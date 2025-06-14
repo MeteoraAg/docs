@@ -1,0 +1,298 @@
+---
+title: "Meteora Launch Pool with Alpha Vault Setup"
+description: "Alpha Vault is a new anti-bot tool to guard against sniper bots and allow genuine supporters to be the first to buy tokens at launch."
+---
+
+## Summary
+
+Meteora Launch Pools can be created with an Alpha Vault as part of the token launch process.
+
+Below we provide the steps to use Bun to configure and run sample scripts to conveniently set up a Meteora Launch Pool with Alpha Vault on your own.
+
+<CardGroup cols={2}>
+  <Card title="Getting started" href="/meteora-launch-pool/meteora-launch-pool-with-alpha-vault-setup#getting-started" icon= "angle-right" iconType="solid" horizontal />
+  <Card title="Scripts" href="/meteora-launch-pool/meteora-launch-pool-with-alpha-vault-setup#scripts" icon= "angle-right" iconType="solid" horizontal />
+  <Card title="When can you withdraw tokens from the pool to the position owner?" href="/meteora-launch-pool/meteora-launch-pool-with-alpha-vault-setup#when-can-you-withdraw-tokens-from-the-pool-to-the-position-owner" icon= "angle-right" iconType="solid" horizontal />
+  <Card title="Other Configuration Details" href="/meteora-launch-pool/meteora-launch-pool-with-alpha-vault-setup#other-configuration-details" icon= "angle-right" iconType="solid" horizontal />
+</CardGroup>
+
+## Getting Started
+
+<CardGroup cols={2}>
+<Card title="Readme" href="https://github.com/MeteoraAg/meteora-pool-setup/blob/main/README.md" icon= "file-lines" iconType="solid" horizontal >
+
+[https://github.com/MeteoraAg/meteora-pool-setup/blob/main/README.md](https://github.com/MeteoraAg/meteora-pool-setup/blob/main/README.md)
+</Card>
+
+<Card title="DLMM SDK on github" href="https://github.com/MeteoraAg/dlmm-sdk" icon= "github" iconType="solid" horizontal >
+[https://github.com/MeteoraAg/dlmm-sdk](https://github.com/MeteoraAg/dlmm-sdk)
+</Card>
+
+<Card title="DLMM API endpoints" href="https://dlmm-api.meteora.ag/swagger-ui/#/" icon= "code" iconType="solid" horizontal >
+[https://dlmm-api.meteora.ag/swagger-ui/#/](https://dlmm-api.meteora.ag/swagger-ui/#/)
+</Card>
+
+<Card title="Alpha Vault SDK" href="/alpha-vault/alpha-vault-typescript-sdk" icon= "code" iconType="solid" horizontal >
+[/alpha-vault/alpha-vault-typescript-sdk](/alpha-vault/alpha-vault-typescript-sdk)
+</Card>
+</CardGroup>
+
+### Dependencies
+
+* **Install Bun**: You'll also need [bun](https://bun.sh/) to run the scripts. Install it via [bun installation](https://bun.sh/docs/installation). Then install the dependencies by running the command `bun install`
+
+## Scripts
+
+The following code examples can be used to initialize and seed a DLMM liquidity pool on Meteora using a customizable permissionless liquidity bin pair (LB pair). It allows you to configure parameters for the pool, including fees, pricing, curvature, and activation conditions, before executing initialization and seeding commands.
+
+We also have code examples for interacting with the Alpha Vault program. Use these examples to create and manage vaults, handle deposits and withdrawals, manage permissioned and permissionless vault configurations, and interact with escrow accounts.
+
+### 1. Create DLMM pool
+
+* Clone repo: [https://github.com/MeteoraAg/meteora-pool-setup](https://github.com/MeteoraAg/meteora-pool-setup)
+
+* Select an example config to reference and change the parameters inside according to your needs: [https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config](https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config)
+
+* Run the script (check [dependencies](/meteora-launch-pool/meteora-launch-pool-with-alpha-vault-setup#dependencies)) with config file specified in the CLI.
+
+* Run:
+
+  * `bun run src/create_pool.ts --config <config.json>`
+
+  * Replace `<config.json>`with the path to your config file, after you have set your config parameters.
+
+**Important Notes:**
+
+* The max bin step you can set for a DLMM pool is 400 bin step.
+
+* When creating a DLMM pool, there are 3 roles in position that you can config:
+
+  * **Position Owner**: Wallet that owns the liquidity
+
+  * **Operator**: Wallet that can deposit and withdraw tokens on behalf of the Position Owner
+
+  * **Fee Owner**: Wallet that gets the fees from that position
+
+* During the initialization of the DLMM pool, pool creator needs to have at least 1 lamport worth of the base token in the wallet to prove ownership.
+
+* If you plan to use a multisig on the Meteora website, please make sure it is the SquadsX multisig, as that is the only type supported on Meteora website. Otherwise, you can't manage liquidity through the website.
+
+### 2. Create Alpha Vault
+
+* Select an example config to reference and change the parameters inside according to your needs: [https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config](https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config)
+
+* Run:
+
+  * `bun run src/create_alpha_vault.ts --config <config.json>`
+
+  * Replace `<config.json>`with the path to your config file, after you have set your config
+
+**Important Notes**:
+
+* If you do not want to use Alpha Vault, skip this step.
+
+* Currently, only SOL or USDC is accepted as the quote token when initializing a Dynamic AMM or DLMM Pool with Alpha Vault in a permissionless setup. Since the Alpha Vault can't tell what the quote token would be, the quote token is limited to SOL or USDC. However, any quote token can be used if you use a config key that doesn't have Alpha Vault.
+
+* There is a minimum \~1 hour 5 minutes period between the deposit close time and the pool activation time.
+
+* **Crank start point (time when vault buys tokens from the pool):**
+
+  * Timestamp-based Crank start point = activationPoint - 3600
+
+  * Slot-based Crank start point = activationPoint - 9000
+
+* **Vault deposit close point (time when vault deposits close):**
+
+  * Timestamp-based Vault, Deposit close point = Crank start point - 5 min
+
+  * Slot-based Vault, Deposit close point = Crank start point - 750
+
+### 3. Seed liquidity
+
+* Clone repo: [https://github.com/MeteoraAg/dlmm-sdk](https://github.com/MeteoraAg/dlmm-sdk)
+
+* Pre-requisite
+
+  * Set up [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
+
+  * if you're on silicon apple chip, you need to be in this rust config`rustup default 1.76.0-x86_64-apple-darwin`
+
+* Run:
+
+  * `cargo build -p cli`
+
+  * `cd command_list`
+
+* Select the command you want from the [command list](https://github.com/MeteoraAg/dlmm-sdk/tree/main/command_list) and update the parameters according to your preference.
+
+* If you want to seed a DLMM pool where the Position Owner is a different wallet from the Fee Owner, you would have to use the command `ilm_curve_by_operator.sh`, or `ilm_single_bin_by_operator.sh` (if liquidity is being deposited into a single bin).
+
+* You can use this [ilm curve tool](https://ilm.jup.ag/) to determine the suitable parameters for your launch.
+
+| Command | Description |
+|---------|------------|
+| `ilm_curve.sh` | Initialize DLMM position and seed liquidity using a preferred ilm curve, without a specified Fee Owner. For this config, Position Owner = Fee Owner. Position Creator must be the Position Owner. [https://github.com/MeteoraAg/dlmm-sdk/blob/feat/ilm-permissionless/command\_list/ilm\_curve.sh](https://github.com/MeteoraAg/dlmm-sdk/blob/feat/ilm-permissionless/command_list/ilm_curve.sh) |
+| `ilm_curve_by_operator.sh` | Initialize DLMM position and seed liquidity using a preferred ilm curve. You can specify the Fee Owner wallet and the Position Owner wallet. You can also use the Operator to create the position. [https://github.com/MeteoraAg/dlmm-sdk/blob/main/command\_list/ilm\_curve\_by\_operator.sh](https://github.com/MeteoraAg/dlmm-sdk/blob/main/command_list/ilm_curve_by_operator.sh) |
+| `ilm_single_bin.sh` | Initialize DLMM position and seed liquidity, where **liquidity is deposited into a single bin**, without a specified Fee Owner. For this config, Position Owner = Fee Owner. Position Creator must be the Position Owner. [https://github.com/MeteoraAg/dlmm-sdk/blob/feat/ilm-permissionless/command\_list/ilm\_single\_bin.sh](https://github.com/MeteoraAg/dlmm-sdk/blob/feat/ilm-permissionless/command_list/ilm_single_bin.sh) |
+| `ilm_single_bin_by_operator.sh` | Initialize DLMM position and seed liquidity, where **liquidity is deposited into a single bin**. You can specify the Fee Owner wallet and the Position Owner wallet. You can also use the Operator to create the position. [https://github.com/MeteoraAg/dlmm-sdk/blob/main/command\_list/ilm\_single\_bin\_by\_operator.sh](https://github.com/MeteoraAg/dlmm-sdk/blob/main/command_list/ilm_single_bin_by_operator.sh)|
+
+* Next, run:
+
+  * `source <ilm_curve_by_operator.sh>`
+
+  * Replace `<ilm_curve_by_operator.sh>` with the command file you selected earlier from the above command list, with your parameters specified.
+
+**Important Notes:**
+
+* When seeding liquidity using the endpoint, both Operator and Position Owner need to have base tokens to prove ownership. If the Position Owner doesn't have any base tokens, then the Operator will need to send 1 lamport worth of the base token to Position Owner. But the script will check if Position Owner has tokens and if not, it will bundle a transfer instruction to send 1 lamport worth of the base token from the Operator to the Position Owner.
+
+* The commands in the command list above only work before the pool is activated for trading. If the pool has already started trading, when you use a command, there would be an error message shown (e.g. `Error Message: Unauthorized access`).
+
+* In the code example, `lock_release_point` refers to the time the liquidity position can be withdrawn. If it is set to zero, it means the position can be withdrawn immediately after trading starts.
+
+* If you plan to use a multisig on the Meteora website, please make sure it is the SquadsX multisig, as that is the only type supported on Meteora website. Otherwise, you can't manage liquidity through the website.
+
+#### After deployment
+
+To view pool on the UI, access the link below
+
+* For DLMM pool: `https://app.meteora.ag/dlmm/<POOL_ADDRESS>`
+
+## When can you withdraw tokens from the pool to the position owner?
+
+* CustomizablePermissionless DLMM: After pool activation point (trading starts)
+
+* CustomizablePermissionless Dynamic AMM: After pool activation point (trading starts)
+
+* Permissioned DLMM: Anytime
+
+* Permissioned Dynamic AMM: Doesn't support Alpha Vault
+
+## Other Configuration Details
+
+There are various config files that can be found in the `config` directory.
+
+It contains all the configurations required to run the scripts. We also need to provide the keypair for the payer wallet in `keypair.json` file.
+
+<Info>
+  DLMM Pool can also lock liquidity, so the `lock_release_point` can be set to some indefinite time then it 'unlocks'
+</Info>
+
+#### General configuration
+
+* `rpcUrl`: Solana RPC URL to get data and send transactions.
+
+* `keypairFilePath`: Keypair file path to send transactions.
+
+* `dryRun`: Set to true to send transactions.
+
+* `createBaseToken`: Configuration to create base token.
+
+* `baseMint`: Base token address if the `createBaseToken` field is not set.
+
+* `quoteSymbol`: Quote token symbol, only `SOL` or `USDC` is supported.
+
+* `baseDecimals`: Base token decimal.
+
+* `dynamicAmm`: Dynamic AMM pool configuration.
+
+* `dlmm`: DLMM pool configuration.
+
+* `alphaVault`: Fcfs or Prorata Alpha Vault configuration.
+
+#### **Some configuration constraints**:
+
+* `createBaseToken` and `baseMint` cannot be used together.
+
+* `dynamicAmm` and `dlmm` cannot be used together.
+
+#### Create Base Token configuration
+
+* `mintBaseTokenAmount`: Base token amount to be minted.
+
+#### DLMM configuration
+
+* `binStep`: DLMM pool bin step.
+
+* `feeBps`: Fee bps for DLMM pool.
+
+* `initialPrice`: Initial pool price.
+
+* `activationType`: To activate pool trading base on `slot` or `timestamp`.
+
+* `activationPoint`: To activate pool trading at a point, either slot valut or timestamp value base on `activationType`.
+
+* `priceRounding`: Should be `up` or `down`.
+
+* `hasAlphaVault`: Whether alpha vault is enabled or not for this pool.
+
+<Info>
+  When using the endpoint instruction `initializeCustomizablePermissionlessLbPair `the purpose is for creating a launch pool for the token for the first time, so only one DLMM pool is meant to be created for that token pair. If you are using that instruction to create a new DLMM pool with the same base and quote tokens, but with different parameters, the transaction will fail. Pool creator must have **at least 1 lamport worth of the base token** in the wallet to prove ownership.
+</Info>
+
+#### Alpha Vault configuration
+
+* `poolType`: `dynamic` or `dlmm` pool type.
+
+* `alphaVaultType`: Alpha Vault type, could be `fcfs` or `prorata`
+
+* `depositingPoint`: Absolute value that, the slot or timestamp that allows deposit depend on the pool activation type.
+
+* `startVestingPoint`: Absolute value, the slot or timestamp that start vesting depend on the pool activation type.
+
+* `endVestingPoint`: Absolute value, the slot or timestamp that end vesting depend on the pool activation type.
+
+* `maxDepositCap`: Maximum deposit cap.
+
+* `individualDepositingCap`: Individual deposit cap.
+
+* `escrowFee`: Fee to create stake escrow account. If this fee is added, it will be a one-time fee charged when users create a stake escrow account. This acts as a tax and makes it prohibitively expensive for users to attempt to use multiple wallets to bypass the individual deposit cap. It's charged in native SOL (non-wrapped version) and will be sent to the Meteora treasury.
+
+* `whitelistMode`: `permissionless` or `permission_with_merkle_proof` or `permission_with_authority`.
+
+#### Alpha Vault Prorata configuration
+
+* `depositingPoint`: Absolute value that, the slot or timestamp that allows deposit depend on the pool activation type.
+
+* `startVestingPoint`: Absolute value, the slot or timestamp that start vesting depend on the pool activation type.
+
+* `endVestingPoint`: Absolute value, the slot or timestamp that end vesting depend on the pool activation type.
+
+* `maxBuyingCap`: Maximum buying cap.
+
+* `escrowFee`: Fee to create stake escrow account. If this fee is added, it will be a one-time fee charged when users create a stake escrow account. This acts as a tax and makes it prohibitively expensive for users to attempt to use multiple wallets to bypass the individual deposit cap. It's charged in native SOL (non-wrapped version) and will be sent to the Meteora treasury.
+
+* `whitelistMode`: `permissionless` or `permission_with_merkle_proof` or `permission_with_authority`.
+
+#### **Alpha Vault Key Components**
+
+* **Vault Types:** Supports both **permissionless** (without whitelist) and **permissioned** (with whitelist) Alpha Vaults.
+
+* **Whitelist Modes:**
+
+  * Without whitelist:
+
+    * `Permissionless`
+
+  * With whitelist:
+
+    * `PermissionWithMerkleProof`
+
+    * `PermissionWithAuthority`
+
+* **alphaVaultType (Vault Mode):**
+
+  * `Pro-rata`
+
+  * `FCFS` (First-Come, First-Served)
+
+* **Individual Deposit Cap:**
+
+  * Global individual deposit cap without whitelist only possible on FCFS vault mode, not possible on Pro rata vault mode.
+
+## Other Alpha Vault Code Examples
+
+<CardGroup>
+  <Card title="Alpha Vault without Whitelist" href="/alpha-vault/alpha-vault-without-whitelist" icon= "angle-right" iconType="solid" horizontal />
+  <Card title="Alpha Vault with Whitelist" href="/alpha-vault/alpha-vault-with-whitelist" icon= "angle-right" iconType="solid" horizontal />
+</CardGroup>

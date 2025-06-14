@@ -1,0 +1,30 @@
+---
+title: "Operational Risk for Dynamic Vaults and Pools"
+description: "Operation risks are risks related to source code such as when a partner protocol or team has a program update, or when lending platforms are not well audited. In minor cases, the source code changes break the integration, users are unable to perform any vault withdrawals or deposits. In major cases, the vault program or lending protocols may be exploited, losing the tokens in the vaults."
+---
+
+We implement a maximum allocation mechanism that the vault can deposit into each lending pool to mitigate this risk.
+
+All lending protocols' maximum allocation starts at 100%. We will assess them across a set of criteria which includes the existence of audits, open-source code, insurance funds, main token pools, program multi-sig / verified & non-updatable status as well as the length of integration with Meteora. This set of criteria will eventually be governed by the DAO.
+
+For every criterion not met, we will reduce the maximum allocation allowed to the protocol according to this matrix:
+
+| Criteria                                         | Maximum allocation reduction, if not present |
+|--------------------------------------------------|-------|
+| Audit                                           | 20    |
+| Open-source                                     | 30    |
+| Official Insurance Funds?                        | 20    |
+| Main Pool                                       | 10    |
+| Existing integration > 1 month                  | 10    |
+| Program multi-sig / or Verified & Non-Updatable | 20    |
+
+
+Example: Lending Protocol Xyz (with Audited, Open-sourced, Main Pool, and Program multi-sig)
+
+The score for allocation will be 100-20 (No official insurance funds) - 10 (Existing integration \< 1 month) = 70
+
+We also limit max allocation in each lending as 30% of total liquidity.
+
+Hermes is not allowed to withdraw funds from the lending protocols to external wallets. In the event that Hermes is hacked, the hackers will only be able to control the flow of funds to and from between the vaults and lending protocols; the principals are still safe in either of them.
+
+You can read about our security measures for dynamic vaults here: [/dynamic-vault-integration/dynamic-vaults/security](/dynamic-vault-integration/dynamic-vaults/security)

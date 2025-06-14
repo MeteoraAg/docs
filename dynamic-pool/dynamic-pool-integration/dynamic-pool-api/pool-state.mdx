@@ -1,0 +1,105 @@
+---
+title: "Pool State"
+---
+
+<CardGroup>
+<Card title="Typescript SDK" href="/dynamic-pool/dynamic-pool-integration/using-typescript-client-sdk" icon="code" iconType="solid" horizontal/>
+</CardGroup>
+<Card title="https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk/tree/master/ts-client" href="https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk/tree/master/ts-client" icon="github" iconType="solid" horizontal/>
+
+### Pools State
+
+Key Data retrieved:
+
+| Data           | Description |
+|----------------------|-------------|
+| lp_mint             | LP mint of the pool |
+| token_a_mint        | Pool token A mint. Eg: USDC mint |
+| token_b_mint        | Pool token B mint. Eg: USDT mint |
+| a_vault            | The vault to store pool token A |
+| b_vault            | The vault to store pool token B |
+| a_vault_lp         | The LP of the vault to store pool token A |
+| b_vault_lp         | The LP of the vault to store pool token B |
+| a_vault_lp_bump    | The nonce used to create signer seed |
+| enabled            | Flag to determine whether the pool is enabled or disabled. If disabled, users couldn't add liquidity, remove liquidity in imbalance ratio or swap at the given pool |
+| admin_token_a_fee  | Used to collect swap fee |
+| admin_token_b_fee  | Used to collect swap fee |
+| admin              | The admin of the pool |
+| fees               | The fee parameter of the pool. It will affect the fee charged during the swap process |
+| padding            | Reserved space for future use |
+| curve_type         | The curve of the pool. Example: Constant product, stable. |
+
+### Pool Fees
+| Type field                  | Description |
+|-----------------------------|-------------|
+| trade_fee_numerator        | Numerator for trading fee |
+| trade_fee_denominator      | Denominator for trading fee |
+| owner_trade_fee_numerator  | Numerator for owner trading fee |
+| owner_trade_fee_denominator | Denominator for owner trading fee |
+
+### Padding
+
+| Data   | Description                       |
+|--------|-----------------------------------|
+| padding | 512 bytes reserved for future use |
+
+### Curve Type
+
+| Data             | Description                              |
+|-----------------|------------------------------------------|
+| ConstantProduct | Indicate the pool is constant product pool |
+| Stable         | Indicate the pool is stable swap pool    |
+
+### Token Multiplier
+
+Because there are tokens with different decimals, the precision factor has been added to normalize the value to support tokens with different decimals in stable swap calculation.
+
+| Data               | Description  |
+|-------------------|-----------------------------------------------------------|
+| token_a_multiplier |Multiplier for token A. Used to make sure that token A will have the same precision as token B. |
+| token_b_multiplier |Multiplier for token B. Used to make sure that token A will have the same precision as token A.|
+| precision_factor   |The precision of token A and B of the pool. |
+
+### Depeg
+
+Store the information about the depeg stable swap pool.
+
+| Data                 | Description  |
+|---------------------|------------------------------------------------|
+| base_virtual_price  |Store the virtual price of the staking/interest-bearing token. Used to calculate the native token amount. |
+| base_cache_updated  | Store the last timestamp the base_virtual_price was updated. |
+| depeg_type         | Indicate the type of the depeg pool supported. If the pool is a depeg pool, token_b of the pool will always be to depeg token. |
+
+
+### Depeg Type
+
+| Data      | Description  |
+|----------|----------------------------------------------------------|
+| None      | Indicate that the pool does not support staking/interest-bearing token. |
+| Marinade  | The pool supports marinade token (mSOL). |
+| Lido      | The pool supports solido token (stSOL). |
+| spl-stake | The pool supports more LSTs like jitoSOL, bSOL, and more. |
+
+
+### User Functions
+
+| Data                           | Description  |
+|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| add_balance_liquidity          | - User have to deposit a balanced ratio into the pool. <br/> - The amount of token A/B to deposit will be calculated based on the number of lp token user wish to receive. <br/> - The pool itself does not hold token A/B. The pool will deposit the user deposited token A and B to the vault, and hold the minted vault LP. <br/> - Supported by stable swap and constant product. |
+| add_imbalance_liquidity        | - User can deposit both tokens, or only single token into the token without any ratio restrictions. <br/> - The amount of lp token to be minted will be calculated based on the token A/B user is depositing. <br/> - The pool itself does not hold token A/B. The pool will deposit the user deposited token A and B to the vault, and hold the minted vault LP. <br/> - Trading fee will be charged. <br/> - Supported only by stable swap. |
+| remove_balance_liquidity       | - User will get token A and token B based on the current pool ratio by burning the lp token. <br/> - The process will fail when the vault does not have enough liquidity. |
+| remove_liquidity_single_side   | - User can choose to withdraw only token A or token B by burning the lp token. <br/> - Trading fee will be charged. <br/> - The process will fail when the vault does not have enough liquidity. |
+| swap                           | - User can exchange token B by deposit token A or vice versa. <br/> - Swap fee will be charged based on the PoolFee parameter stored in the pool account. <br/> - If the host fee account was passed as the remaining account during the swap, 20% of the admin trading fee will be taken by the host. <br/> - Admin trading fee will be transferred to admin_token_a_fee or admin_token_b_fee based on the deposit mint token. <br/> - The pool will deposit the user deposited token to the respective vault, and hold the minted vault LP. <br/> - Meanwhile, the pool will burn the correct amount of vault LP by using vault SDK and transfer the token to the user. <br/> - The process will fail when the vault does not have enough liquidity. |
+| get_pool_info                  | - User can query the pool metric information, such as total token A amount, total token B amount, virtual price, and pool APY. |
+| initialize_permissionless_pool | - Creates a new permissionless pool by depositing tokens A and B as bootstrap liquidity. |
+
+### Admin Functions
+
+| Data                          | Description  |
+|--------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| initialize_permissioned_pool   | Admin creates a new permissioned pool by depositing tokens A and B as bootstrap liquidity. |
+| transfer_admin                 | Transfer the admin of the pool to the new admin for permissioned pools. |
+| set_pool_fees                  | Set a new fee parameter for permissioned pools. |
+| set_admin_fee_account          | Set a new admin token fee account to receive the swap fee for permissioned pools. |
+| override_curve_param           | Update curve parameters. For example, amplification coefficient of stable swap for permissioned pools. |
+| enable_or_disable_pool         | Enable or disable permissioned pools. A disabled pool will allow only remove balanced liquidity. |

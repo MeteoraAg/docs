@@ -1,0 +1,312 @@
+---
+title: "DLMM SDK"
+description: "This Typescript SDK is meant to help developers easily integrate Meteora's DLMM pools into their protocols. This SDK uses the latest AddLiquidityByStrategy endpoint (instead of AddLiquidityByWeight)."
+---
+
+## Getting started
+
+<CardGroup cols={1}>
+<Card title="NPM" href="https://www.npmjs.com/package/@meteora-ag/dlmm" icon="npm" iconType="solid" horizontal>
+[https://www.npmjs.com/package/@meteora-ag/dlmm](https://www.npmjs.com/package/@meteora-ag/dlmm)
+</Card>
+<Card title="SDK on github" href="https://github.com/MeteoraAg/dlmm-sdk" icon="github" iconType="solid" horizontal>
+[https://github.com/MeteoraAg/dlmm-sdk](https://github.com/MeteoraAg/dlmm-sdk)
+</Card>
+<Card title="Discord" href="https://discord.com/channels/841152225564950528/864859354335412224" icon="discord" iconType="solid" horizontal>
+[https://discord.com/channels/841152225564950528/864859354335412224](https://discord.com/channels/841152225564950528/864859354335412224)
+</Card>
+<Card title="Program ID"  icon="code" iconType="solid" horizontal>
+LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo
+</Card>
+</CardGroup>
+
+<Card title="GitHub - MeteoraAg/dlmm-sdk: An SDK for building applications on top of Dynamic CLMM" href="https://github.com/MeteoraAg/dlmm-sdk" icon="github" iconType="solid" horizontal/>
+
+### Devnet Testing
+
+<CardGroup>
+<Card title="Devnet" href="https://devnet.meteora.ag/" icon="globe" iconType="solid" horizontal/>
+</CardGroup>
+## **List of sections**
+
+<CardGroup cols={2}>
+<Card title="CPI call example" href="/dlmm/dlmm-integration/dlmm-sdk#cpi-call-example" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Rust examples" href="/dlmm/dlmm-integration/dlmm-sdk#cpi-call-example" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Example codes for key DLMM actions" href="/dlmm/dlmm-integration/dlmm-sdk#example-codes-for-key-dlmm-actions" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Static functions" href="/dlmm/dlmm-integration/dlmm-sdk#static-functions" icon="angle-right" iconType="solid" horizontal/>
+<Card title="DLMM instance functions" href="/dlmm/dlmm-integration/dlmm-sdk#dlmm-instance-functions" icon="angle-right" iconType="solid" horizontal/>
+</CardGroup>
+## CPI call example
+
+Access this repo in the SDK, import, CPI:
+
+<Card title="https://github.com/MeteoraAg/dlmm-sdk/tree/main/programs/lb_clmm" href="https://github.com/MeteoraAg/dlmm-sdk/tree/main/programs/lb_clmm" icon="github" iconType="solid" horizontal/>
+
+## Rust examples
+
+Access these repos in the SDK, import, and use the necessary functions:
+
+<Card title="https://github.com/MeteoraAg/dlmm-sdk/tree/main/cli" href="https://github.com/MeteoraAg/dlmm-sdk/tree/main/cli" icon="github" iconType="solid" horizontal/>
+
+<Card title="https://github.com/MeteoraAg/dlmm-sdk/tree/main/market_making" href="https://github.com/MeteoraAg/dlmm-sdk/tree/main/market_making" icon="github" iconType="solid" horizontal/>
+
+## Example codes for key DLMM actions
+
+Below we have provided example codes for the key DLMM actions:
+
+* Getting the active bin
+
+* Creating a position
+
+* Getting the list of positions
+
+* Adding liquidity to an existing position
+
+* Removing liquidity from an existing position
+
+* Swapping tokens within a specified pool
+
+We have also provided a list of the necessary [static functions](/dlmm/dlmm-integration/dlmm-sdk#static-functions) and [DLMM instance functions](/dlmm/dlmm-integration/dlmm-sdk#dlmm-instance-functions). To view other SDK files on github, [click here](https://github.com/MeteoraAg/dlmm-sdk).
+
+### Main Steps for SDK testing
+
+```bash
+1. cd ts-client
+2. anchor localnet -- --features localnet
+3. pnpm run test
+```
+
+### Install
+<Steps>
+  <Step title="Install dependencies">
+
+   You will need to first install these SDK dependencies in order for it to function properly
+
+```bash
+npm i @meteora-ag/dlmm @coral-xyz/anchor @solana/web3.js
+```
+
+  </Step>
+  <Step title="Initialize DLMM instance">
+
+```typescript
+import DLMM from '@meteora-ag/dlmm'
+
+const USDC_USDT_POOL = new PublicKey('ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq') // You can get your desired pool address from the API https://dlmm-api.meteora.ag/pair/all
+const dlmmPool = await DLMM.create(connection, USDC_USDT_POOL);
+
+// If you need to create multiple, can consider using `createMultiple`
+const dlmmPool = await DLMM.createMultiple(connection, [USDC_USDT_POOL, ...]);
+```
+
+  </Step>
+  <Step title="To interact with the AmmImpl">
+
+   Changing Ammlmpl parameters to interact with the lb\_pair / or pool
+
+  * **Get Active Bin**
+
+    To get the [active bin](/dlmm/dlmm-program) where the current pool price resides
+
+  ```typescript
+  const activeBin = await dlmmPool.getActiveBin();
+  const activeBinPriceLamport = activeBin.price;
+  const activeBinPricePerToken = dlmmPool.fromPricePerLamport(
+    Number(activeBin.price)
+  );
+  ```
+
+  * **Create Position**
+
+    To create a new liquidity position
+
+  ```typescript
+  const TOTAL_RANGE_INTERVAL = 10; // 10 bins on each side of the active bin
+  const minBinId = activeBin.bin_id - TOTAL_RANGE_INTERVAL;
+  const maxBinId = activeBin.bin_id + TOTAL_RANGE_INTERVAL;
+
+  const activeBinPricePerToken = dlmmPool.fromPricePerLamport(
+    Number(activeBin.price)
+  );
+  const totalXAmount = new BN(100);
+  const totalYAmount = totalXAmount.mul(new BN(Number(activeBinPricePerToken)));
+
+  // Create Position (Spot Balance deposit, Please refer ``example.ts` for more example)
+  const createPositionTx =
+    await dlmmPool.initializePositionAndAddLiquidityByStrategy({
+      positionPubKey: newBalancePosition.publicKey,
+      user: user.publicKey,
+      totalXAmount,
+      totalYAmount,
+      strategy: {
+        maxBinId,
+        minBinId,
+        strategyType: StrategyType.SpotBalanced,
+      },
+    });
+
+  try {
+    const createBalancePositionTxHash = await sendAndConfirmTransaction(
+      connection,
+      createPositionTx,
+      [user, newBalancePosition]
+    );
+  } catch (error) {}
+  ```
+
+  * **Get list of positions**
+
+    To get the list of liquidity positions for a specified pair and pool
+
+  ```typescript
+  const { userPositions } = await dlmmPool.getPositionsByUserAndLbPair(
+    user.publicKey
+  );
+  const binData = userPositions[0].positionData.positionBinData;
+  ```
+
+  * **Add liquidity to existing position**
+
+    To add liquidity to an existing liquidity position
+
+  ```typescript
+  const TOTAL_RANGE_INTERVAL = 10; // 10 bins on each side of the active bin
+  const minBinId = activeBin.bin_id - TOTAL_RANGE_INTERVAL;
+  const maxBinId = activeBin.bin_id + TOTAL_RANGE_INTERVAL;
+
+  const activeBinPricePerToken = dlmmPool.fromPricePerLamport(
+    Number(activeBin.price)
+  );
+  const totalXAmount = new BN(100);
+  const totalYAmount = totalXAmount.mul(new BN(Number(activeBinPricePerToken)));
+
+  // Add Liquidity to existing position
+  const addLiquidityTx = await dlmmPool.addLiquidityByStrategy({
+    positionPubKey: newBalancePosition.publicKey,
+    user: user.publicKey,
+    totalXAmount,
+    totalYAmount,
+    strategy: {
+      maxBinId,
+      minBinId,
+      strategyType: StrategyType.SpotBalanced,
+    },
+  });
+
+  try {
+    const addLiquidityTxHash = await sendAndConfirmTransaction(
+      connection,
+      addLiquidityTx,
+      [user]
+    );
+  } catch (error) {}
+  ```
+
+  * **Remove Liquidity**
+
+    To remove liquidity from an existing liquidity position
+
+  ```typescript
+  const userPosition = userPositions.find(({ publicKey }) =>
+    publicKey.equals(newBalancePosition.publicKey)
+  );
+  // Remove Liquidity
+  const binIdsToRemove = userPosition.positionData.positionBinData.map(
+    (bin) => bin.binId
+  );
+  const removeLiquidityTx = await dlmmPool.removeLiquidity({
+    position: userPosition.publicKey,
+    user: user.publicKey,
+    binIds: binIdsToRemove,
+    liquiditiesBpsToRemove: new Array(binIdsToRemove.length).fill(
+      new BN(100 * 100)
+    ), // 100% (range from 0 to 100)
+    shouldClaimAndClose: true, // should claim swap fee and close position together
+  });
+
+  try {
+    for (let tx of Array.isArray(removeLiquidityTx)
+      ? removeLiquidityTx
+      : [removeLiquidityTx]) {
+      const removeBalanceLiquidityTxHash = await sendAndConfirmTransaction(
+        connection,
+        tx,
+        [user],
+        { skipPreflight: false, preflightCommitment: "singleGossip" }
+      );
+    }
+  } catch (error) {}
+  ```
+
+  * **Swap**
+
+    To swap tokens within the specified liquidity pool
+
+  ```typescript
+  const swapAmount = new BN(100);
+  // Swap quote
+  const swapYtoX = true;
+  const binArrays = await dlmmPool.getBinArrayForSwap(swapYtoX);
+  const swapQuote = await dlmmPool.swapQuote(
+    swapAmount,
+    swapYtoX,
+    new BN(10),
+    binArrays
+  );
+
+  // Swap
+  const swapTx = await dlmmPool.swap({
+    inToken: dlmmPool.tokenX.publicKey,
+    binArraysPubkey: swapQuote.binArraysPubkey,
+    inAmount: swapAmount,
+    lbPair: dlmmPool.pubkey,
+    user: user.publicKey,
+    minOutAmount: swapQuote.minOutAmount,
+    outToken: dlmmPool.tokenY.publicKey,
+  });
+
+  try {
+    const swapTxHash = await sendAndConfirmTransaction(connection, swapTx, [
+      user,
+    ]);
+  } catch (error) {}
+  ```
+</Step>
+</Steps>
+
+### Static functions
+| Function | Description | Return |
+|----------|------------|--------|
+| `create` | Given the DLMM address, create an instance to access the state and functions | `Promise<DLMM>` |
+| `createMultiple` | Given a list of DLMM addresses, create instances to access the state and functions | `Promise<Array<DLMM>>` |
+| `getAllLbPairPositionsByUser` | Given a list of DLMM addresses, create instances to access the state and functions | `Promise<Map<string, PositionInfo>>` |
+
+### DLMM instance functions
+
+| Function | Description | Return |
+|----------|------------|--------|
+| `refetchStates` | Update onchain state of DLMM instance. It's recommended to call this before interacting with the program (Deposit/ Withdraw/ Swap) | `Promise<void>` |
+| `getBinArrays` | Retrieves List of Bin Arrays | `Promise<BinArrayAccount[]>` |
+| `getBinArrayForSwap` | Retrieves List of Bin Arrays for swap purpose | `Promise<BinArrayAccount[]>` |
+| `getFeeInfo` | Retrieves LbPair's fee info including `base fee`, `protocol fee` & `max fee` | `FeeInfo` |
+| `getDynamicFee` | Retrieves LbPair's dynamic fee | `Decimal` |
+| `getBinsAroundActiveBin` | Retrieves a specified number of bins to the left and right of the active bin and returns them along with the active bin ID. | `Promise<{ activeBin: number; bins: BinLiquidity[] }>` |
+| `getBinsBetweenMinAndMaxPrice` | Retrieves a list of bins within a specified price | `Promise<{ activeBin: number; bins: BinLiquidity[] }>` |
+| `getBinsBetweenLowerAndUpperBound` | Retrieves a list of bins between a lower and upper bin ID and returns the active bin ID and the list of bins. | `Promise<{ activeBin: number; bins: BinLiquidity[] }>` |
+| `toPricePerLamport` | Converts a real price of bin to lamport price | `string` |
+| `fromPricePerLamport` | Converts a price per lamport value to a real price of bin | `string` |
+| `getActiveBin` | Retrieves the active bin ID and its corresponding price | `Promise<{ binId: number; price: string }>` |
+| `getPriceOfBinByBinId` | Get the price of a bin based on its bin ID | `string` |
+| `getBinIdFromPrice` | Get bin ID based on a given price and a boolean flag indicating whether to round down or up. | `number` |
+| `getPositionsByUserAndLbPair` | Retrieves positions by user and LB pair, including active bin and user positions. | `Promise<{ activeBin: { binId: any; price: string; }; userPositions: Array<Position>;}>` |
+| `initializePositionAndAddLiquidityByStrategy` | Initializes a position and adds liquidity | `Promise<Transaction\|Transaction[]>` |
+| `addLiquidityByStrategy` | Add liquidity to existing position | `Promise<Transaction\|Transaction[]>` |
+| `removeLiquidity` | Function is used to remove liquidity from a position, with the option to claim rewards and close the position. | `Promise<Transaction\|Transaction[]>` |
+| `closePosition` | Closes a position | `Promise<Transaction\|Transaction[]>` |
+| `swapQuote` | Quote for a swap | `SwapQuote` |
+| `swap` | Swap token within the LbPair | `Promise<Transaction>` |
+| `claimLMReward` | Claim rewards for a specific position owned by a specific owner | `Promise<Transaction>` |
+| `claimAllLMRewards` | Claim all liquidity mining rewards for a given owner and their positions. | `Promise<Transaction[]>` |
+| `claimSwapFee` | Claim swap fees for a specific position owned by a specific owner | `Promise<Transaction>` |
+| `claimAllSwapFee` | Claim swap fees for multiple positions owned by a specific owner | `Promise<Transaction>` |
+| `claimAllRewards` | Claim swap fees and LM rewards for multiple positions owned by a specific owner | `Promise<Transaction[]>` |

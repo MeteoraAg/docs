@@ -1,0 +1,36 @@
+---
+title: "Create Dynamic Pool with Timestamp/Slot Activation"
+description: "Meteora’s Dynamic AMM Pool or DLMM pool can be set up to start trading at a specific activation slot on the blockchain, or at a specific time based on sysvar clock."
+---
+
+There are 2 fields involved:
+
+* `pool.activation_type` and `pool.activation_point`
+
+Pool creator has the option to choose between using slot or time for activation.
+
+* If `Pool.activation_type == 0`, Pool starts trading when `current_slot >= pool.activation_point`
+
+* If `Pool.activation_type == 1`, Pool starts trading when `current_time >= pool.activation_point`
+
+## Pool Activation by Slot
+
+Pool starts trading when `current_slot >= pool.activation_slot`
+
+## Pool Activation by Time (Clock)
+
+You can create a pool with timestamp (clock or slot) by using this endpoint:
+
+`initialize_permissionless_constant_product_pool_with_config2`
+
+In the new endpoint, pool creator is able to specify an `activation_point` for a pool, that allows token team to set a precise launch time for the pool.
+
+In the config account, there will be a max duration. This max duration (tbd by Meteora) determines the furthest point in time after pool creation where the `pool.activation_point` can be adjusted to.
+
+For example, if the max duration is 7 days, `Pool.activation_point` must be =\< 7 days from pool creation.
+
+Note: For time, we are using sysvar clock.
+
+### **Important Reminder: Claim start time should NOT be earlier than Pool activation time**
+
+For a new token launch, the project should ensure that token claiming from the Alpha Vault is NOT possible before the launch pool trading activation or before the token starts trading anywhere, whether on a Dynamic AMM or DLMM Pool. If users are able to claim tokens before the launch pool/token starts trading, they may create a separate market with a price that deviates from the project's preferred launch price. Read how to configure Alpha Vault timings [here](/alpha-vault/alpha-vault-without-whitelist#9-configure-alpha-vault-timings).

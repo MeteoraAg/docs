@@ -1,0 +1,33 @@
+---
+title: "Alpha Vault FAQ"
+---
+
+<AccordionGroup>
+   <Accordion title="1. Can there be multiple Alpha Vaults for the same pair or pool?">
+
+   No. There should only be 1 Alpha Vault per pair or pool. Technically, you can try to create more Alpha Vaults for a pool, but only the whitelisted one can swap, which means the others vaults have no function. The connected Alpha Vault for the pool is stored in `pool_account.bootstrapping.whitelisted_vault` as shown [here](https://github.com/MeteoraAg/dynamic-amm-sdk/blob/2cc0f39011d826a07c8243ca02b2b17e3ec2d21f/ts-client/src/amm/idl.ts#L3531).
+
+   </Accordion>
+   <Accordion title="2. Is there any time restrictions to consider when configuring the Alpha Vault for the token launch?">
+
+   There needs to be roughly \~1 hour 5 min between the end of the Alpha Vault deposit period and the pool activation time. This is a hard requirement. But Deposit Time, Vesting Period, when tokens can be released to depositors etc. can be configured by the creator during setup.
+
+   This \~1 hour 5 min time period acts as a buffer, given that it can be challenging to land transactions when the Solana network is congested, especially for DLMM launch pools, which require multiple swaps and consume much more high compute unit than the constant product Dynamic AMM.
+
+   </Accordion>
+   <Accordion title="3. What is the escrow fee?">
+
+   Fee to create stake escrow account. If this fee is added, it will be a one-time fee charged when users create a stake escrow account. This acts as a tax and makes it prohibitively expensive for users to attempt to use multiple wallets to bypass the individual deposit cap. It's charged in native SOL (non-wrapped version) and will be sent to the Meteora treasury.
+
+   </Accordion>
+   <Accordion title="4. Relating to the escrow fee, is there a way for the Alpha Vault creator to set a custom fee to receive on each Alpha Vault deposit?">
+
+   Currently there's no way to set a custom receiver.
+
+   </Accordion>
+   <Accordion title="5. How do you find all the user wallets that deposited into an Alpha Vault for a particular liquidity pool?">
+
+   Please refer to this example: [https://github.com/MeteoraAg/alpha-vault-sdk/blob/get-all-depositors/ts-client/src/examples/getAllDepositors.ts](https://github.com/MeteoraAg/alpha-vault-sdk/blob/get-all-depositors/ts-client/src/examples/getAllDepositors.ts)
+
+   </Accordion>
+</AccordionGroup>

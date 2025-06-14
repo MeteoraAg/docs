@@ -1,0 +1,220 @@
+---
+title: "Permissionless Dynamic AMM with Alpha Vault Setup"
+description: "Below we provide the steps to use Bun to configure and run sample scripts to conveniently set up a Dynamic AMM with Alpha Vault on your own."
+---
+
+<CardGroup cols={2}>
+
+<Card title="Getting started" href="/dynamic-pool/permissionless-dynamic-amm-with-alpha-vault-setup#getting-started" icon="angle-right" iconType="solid" horizontal/>
+
+<Card title="Scripts" href="/dynamic-pool/permissionless-dynamic-amm-with-alpha-vault-setup#scripts" icon="angle-right" iconType="solid" horizontal/>
+
+<Card title="When can you withdraw tokens from the pool to the position owner?" href="/dynamic-pool/permissionless-dynamic-amm-with-alpha-vault-setup#when-can-you-withdraw-tokens-from-the-pool-to-the-position-owner" icon="angle-right" iconType="solid" horizontal/>
+
+<Card title="Other Configuration Details" href="/dynamic-pool/permissionless-dynamic-amm-with-alpha-vault-setup#other-configuration-details" icon="angle-right" iconType="solid" horizontal/>
+
+</CardGroup>
+
+## Getting Started
+
+<CardGroup>
+  <Card title="Clone repo" href="https://github.com/MeteoraAg/meteora-pool-setup" icon="clone" iconType="solid" horizontal>
+  [https://github.com/MeteoraAg/meteora-pool-setup](https://github.com/MeteoraAg/meteora-pool-setup)
+  </Card>
+  <Card title="Config list to reference" href="https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config" icon="list" iconType="solid" horizontal>
+  [https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config](https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config)
+  </Card>
+  <Card title="Readme" href="https://github.com/MeteoraAg/meteora-pool-setup/blob/main/README.md" icon="file-lines" iconType="solid" horizontal>
+  [https://github.com/MeteoraAg/meteora-pool-setup/blob/main/README.md](https://github.com/MeteoraAg/meteora-pool-setup/blob/main/README.md)
+  </Card>
+  <Card title="Alpha Vault Launch Calculation template" href="https://docs.google.com/spreadsheets/d/1IZps6htpJJ2MAp-4KMzLP7LQ5JacNznJu7EEJTK9k9Y/edit?usp=sharing" icon="table" iconType="solid" horizontal>
+  Copy this [google sheet](https://docs.google.com/spreadsheets/d/1IZps6htpJJ2MAp-4KMzLP7LQ5JacNznJu7EEJTK9k9Y/edit?usp=sharing.) and adjust the numbers to help determine your preferred parameters.
+  </Card>
+</CardGroup>
+### Dependencies
+
+* **Install Bun**: You'll also need [bun](https://bun.sh/) to run the scripts. Install it via [bun installation](https://bun.sh/docs/installation). Then install the dependencies by running the command `bun install`
+
+## Scripts
+
+The following code examples can be used to initialize and seed a Dynamic AMM liquidity pool on Meteora.
+
+We also have code examples for interacting with the Alpha Vault program. Use these examples to create and manage vaults, handle deposits and withdrawals, manage permissioned and permissionless vault configurations, and interact with escrow accounts.
+
+### 1. Create Dynamic AMM Pool
+
+* Clone repo: [https://github.com/MeteoraAg/meteora-pool-setup](https://github.com/MeteoraAg/meteora-pool-setup)
+
+* Select an example config from the list to reference and change the parameters inside according to your needs: [https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config](https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config)
+
+* Run the script with config file specified in the CLI.
+
+* Run: `bun run src/create_pool.ts --config <./config/create_dynamic_amm_pool.json>`
+
+* Replace `<./config/create_dynamic_amm_pool.json>`with the path to your config file, after you have selected the type of config from the list and set your config parameters.
+
+#### **Examples:**
+
+#### **A) Create a standard Dynamic AMM Pool**
+
+Run:
+
+`bun run src/create_pool.ts --config ./config/create_dynamic_amm_pool.json`
+
+#### **B) Create a Dynamic AMM Pool with new token mint**
+
+Run:
+
+`bun run src/create_pool.ts --config ./config/create_dynamic_amm_pool_with_new_token.json`
+
+#### **C) Lock Liquidity for Dynamic AMM Pool**
+
+`bun run src/lock_liquidity.ts --config ./config/lock_liquidity.json`
+
+### 2. Create a Dynamic AMM Pool with Alpha Vault
+
+* Reference this example config: [https://github.com/MeteoraAg/meteora-pool-setup/blob/main/config/create\_dynamic\_amm\_pool\_with\_fcfs\_alpha\_vault.json](https://github.com/MeteoraAg/meteora-pool-setup/blob/main/config/create_dynamic_amm_pool_with_fcfs_alpha_vault.json)
+
+* Change the parameters in the config according to your needs.
+
+* Run the config after it has been updated with your parameters:
+
+  * `bun run src/create_alpha_vault.ts --config ./config/create_dynamic_amm_pool_with_fcfs_alpha_vault.json`
+
+**Important Notes**:
+
+* If you do not want to use Alpha Vault, skip this step.
+
+* Currently, only SOL or USDC is accepted as the quote token when initializing a Dynamic AMM or DLMM Pool with Alpha Vault in a permissionless setup. Since the Alpha Vault can't tell what the quote token would be, the quote token is limited to SOL or USDC. However, any quote token can be used if you use a config key that doesn't have Alpha Vault.
+
+* If you plan to use a multisig on the Meteora website, please make sure it is the SquadsX multisig, as that is the only type supported on Meteora website. Otherwise, you can't manage liquidity through the website.
+
+* There is a minimum \~1 hour 5 minutes period between the deposit close time and the pool activation time.
+
+### After deployment
+
+To view pool on the UI, access the link below
+
+* For Dynamic AMM pool: `https://app.meteora.ag/pools/<POOL_ADDRESS>`
+
+## When can you withdraw tokens from the pool to the position owner?
+
+* CustomizablePermissionless DLMM: After pool activation point (trading starts)
+
+* CustomizablePermissionless Dynamic AMM: After pool activation point (trading starts)
+
+* Permissioned DLMM: Anytime
+
+* Permissioned Dynamic AMM: Doesn't support Alpha Vault
+
+## Other Configuration Details
+
+There are various config files that can be found in the `config` directory.
+
+It contains all the configurations required to run the scripts. We also need to provide the keypair for the payer wallet in `keypair.json` file.
+
+#### General configuration
+
+* `rpcUrl`: Solana RPC URL to get data and send transactions.
+
+* `keypairFilePath`: Keypair file path to send transactions.
+
+* `dryRun`: Set to true to send transactions.
+
+* `createBaseToken`: Configuration to create base token.
+
+* `baseMint`: Base token address if the `createBaseToken` field is not set.
+
+* `quoteSymbol`: Quote token symbol, only `SOL` or `USDC` is supported.
+
+* `baseDecimals`: Base token decimal.
+
+* `dynamicAmm`: Dynamic AMM pool configuration.
+
+* `dlmm`: DLMM pool configuration.
+
+* `alphaVault`: Fcfs or Prorata Alpha Vault configuration.
+
+#### **Some configuration constraints**:
+
+* `createBaseToken` and `baseMint` cannot be used together.
+
+* `dynamicAmm` and `dlmm` cannot be used together.
+
+#### Create Base Token configuration
+
+* `mintBaseTokenAmount`: Base token amount to be minted.
+
+#### Dynamic AMM configuration
+
+* `baseAmount`: Base token amount.
+
+* `quoteAmount`: Quote token amount.
+
+* `tradeFeeNumerator`: Trade fee numerator, with fee denominator is set to 100\_000.
+
+* `activationType`: To activate pool trading base on `slot` or `timestamp`.
+
+* `activationPoint`: To activate pool trading at a point, either slot valut or timestamp value base on `activationType`.
+
+* `hasAlphaVault`: Whether alpha vault is enabled or not for this pool.
+
+#### Alpha Vault configuration
+
+* `poolType`: `dynamic` or `dlmm` pool type.
+
+* `alphaVaultType`: Alpha Vault type, could be `fcfs` or `prorata`
+
+* `depositingPoint`: Absolute value that, the slot or timestamp that allows deposit depend on the pool activation type.
+
+* `startVestingPoint`: Absolute value, the slot or timestamp that start vesting depend on the pool activation type.
+
+* `endVestingPoint`: Absolute value, the slot or timestamp that end vesting depend on the pool activation type.
+
+* `maxDepositCap`: Maximum deposit cap.
+
+* `individualDepositingCap`: Individual deposit cap.
+
+* `escrowFee`: Fee to create stake escrow account. If this fee is added, it will be a one-time fee charged when users create a stake escrow account. This acts as a tax and makes it prohibitively expensive for users to attempt to use multiple wallets to bypass the individual deposit cap. It's charged in native SOL (non-wrapped version) and will be sent to the Meteora treasury.
+
+* `whitelistMode`: `permissionless` or `permission_with_merkle_proof` or `permission_with_authority`.
+
+#### Alpha Vault Prorata configuration
+
+* `depositingPoint`: Absolute value that, the slot or timestamp that allows deposit depend on the pool activation type.
+
+* `startVestingPoint`: Absolute value, the slot or timestamp that start vesting depend on the pool activation type.
+
+* `endVestingPoint`: Absolute value, the slot or timestamp that end vesting depend on the pool activation type.
+
+* `maxBuyingCap`: Maximum buying cap.
+
+* `escrowFee`: Fee to create stake escrow account. If this fee is added, it will be a one-time fee charged when users create a stake escrow account. This acts as a tax and makes it prohibitively expensive for users to attempt to use multiple wallets to bypass the individual deposit cap. It's charged in native SOL (non-wrapped version) and will be sent to the Meteora treasury.
+
+* `whitelistMode`: `permissionless` or `permission_with_merkle_proof` or `permission_with_authority`.
+
+#### **Alpha Vault Key Components**
+
+* **Vault Types:** Supports both **permissionless** (without whitelist) and **permissioned** (with whitelist) Alpha Vaults.
+
+* **Whitelist Modes:**
+
+  * Without whitelist:
+
+    * `Permissionless`
+
+  * With whitelist:
+
+    * `PermissionWithMerkleProof`
+
+    * `PermissionWithAuthority`
+
+* **alphaVaultType (Vault Mode):**
+
+  * `Pro-rata`
+
+  * `FCFS` (First-Come, First-Served)
+
+* **Individual Deposit Cap:**
+
+  * Global individual deposit cap without whitelist only possible on FCFS vault mode, not possible on Pro rata vault mode.

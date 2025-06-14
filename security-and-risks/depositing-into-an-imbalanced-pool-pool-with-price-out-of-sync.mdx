@@ -1,0 +1,40 @@
+---
+title: "Depositing into an Imbalanced Pool / Pool with Price Out of Sync"
+description: "The ratio of tokens in the dynamic pool determines the price of the tokens in the pool."
+---
+
+## Dynamic pool
+
+As a liquidity provider, it is important that you check that the pool price is **in sync with the general market price** or your deposit will be impacted by arbitrage trades, causing you to incur a loss.
+
+For example, as a pool creator for a SOL/USDC pool when the current market price is 1 SOL = 100 USDC, you would need to add 100 USDC for every 1 SOL you add to the pool. If you only added 50 USDC for every 1 SOL, this differs from the market price and you can lose money as arbitragers take advantage of your low SOL price by buying your SOL at a cheaper rate and selling it on another DEX at market rate, profiting from the difference.
+
+## DLMM pool
+
+Sometimes, the initial price in the DLMM pool may not be in sync with the broader market price, especially when it was just created with a wrong initial price and has low liquidity.
+
+As a liquidity provider, it is important that you check that the pool price is **in sync with the general market price** or your deposit will be impacted by arbitrage trades, causing you to incur a loss.
+
+**Important:** As a reference for market price for the token, Meteora uses [Jupiter](https://jup.ag/)'s price API. However, this is just an estimate. Before adding liquidity, LPs should always check and compare the Meteora pool price with all other markets (e.g. other DEX pools) that have liquidity for the token to have a better sense of the general market price.
+
+<Frame>
+  <img src="/images/security-and-risks/image-1.png" />
+</Frame>
+
+LPs can first use the "Sync with Jupiter's price" button to sync the pool price with Jupiter price before adding liquidity, to avoid the risk of loss due to arbitrage trades. Example image attached.
+
+<Frame>
+  <img src="/images/security-and-risks/image-2.png" />
+</Frame>
+
+The "[Sync with Jupiter's price](https://x.com/MeteoraAG/status/1788392736959373452)" feature is only available for out of sync DLMM pools:
+
+* With 0 liquidity between the active bin and the Jupiter price bin, or
+
+* With liquidity in a bin that's close enough to the Jupiter price bin.
+
+If there's already liquidity in bins between the active price bin and market price bin, but those bins aren't close enough to the Jupiter price, "Sync with Jupiter's price" won't be available.
+
+In that scenario, the only way to sync the price is to either wait for arbitrage trades to occur through the pool, or manually make a few tiny swaps through the pool on your own in the appropriate swap order.
+
+For example, if the USDC/SOL pool price is currently lower (cheaper) than Jupiter's price, you'd need to make a few tiny swaps from USDC to SOL (buy SOL with USDC) until USDC/SOL pool price increases to a point it's similar to Jupiter's price.

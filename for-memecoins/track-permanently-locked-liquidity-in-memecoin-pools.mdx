@@ -1,0 +1,84 @@
+---
+title: "Track Permanently-Locked Liquidity in Memecoin Pools"
+description: "via sdk / on-chain / api"
+---
+
+*This section is under construction. More details will be added soon.*
+
+## How to verify the fee owner for the fees from perma-locked liquidity in the Memecoin pool?
+
+* Go to the escrow address on solscan
+
+* Click `Data` tab
+
+* Under `LockEscrow - JSON`
+
+Alternatively, if the pool liquidity is fully locked (won't work if there's non-locked LP tokens), you can use the following steps:
+
+* Go to the LP mint address on solscan
+
+* Under `Holders`, select the holder account (not the token account)
+
+* Click `Data` tab
+
+* Under `LockEscrow - JSON`, search for `owner` field and view the address
+<Frame>
+<img src="/images/for-memecoins/memecoins-6.png" alt="LockEscrow" />
+</Frame>
+## How to get the LockEscrow account address for the user wallet?
+
+There's a different LockEscrow address created for each wallet that locks the LP.
+
+The first lock transaction will create a `createLockEscrow` transaction, then there will be a `Lock` transaction. For each wallet, subsequent locks will go to the same lock address.
+
+Example:
+
+<CardGroup cols={1}>
+<Card title="createLockEscrow" href="https://solscan.io/tx/2hiigq63TH3WkRjKPW6SDbYn3MtHPcBXkLTsyw3HoqFayXm3SNnvxXQcJC9j6HgGTKVZkPc38PwtMEaGHQZehd8S" icon="angle-right" iconType="solid" horizontal>
+https://solscan.io/tx/2hiigq63TH3WkRjKPW6SDbYn3MtHPcBXkLTsyw3HoqFayXm3SNnvxXQcJC9j6HgGTKVZkPc38PwtMEaGHQZehd8S
+</Card>
+<Card title="Lock" href="https://solscan.io/tx/4T92iq3aVSmqXBgTuXeMbqnXgGnEPD2UEkUF2kt8sZtg7pcbXatLNRJBmtBdyf2Kge7mkZoLpWjwZgwwXXj2nrZC" icon="angle-right" iconType="solid" horizontal>
+https://solscan.io/tx/4T92iq3aVSmqXBgTuXeMbqnXgGnEPD2UEkUF2kt8sZtg7pcbXatLNRJBmtBdyf2Kge7mkZoLpWjwZgwwXXj2nrZC
+</Card>
+</CardGroup>
+
+### Find LockEscrow account address for the Memecoin Pool creator wallet
+
+For a Memecoin Pool that's created where the liquidity is auto-locked as part of Memecoin Pool creation, you can get the LockEscrow account of the creator through the LP mint.
+
+Example:
+<CardGroup cols={1}>
+<Card title="Pool tx" href="https://app.meteora.ag/pools/BaMGxrARK2xrW7wMV6LmJ3742D29J2sz8mpWx3zTePhD" icon="angle-right" iconType="solid" horizontal>
+[https://app.meteora.ag/pools/BaMGxrARK2xrW7wMV6LmJ3742D29J2sz8mpWx3zTePhD](https://app.meteora.ag/pools/BaMGxrARK2xrW7wMV6LmJ3742D29J2sz8mpWx3zTePhD)
+</Card>
+<Card title="LP mint tx" href="https://solscan.io/account/CdThU2kprkW3JKphqQRUtAEH5JDA6zCr5Mxmn1k3w8Sx" icon="angle-right" iconType="solid" horizontal>
+[https://solscan.io/account/CdThU2kprkW3JKphqQRUtAEH5JDA6zCr5Mxmn1k3w8Sx](https://solscan.io/account/CdThU2kprkW3JKphqQRUtAEH5JDA6zCr5Mxmn1k3w8Sx)
+</Card>
+<Card title="LockEscrow" href="https://solscan.io/tx/4T92iq3aVSmqXBgTuXeMbqnXgGnEPD2UEkUF2kt8sZtg7pcbXatLNRJBmtBdyf2Kge7mkZoLpWjwZgwwXXj2nrZC" icon="angle-right" iconType="solid" horizontal>
+[https://solscan.io/tx/4T92iq3aVSmqXBgTuXeMbqnXgGnEPD2UEkUF2kt8sZtg7pcbXatLNRJBmtBdyf2Kge7mkZoLpWjwZgwwXXj2nrZC](https://solscan.io/tx/4T92iq3aVSmqXBgTuXeMbqnXgGnEPD2UEkUF2kt8sZtg7pcbXatLNRJBmtBdyf2Kge7mkZoLpWjwZgwwXXj2nrZC)
+</Card>
+</CardGroup>
+
+### Use this to fetch all lock escrows for a user wallet address
+
+<Card title="https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk/blob/master/ts-client/src/amm/index.ts#L1476" href="https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk/blob/master/ts-client/src/amm/index.ts#L1476" icon="github" iconType="solid" horizontal/>
+
+### To view total locked for each pool address, you can use this
+
+<Card title="https://dexscreener-adapter.meteora.ag/all-lock" href="https://dexscreener-adapter.meteora.ag/all-lock" icon="angle-right" iconType="solid" horizontal/>
+
+## **Important: For Memecoins that want to permanently lock liquidity, lock it before Pool activation time**
+
+If the project wants to permanently lock liquidity in the Memecoin pool, they should ideally lock the liquidity BEFORE the pool starts trading, so that swap fees from locked liquidity are captured the second trading starts.
+
+In a scenario where:
+
+* The pool started trading - t0
+
+* Liquidity gets deposited to the pool by the project, but not locked - t1
+
+* Subsequently, that liquidity is permanently locked by the project - t2
+
+The project will not be able to claim swap fees earned from t1 to t2, since fees from t1 to t2 are assigned to the LP token before the LP token gets permanently locked. When the LP token gets locked, the earlier fees are locked along with it.
+
+The project will only be able to claim swap fees from locked liquidity starting from t2.

@@ -1,0 +1,34 @@
+---
+title: "SOL Required for Rent"
+description: "One of the reasons why the Solana blockchain is able to efficiently store data is its novel “rent” mechanism. Solana creates different accounts to record the data related to the transfer and ownership of tokens between different user wallet addresses, as well as other programmatic transactions on the blockchain. Since transaction history or other data stored on the Solana blockchain use resources, a rent fee is imposed."
+---
+
+SOL is the crypto used as a rent fee to create or maintain each unique account on Solana, with the amount of SOL rent dependent on the necessary data resource used for the account.
+
+For example, when you receive a new token in your wallet for the first time, a token associated account (ATA) owned by your wallet gets automatically created and a SOL rent is charged in the process.
+
+In some scenarios, SOL used for rent is **refundable.** If an account is closed, the associated data resource being used on Solana gets freed up and the rent is refunded back to your address (account owner).
+
+## On Meteora
+
+### Dynamic AMM Pool
+
+When you create a [Dynamic AMM pool](/dynamic-pool/dynamic-amm-pools/dynamic-amm-overview), you may need to pay some rent to open ATAs ([Associated Token Accounts](https://spl.solana.com/associated-token-account)) on Solana. This is roughly \~0.01561672+ SOL (may change over time).
+
+### DLMM Pool
+
+When you create a [DLMM position](/faq/dlmm-faq#adding-liquidity), you also need to pay some rent.
+
+* **Position rent:** Rent of \~0.057-0.059 SOL per position is required to open the program account and store data related to your liquidity position. This is **refundable**; you get it back when you withdraw your liquidity and close the position.
+
+* **binArray creation rent:** If you happen to be the first to create the specific price bins in the pool, meaning no LPs have used those price bins before, you will also need to pay the rent to create the binArray program account that stores the bins and this rent is unfortunately **non-refundable** (\~0.075 SOL per binArray). But once they are created no one else has to pay that rent again. Meteora can't close that program account because other LPs may have liquidity in those bins.
+
+When you close your own position, you still get back the standard rent for your position (\~0.057-0.059 SOL per position).
+
+**You can check the costs involved for opening your position/s**
+
+Before you add liquidity, you can view the total amount of SOL required to open your positions. SOL required for the position rent has the "Refundable" label, while the SOL required for creating new bin arrays has the "Non-Refundable" label. Example image attached.
+
+<Frame>
+<img src="/images/getting-started/gs.png" />
+</Frame>

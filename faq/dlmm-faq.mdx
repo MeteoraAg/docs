@@ -1,0 +1,360 @@
+---
+title: "DLMM FAQ"
+---
+
+## Adding Liquidity
+<AccordionGroup>
+   <Accordion title="1. When adding liquidity into DLMM, do users get an LP token or NFT that represents their position?">
+      No, the user (owner) just creates a unique DLMM position / program account.
+   </Accordion>
+   <Accordion title="2. Why do I need to pay 0.05+ SOL when I open a DLMM position?">
+      As described [here](/faq/getting-started/sol-required-for-rent), on Meteora, when a [DLMM position](/faq/dlmm-faq#adding-liquidity) is created, rent is required to open the program account and store data related to your liquidity position. This is refundable. You get it back when you withdraw your liquidity and close the position.
+   </Accordion>
+   <Accordion title="3. How often do you need to pay rent on DLMM?">
+
+      Whenever you open a new position, you will need to pay:
+
+      * Position rent of \~0.057-0.059 SOL. This is refundable.
+
+      * binArray creation rent (if the binArray has never been initialized before) of \~0.075 SOL per bin array. This is non-refundable.
+
+      Adding liquidity into the same position would not require additional rent. Read more [here](/faq/getting-started/sol-required-for-rent).
+   </Accordion>
+   <Accordion title="4. Can I check my price range in DLMM if I already added liquidity?">
+      Yes you can look at your price range in the liquidity chart under "Your Positions".
+   </Accordion>
+   <Accordion title="5. I had provided liquidity in a DLMM pool, now that the price has gone out of range, is it possible to change the range of my liquidity without withdrawing my tokens and re-adding them?">
+   No, you cannot change the price range on the inactive liquidity. Note that inactive liquidity doesn't earn any fees.
+
+   You can either:
+
+   1. Wait for the price to return within your range, especially if it is not too far out
+
+   2. Or if you want to continue earning fees immediately, rebalance by withdrawing your liquidity and opening a new position with a new price range / use additional funds to open a new position with a new price range
+   </Accordion>
+   <Accordion title="6. I deposited liquidity with two tokens. Why am I left with only one token and my position becomes inactive / out of range?">
+
+   The tokens you deposit into the DLMM pool are used as liquidity for traders to swap and in return you earn fees. As swaps take place, the active price changes and the token amounts in your position would fluctuate. If the current active price moves outside of the price range you initially set, your position becomes inactive and you stop earning fees. Your position would be left with only **one type of token** in the pair, because 100% of the other token would have been sold in exchange for your remaining token. You cannot change your price range for your position once created.
+
+   You can either:
+
+   1. Wait for the price to return within your range, especially if it is not too far out
+
+   2. Or if you want to continue earning fees immediately, rebalance by withdrawing your liquidity and opening a new position with a new price range / use additional funds to open a new position with a new price range
+   </Accordion>
+   <Accordion title="7. When adding liquidity, why does the wallet simulation pop-up show a different token amount from the UI?">
+      When you add liquidity to a DLMM pool, the function does a balanced deposit for the active bin, based on the token ratio in the active bin. There’s usually a tiny discrepancy between what is shown on the UI vs what is on the wallet simulation. We are making improvements so that they would show the exact amount as the simulation.
+   </Accordion>
+   <Accordion title="8. When adding liquidity, do the two token types in a pair need to be in a 50:50 deposit for the active bin?">
+      No. When you deposit, if the price range covers the active bin, you will deposit according to the ratio of the 2 token types in the pool.
+   </Accordion>
+   <Accordion title="9. What determines the deposit amount for each token type in a pair on DLMM? For example, if depositing into a BONK-SOL pool, should the two tokens be of the same ratio and have the same value in USDT (50:50 autofill)?">
+   For DLMM, it is not necessary for both token deposits to have the same value. This depends on your trading and volatility strategy. For example, whether you aim to sell more of a particular token e.g. BONK or SOL at certain bins and bin prices, within the price range you set when using the[ Spot, Curve, or Bid Ask volatility strategy](/dlmm/strategies-and-use-cases).
+   </Accordion>
+   <Accordion title="10. Why can’t I set a wider price range than what is immediately shown?">
+      While DLMM is in beta, we have a max of 69 bins. You can open more positions if you need a wider price range or choose a pool with a larger bin step.
+   </Accordion>
+   <Accordion title="11. How are DLMM fees paid out? Do they auto-compound back into your liquidity position?">
+      No, you’d have to claim fees manually.
+   </Accordion>
+   <Accordion title="12. Within the price range you set (across multiple bins), does only the active bin earn trading fees?">
+      LPs get fees as long as successful swaps happen within their active price range in the pool. This could be swaps within the same active bin or swaps that resulted in closed bin(s) and a new active bin and price. Note that there can only be one active bin at any point in time. For more information, please refer to [this section](/dlmm/dlmm-program).
+   </Accordion>
+   <Accordion title="13. What does the height of the bin bar (y axis) on the liquidity chart represent?">
+    The amount of tokens in terms of the quote token (right side token) in the bin.
+
+    Y axis (height of the bin bar) = (Amount of base token x the bin price) + quote token = Total quote value.
+
+    Example: For [this SOL-USDC pool](https://app.meteora.ag/dlmm/FoSDw2L5DmTuQTFe55gWPDXf88euaxAEKFre74CnvQbX), SOL = base token, USDC = quote token
+   </Accordion>
+   <Accordion title="14. What do the faded grey bins at the bottom represent when I am setting my price range?">
+      The faded grey bins represent the liquidity positions of other users in the pool, which gives you a sense of the price range where most liquidity currently resides. When you adjust your price range the bins get highlighted a darker shade of grey. The height of the faded grey bins shows the relative amount of liquidity in that bin compared to the other bins.
+   </Accordion>
+   <Accordion title="15. How do DLMM bins quote prices?">
+      Let's say the current active bin price is 64.80 USDC/SOL. And due to the bin step, the next bin price is 64.74 USDC. The DLMM will always quote whatever is the active bin as the pool price, so if another DEX quotes 64.79 USDC, they will win the volume as the DLMM will continue to quote 64.80 USDC until it moves down to the next bin at 64.74 USDC.
+
+      The active bin will switch down to 64.74 USDC when it has exchanged all its USDC for SOL and then move to the next bin that has USDC in order to fill any trade that is selling SOL for its USDC.
+   </Accordion>
+   <Accordion title="16. Is there a deposit cap for DLMM?">
+      No, deposit cap has been lifted. Previously, there was a cap of $1.5 Million while we did further optimizations on our beta.
+   </Accordion>
+   <Accordion title="17. The pool that I deposited funds into is now missing on the frontend. How do I see it again?">
+      Sometimes there are test pools and we want to prevent LPs from depositing into those. You can use this link: [https://app.meteora.ag/dlmm?internal=true](https://app.meteora.ag/dlmm?internal=true) which sets internal=true so that you can see hidden pools on the UI.
+   </Accordion>
+   <Accordion title="18. What is Volatility Strategy? What are some example use cases for Spot, Curve, Bid Ask?">
+      Please refer to [this section](/dlmm/strategies-and-use-cases).
+   </Accordion>
+   <Accordion title="19. Why do I sometimes need to pay higher rent than 0.05+ SOL when I open a DLMM position? Why can't I receive this rent back?">
+      If you happen to be the first to create the specific price bins in the pool, meaning no LPs have used those price bins before, you will need to pay the rent to create the binArray program account (that stores the bins) and this rent is unfortunately non-refundable. But once they are created no one else has to pay that rent again.
+   </Accordion>
+   <Accordion title="20. When I withdraw liquidity without closing my position, will fees be automatically claimed?">
+      No, you have to claim fees separately. Alternatively, withdraw AND close position to claim the fees automatically.
+   </Accordion>
+   <Accordion title="21. When I withdraw liquidity AND close my position, will fees be automatically claimed?">
+      Yes. But you also have the option to only claim fees first and keep your liquidity position open.
+   </Accordion>
+   <Accordion title="22. For example, in a standard SOL-WIF pool, when traders swap their SOL for my WIF, what token do I receive as fee?">
+    Traders swap their SOL for your WIF in the position, you receive SOL fee
+
+      Traders swap their WIF for your SOL in the position, you receive WIF fee
+   </Accordion>
+   <Accordion title="23. What do I do if the pool price is out of sync with market price?">
+    For a few DLMM pools created with an inaccurate initial price or with low liquidity, the pool price may be out of sync with market price. LPs can first sync the pool price with market price before adding liquidity, to avoid the risk of loss due to arbitrage trades.
+
+    The "[Sync with Jupiter's price](https://x.com/MeteoraAG/status/1788392736959373452)" feature is only available for out of sync DLMM pools:
+
+    a) With 0 liquidity between the active bin and the market price bin, or
+
+    b) With liquidity in a bin that's close enough to the market price bin.
+
+    If there's already liquidity in bins between the active price bin and market price bin, but those bins aren't close enough to the market price, "Sync with Jupiter's price" won't be available.
+   </Accordion>
+   <Accordion title="24. How is liquidity distributed in the bins when using the Spot volatility strategy?">
+    When using Spot volatility strategy for an A-B (base token-quote token) pool:
+
+    * bid side = tokenB\_balance should be \~equal between bins
+
+    * ask side = tokenA\_balance \* tokenA\_price\_in\_this\_bin should be \~equal between bins
+
+    For example
+
+    In a SOL-USDC pool,
+
+    * USDC is for the bid side (token B, quote token)
+
+    * SOL is for the ask side (token A, base token)
+
+    Liquidity bin distribution using Spot strategy:
+
+    * bid side = usdc\_balance should be \~equal between bins
+
+    * ask side = sol\_balance \* sol\_price\_in\_this\_bin should be \~equal between bins
+
+    Note: The "equal" here isn't exactly equal because there could be very minor precision loss when liquidity is added.
+   </Accordion>
+   <Accordion title="25. When adding liquidity into the active bin and it's an imbalanced deposit, can you add two tokens?">
+    No. For an imbalanced deposit into the active bin, you can only deposit one token in the pair, not both.
+   </Accordion>
+   <Accordion title="26. Why doesn't the DLMM Pool price match the exact price shown on data analytics sites e.g. Birdeye, DEX Screener?">
+    The DLMM Pool price is based on bin step and the current active price bin. With larger bin steps, the price change between two consecutive bins is larger and so the current pool price may not be as precise as the price shown on data analytics sites.
+   </Accordion>
+   <Accordion title="27. How do I check/identify the price range set for a DLMM position by using a Solana explorer?">
+    View the position address on [https://explorer.solana.com/](https://explorer.solana.com/) and navigate to the Anchor Data tab to find the Lower Bin Id and Upper Bin Id, before using this formula:
+
+    min\_price = (1 + bin\_step/10000) ^ lower\_bin\_id
+
+    max\_price = (1 + bin\_step/10000) ^ upper\_bin\_id
+   </Accordion>
+   <Accordion title="28. How do I check/identify the bin step of a DLMM position by using a Solana explorer?">
+    View the position address on [https://explorer.solana.com/](https://explorer.solana.com/) and navigate to the Anchor Data tab. Click on the Lb Pair address then click the Anchor Data tab again and scroll down to find the bin step.
+   </Accordion>
+   <Accordion title="29. What does the** `ExceedAmountSlippageTolerance` **error mean when trying to add liquidity?">
+    It means the active price bin moved too much while you were adding liquidity and exceeded the allowed liquidity slippage. Please increase your liquidity slippage allowance in settings.
+   </Accordion>
+   <Accordion title="30. After adding liquidity single-sided with only one token in a new position, and the price goes in range, then out of range again, why is there a difference between my final withdrawal amount and my initial deposit amount for that same token?">
+      There was likely an internal swap that happened because the active bin price moved in range while you added liquidity to your position.
+
+      Example scenario when you add USDC liquidity single-sided using Spot strategy:
+
+      * If the active price moved into your range while you added liquidity, you are actually depositing some USDC tokens into the active bin.
+
+      * There's an internal swap fee involved when depositing into the active bin, to get a balanced ratio between the 2 tokens in the active bin.
+
+      * Internal swap fee = \[USDC amount you have to swap to Token B to get a balanced ratio deposit of USDC and Token B in the active bin at that time] x \[Pool Base Fee %]
+
+      * To estimate the internal swap fee:
+
+         * Go to your remove liquidity tx link on solscan -> Instruction Details -> #3 - Meteora DLMM Program: RemoveLiquidityByRange -> Input Args section -> expand txs -> find the difference between fromBinId and toBinId numbers + 1 (e.g. 1176 - 1170 + 1 = 7)
+
+         <Frame>
+            <img src="/images/faq/faq-1.png" />
+         </Frame>
+
+         * USDC amount in one bin = \[USDC amount you deposited] / \[difference between fromBinId and toBinId numbers + 1]
+
+         * Estimated internal swap fee = \< \[USDC amount in one bin] x \[Pool Base Fee %]
+   </Accordion>
+</AccordionGroup>
+
+## Withdrawing Liquidity
+
+<AccordionGroup>
+   <Accordion title='1. If my liquidity position has a token with freeze authority enabled and is "frozen", can I withdraw the SOL portion of my position?'>
+
+   Yes. We support single-sided liquidity withdrawals, so you can select the token to withdraw. But the range you select should only consist of SOL and exclude the active bin (as it may contain both the token and SOL).
+   </Accordion>
+   <Accordion title="2. Why haven't I gotten back my refundable SOL (for position rent) when I have already withdrawn all liquidity from my positions?">
+      SOL rent paid earlier when you opened your position is only refunded when you close your position, not when you withdraw liquidity. Please close your liquidity position on the pool dashboard.
+   </Accordion>
+</AccordionGroup>
+
+## Farming on DLMM
+
+<AccordionGroup>
+   <Accordion title="1. How are DLMM farming rewards paid out? Do they compound?">
+
+   No, you’d have to claim farming rewards manually. We want to encourage more external projects to integrate DLMM and currently, setting up a compounding fee function may not be convenient for such integrations when accounting for fees to distribute to their own users.
+   </Accordion>
+   <Accordion title="2. Why doesn't my DLMM position earn any farming rewards?">
+   DLMM farming rewards work differently from farms for Dynamic Pools. There are no LP tokens to stake into a farm. You start earning DLMM farming rewards once you deposit liquidity in a price range that covers the active bin.
+
+   Rewards are distributed to the liquidity position in the active bin. But if swaps cause the price to move to a different active bin, rewards are distributed equally between bins crossed.
+
+   The proportion of rewards you get is based on your share of the liquidity position in those bins. The greater your share, the more rewards you get.
+
+   Basically, only your liquidity that earns fees will earn farming rewards, so you won't get any rewards if your position is out of range and not active. No rewards will be distributed to the bin if it has 0 liquidity.
+   </Accordion>
+   <Accordion title="3. Is the rate of reward distribution linear? What happens if there is no active liquidity?">
+   Yes, rewards are distributed at a fixed rate per second. For example, if there are 50,000 USDC in total farm rewards over 4 weeks (\~28 days), rewards are distributed at 0.020667 USDC per second. This is distributed to positions in the active bin and in bins crossed when the active bin changes.
+
+   If there's no liquidity in the active bin, rewards will accumulate and not be distributed. Using the same example above (50,000 USDC in total rewards at 0.020667 USDC per second), if there's no active liquidity for 10 days, total undistributed farming rewards will be \~17,856.288 USDC.
+   </Accordion>
+   <Accordion title='4. Are LM/farming rewards claimed calculated and shown under "Fees Earned (Claimed)"?'>
+   No. "Fees Earned (Claimed)" only shows swap fees claimed.
+
+   For more details on DLMM Farming Rewards, [click here](/dlmm/dlmm-farming-rewards).
+
+   </Accordion>
+   <Accordion title='5. How do I set up a farm?'>
+
+   Please open a ticket on discord. We need the following details:
+
+   1. Link to the pool you want to create a farm for
+
+   2. Token mint address for the reward token you want to give. You can specify up to two.
+
+   3. Duration the farm will run. We recommend 4 weeks. Whenever you add rewards it resets the farm duration. So for a 4 week farm, if you upload rewards at week 2, it will reset and distribute whatever rewards in the farm for 4 more weeks.
+
+   4. A wallet address to whitelist that will load the farming rewards.
+
+   </Accordion>
+   <Accordion title='6. When adding farming rewards to a new DLMM pool, can I use a token that is not part of the pair as the reward? How many token types can I give as rewards?'>
+      Yes you can use any token, up to 2 types of token.
+
+   </Accordion>
+   <Accordion title='7. Can I close or change my farm duration?'>
+
+   Farms are not designed to be changed or closed once created. If required, we can create a new farm with a shorter/longer duration for you.
+   </Accordion>
+</AccordionGroup>
+
+## Creating a DLMM pool
+
+<AccordionGroup>
+   <Accordion title="1. Who can create DLMM pools at the moment?">
+
+   Anyone can create a DLMM pool here [https://app.meteora.ag/dlmm/create](https://app.meteora.ag/dlmm/create)
+
+   </Accordion>
+   <Accordion title="2. As a new DLMM pool creator, why can’t I set a wider price range than what is immediately shown?">
+
+   While DLMM is in beta, we have a max of 69 bins. You can open more positions if you need a wider price range.
+
+   </Accordion>
+   <Accordion title="3. Can a new DLMM pool creator change the bin step after creation?">
+
+   No. A new pool creator will be able to set the bin step at creation, but won't be able to change it after.
+
+   </Accordion>
+   <Accordion title="4. As a pool creator, why do I sometimes pay higher rent than normal to open the position?">
+
+   If you happen to be the first to create the specific price bins in the pool, meaning no LPs have used those price bins before, you will need to pay the rent to create the binArray program account (that stores the bins) and this rent of \~0.075 SOL is unfortunately non-refundable. But once they are created no one else has to pay that rent again. When you close your own position, you still get back the standard rent for your position (\~0.057 SOL). Read more[ here](/faq/getting-started/sol-required-for-rent).
+
+   </Accordion>
+   <Accordion title="5. When creating a DLMM pool and setting the initial pool price, why does the eventual pool price deviate from my input?">
+
+   If the bin price cannot be represented exactly by the program, frontend will round up / down to the closest price. The deviation depends on the bin step the user selected.
+
+   </Accordion>
+</AccordionGroup>
+
+## General Questions
+
+<AccordionGroup>
+   <Accordion title="1. What are the differences between DLMM and Dynamic pools?">
+
+   Please read [this section](/faq/differences-between-dlmm-and-dynamic-pools).
+
+   </Accordion>
+   <Accordion title="2. What are the differences between a standard DLMM Pool and a DLMM Bootstrapping Pool?">
+
+   A DLMM Bootstrapping Pool is very similar to a standard DLMM Pool created using the UI, except that it supports a custom pool activation point, liquidity seeding using an [ILM curve](https://ilm.jup.ag/), and launching with an Alpha Vault.
+
+   </Accordion>
+   <Accordion title="3.For DLMM's Dynamic Fees, is the variable fee portion only charged when swaps crosses bins?">
+      Yes
+</Accordion>
+   <Accordion title="4. What is 24Hr Fee / TVL?">
+
+   For DLMM, 24hr fee are the trading fees earned in the last 24 hrs. This can vary quite a bit, so we show how much fees are earned in one day over the liquidity provided (TVL) in the pools. To extrapolate to a year, you would multiply by 365 days.
+
+   </Accordion>
+   <Accordion title="5. Is there a price feed / oracle used by DLMM?">
+
+   There is no price feed used. How the pool price syncs to the market price is through trades and arbitrage. This only happens if there is liquidity in a range from the market price to the current pool price, and the liquidity is picked up by Jupiter aggregator for trading. We will place a warning for users when the market price is out of sync with the pool price.
+
+   </Accordion>
+   <Accordion title="6. What is bin step?">
+
+   Each bin represents a single price point, and the difference between 2 consecutive bins is the bin step. Bin steps are calculated based on the basis points set by the pool creator. Bin step is similar to tick size and a higher size means a larger jump from one price to the next.
+
+   For example, if the current price for SOL/USDC is $20 per SOL and the bin step is 25 basis points (0.25%), then the consecutive bins would be 20 x 1.0025 = 20.05, 20.05 \* 1.0025 = 20.10 and so on.
+
+   **Smaller bin step:** Allows you to capture more volume, but, your max range per position is smaller. So a good rule of thumb is smaller steps for stable pairs and larger steps for more volatile pairs.
+
+   **Larger bin step:** Allows you to set a wider price range per position, but at the cost of less volume, since there's a less continuous price range (harder for liquidity to be picked up for swaps). But important for highly volatile pairs where price swings can be huge. Note: Currently the max # of bins per position is 69, so a larger bin step can be used if you need to widen your range.
+
+   **Base Fee:** The minimum fee charged per swap. Lower fee gets more volume but higher fee earns more per volume. Generally if you want a higher base fee, the higher the bin step. But a lower base fee than other DEXes might give more flexibility for dynamic fees to optimize for volume or fees given the market volatility. For more details on dynamic fees, please refer to [this section](/dlmm/dynamic-fees).
+
+   </Accordion>
+   <Accordion title="7. What is binArray?">
+
+   * binArray is the program account created to store liquidity from the pool’s position.
+
+   * binArray = Sum of the pool’s position. e.g. the positions of 4 different users.
+
+   If you happen to be the first to create the specific price bins in the pool, meaning no LPs have used those price bins before, you will need to pay the rent to create the binArray program account (that stores the bins) and this rent is unfortunately **non-refundable**. Meteora can't close that program account because other LPs may have liquidity in those bins. But once they are created no one else has to pay that rent again.
+
+   </Accordion>
+   <Accordion title="8. How many binArrays are required for a single liquidity position?">
+
+   Normally one liquidity position will require around 2 binArrays. There is a program requirement of having a fixed 69 bins per position. As we don't want to break the position interface, we need 2 bin arrays for one position to have 100% full position coverage.
+
+   </Accordion>
+   <Accordion title="9. How do I calculate my impermanent loss on DLMM?">
+
+   There is a formula to calculate the impermanent loss for a given start and end point based on the relative price changes between the assets in the pool.
+
+   We created a [simple google sheet](https://docs.google.com/spreadsheets/d/1RIlAb-eilVWUVzruDUWR7Sidt8LI-GB1VIBhiKC_ccI/edit?usp=sharing) as a helpful tool to manage your IL on the DLMM. It is currently set up for checking a position with 69 bins and an equal distribution of liquidity across the bins. Your actual liquidity distribution may be very different and would change the IL calculation here. Additionally, your 24hr fee / TVL for your position may also be different.
+
+   </Accordion>
+   <Accordion title="10. How do I get notified if my token price goes out of range on DLMM?">
+
+   Right now you can either use:
+
+   [Dialect notifications on Meteora](https://x.com/MeteoraAG/status/1788222765251833886):
+
+   Set up your preferred alert channel (e.g. web app, Telegram, email) and receive alerts whenever your all DLMM positions in a pool go out of range, plus quickly view the affected liquidity pool.
+
+   or
+
+   [DEXScreener](https://dexscreener.com/solana/meteora):
+
+   Find the pool you are LPing in and set a notification for a price change that goes out of range of your liquidity.
+
+   </Accordion>
+   <Accordion title="11. Is there an introduction video for DLMM beginners?">
+
+   Please watch these videos:
+   <CardGroup>
+    <Card title="DLMM walkthrough" href="https://www.youtube.com/watch?v=HV-Enxuet60" icon="youtube" icoType="solid" horizontal />
+    <Card title="Basic DLMM Community Explainer" href="https://x.com/MeteoraAG/status/1755962478364893316" icon="twitter" icoType="solid" horizontal />
+    <Card title="Customizing your DLMM range and liquidity distribution" href="https://www.youtube.com/watch?v=4nPbS6LZ_9I" icon="youtube" icoType="solid" horizontal />
+    <Card title="Getting started with Meteora" href="https://www.youtube.com/watch?v=Lz1h4AGK5YA" icon="youtube" icoType="solid" horizontal />
+
+    <Card title="What is LPing?" href="https://www.youtube.com/watch?v=c-7iFTZF9ic" icon="youtube" icoType="solid" horizontal />
+   </CardGroup>
+   You can also watch our LP Army [Jam Sessions](/faq/video-tutorials-to-get-started/dlmm-strategy-sessions-jam-sessions) or [Boot Camp Recaps](/faq/video-tutorials-to-get-started/lp-army-boot-camp)!
+
+   </Accordion>
+</AccordionGroup>

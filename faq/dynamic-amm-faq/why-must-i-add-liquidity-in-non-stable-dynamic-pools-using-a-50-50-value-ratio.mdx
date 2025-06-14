@@ -1,0 +1,44 @@
+---
+title: "Why Must I Add Liquidity in Non-Stable Dynamic Pools Using a 50:50 Value Ratio?"
+description: "Meteora's Dynamic AMM is based on the Automated Market Maker (AMM) model and is a constant product-type pool that support prices from 0 to infinity."
+---
+
+The Dynamic AMM sets the price of an asset in the pool based on the ratio of the two assets in the pool. You have to add liquidity in a 50:50 value ratio to maintain the balance of assets in the liquidity pool and ensure the Dynamic AMM operates as intended with more accurate market prices.
+
+Most AMMs, like Meteora's Dynamic AMM, use a constant product formula:
+
+x \* y = k
+
+Where:
+
+* x is the amount of one asset in the pair (e.g. SOL)
+
+* y is the amount of the other asset in the pair (e.g. USDC)
+
+* k is a constant that stays the same always
+
+To abide by this formula, the two assets in the pool must be provided in a balanced ratio of **equal value**. If one asset becomes significantly more valuable than the other, the pool would become imbalanced, affecting the token prices and trade volume.
+
+For example, if an LP is able to add SOL and USDC in an imbalanced ratio:
+
+* If the value of the SOL amount added to the pool is higher than the value of the USDC amount, the pool price of SOL will decrease
+
+* If the value of the SOL amount added to the pool is lower than the value of the USDC amount, the pool price of SOL will increase
+
+LPs depositing in an imbalanced ratio can also suffer a loss as arbitragers take advantage of the difference between the pool price and market price. For example, if the pool has a lower than market rate for SOL, arbitragers can buy your SOL at a cheaper rate and sell it on another DEX at market rate, profiting from the difference.
+
+As such, to avoid creating a wrong/skewed price, liquidity providers must deposit both assets in **equal value (50:50 in value)**. For example, if 1 SOL = 150 USDC, you must deposit 1 SOL and 150 USDC for the pool to provide accurate prices to traders.
+
+This helps ensure that both assets are available in the correct proportion and this is crucial because the Dynamic AMM pool uses these assets to facilitate trades.
+
+On a related note, read [why the USDT-USDC pool is not 1:1 in ratio of assets](/faq/dynamic-amm-faq/why-is-the-usdt-usdc-pool-not-1-1-in-ratio-of-assets).
+
+### **Things to note when creating a new Dynamic AMM Pool**
+
+The ratio of tokens is how you set the initial pool price. It is important that this is the market price or you will suffer loss due to arbitrage. So if you create a SOL/USDC pool, you would need to add the correct amount of USDC for every 1 SOL you add to the pool. If this is way off you can lose money as arbitragers take advantage of your low price.
+
+In order for your pool to be picked up by Jupiter, you need to follow the instructions [here](https://station.jup.ag/guides/general/get-your-token-on-jupiter).
+
+It may take a few minutes for your pool to appear on the Meteora pools list, but if the transaction is successful then it will be created on-chain even if you don't see it in the UI.
+
+Higher fee % tier means LPs like yourself make more money per trade. If all the liquidity for your token is in this pool you can start out with a high fee % tier, but, what tends to happen is that eventually others will create pools with a smaller fee to capture more volume. So for popular trading pairs, it mostly trades around 0.3% but can be higher for highly volatile pairs as LPs need to make enough fees to offset IL (impermanent loss).

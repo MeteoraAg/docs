@@ -1,0 +1,209 @@
+---
+title: "Using Typescript-Client SDK"
+description: "Mercurial AMM SDK is a typescript library that allows you to interact with Meteora's Dynamic Pools."
+---
+
+## Getting Started
+<CardGroup cols={1}>
+<Card title="NPM" href="https://www.npmjs.com/package/@mercurial-finance/dynamic-amm-sdk" icon="npm" iconType="solid" horizontal>
+[https://www.npmjs.com/package/@mercurial-finance/dynamic-amm-sdk](https://www.npmjs.com/package/@mercurial-finance/dynamic-amm-sdk)
+</Card>
+<Card title="SDK" href="https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk" icon="code" iconType="solid" horizontal>
+[https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk](https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk)
+</Card>
+<Card title="Discord" href="https://discord.com/channels/841152225564950528/864859354335412224" icon="discord" iconType="solid" horizontal>
+[https://discord.com/channels/841152225564950528/864859354335412224](https://discord.com/channels/841152225564950528/864859354335412224)
+</Card>
+<Card title="Program ID"icon="code" iconType="solid" horizontal>
+Program ID: Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB
+</Card>
+</CardGroup>
+
+## Devnet Testing
+<CardGroup>
+<Card title="Devnet" href="https://devnet.meteora.ag/" icon="globe" iconType="solid" horizontal>
+[https://devnet.meteora.ag/](https://devnet.meteora.ag/)
+</Card>
+</CardGroup>
+
+## Install
+
+<Steps>
+  <Step title="Install dependencies">
+
+```bash
+npm i @mercurial-finance/dynamic-amm-sdk @project-serum/anchor @solana/web3.js @solana/spl-token @solana/spl-token-registry
+```
+
+  </Step>
+  <Step title="Initialize AmmImpl instance">
+
+```typescript
+import AmmImpl, { MAINNET_POOL } from '@mercurial-finance/dynamic-amm-sdk';
+import { PublicKey } from '@solana/web3.js';
+import { Wallet, AnchorProvider } from '@project-serum/anchor';
+
+// Connection, Wallet, and AnchorProvider to interact with the network
+const mainnetConnection = new Connection('https://api.mainnet-beta.solana.com');
+const mockWallet = new Wallet(new Keypair());
+const provider = new AnchorProvider(mainnetConnection, mockWallet, {
+  commitment: 'confirmed',
+});
+// Alternatively, to use Solana Wallet Adapter
+
+const constantProductPool = await AmmImpl.create(connection, MAINNET_POOL.USDC_SOL);
+const stablePool = await AmmImpl.create(connection, MAINNET_POOL.USDT_USDC);
+
+// If you need to create multiple, can consider using `createMultiple`
+const pools = [MAINNET_POOL.USDC_SOL, MAINNET_POOL.USDT_USDC];
+const [constantProductPool, stablePool] = await AmmImpl.createMultiple(connection, pools);
+```
+
+  </Step>
+  <Step title="To interact with the AmmImpl">
+
+  * Get Lp Supply
+
+  ```typescript
+  // To refetch the pool's latest supply
+  // Alternatively, use `AmmImpl.poolState.lpSupply`
+  const lpSupply = await constantProductPool.getLpSupply();
+  ```
+
+  * Check pool balance
+
+  ```typescript
+  // Get the user's ATA LP balance
+  const userLpBalance = await constantProductPool.getUserBalance(mockWallet.publicKey);
+  ```
+
+  * Update pool state (It's recommended to update the deposit before perform any quotation)
+
+  ```typescript
+  await constantProduct.updateState();
+  ```
+
+  * Deposit to constant product
+
+  ```typescript
+  const inAmountALamport = new BN(1 * 10 ** constantProductPool.tokenA.decimals); // 1.0 SOL
+
+  // Get deposit quote for constant product
+  const { poolTokenAmountOut, tokenAInAmount, tokenBInAmount } = constantProductPool.getDepositQuote(
+    inAmountALamport,
+    new BN(0),
+  );
+
+  const depositTx = await constantProductPool.deposit(
+    mockWallet.publicKey,
+    tokenAInAmount,
+    tokenBInAmount,
+    poolTokenAmountOut,
+  ); // Web3 Transaction Object
+  const depositResult = await provider.sendAndConfirm(depositTx); // Transaction hash
+  ```
+
+  * Balance deposit to stable pool
+
+  ```typescript
+  const inAmountALamport = new BN(0.1 * 10 ** stablePool.tokenA.decimals);
+
+  const { poolTokenAmountOut, tokenAInAmount, tokenBInAmount } = stablePool.getDepositQuote(inAmountALamport, new BN(0));
+
+  const depositTx = await stablePool.deposit(mockWallet.publicKey, tokenAInAmount, tokenBInAmount, poolTokenAmountOut); // Web3 Transaction Object
+  const depositResult = await provider.sendAndConfirm(depositTx); // Transaction hash
+  ```
+
+  * Double side imbalance deposit to stable pool
+
+  ```typescript
+  const inAmountALamport = new BN(0.1 * 10 ** stablePool.tokenA.decimals);
+  const inAmountBLamport = new BN(0.1 * 10 ** stablePool.tokenB.decimals);
+
+  const { poolTokenAmountOut, tokenAInAmount, tokenBInAmount } = stablePool.getDepositQuote(
+    inAmountALamport,
+    inAmountBLamport,
+    false, // pass in false for imbalance deposit quote
+  ); // Web3 Transaction Object
+  const depositTx = await stablePool.deposit(mockWallet.publicKey, tokenAInAmount, tokenBInAmount, poolTokenAmountOut);
+  const depositResult = await provider.sendAndConfirm(depositTx); // Transaction hash
+  ```
+
+  * Single-side imbalance deposit to stable pool
+
+  ```typescript
+  const inAmountALamport = new BN(0.1 * 10 ** stablePool.tokenA.decimals);
+
+  const { poolTokenAmountOut, tokenAInAmount, tokenBInAmount } = stablePool.getDepositQuote(
+    inAmountALamport,
+    new BN(0),
+    false, // pass in false for imbalance deposit quote
+  ); // Web3 Transaction Object
+  const depositTx = await stablePool.deposit(mockWallet.publicKey, tokenAInAmount, tokenBInAmount, poolTokenAmountOut);
+  const depositResult = await provider.sendAndConfirm(depositTx); // Transaction hash
+  ```
+
+  * Balance withdraw from constant product
+
+  ```typescript
+  const outTokenAmountLamport = new BN(0.1 * 10 ** cpPool.decimals);
+
+  const { poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount } = cpPool.getWithdrawQuote(outTokenAmountLamport); // use lp balance for full withdrawal
+  const withdrawTx = await cpPool.withdraw(mockWallet.publicKey, poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount); // Web3 Transaction Object
+  const withdrawResult = await provider.sendAndConfirm(withdrawTx); // Transaction hash
+  ```
+
+  * Balance withdraw from stable pool
+
+  ```typescript
+  const outTokenAmountLamport = new BN(0.1 * 10 ** stablePool.decimals);
+
+  const { poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount } = stablePool.getWithdrawQuote(outTokenAmountLamport); // use lp balance for full withdrawal
+  const withdrawTx = await stablePool.withdraw(mockWallet.publicKey, poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount); // Web3 Transaction Object
+  const withdrawResult = await provider.sendAndConfirm(withdrawTx);
+  ```
+
+  * Imbalance withdraw from stable pool
+
+  ```typescript
+  const outTokenAmountLamport = new BN(0.1 * 10 ** stablePool.decimals);
+
+  const { poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount } = stablePool.getWithdrawQuote(
+    outTokenAmountLamport,
+    new PublicKey(stablePool.tokenA.address), // Pass in token A/B mint to perform imbalance withdraw
+  );
+  const withdrawTx = await stablePool.withdraw(mockWallet.publicKey, poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount); // Web3 Transaction Object
+  const withdrawResult = await provider.sendAndConfirm(withdrawTx);
+  ```
+
+  * Swap
+
+  ```typescript
+  const inAmountLamport = new BN(0.1 * 10 ** constantProductPool.tokenB.decimals);
+
+  // Swap SOL → USDT
+  const { minSwapOutAmount } = constantProductPool.getSwapQuote(
+    new PublicKey(constantProductPool.tokenB.address),
+    inAmountLamport,
+  );
+
+  const swapTx = await constantProductPool.swap(
+    mockWallet.publicKey,
+    new PublicKey(constantProductPool.tokenB.address),
+    inAmountLamport,
+    minSwapOutAmount,
+  );
+  const swapResult = await provider.sendAndConfirm(swapTx);
+  ```
+
+  * Update pool state
+
+  ```typescript
+  constantProductPool.updateState();
+  ```
+</Step>
+</Steps>
+
+## Any constraints on the quote token?
+
+No constraint on the quote token for a Dynamic AMM Pool. However, if the Dynamic AMM Pool is being launched with an Alpha Vault, SOL or USDC must be used as the quote token.

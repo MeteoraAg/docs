@@ -1,0 +1,99 @@
+---
+title: "Permissionless Dynamic AMM Pools"
+description: "The goal of Permissionless Dynamic Pools is to make it easy for projects to create pools for their tokens without reliance on any centralized or third party. This means greater flexibility, control, and transparency for everyone involved. Also since we are creating dynamic pools, added yield can be generated through lending for eligible tokens - making it attractive for LPs to contribute liquidity even if trading fees are low or a lack of LM rewards."
+---
+
+Below is a simple guide on the pool creation process:
+
+## Step 1: Select Pool Type
+
+Choose between the 3 pool types: Volatile, Stable, or Memecoin
+
+<Frame>
+  <img src="/images/dynamic-pool/dynamic-amm-pools/amm-1.png" alt="Pool Type" />
+</Frame>
+
+#### Volatile Pool
+
+Select "Volatile" as your pool type if 1 or more of your selected token is a non-stable coin i.e. SOL-USDC, MET-USDT etc.
+
+Selecting this option will allow you to set the initial price for your token by adjusting the ratio between the initial deposit amount of your token pair. Volatile Pool has a fixed base fee.
+
+#### **Stable Pool**
+
+Select "Stable" as your pool type if both of your tokens are stable coins i.e. USDC-USDT, UXD-USDC etc.
+
+Selecting this option will ensure that the liquidity ratio between the token pair remains at 1:1.
+
+#### [**Memecoin Pool**](/for-memecoins/dynamic-memecoin-pools)
+
+Select "Memecoin" as your pool type if your token is a new memecoin. This is a variation of the Volatile Pool type.
+
+Selecting this option locks your deposited liquidity permanently to raise community confidence but still allows you to earn fees on locked liquidity forever. Unlike Volatile Pool, which has a fixed base LP fee, Memecoin Pool allows the LP fee to be optimized and also has a volume referral fee component (which is a % of the LP fee). Integrators such as trading bots and Dapps, as well as Blink referrers are able to earn volume referral fees if they refer swap volume to your Memecoin Pool.
+
+### Step 2: Select token pair
+
+After selecting your pool type, you can start selecting your token pair for the pool.
+
+<Frame>
+  <img src="/images/dynamic-pool/dynamic-amm-pools/amm-2.png" alt="Token Pair" />
+</Frame>
+
+You can use the following ways to find and select the token.
+
+* Select your token directly from the token dropdown list
+
+* Enter the token symbol in the search bar and select the token from the filtered list
+
+* Enter the token mint address
+
+<Frame>
+  <img src="/images/dynamic-pool/dynamic-amm-pools/amm-3.png" alt="Token Pair" />
+</Frame>
+
+<Info>
+  You might see the "Unknown" label beside your selected token, this means that the token is not listed on Jupiter or has yet to be verified yet. You can refer to this document for more info on how to get your token listed on Jupiter:
+</Info>
+
+  <Card title="https://docs.jup.ag/docs/get-your-token-onto-jup" icon="link" iconType="solid" horizontal/>
+
+
+### Step 3: Deposit initial liquidity for both tokens
+
+<Info>
+  *If the pool price is different from the market price you will lose money to arbitragers. To minimize this loss, we recommend you put in \$600 worth of liquidity first. This will get you listed on Jupiter which will then automatically move your pool price to the market price. Once you see volume on the pool, Jupiter is likely trading against your liquidity. Then you can make a balanced deposit for the amount you were planning to seed the pool with.*
+</Info>
+
+After selecting your tokens, you can start to enter the initial deposit amount for each of your tokens.
+
+If you are creating a stable pool, your allowed deposits for both tokens will be in a 1:1 ratio. If you are creating a volatile pool, you can enter any initial deposit amount for both tokens, but do note that the initial deposit amount will determine the initial price you are setting for your tokens. So please take note to deposit the correct ratio especially if both tokens already have a market price. You can refer to the initial price for each token in the section below "Initial Price and Pool Setting"
+
+<Frame>
+  <img src="/images/dynamic-pool/dynamic-amm-pools/amm-4.png" alt="Token Pair" />
+</Frame>
+
+### Step 4: Click "Deposit and Create"
+
+If all the required fields have been entered - the pool will be created and you will be redirected to your new pool's detail page as shown below.
+
+You can begin depositing, withdrawing or swapping liquidity in the pool immediately.
+
+<Frame>
+  <img src="/images/dynamic-pool/dynamic-amm-pools/amm-5.png" alt="Token Pair" />
+</Frame>
+
+<Info>
+ It will take a few minutes for our system to update and make the pool available and searchable in the pool listing page
+</Info>
+
+Permissionless Pool Creation Link: [https://app.meteora.ag/pools/create](https://app.meteora.ag/pools/create)
+
+**Important Notes**
+
+1. The ratio of tokens is how the initial pool price is set. It is important that this is the **market price** or you will get arbitraged away. So if you create a SOL/USDC pool, you would need to add 75 USDC for every 1 SOL you add to the pool. If this is way off you can lose money as arbitragers take advantage of your low price.
+
+2. You need a minimum of \$600 in liquidity (combined value of token pair) for your pool to be picked up by Jupiter. This may take 30mins for the crawler to update. If at any time the liquidity goes below \$600 then it will auto-delist from Jupiter, but once it goes above, it will auto-relist. Please [visit here](https://station.jup.ag/guides/general/get-your-token-on-jupiter#how-to-get-your-pool-routed-on-jupiter) for the latest steps to get the token and pool listed on Jupiter.
+
+3. It may take a few minutes for your pool to appear on the Meteora pools list, but if the transaction is successful then it will be created on-chain.
+
+4. Any constraints on the quote token? No constraint on the quote token for a Dynamic AMM Pool. However, if the Dynamic AMM Pool is being launched with an Alpha Vault, SOL or USDC must be used as the quote token.

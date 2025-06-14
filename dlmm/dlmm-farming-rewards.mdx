@@ -1,0 +1,70 @@
+---
+title: "DLMM Farming Rewards"
+description: "DLMM farming rewards work differently from farms for Dynamic Pools. There are no LP tokens to stake into a farm. You start earning DLMM farming rewards once you deposit liquidity in a price range that covers the active bin."
+---
+
+## How rewards are distributed
+
+Rewards are distributed to the liquidity position in the active bin. But if swaps cause the price to move to a different active bin, rewards are distributed equally between bins crossed. For example, during a swap, active price moves from A -> C, but B is also within the range of active liquidity for the LP. Rewards will be equally distributed to the bins crossed for price points A, B, C.
+
+**Your share of rewards:** The proportion of rewards you get as an LP is based on your share of the liquidity position in the active bin and the bins crossed during swaps. The greater your share, the more rewards you get.
+
+Basically, only your liquidity that earns fees will earn farming rewards, so you won't get any rewards if your position is out of range and not active. No rewards will be distributed to the bin if it has 0 liquidity.
+
+### Is the rate of reward distribution linear? What happens if there is no active liquidity?
+
+Yes, rewards are distributed at a fixed rate per second. For example, if there are 50,000 USDC in total farm rewards over 4 weeks (\~28 days), rewards are distributed at 0.020667 USDC per second. This is distributed to positions in the active bin and in bins crossed when the active bin changes.
+
+If there's no liquidity in the active bin, rewards will accumulate and not be distributed. Using the same example above (50,000 USDC in total rewards at 0.020667 USDC per second), if there's no active liquidity for 10 days, total undistributed farming rewards will be \~17,856.288 USDC.
+
+### **How are rewards paid out? Do they compound?**
+
+No, you’d have to claim farming rewards manually.
+
+## Example
+
+50,000 USDC for 4 weeks (\~28 days) = 1,785.71 USDC per day
+
+Reward rate = 0.020667 USDC per second
+
+Starting active bin: 0
+
+`Time 00:00:`
+
+* `Position A deposit 70 in bin 0`
+
+* `Bin 0 total supply = 70`
+
+`Time 00:05:`
+
+* `Position B deposit 30 in bin 0`
+
+* `Position C deposit 100 in bin 1`
+
+* `Accumulated reward = 0.020667 * 5 = 0.103335 USDC`
+
+* `Position A get 0.103335 USDC`
+
+* `Bin 0 total supply = 70 (position A) + 30 (position B) = 100`
+
+* `Bin 1 total supply = 100`
+
+`Time 00:10: Someone swap, active bin moved to bin 1`
+
+* `Accumulated reward = 0.020667 * 5 = 0.103335 USDC`
+
+* `Reward per bin = 0.103335 / 2 = 0.0516675 USDC`
+
+* `Position A get 0.0516675 * 70 / 100 = 0.03616725 (bin 0)`
+
+* `Position B get 0.0516675 * 30 / 100 = 0.01550025 (bin 0)`
+
+* `Position C get 0.0516675 * 100 / 100 = 0.0516675 (bin 1)`
+
+`Current state:`
+
+* `Position A total reward = 0.103335 (from 00:00 -> 00:05) + 0.03616725 (from 00:05 -> 00:10)`
+
+* `Position B total reward = 0.01550025 (from 00:05 -> 00:10)`
+
+* `Position C total reward = 0.0516675 (from 00:05 -> 00:10)`

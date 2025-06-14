@@ -1,0 +1,132 @@
+---
+title: "Introduction"
+description: "Alpha Vault is a new anti-bot tool to guard against sniper bots and allow genuine supporters to be the first to buy tokens at launch."
+---
+
+The Alpha Vault doesn't hold any token supply at the start. The Alpha Vault collects SOL or USDC from users, then subsequently has the ability to buy tokens from the pool before public trading. SOL or USDC goes from the Alpha Vault into the pool, and token from the pool goes to the Alpha Vault - to be distributed to depositors.
+
+Projects who use the Alpha Vault have the flexibility to tailor vault parameters to suit their specific token launch requirements, such as setting maximum purchase limits and defining the lock-up and vesting periods for users.
+
+Our aim building such tools is to help projects ensure fairer token launches for their community.
+
+* **First-to-purchase ability:** The vault is whitelisted to buy tokens from the liquidity pool before the launch activation slot, so vault users can buy the token at the earliest (and likely lowest) price before the activation slot and thus before sniper bots.
+
+* **Fairer distribution:** All vault users get their tokens at the same average price and the amount of tokens received is proportional to their share of the total amount of USDC deposited.
+
+* **Configurable token lock-up period:** Projects can configure  ****vault parameters such that tokens bought by the vault are locked for a day or more, and subsequently vested for a few days, encouraging purchase by genuine supporters of the project.
+
+This solution mitigates against the negative effects of mercenary capital from sniper bots while encouraging purchase from genuine supporters, who'd be more willing to receive their tokens a day or so later than others. This helps ensure greater alignment between projects and token holders! Read about our Alpha Vault launch [here](https://meteoraag.medium.com/alpha-vault-new-anti-bot-mechanism-to-level-the-playing-field-for-genuine-supporters-at-token-9cf800a41b5c).
+
+Alpha Vault has two modes: [Pro rata](/alpha-vault/alpha-vault-overview#id-1.-pro-rata-mode) and [FCFS (First Come First Serve)](/alpha-vault/alpha-vault-overview#id-2.-fcfs-first-come-first-serve-mode).
+
+## Alpha Vault Process
+
+## 1. Pro rata mode
+
+### A) Deposit Period
+
+The deposit period will always take place a period of time before the main token launch, so vault users are the earliest to secure the token at launch.
+
+During the deposit period, users are able to deposit their preferred amount of USDC into the vault. A timer shows a countdown to the end of this period. Before the end of the deposit period, if users change their mind, they can also withdraw their deposits.
+
+Based on users' USDC deposit amount and the current deposit TVL in the vault, the estimated token amount received and discount from launch price is calculated.
+
+### B) Token Purchase Period
+
+At the end of the deposit period, the token purchase period begins, and the vault will start using the USDC collected to buy tokens from the liquidity pool. During the token purchase period, users can no longer deposit more USDC or withdraw their earlier deposit.
+
+If the vault max cap is not reached, all the USDC collected in the vault would be used to buy the token from the pool.
+
+**Claim unused USDC (only for Pro rata mode):** However, if USDC in the vault exceeds the max cap the vault can buy from the pool, unused USDC will be returned to users and they can withdraw them anytime once the token purchase period is over.
+
+* Example: you deposited 100 USDC and TVL in the vault is 10M USDC, but the vault max cap is 1M USDC. Only 1/10th of your USDC deposit will be used to purchase tokens. 90 USDC from your 100 USDC deposit will be unused and returned to you.
+
+#### How to calculate Average Vault Price?
+
+All vault users get their tokens at the same average price and the amount of tokens received is proportional to their share of the total amount of USDC deposited.
+
+Average vault price = USDC used by vault to buy tokens / Tokens bought by vault
+
+Example:
+
+* USDC used by vault to buy tokens = 2.424685m
+
+* Tokens bought by the vault = 39.49m
+
+* Average vault price = 2.424685m / 39.49m = \~0.06139 USDC per token
+
+### C) Launch Pool Activation Slot / Timestamp
+
+A short period of time after the vault finishes its token purchase, the launch pool activation slot / timestamp will be reached and the pool becomes open and active for everyone to trade and LP.
+
+### D) Tokens Unlock and Vesting Period
+
+A short period of time after the launch pool activation slot, locked tokens in the vault start getting unlocked and vested over a few days. Users can claim unlocked tokens anytime, there is no deadline!
+
+The exact slot where tokens get unlocked and vested depends on the token project, who can configure the parameters based on their needs.
+
+#### **Important Reminder: Claim start time should NOT be earlier than Pool activation time**
+
+For a new token launch, the project should ensure that token claiming from the Alpha Vault is NOT possible before the launch pool trading activation or before the token starts trading anywhere, whether on a Dynamic AMM or DLMM Pool. If users are able to claim tokens before the launch pool/token starts trading, they may create a separate market with a price that deviates from the project's preferred launch price.
+
+Read how to configure Alpha Vault timings [here](/alpha-vault/alpha-vault-without-whitelist#9-configure-alpha-vault-timings).
+
+#### How to calculate the token amount to receive?
+
+Amount of tokens to receive = Your USDC used by vault to buy tokens / Average Vault Price
+
+Example:
+
+* Your USDC used by vault to buy tokens = 100
+
+* Average Vault Price = 0.061396 USDC per token
+
+* Amount of tokens you’ll receive = 100 / 0.061396 = 1,628.77 tokens
+
+<Info>
+Meteora cannot guarantee that market price after the launch will remain above the average vault price over time before all tokens are vested/unlocked. This is a risk that users have to consider.
+</Info>
+
+### Example Timeline (Alpha Vault: Pro rata mode)
+
+<Frame>
+  <img src="/images/alpha-vault/alpha-1.png" />
+</Frame>
+
+## 2. FCFS (First Come First Serve) Mode
+
+Alpha Vault has another mode called FCFS (First Come First Serve), which follows a similar process to Pro Rata mode, but with the following differences:
+
+* Unlike Pro rata mode, in FCFS mode, during the deposit period, **Alpha Vault max buying cap = max amount of deposits the Alpha Vault accepts**. Users can deposit as much as they want initially, but as soon as the vault’s reserve reaches the deposit/buy cap, then no one can deposit more (TVL cannot exceed Vault Max Cap). In other words, deposits are first come first served, up to the Alpha Vault max deposit/buy cap.
+
+  * For example: If Vault Max Cap is 1M USDC, and a single user is the first to deposit 1M USDC right when deposits open, the vault gets fully filled and no longer accepts further deposits.
+
+* By default, each user has no individual deposit cap, which means a single user can technically fill up the entire Alpha Vault deposit/buy cap. However, if required, the project can specify an individual user cap and/or submit a whitelist to allow only certain wallets to deposit.
+
+* Once a user deposits funds, the user cannot withdraw them, even during the deposit period.
+
+* In FCFS mode, there won’t be any unused USDC or SOL. All deposits would be used to buy the token.
+
+* After the Alpha Vault buys the tokens, all depositors will also get tokens at the same average price.
+
+## Whitelist and Individual Deposit Cap
+
+Whitelist and Individual Deposit Cap are optional features for your Alpha Vault.
+
+### **Whitelist**
+
+For both Pro rata and FCFS mode, projects can submit a whitelist (csv file format) to specify which wallets are allowed to deposit into the Alpha Vault.
+
+### **Individual Deposit Cap**
+
+* Projects can specify a global individual deposit cap, where all depositors have the same individual deposit cap.
+
+* Projects can also specify unique individual deposit caps for each wallet e.g. Wallet A = max 500 USDC, Wallet B = max 1,000 USDC, Wallet C = max 1,500 USDC. But this requires the submission of a whitelist.
+
+## Alpha Vault Audit
+
+Alpha Vault has been [audited](https://850358062-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2FyCszyuZ1UBdRqaT2zQpK%2Fuploads%2FEC006Opq1HBtVMrt7PYB%2FMeteora-Alpha_Vault-May24%20audit.pdf?alt=media\&token=377d9cb3-f137-45c3-b345-6e2dc74638ab) by the experienced team from Offside Labs.
+
+## Alpha Vault Typescript SDK
+
+You can find the Alpha Vault SDK and code examples in [this section](/alpha-vault/alpha-vault-typescript-sdk).

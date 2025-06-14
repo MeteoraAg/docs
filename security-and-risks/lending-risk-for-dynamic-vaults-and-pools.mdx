@@ -1,0 +1,18 @@
+---
+title: "Lending Risk for Dynamic Vaults and Pools"
+description: "If you deposit into our Dynamic Vaults or our Dynamic Pools (which compose on top of our Dynamic Vaults), your capital is being lent to different lending protocols to earn lending yield."
+---
+
+When loaning out capital, there is a risk of depositors being unable to withdraw their funds from the lending pools. This is caused when utilization rates of the reserves reach full capacity at 100% where borrowed amount equals the deposited amount, or when the amount of reserves remaining in the lending pools is less than the vault deposits. When this happens, depositors are unable to withdraw funds on demand.
+
+To reduce risk, Meteora is checking pool utilization every minute and if the utilization exceeds a threshold it will withdraw funds back into the vault. Additionally, we cap the amount of capital we lend to any single protocol.
+
+We have developed the following mechanisms to protect principals:
+
+  * Stretch allocations in multiple lendings to diversify and manage risk across them
+
+  * Hermes consistently monitors the utilization rates of each lending pool and is ready to withdraw funds whenever the threshold is exceeded. Current thresholds are set at 80% - allowing us to participate in popular lending pools with higher utilization rates while still leaving a buffer for Hermes to withdraw funds when required.
+
+  * Vaults always maintain a buffer in the lending reserve to allow Hermes buffer time to react to liquidity movements.
+
+You can read about other risks here: [/dynamic-vault-integration/dynamic-vaults/security](/dynamic-vault-integration/dynamic-vaults/security)

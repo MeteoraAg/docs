@@ -1,0 +1,558 @@
+---
+title: "Alpha Vault with Whitelist"
+description: "Below we provide the steps to use the Alpha Vault Typescript SDK to create an Alpha Vault with Whitelist."
+---
+
+
+Permissioned Alpha Vault has whitelist and individual deposit cap, so only whitelisted addresses can deposit into the vault, up to the deposit cap defined for the wallet.
+
+To use the following Alpha Vault SDK examples, please complete the steps listed in the [Alpha Vault SDK section](/alpha-vault/alpha-vault-typescript-sdk) first.
+
+## Example Timeline (Alpha Vault: Pro rata mode)
+
+<Frame>
+  <img src="/images/alpha-vault/alpha-1.png" />
+</Frame>
+
+## Code Examples
+<CardGroup cols={2}>
+<Card title="Main Steps" href="/alpha-vault/alpha-vault-with-whitelist#1-main-steps" icon="angle-right" iconType="solid" horizontal/>
+
+<Card title="Create Permissioned Alpha Vault with Whitelist and Individual Deposit Cap" href="/alpha-vault/alpha-vault-with-whitelist#2-create-permissioned-alpha-vault-with-whitelist-and-individual-deposit-cap" icon="angle-right" iconType="solid" horizontal/>
+
+<Card title="Create Merkle Root Config" href="/alpha-vault/alpha-vault-with-whitelist#3-create-merkle-root-config" icon="angle-right" iconType="solid" horizontal/>
+
+<Card title="Deposit SOL or USDC with Proof" href="/alpha-vault/alpha-vault-with-whitelist#4-deposit-sol-or-usdc-with-proof" icon="angle-right" iconType="solid" horizontal/>
+
+<Card title="Configure Alpha Vault Timings" href="/alpha-vault/alpha-vault-with-whitelist#5-configure-alpha-vault-timings" icon="angle-right" iconType="solid" horizontal/>
+
+<Card title="Important Reminders" href="/alpha-vault/alpha-vault-with-whitelist#6-important-reminders" icon="angle-right" iconType="solid" horizontal/>
+</CardGroup>
+### **1. Main Steps**
+
+This example demonstrates how to use the permissioned Alpha Vault to achieve authorization of user deposit with whitelisted wallet and deposit cap.
+
+1. Update address and deposit cap. Check `whitelist_wallet.csv`.
+
+2. Create a pool with permissioned vault. Check `createDynamicPoolWithPermissionedVault.ts` for more details.
+
+3. Generate merkle tree, and create merkle root config. Check `createMerkleRootConfig.ts` for more details.
+
+4. Deposit with merkle proof. Check `depositWithProof.ts` for more details.
+
+### 2. Create Permissioned Alpha Vault with Whitelist and Individual Deposit Cap
+
+This example shows how to create a Dynamic AMM Pool with permissioned Alpha Vault (that has a whitelist and deposit cap)
+
+* Please contact the Meteora team if the existing pool and Alpha Vault config don't meet your requirements.
+
+* Currently only Dynamic AMM Pool support permissioned Alpha Vault with whitelist and deposit cap.
+
+* Currently, only SOL or USDC is accepted as the quote token when initializing a Dynamic AMM or DLMM Pool with Alpha Vault in a permissionless setup. Since the Alpha Vault can't tell what the quote token would be, the quote token is limited to SOL or USDC.
+
+```typescript
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+  SYSVAR_CLOCK_PUBKEY,
+} from "@solana/web3.js";
+import AlphaVault, { DYNAMIC_AMM_PROGRAM_ID, PoolType, VaultMode } from "../..";
+import DynamicAmm from "@mercurial-finance/dynamic-amm-sdk";
+import {
+  ActivationType,
+  Clock,
+  ClockLayout,
+  createTokenAndMint,
+  loadKeypairFromFile,
+} from "../utils";
+import dotenv from "dotenv";
+import { BN } from "bn.js";
+import { derivePoolAddressWithConfig } from "@mercurial-finance/dynamic-amm-sdk/dist/cjs/src/amm/utils";
+
+dotenv.config();
+
+async function createDummyMints(connection: Connection, payer: Keypair) {
+  console.log("Creating mint A");
+  const mintAInfo = await createTokenAndMint(
+    connection,
+    payer,
+    6,
+    100_000_000_000
+  );
+
+  console.log("Creating mint B");
+  const mintBInfo = await createTokenAndMint(
+    connection,
+    payer,
+    6,
+    100_000_000_000
+  );
+
+  return {
+    mintAInfo,
+    mintBInfo,
+  };
+}
+
+/**
+ *
+ * @param connection
+ * @param creator
+ * @param activationType Pool activation based on time or slot
+ * @param maximumActivationDuration Maximum duration for pool to be activation after creation
+ * @param minimumLockDuration Minimum duration for bought token be locked
+ * @param maximumLockDuration Maximum duration for bought token to be locked
+ * @param minimumVestingDuration Minimum duration for bought token to be vested
+ * @param maximumVestingDuration Maximum duration for bought token be vested
+ * @param vaultMode Vault mode: fcfs or prorata
+ */
+async function getPoolConfigByRequirement(
+  connection: Connection,
+  creator: PublicKey,
+  activationType: ActivationType,
+  maximumActivationDuration: number,
+  minimumLockDuration: number,
+  maximumLockDuration: number,
+  minimumVestingDuration: number,
+  maximumVestingDuration: number,
+  vaultMode: VaultMode
+) {
+  // 1. Pool configs that can be used by anyone to create pool
+  const publicPoolConfigs =
+    await DynamicAmm.getPoolConfigsWithPoolCreatorAuthority(
+      connection,
+      PublicKey.default
+    );
+
+  // 2. Pool configs that can only be used by specific pubkey to create pool
+  const creatorPoolConfigs =
+    await DynamicAmm.getPoolConfigsWithPoolCreatorAuthority(
+      connection,
+      creator
+    );
+
+  // 3. Look for pool configs that have vault support
+  const poolConfigsWithVaultSupport = [
+    ...publicPoolConfigs,
+    ...creatorPoolConfigs,
+  ].filter((config) => config.account.vaultConfigKey != PublicKey.default);
+
+  console.log(
+    `Gotten ${poolConfigsWithVaultSupport.length} usable pool configs with vault support`
+  );
+
+  const configFuture =
+    vaultMode === VaultMode.FCFS
+      ? AlphaVault.getFcfsConfigs(connection)
+      : AlphaVault.getProrataConfigs(connection);
+
+  const configs = await configFuture;
+
+  for (const programAccount of poolConfigsWithVaultSupport) {
+    const { account } = programAccount;
+    // 3.1 Pool activation type and duration matches
+    if (
+      account.activationType == activationType &&
+      account.activationDuration.toNumber() >= maximumActivationDuration
+    ) {
+      const vaultConfig = configs.find((c) =>
+        c.publicKey.equals(account.vaultConfigKey)
+      );
+
+      if (!vaultConfig) {
+        continue;
+      }
+
+      const startVestingDuration =
+        vaultConfig.account.startVestingDuration.toNumber();
+      const endVestingDuration =
+        vaultConfig.account.endVestingDuration.toNumber();
+
+      const vestingDuration = endVestingDuration - startVestingDuration;
+
+      // 3.2 Vault activation type, lock and vesting duration matches
+      if (
+        startVestingDuration >= minimumLockDuration &&
+        startVestingDuration <= maximumLockDuration &&
+        vestingDuration >= minimumVestingDuration &&
+        vestingDuration <= maximumVestingDuration &&
+        vaultConfig.account.activationType == activationType
+      ) {
+        return programAccount;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function createDynamicPoolWithPermissionedVault(
+  connection: Connection,
+  payer: Keypair
+) {
+  const { mintAInfo, mintBInfo } = await createDummyMints(connection, payer);
+
+  // Pool and vault requirement
+  const maximumActivationDuration = 86400; // 1 day
+  const minimumLockDuration = 60 * 30; // 30 minutes
+  const maximumLockDuration = 86400; // 1 day
+  const minimumVestingDuration = 60 * 60; // 1 hour
+  const maximumVestingDuration = 60 * 60 * 24 * 7; // 1 week
+  const vaultMode = VaultMode.PRORATA;
+
+  // 1.Find pool config where it allow user to create pool with customizable start trading time which start from NOW -> NOW + 24H
+  // With lock duration fall between 30 minutes -> 1 days (non customizable)
+  // And vesting duration fall between 1 hour -> 1 week (non customizable)
+  // And prorata vault
+  const poolConfig = await getPoolConfigByRequirement(
+    connection,
+    payer.publicKey,
+    ActivationType.Timestamp,
+    maximumActivationDuration,
+    minimumLockDuration,
+    maximumLockDuration,
+    minimumVestingDuration,
+    maximumVestingDuration,
+    vaultMode
+  );
+
+  console.log("Got pool config");
+  console.log(poolConfig);
+
+  const clockAccount = await connection.getAccountInfo(SYSVAR_CLOCK_PUBKEY);
+  const clock: Clock = ClockLayout.decode(clockAccount.data);
+
+  // Pool start trade after created for 5 hour
+  const activationPoint = clock.unixTimestamp.add(new BN(3600 * 5));
+
+  // 2. Create the pool
+  const transactions =
+    await DynamicAmm.createPermissionlessConstantProductPoolWithConfig2(
+      connection,
+      payer.publicKey,
+      mintAInfo.mint,
+      mintBInfo.mint,
+      new BN(100_000_000),
+      new BN(100_000_000),
+      poolConfig.publicKey,
+      {
+        activationPoint,
+      }
+    );
+
+  console.log("Creating pool");
+  for (const tx of transactions) {
+    const txHash = await sendAndConfirmTransaction(connection, tx, [payer]);
+    console.log(txHash);
+  }
+
+  const poolPubkey = derivePoolAddressWithConfig(
+    mintAInfo.mint,
+    mintBInfo.mint,
+    poolConfig.publicKey,
+    DYNAMIC_AMM_PROGRAM_ID
+  );
+
+  console.log("Pool created", poolPubkey.toBase58());
+
+  // 3. Create the alpha vault
+  const initPermissionlessVaultTx = await AlphaVault.createPermissionedVault(
+    connection,
+    {
+      baseMint: mintAInfo.mint,
+      quoteMint: mintBInfo.mint,
+      poolType: PoolType.DYNAMIC,
+      vaultMode: VaultMode.PRORATA,
+      poolAddress: poolPubkey,
+      config: poolConfig.account.vaultConfigKey,
+    },
+    payer.publicKey
+  );
+
+  console.log("Creating vault");
+  const txHash = await sendAndConfirmTransaction(
+    connection,
+    initPermissionlessVaultTx,
+    [payer]
+  );
+  console.log(txHash);
+}
+
+const connection = new Connection(clusterApiUrl("devnet"));
+const payer = loadKeypairFromFile(process.env.KEYPAIR_PATH);
+
+/**
+ * This example shows how to create dynamic pool with permissioned vault
+ * Please contact meteora team if the existing pool and vault config doesn't meet the requirement
+ * Currently only dynamic pool support permissioned vault
+ */
+createDynamicPoolWithPermissionedVault(connection, payer)
+  .then(() => {
+    console.log("Done");
+  })
+  .catch(console.error);
+```
+
+#### Whitelisted wallet csv file Example
+<Card title="https://github.com/MeteoraAg/alpha-vault-sdk/blob/main/ts-client/src/examples/permissioned/whitelist_wallet.csv?plain=1" href="https://github.com/MeteoraAg/alpha-vault-sdk/blob/main/ts-client/src/examples/permissioned/whitelist_wallet.csv?plain=1" icon="github" iconType="solid" horizontal/>
+
+### 3. Create Merkle Root Config
+
+This example shows how to create a merkle root config after generating a merkle tree, which is required to verify the whitelisted wallet address data, and enable deposits by whitelisted wallets.
+
+```typescript
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { loadKeypairFromFile } from "../utils";
+import { AlphaVault } from "../../alpha-vault";
+import dotenv from "dotenv";
+import { createMerkleTree, loadWhitelistWalletCsv } from "./utils";
+import { BN } from "bn.js";
+
+dotenv.config();
+
+async function createMerkleRootConfig(
+  vault: PublicKey,
+  csvPath: string,
+  payer: Keypair
+) {
+  const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+  const alphaVault = await AlphaVault.create(connection, vault);
+
+  // 1. Load whitelist wallet from csv file
+  const whitelistWallets = await loadWhitelistWalletCsv(csvPath);
+  console.log("Loaded whitelist wallets");
+  console.log(whitelistWallets);
+
+  // 2. Create merkle tree
+  const tree = await createMerkleTree(connection, alphaVault, whitelistWallets);
+
+  // 3. Create merkle root config
+  // If the tree grew too large, one can partition it into multiple tree by setting different version
+  const version = new BN(0);
+  const createMerkleRootConfigTx = await alphaVault.createMerkleRootConfig(
+    tree.getRoot(),
+    version,
+    payer.publicKey
+  );
+
+  // 4. Send transaction
+  console.log("Sending transaction");
+  const txHash = await sendAndConfirmTransaction(
+    connection,
+    createMerkleRootConfigTx,
+    [payer]
+  );
+  console.log(txHash);
+}
+
+// Permissioned alpha vault
+const vault = new PublicKey("ARGqVVUPPqtqH9UeBHvYsv7AtZv623YdEaEziZ1pdDUs");
+const payer = loadKeypairFromFile(process.env.KEYPAIR_PATH);
+const whitelistWalletCsvFilepath =
+  "src/examples/permissioned/whitelist_wallet.csv";
+
+/**
+ * This example shows how to close an escrow account and get rental back. Close escrow can only happen after vesting is complete, and escrow have claimed all the bought token.
+ */
+createMerkleRootConfig(vault, whitelistWalletCsvFilepath, payer)
+  .then(() => {
+    console.log("Done");
+  })
+  .catch(console.error);
+```
+
+### 4. Deposit SOL or USDC with Proof
+
+This example shows how to deposit into a permissioned alpha vault using a whitelisted wallet. Deposit can only happen before the end of the deposit period.
+
+```typescript
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { loadKeypairFromFile } from "../utils";
+import { AlphaVault } from "../../alpha-vault";
+import BN from "bn.js";
+import dotenv from "dotenv";
+import Decimal from "decimal.js";
+import { deriveMerkleRootConfig } from "../../alpha-vault/helper";
+import { createMerkleTree, loadWhitelistWalletCsv } from "./utils";
+import { PROGRAM_ID } from "../../alpha-vault/constant";
+
+dotenv.config();
+
+async function depositToPermissionedAlphaVault(
+  vault: PublicKey,
+  depositAmount: BN,
+  csvPath: string,
+  payer: Keypair
+) {
+  const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+  const alphaVault = await AlphaVault.create(connection, vault);
+
+  // 1. Load whitelisted wallet
+  const whitelistedWallets = await loadWhitelistWalletCsv(csvPath);
+
+  // 2. Create merkle tree
+  const tree = await createMerkleTree(
+    connection,
+    alphaVault,
+    whitelistedWallets
+  );
+
+  // 3. Get wallet proof info
+  const depositorWhitelistInfo = whitelistedWallets.find((w) =>
+    w.wallet.equals(payer.publicKey)
+  );
+  const quoteMint = await connection.getTokenSupply(alphaVault.vault.quoteMint);
+  const toNativeAmountMultiplier = new Decimal(10 ** quoteMint.value.decimals);
+
+  const nativeDepositCap = new BN(
+    depositorWhitelistInfo.depositCap.mul(toNativeAmountMultiplier).toString()
+  );
+
+  const depositorProof = tree
+    .getProof(payer.publicKey, nativeDepositCap)
+    .map((buffer) => {
+      return Array.from(new Uint8Array(buffer));
+    });
+
+  const [merkleRootConfig] = deriveMerkleRootConfig(
+    alphaVault.pubkey,
+    new BN(0),
+    new PublicKey(PROGRAM_ID["mainnet-beta"])
+  );
+
+  // 4. Deposit
+  const depositTx = await alphaVault.deposit(depositAmount, payer.publicKey, {
+    merkleRootConfig,
+    maxCap: nativeDepositCap,
+    proof: depositorProof,
+  });
+
+  console.log(`Depositing ${depositAmount.toString()}`);
+  const txHash = await sendAndConfirmTransaction(connection, depositTx, [
+    payer,
+  ]);
+  console.log(txHash);
+
+  const escrow = await alphaVault.getEscrow(payer.publicKey);
+  console.log("Escrow info");
+  console.log(escrow);
+}
+
+// Alpha vault to be deposited to
+const vault = new PublicKey("ARGqVVUPPqtqH9UeBHvYsv7AtZv623YdEaEziZ1pdDUs");
+const depositAmount = new BN(100_000);
+const payer = loadKeypairFromFile(process.env.KEYPAIR_PATH);
+const whitelistWalletCsvFilepath =
+  "src/examples/permissioned/whitelist_wallet.csv";
+
+/**
+ * This example shows how to deposit to permissioned alpha vault. Deposit can only happen before the deposit close.
+ */
+depositToPermissionedAlphaVault(
+  vault,
+  depositAmount,
+  whitelistWalletCsvFilepath,
+  payer
+)
+  .then(() => {
+    console.log("Done");
+  })
+  .catch(console.error);
+```
+
+### 5. Configure Alpha Vault Timings
+
+If you are integrating the Alpha Vault program and need to view and select the predefined timings for the various phases, such as:
+
+* Deposit open time (only for FCFS mode currently)
+
+* Deposit close time
+
+* Vault crank/buy start time
+
+* Vault crank/buy end time
+
+* Withdraw unused USDC or SOL after crank is successful
+
+* Pool Activation time
+
+* Token claim start time
+
+* Vesting start time
+
+* Vesting end time
+
+<Info>
+There is a minimum \~1 hour 5 minutes period between the deposit close time and the pool activation time.
+</Info>
+
+You can use this config endpoint that has predefined timings created by Meteora.
+
+<CardGroup>
+<Card title="Pool config list" href="https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs" icon="link" iconType="solid" horizontal/>
+
+<Card title="Vault config list" href="https://amm-v2.meteora.ag/swagger-ui/#/alpha_vault_config/get_all" icon="link" iconType="solid" horizontal/>
+
+</CardGroup>
+
+If your preferred configs are not available in the predefined config lists above, and you want more customization, please contact the Meteora team.
+
+**Config endpoint is based on Pool Activation Timing**
+
+The above config endpoint is tied to the pool activation timing, so all timings for the different Alpha Vault phases is derived from the pool activation timing.
+
+In this example below, the claim process will start 3600 seconds (1 hour) after pool activation, and it will end 7200 seconds (2 hours) after pool activation. In other words, after the pool starts trading, tokens are locked first and released for claiming 3600 seconds (1 hour) later.
+
+```typescript
+{
+  maxBuyingCap: new BN(10000000),
+  index,
+  startVestingDuration: new BN(3600),
+  endVestingDuration: new BN(7200),
+  escrowFee: new BN(0),
+  individualDepositingCap: new BN(50000),
+  activationType: ActivationType.TIMESTAMP,
+  depositingPoint: new BN(1028979080),
+}
+```
+
+### 6. Important Reminders
+
+**A) Claim start time should NOT be earlier than Pool activation time**
+
+For a new token launch, the project should ensure that token claiming from the Alpha Vault is NOT possible before the launch pool trading activation or before the token starts trading anywhere, whether on a Dynamic AMM or DLMM Pool. If users are able to claim tokens before the launch pool/token starts trading, they may create a separate market with a price that deviates from the project's preferred launch price.
+
+**B) For Memecoins that want to permanently lock liquidity, lock it before Pool activation time**
+
+If the Alpha Vault is used for a Memecoin launch pool, and the project wants to permanently lock liquidity in the Memecoin pool, they should ideally lock the liquidity BEFORE the pool starts trading, so that swap fees from locked liquidity are captured the second trading starts.
+
+In a scenario where:
+
+* The pool started trading - t0
+
+* Liquidity gets deposited to the pool by the project, but not locked - t1
+
+* Subsequently, that liquidity is permanently locked by the project - t2
+
+The project will not be able to claim swap fees earned from t1 to t2, since fees from t1 to t2 are assigned to the LP token before the LP token gets permanently locked. When the LP token gets locked, the earlier fees are locked along with it.
+
+The project will only be able to claim swap fees from locked liquidity starting from t2.
+
+**C) Quote token must be SOL or USDC**
+
+Only SOL or USDC is accepted as the quote token when initializing a Dynamic AMM or DLMM Pool with Alpha Vault.

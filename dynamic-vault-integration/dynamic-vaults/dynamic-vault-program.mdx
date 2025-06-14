@@ -1,0 +1,88 @@
+---
+title: "Dynamic Vault Program"
+---
+
+<Frame caption="Overview of Dynamic Yield Infrastructure">
+  <img src="/images/dynamic-vault-integration/dynamic-vaults/valuts.png" />
+</Frame>
+
+On-chain Program includes components
+
+* Vault: to store native token. Vault always has a buffer, that user can withdraw at anytime
+
+* Strategy Handler: submit liquidity in various lending protocols.
+
+* Treasury: hold rewards and operation (performance) fee
+
+How vault sync balances from various strategies:
+
+Vault state:
+
+```typescript
+pub struct Vault {
+    /// The flag, if admin set enable = false, then the user can only withdraw and cannot deposit in the vault.
+    pub enabled: u8,
+    /// Vault nonce, to create vault seeds
+    pub bumps: VaultBumps,
+    /// The total liquidity of the vault, including remaining tokens in token_vault and the liquidity in all strategies.
+    pub total_amount: u64,
+    /// Token account, hold liquidity in vault reserve
+    pub token_vault: Pubkey,
+    /// Hold lp token of vault, each time rebalance crank is called, vault calculate performance fee and mint corresponding lp token amount to fee_vault. fee_vault is owned by treasury address
+    pub fee_vault: Pubkey,
+    /// Token mint that vault supports
+    pub token_mint: Pubkey,
+    /// Lp mint of vault
+    pub lp_mint: Pubkey,
+    /// The list of strategy addresses that vault supports, vault can support up to MAX_STRATEGY strategies at the same time.
+    pub strategies: [Pubkey; MAX_STRATEGY],
+    /// The base address to create vault seeds
+    pub base: Pubkey,
+    /// Admin of vault
+    pub admin: Pubkey,
+    /// Person who can send the crank. Operator can only send liquidity to strategies that admin defined, and claim reward to account of treasury address
+    pub operator: Pubkey,
+    /// Stores information for locked profit.
+    pub locked_profit_tracker: LockedProfitTracker,
+}
+```
+
+Strategy state:
+
+```typescript
+pub struct Strategy {
+    /// Lending pool address, that the strategy will deposit/withdraw balance
+    pub reserve: Pubkey,
+    /// The token account, that holds the collateral token
+    pub collateral_vault: Pubkey,
+    /// Specify type of strategy
+    pub strategy_type: StrategyType,
+    /// The liquidity in strategy at the time vault deposit/withdraw from a lending protocol
+    pub current_liquidity: u64,
+    /// Hold some bumps, in case the strategy needs to use other seeds to sign a CPI call.
+    pub bumps: [u8; MAX_BUMPS],
+    /// Vault address, that the strategy belongs
+    pub vault: Pubkey,
+}
+```
+
+In which `total_amount` denotes to vault liquidity. Buffer liquidity is stored in `token_vault` account. `strategies` stores all strategy pubkey, that vault integrate.
+
+At any point of time, the following assertion must be satisfied:
+
+```typescript
+vault.total_amount = token_vault.amount + sum(strategy.current_liquidity)
+```
+
+Which means total vault liquidity must be equal to buffer liquidity in vault and total liquidity in all strategies.
+
+When keeper send rebalance crank in a strategy, program will update `vault.total_amount` and `strategy.current_liquidity`
+
+```typescript
+// reload the new liquidity in this strategy
+let new_liquidity = get_new_liquidity_in_this_strategy()
+
+// sync balance in vault and this strategy
+vault.total_amount = vault.total_amount + new_liqudity - strategy.current_liquidity;
+strategy.current_liquidity = new_liquidity;
+```

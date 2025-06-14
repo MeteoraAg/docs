@@ -1,0 +1,109 @@
+---
+title: "Farm Integration Using Typescript-Client"
+description: "Meteora Pool Farm SDK is a typescript library that allows you to interact with Meteora Farming pools."
+---
+
+## Getting Started
+<CardGroup cols={1}>
+<Card title="NPM" href="https://www.npmjs.com/package/@mercurial-finance/farming-sdk" icon="npm" iconType="solid" horizontal>
+[https://www.npmjs.com/package/@mercurial-finance/farming-sdk](https://www.npmjs.com/package/@mercurial-finance/farming-sdk)
+</Card>
+<Card title="SDK" href="https://github.com/MeteoraAg/reward-pool" icon="code" iconType="solid" horizontal>
+[https://github.com/MeteoraAg/reward-pool](https://github.com/MeteoraAg/reward-pool)
+</Card>
+<Card title="Discord" href="https://discord.com/channels/841152225564950528/864859354335412224" icon="discord" iconType="solid" horizontal>
+[https://discord.com/channels/841152225564950528/864859354335412224](https://discord.com/channels/841152225564950528/864859354335412224)
+</Card>
+<Card title="Program ID" icon="code" iconType="solid" horizontal>
+Program ID: FarmuwXPWXvefWUeqFAa5w6rifLkq5X6E8bimYvrhCB1
+</Card>
+</CardGroup>
+
+### Devnet Testing
+
+<CardGroup>
+<Card title="Devnet" href="https://devnet.meteora.ag/" icon="globe" iconType="solid" horizontal>
+[https://devnet.meteora.ag/](https://devnet.meteora.ag/)
+</Card>
+</CardGroup>
+
+## Install
+
+<Steps>
+  <Step title="Install dependencies">
+
+```bash
+npm i @mercurial-finance/farming-sdk @project-serum/anchor @solana/web3.js @solana/spl-token @solana/spl-token-registry
+```
+
+  </Step>
+  <Step title="Initialize PoolFarmImpl instance">
+
+```typescript
+import { PoolFarmImpl } from "@mercurial-finance/farming-sdk";
+import { Wallet, AnchorProvider } from "@coral-xyz/anchor";
+import { Connection, PublicKey, Keypair } from "@solana/web3.js";
+
+// Connection, Wallet, and AnchorProvider to interact with the network
+const mainnetConnection = new Connection("https://api.mainnet-beta.solana.com");
+const mockWallet = new Wallet(new Keypair());
+const provider = new AnchorProvider(mainnetConnection, mockWallet, {
+  commitment: "confirmed",
+});
+// Alternatively, to use Solana Wallet Adapter
+
+const USDC_acUSDC_POOL = new PublicKey(
+  "6ZLKLjMd2KzH7PPHCXUPgbMAtdTT37VgTtdeXWLoJppr"
+); // Pool Address can get from /dynamic-pools-integration/dynamic-pool-api/pool-info
+
+const farmingPools = await PoolFarmImpl.getFarmAddressesByPoolAddress(
+  USDC_acUSDC_POOL
+);
+// farmingPools is an array (A pool can have multiple farms)
+const farmingPool = farmingPools[0];
+const farm = await PoolFarmImpl.create(
+  mainnetConnection,
+  farmingPool.farmAddress
+);
+```
+
+  </Step>
+  <Step title="To interact with the PoolFarmImpl">
+
+  * Stake
+
+  ```typescript
+  // https://station.jup.ag/blog/jupiter-token-list-api#endpoints
+  const tokenList = await fetch('https://token.jup.ag/all').then(res => res.json());
+  const USDC = tokenList.find(token => token.address === <USDC_ADDRESS>);
+  const USDT = tokenList.find(token => token.address === <USDT_ADDRESS>);
+  // Get pool lp balance from `@mercurial-finance/dynamic-amm-sdk` package
+  const pool = await AmmImpl.create(connection, MAINNET_POOL.USDC_USDT, USDC, USDT);
+  const lpBalance = await pool.getUserBalance(mockWallet.publicKey);
+
+  const stakeTx = await farm.deposit(mockWallet.publicKey, lpBalance); // Web3 Transaction Object
+  const stakeResult = await provider.sendAndConfirm(stakeTx); // Transaction hash
+  ```
+
+  * Check stake balance
+
+  ```typescript
+  const farmBalance = await farm.getUserBalance(mockWallet.publicKey);
+  ```
+
+  * Claim
+
+  ```typescript
+  const claimTx = await farm.claim(mockWallet.publicKey);
+  const claimResult = await provider.sendAndConfirm(claimTx); // Transaction hash
+  ```
+
+  * Unstake
+
+  ```typescript
+  const unStakeTx = await farm.withdraw(mockWallet.publicKey, farmBalance); // Web3 Transaction Object
+  const unstakeResult = await provider.sendAndConfirm(depositTx); // Transaction hash
+  ```
+
+</Step>
+</Steps>

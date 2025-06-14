@@ -1,0 +1,819 @@
+---
+title: "Alpha Vault without Whitelist"
+description: "Below we provide the steps to use the Alpha Vault Typescript SDK to create an Alpha Vault without Whitelist."
+---
+
+Permissionless Alpha Vault has no whitelist or individual deposit cap. "Permissionless" in this case means anyone can deposit assets into the Alpha Vault after creation.
+
+To use the following Alpha Vault SDK examples, please complete the steps listed in the [Alpha Vault SDK section](/alpha-vault/alpha-vault-typescript-sdk) first.
+
+## Example Timeline (Alpha Vault: Pro rata mode)
+
+<Frame>
+  <img src="/images/alpha-vault/alpha-1.png" />
+</Frame>
+
+## **Code Examples**
+
+<CardGroup cols={2}>
+<Card title="Create Dynamic Pool With Permissionless Alpha Vault" href="/alpha-vault/alpha-vault-without-whitelist#1-create-dynamic-pool-with-permissionless-alpha-vault" icon="angle-right" iconType="solid" horizontal/>
+
+<Card title="Deposit SOL or USDC into Alpha Vault" href="/alpha-vault/alpha-vault-without-whitelist#2-deposit-sol-or-usdc-into-alpha-vault" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Withdraw SOL or USDC from Alpha Vault during deposit period (only for Pro rata mode)" href="/alpha-vault/alpha-vault-without-whitelist#3-withdraw-sol-or-usdc-from-alpha-vault-during-deposit-period-only-for-pro-rata-mode" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Crank Alpha Vault to buy tokens from a Dynamic AMM/Memecoin pool" href="/alpha-vault/alpha-vault-without-whitelist#4-crank-alpha-vault-to-buy-tokens-from-a-dynamic-amm-memecoin-pool" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Crank Alpha Vault to buy tokens from a DLMM pool" href="/alpha-vault/alpha-vault-without-whitelist#5-crank-alpha-vault-to-buy-tokens-from-a-dlmm-pool" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Withdraw unused SOL or USDC from Alpha Vault (only for Pro rata mode)" href="/alpha-vault/alpha-vault-without-whitelist#6-withdraw-unused-sol-or-usdc-from-alpha-vault-only-for-pro-rata-mode" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Claim tokens from Alpha Vault" href="/alpha-vault/alpha-vault-without-whitelist#7-claim-tokens-from-alpha-vault" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Close Escrow Account" href="/alpha-vault/alpha-vault-without-whitelist#8-close-escrow-account" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Configure Alpha Vault Timings" href="/alpha-vault/alpha-vault-without-whitelist#9-configure-alpha-vault-timings" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Considerations for Slot Parameters" href="/alpha-vault/alpha-vault-without-whitelist#10-considerations-for-slot-parameters" icon="angle-right" iconType="solid" horizontal/>
+<Card title="Important Reminders" href="/alpha-vault/alpha-vault-without-whitelist#11-important-reminders" icon="angle-right" iconType="solid" horizontal/>
+</CardGroup>
+### 1. Create Dynamic Pool With Permissionless Alpha Vault
+
+This example shows how to create a new Dynamic AMM Pool that also adds a permissionless Alpha Vault. Please contact the Meteora team if the existing pool and vault config do not meet your requirements. Currently only Dynamic AMM Pools support the addition of a permissionless Alpha Vault.
+
+<Info>
+  Currently, only SOL or USDC is accepted as the quote token when initializing a Dynamic AMM or DLMM Pool with Alpha Vault in a permissionless setup. Since the Alpha Vault can't tell what the quote token would be, the quote token is limited to SOL or USDC.
+</Info>
+
+```typescript
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+  SYSVAR_CLOCK_PUBKEY,
+} from "@solana/web3.js";
+import AlphaVault, { DYNAMIC_AMM_PROGRAM_ID, PoolType, VaultMode } from "..";
+import DynamicAmm from "@mercurial-finance/dynamic-amm-sdk";
+import {
+  ActivationType,
+  Clock,
+  ClockLayout,
+  createTokenAndMint,
+  loadKeypairFromFile,
+} from "./utils";
+import dotenv from "dotenv";
+import { BN } from "bn.js";
+import { derivePoolAddressWithConfig } from "@mercurial-finance/dynamic-amm-sdk/dist/cjs/src/amm/utils";
+
+dotenv.config();
+
+async function createDummyMints(connection: Connection, payer: Keypair) {
+  console.log("Creating mint A");
+  const mintAInfo = await createTokenAndMint(
+    connection,
+    payer,
+    6,
+    100_000_000_000
+  );
+
+  console.log("Creating mint B");
+  const mintBInfo = await createTokenAndMint(
+    connection,
+    payer,
+    6,
+    100_000_000_000
+  );
+
+  return {
+    mintAInfo,
+    mintBInfo,
+  };
+}
+
+/**
+ *
+ * @param connection
+ * @param creator
+ * @param activationType Pool activation based on time or slot
+ * @param maximumActivationDuration Maximum duration for pool to be activation after creation
+ * @param minimumLockDuration Minimum duration for bought token be locked
+ * @param maximumLockDuration Maximum duration for bought token to be locked
+ * @param minimumVestingDuration Minimum duration for bought token to be vested
+ * @param maximumVestingDuration Maximum duration for bought token be vested
+ * @param vaultMode Vault mode: fcfs or prorata
+ */
+async function getPoolConfigByRequirement(
+  connection: Connection,
+  creator: PublicKey,
+  activationType: ActivationType,
+  maximumActivationDuration: number,
+  minimumLockDuration: number,
+  maximumLockDuration: number,
+  minimumVestingDuration: number,
+  maximumVestingDuration: number,
+  vaultMode: VaultMode
+) {
+  // 1. Pool configs that can be used by anyone to create pool
+  const publicPoolConfigs =
+    await DynamicAmm.getPoolConfigsWithPoolCreatorAuthority(
+      connection,
+      PublicKey.default
+    );
+
+  // 2. Pool configs that can only be used by specific pubkey to create pool
+  const creatorPoolConfigs =
+    await DynamicAmm.getPoolConfigsWithPoolCreatorAuthority(
+      connection,
+      creator
+    );
+
+  // 3. Look for pool configs that have vault support
+  const poolConfigsWithVaultSupport = [
+    ...publicPoolConfigs,
+    ...creatorPoolConfigs,
+  ].filter((config) => config.account.vaultConfigKey != PublicKey.default);
+
+  console.log(
+    `Gotten ${poolConfigsWithVaultSupport.length} usable pool configs with vault support`
+  );
+
+  const configFuture =
+    vaultMode === VaultMode.FCFS
+      ? AlphaVault.getFcfsConfigs(connection)
+      : AlphaVault.getProrataConfigs(connection);
+
+  const configs = await configFuture;
+
+  for (const programAccount of poolConfigsWithVaultSupport) {
+    const { account } = programAccount;
+    // 3.1 Pool activation type and duration matches
+    if (
+      account.activationType == activationType &&
+      account.activationDuration.toNumber() >= maximumActivationDuration
+    ) {
+      const vaultConfig = configs.find((c) =>
+        c.publicKey.equals(account.vaultConfigKey)
+      );
+
+      if (!vaultConfig) {
+        continue;
+      }
+
+      const startVestingDuration =
+        vaultConfig.account.startVestingDuration.toNumber();
+      const endVestingDuration =
+        vaultConfig.account.endVestingDuration.toNumber();
+
+      const vestingDuration = endVestingDuration - startVestingDuration;
+
+      // 3.2 Vault activation type, lock and vesting duration matches
+      if (
+        startVestingDuration >= minimumLockDuration &&
+        startVestingDuration <= maximumLockDuration &&
+        vestingDuration >= minimumVestingDuration &&
+        vestingDuration <= maximumVestingDuration &&
+        vaultConfig.account.activationType == activationType
+      ) {
+        return programAccount;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function createDynamicPoolWithPermissionlessVault(
+  connection: Connection,
+  payer: Keypair
+) {
+  const { mintAInfo, mintBInfo } = await createDummyMints(connection, payer);
+
+  // Pool and vault requirement
+  const maximumActivationDuration = 86400; // 1 day
+  const minimumLockDuration = 60 * 30; // 30 minutes
+  const maximumLockDuration = 86400; // 1 day
+  const minimumVestingDuration = 60 * 60; // 1 hour
+  const maximumVestingDuration = 60 * 60 * 24 * 7; // 1 week
+  const vaultMode = VaultMode.PRORATA;
+
+  // 1.Find pool config where it allow user to create pool with customizable start trading time which start from NOW -> NOW + 24H
+  // With lock duration fall between 30 minutes -> 1 days (non customizable)
+  // And vesting duration fall between 1 hour -> 1 week (non customizable)
+  // And prorata vault
+  const poolConfig = await getPoolConfigByRequirement(
+    connection,
+    payer.publicKey,
+    ActivationType.Timestamp,
+    maximumActivationDuration,
+    minimumLockDuration,
+    maximumLockDuration,
+    minimumVestingDuration,
+    maximumVestingDuration,
+    vaultMode
+  );
+
+  console.log("Got pool config");
+  console.log(poolConfig);
+
+  const clockAccount = await connection.getAccountInfo(SYSVAR_CLOCK_PUBKEY);
+  const clock: Clock = ClockLayout.decode(clockAccount.data);
+
+  // Pool start trade after created for 5 hour
+  const activationPoint = clock.unixTimestamp.add(new BN(3600 * 5));
+
+  // 2. Create the pool
+  const transactions =
+    await DynamicAmm.createPermissionlessConstantProductPoolWithConfig2(
+      connection,
+      payer.publicKey,
+      mintAInfo.mint,
+      mintBInfo.mint,
+      new BN(100_000_000),
+      new BN(100_000_000),
+      poolConfig.publicKey,
+      {
+        activationPoint,
+      }
+    );
+
+  console.log("Creating pool");
+  for (const tx of transactions) {
+    const txHash = await sendAndConfirmTransaction(connection, tx, [payer]);
+    console.log(txHash);
+  }
+
+  const poolPubkey = derivePoolAddressWithConfig(
+    mintAInfo.mint,
+    mintBInfo.mint,
+    poolConfig.publicKey,
+    DYNAMIC_AMM_PROGRAM_ID
+  );
+
+  console.log("Pool created", poolPubkey.toBase58());
+
+  // 3. Create the alpha vault
+  const initPermissionlessVaultTx = await AlphaVault.createPermissionlessVault(
+    connection,
+    {
+      baseMint: mintAInfo.mint,
+      quoteMint: mintBInfo.mint,
+      poolType: PoolType.DYNAMIC,
+      vaultMode: VaultMode.PRORATA,
+      poolAddress: poolPubkey,
+      config: poolConfig.account.vaultConfigKey,
+    },
+    payer.publicKey
+  );
+
+  console.log("Creating vault");
+  const txHash = await sendAndConfirmTransaction(
+    connection,
+    initPermissionlessVaultTx,
+    [payer]
+  );
+  console.log(txHash);
+}
+
+const connection = new Connection(clusterApiUrl("devnet"));
+const payer = loadKeypairFromFile(process.env.KEYPAIR_PATH);
+
+/**
+ * This example shows how to create dynamic pool with permissionless vault
+ * Please contact meteora team if the existing pool and vault config doesn't meet the requirement
+ * Currently only dynamic pool support permissionless vault
+ */
+createDynamicPoolWithPermissionlessVault(connection, payer)
+  .then(() => {
+    console.log("Done");
+  })
+  .catch(console.error);
+```
+
+**Note for token vesting period**
+
+`startVestingSlot = poolState.activationSlot+ startVestingDuration`
+
+`endVestingSlot = poolState.activationSlot+ endVestingDuration`
+
+### 2. Deposit SOL or USDC into Alpha Vault
+
+This example shows how to deposit SOL or USDC into an Alpha Vault. Deposit can only happen before the end of the deposit period.
+
+```typescript
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { loadKeypairFromFile } from "./utils";
+import { AlphaVault } from "../alpha-vault";
+import BN from "bn.js";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+async function depositToAlphaVault(
+  vault: PublicKey,
+  depositAmount: BN,
+  payer: Keypair
+) {
+  const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+
+  const alphaVault = await AlphaVault.create(connection, vault);
+  const depositTx = await alphaVault.deposit(depositAmount, payer.publicKey);
+
+  console.log(`Depositing ${depositAmount.toString()}`);
+  const txHash = await sendAndConfirmTransaction(connection, depositTx, [
+    payer,
+  ]);
+  console.log(txHash);
+
+  const escrow = await alphaVault.getEscrow(payer.publicKey);
+  console.log("Escrow info");
+  console.log(escrow);
+}
+
+// Alpha vault to be deposited to
+const vault = new PublicKey("AxRoXRwQgxyaQBMwQsTRrtQ9i9Hd59BKNZBycTcYru5Z");
+const depositAmount = new BN(100_000);
+const payer = loadKeypairFromFile(process.env.KEYPAIR_PATH);
+
+/**
+ * This example shows how to deposit to alpha vault. Deposit can only happen before the deposit close.
+ */
+depositToAlphaVault(vault, depositAmount, payer)
+  .then(() => {
+    console.log("Done");
+  })
+  .catch(console.error);
+```
+
+### 3. Withdraw SOL or USDC from Alpha Vault during deposit period (only for Pro rata mode)
+
+This example shows how to withdraw SOL or USDC from an Alpha Vault. Withdraw function only available before the end of the deposit period, and the function is applicable only when the Alpha Vault is using Pro rata mode.
+
+```typescript
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { loadKeypairFromFile } from "./utils";
+import { AlphaVault } from "../alpha-vault";
+import BN from "bn.js";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+async function withdrawFromAlphaVault(
+  vault: PublicKey,
+  withdrawAmount: BN,
+  payer: Keypair
+) {
+  const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+
+  const alphaVault = await AlphaVault.create(connection, vault);
+  const withdrawTx = await alphaVault.withdraw(withdrawAmount, payer.publicKey);
+
+  console.log(`Withdrawing ${withdrawAmount.toString()}`);
+  const txHash = await sendAndConfirmTransaction(connection, withdrawTx, [
+    payer,
+  ]);
+  console.log(txHash);
+
+  const escrow = await alphaVault.getEscrow(payer.publicKey);
+  console.log("Escrow info");
+  console.log(escrow);
+}
+
+// Alpha vault to be withdraw from
+const vault = new PublicKey("AxRoXRwQgxyaQBMwQsTRrtQ9i9Hd59BKNZBycTcYru5Z");
+const withdrawAmount = new BN(100_000);
+const payer = loadKeypairFromFile(process.env.KEYPAIR_PATH);
+
+/**
+ * This example shows how to withdraw from an alpha vault. Withdraw can only happen before the deposit close,
+ * and it applicable only when the vault is in Prorata mode.
+ */
+withdrawFromAlphaVault(vault, withdrawAmount, payer)
+  .then(() => {
+    console.log("Done");
+  })
+  .catch(console.error);
+```
+
+### 4. Crank Alpha Vault to buy tokens from a Dynamic AMM/Memecoin pool
+
+This example shows how to crank an Alpha Vault to purchase the base token from the liquidity pool during the crank period. Alpha Vault would purchase tokens using the SOL or USDC deposited into the Alpha Vault earlier.
+
+```typescript
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { loadKeypairFromFile } from "./utils";
+import { AlphaVault } from "../alpha-vault";
+import dotenv from "dotenv";
+import { PoolType } from "../alpha-vault/type";
+
+dotenv.config();
+
+async function fillVaultWithDynamicAmm(vault: PublicKey, payer: Keypair) {
+  const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+
+  const alphaVault = await AlphaVault.create(connection, vault);
+
+  console.log(
+    "Pool type: ",
+    alphaVault.vault.poolType == PoolType.DYNAMIC ? "Dynamic AMM" : "DLMM"
+  );
+
+  // Dynamic AMM require only single fill transaction
+  const fillVaultWithDynamicAmmTransaction = await alphaVault.fillVault(
+    payer.publicKey
+  );
+
+  console.log("Fill vault with dynamic AMM");
+  const txHash = await sendAndConfirmTransaction(
+    connection,
+    fillVaultWithDynamicAmmTransaction,
+    [payer]
+  );
+  console.log(txHash);
+}
+
+// Alpha vault to be cranked
+const vault = new PublicKey("AxRoXRwQgxyaQBMwQsTRrtQ9i9Hd59BKNZBycTcYru5Z");
+const payer = loadKeypairFromFile(process.env.KEYPAIR_PATH);
+
+/**
+ * This example shows how to crank the vault to purchase base token from the pool, with deposited token from the vault.
+ */
+fillVaultWithDynamicAmm(vault, payer)
+  .then(() => {
+    console.log("Done");
+  })
+  .catch(console.error);
+```
+
+### 5. Crank Alpha Vault to buy tokens from a DLMM pool
+
+This example shows how to crank an Alpha Vault to purchase the base token from the liquidity pool during the crank period. Alpha Vault would purchase tokens using the SOL or USDC deposited into the Alpha Vault earlier.
+
+```typescript
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { loadKeypairFromFile } from "./utils";
+import { AlphaVault } from "../alpha-vault";
+import dotenv from "dotenv";
+import { PoolType, VaultMode } from "../alpha-vault/type";
+
+dotenv.config();
+
+async function fillVaultWithDlmm(vault: PublicKey, payer: Keypair) {
+  const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+
+  const alphaVault = await AlphaVault.create(connection, vault);
+
+  console.log(
+    "Pool type: ",
+    alphaVault.vault.poolType == PoolType.DYNAMIC ? "Dynamic AMM" : "DLMM"
+  );
+
+  // DLMM require require one to many transactions
+  while (true) {
+    const fillVaultWithDLMMTransaction = await alphaVault.fillVault(
+      payer.publicKey
+    );
+
+    if (!fillVaultWithDLMMTransaction) {
+      // Vault bought out the whole pool and still have remaining
+      break;
+    }
+
+    console.log("Fill vault with DLMM");
+    const txHash = await sendAndConfirmTransaction(
+      connection,
+      fillVaultWithDLMMTransaction,
+      [payer]
+    );
+    console.log(txHash);
+
+    await alphaVault.refreshState();
+    const inAmountCap =
+      alphaVault.vault.vaultMode == VaultMode.FCFS
+        ? alphaVault.vault.totalDeposit
+        : alphaVault.vault.totalDeposit.lt(alphaVault.vault.maxBuyingCap)
+          ? alphaVault.vault.totalDeposit
+          : alphaVault.vault.maxBuyingCap;
+
+    if (inAmountCap.eq(alphaVault.vault.swappedAmount)) {
+      break;
+    }
+  }
+}
+
+// Alpha vault to be cranked
+const vault = new PublicKey("AxRoXRwQgxyaQBMwQsTRrtQ9i9Hd59BKNZBycTcYru5Z");
+const payer = loadKeypairFromFile(process.env.KEYPAIR_PATH);
+
+/**
+ * This example shows how to crank the vault to purchase base token from the pool, with deposited token from the vault.
+ */
+fillVaultWithDlmm(vault, payer)
+  .then(() => {
+    console.log("Done");
+  })
+  .catch(console.error);
+```
+
+### 6. Withdraw unused SOL or USDC from Alpha Vault (only for Pro rata mode)
+
+This example shows how to withdraw unused SOL or USDC deposit from an Alpha Vault after the Alpha Vault has completed the purchase of tokens from the liquidity pool. This is applicable only for Alpha Vault using Pro rata mode.
+
+```typescript
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { loadKeypairFromFile } from "./utils";
+import { AlphaVault } from "../alpha-vault";
+import BN from "bn.js";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+async function withdrawRemainingFromAlphaVault(
+  vault: PublicKey,
+  payer: Keypair
+) {
+  const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+
+  const alphaVault = await AlphaVault.create(connection, vault);
+  const withdrawRemainingTx = await alphaVault.withdrawRemainingQuote(
+    payer.publicKey
+  );
+
+  console.log(`Withdrawing unused fund`);
+  const txHash = await sendAndConfirmTransaction(
+    connection,
+    withdrawRemainingTx,
+    [payer]
+  );
+  console.log(txHash);
+
+  const escrow = await alphaVault.getEscrow(payer.publicKey);
+  console.log("Escrow info");
+  console.log(escrow);
+}
+
+// Alpha vault to be withdraw / refund from
+const vault = new PublicKey("AxRoXRwQgxyaQBMwQsTRrtQ9i9Hd59BKNZBycTcYru5Z");
+const payer = loadKeypairFromFile(process.env.KEYPAIR_PATH);
+
+/**
+ * This example shows how to withdraw remaining unused deposit from an alpha vault after the vault done buying.
+ */
+withdrawRemainingFromAlphaVault(vault, payer)
+  .then(() => {
+    console.log("Done");
+  })
+  .catch(console.error);
+```
+
+### 7. Claim Tokens from Alpha Vault
+
+This example shows how to claim tokens from an Alpha Vault after it has purchased those tokens from the liquidity pool. Claiming can only happen after the start of the vesting period.
+
+#### **Important Reminder: Claim start time should NOT be earlier than Pool activation time**
+
+For a new token launch, the project should ensure that token claiming from the Alpha Vault is NOT possible before the launch pool trading activation or before the token starts trading anywhere, whether on a Dynamic AMM or DLMM Pool. If users are able to claim tokens before the launch pool/token starts trading, they may create a separate market with a price that deviates from the project's preferred launch price.
+
+```typescript
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { loadKeypairFromFile } from "./utils";
+import { AlphaVault } from "../alpha-vault";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+async function claimBoughtTokenFromAlphaVault(
+  vault: PublicKey,
+  payer: Keypair
+) {
+  const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+
+  const alphaVault = await AlphaVault.create(connection, vault);
+  const claimTx = await alphaVault.claimToken(payer.publicKey);
+
+  console.log("Claiming bought token");
+  const txHash = await sendAndConfirmTransaction(connection, claimTx, [payer]);
+  console.log(txHash);
+
+  const escrow = await alphaVault.getEscrow(payer.publicKey);
+  console.log("Escrow info");
+  console.log(escrow);
+}
+
+// Alpha vault to be deposited to
+const vault = new PublicKey("AxRoXRwQgxyaQBMwQsTRrtQ9i9Hd59BKNZBycTcYru5Z");
+const payer = loadKeypairFromFile(process.env.KEYPAIR_PATH);
+
+/**
+ * This example shows how to claim bought token from an alpha vault. Claim can only happen when the vesting start.
+ */
+claimBoughtTokenFromAlphaVault(vault, payer)
+  .then(() => {
+    console.log("Done");
+  })
+  .catch(console.error);
+```
+
+### 8. Close Escrow Account
+
+When a user deposits to the vault, it will create an escrow account, which stores the user info, such as deposit, claimed token, etc. Once user fully claims all tokens, they can close the escrow account.
+
+Close escrow can only happen after vesting of tokens is complete, and the escrow has claimed all the bought token. This example shows how to close an escrow account and get rental back.
+
+```typescript
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { loadKeypairFromFile } from "./utils";
+import { AlphaVault } from "../alpha-vault";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+async function closeEscrow(vault: PublicKey, payer: Keypair) {
+  const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+
+  const alphaVault = await AlphaVault.create(connection, vault);
+  const claimTx = await alphaVault.closeEscrow(payer.publicKey);
+
+  console.log("Close escrow");
+  const txHash = await sendAndConfirmTransaction(connection, claimTx, [payer]);
+  console.log(txHash);
+}
+
+// Alpha vault to be deposited to
+const vault = new PublicKey("AxRoXRwQgxyaQBMwQsTRrtQ9i9Hd59BKNZBycTcYru5Z");
+const payer = loadKeypairFromFile(process.env.KEYPAIR_PATH);
+
+/**
+ * This example shows how to close an escrow account and get rental back. Close escrow can only happen after vesting is complete, and escrow have claimed all the bought token.
+ */
+closeEscrow(vault, payer)
+  .then(() => {
+    console.log("Done");
+  })
+  .catch(console.error);
+```
+
+### 9. Configure Alpha Vault Timings
+
+If you are integrating the Alpha Vault program and need to view and select the predefined timings for the various phases, such as:
+
+* Deposit open time (only for FCFS mode currently)
+
+* Deposit close time
+
+* Vault crank/buy start time
+
+* Vault crank/buy end time
+
+* Withdraw unused USDC or SOL after crank is successful
+
+* Pool Activation time
+
+* Token claim start time
+
+* Vesting start time
+
+* Vesting end time
+
+<Info>
+There is a minimum \~1 hour 5 minutes period between the deposit close time and the pool activation time.
+</Info>
+
+You can use this config endpoint that has predefined timings created by Meteora.
+
+<Card title="Pool config list" href="https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs" icon="link" iconType="solid" horizontal/>
+
+<Card title="Vault config list" href="https://amm-v2.meteora.ag/swagger-ui/#/alpha_vault_config/get_all" icon="link" iconType="solid" horizontal/>
+
+If your preferred configs are not available in the predefined config lists above, and you want more customization, please contact the Meteora team.
+
+**Config endpoint based on Pool Activation Timing**
+
+This config endpoint is tied to the pool activation timing, so all timings for the different Alpha Vault phases is derived from the pool activation timing.
+
+In this example below, the claim process will start 3600 seconds (1 hour) after pool activation, and it will end 7200 seconds (2 hours) after pool activation. In other words, after the pool starts trading, tokens are locked first and released for claiming 3600 seconds (1 hour) later.
+
+```typescript
+{
+  maxBuyingCap: new BN(10000000),
+  index,
+  startVestingDuration: new BN(3600),
+  endVestingDuration: new BN(7200),
+  escrowFee: new BN(0),
+  individualDepositingCap: new BN(50000),
+  activationType: ActivationType.TIMESTAMP,
+  depositingPoint: new BN(1028979080),
+}
+```
+
+### 10. Considerations for Slot Parameters
+
+Timeline in slot:
+
+* depositing\_slot -> last\_join\_slot -> pre\_activation\_lot -> activation\_slot -> start\_vesting\_slot -> end\_vesting\_slot
+
+* curr\_point (current\_slot) \< pre\_activation\_point
+
+* Alpha Vault will start to buy from the pool from pre\_activation\_point
+
+Constraints:
+
+* depositing\_slot + 3000 \<= last\_join\_slot
+
+* last\_join\_slot > current\_slot
+
+* last\_join\_slot + 750 = pre\_activation\_lost
+
+* pre\_activation\_lot + 9000 = activation\_slot
+
+* activation\_slot \< start\_vesting\_slot
+
+* end\_vesting\_slot >= start\_vesting\_slot
+
+Program parameters requires user to submit: depositing\_slot + activation\_slot + start\_vesting\_slot + end\_vesting\_slot
+
+<Tip>
+* get current\_slot
+
+* set activation\_slot = current\_slot + 9000 + 750 + (some buffer if you prefer)
+
+* set depositing\_slot = activation\_slot - 9000 - 3000 - 750 - (some buffer if you prefer)
+
+* set end\_vesting\_slot >= start\_vesting\_slot > activation\_slot
+</Tip>
+
+In timestamp, conversion:
+
+3000 = 20 minutes
+
+750 = 5 minutes
+
+9000 = 1 hour
+
+**Note for Quote mint:**
+
+* New endpoint only supports wSOL or USDC as Quote mint on mainnet.
+
+* Devnet has more flexibility regarding the Quote mint; please reach out to the team.
+
+### 11. Important Reminders
+
+**A) Claim start time should NOT be earlier than Pool activation time**
+
+For a new token launch, the project should ensure that token claiming from the Alpha Vault is NOT possible before the launch pool trading activation or before the token starts trading anywhere, whether on a Dynamic AMM or DLMM Pool. If users are able to claim tokens before the launch pool/token starts trading, they may create a separate market with a price that deviates from the project's preferred launch price.
+
+**B) For Memecoins that want to permanently lock liquidity, lock it before Pool activation time**
+
+If the Alpha Vault is used for a Memecoin launch pool, and the project wants to permanently lock liquidity in the Memecoin pool, they should ideally lock the liquidity BEFORE the pool starts trading, so that swap fees from locked liquidity are captured the second trading starts.
+
+In a scenario where:
+
+* The pool started trading - t0
+
+* Liquidity gets deposited to the pool by the project, but not locked - t1
+
+* Subsequently, that liquidity is permanently locked by the project - t2
+
+The project will not be able to claim swap fees earned from t1 to t2, since fees from t1 to t2 are assigned to the LP token before the LP token gets permanently locked. When the LP token gets locked, the earlier fees are locked along with it.
+
+The project will only be able to claim swap fees from locked liquidity starting from t2.
+
+**C) Quote token must be SOL or USDC**
+
+Only SOL or USDC is accepted as the quote token when initializing a Dynamic AMM or DLMM Pool with Alpha Vault.

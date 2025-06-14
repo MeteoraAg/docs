@@ -1,0 +1,236 @@
+---
+title: "Pool and Fee Config for Memecoin Pools"
+---
+
+## Current Default Fee System for Memecoin Pools
+
+* **Dynamic Fee:** For Memecoin Pools, Dynamic Fee is the % fee charged per swap. This fee is dynamic and set by the protocol, based on memecoin creator requests or market conditions.
+
+* **Protocol Fee:** Protocol Fee represents the amount of fees charged per swap that goes to the protocol or integrations that drive volume to the pool. Protocol Fee is a % of the Dynamic Fee.
+
+The default global Fee Config for Memecoin Pools on Meteora is currently (may change over time):
+
+* 15% - when pool trading starts
+
+* 7% - 10 min after pool trading starts (10 min after 15% starts)
+
+* 5% - 130 min after pool trading starts (120 min after 7% starts)
+
+* 2% - 250 min after pool trading starts (120 min after 5% starts)
+
+* 1% - 370 min after pool trading starts (120 min after 2% starts)
+
+* 0.5% - 490 min after pool trading starts (120 min after 1% starts)
+
+* 0.25% - 24 hours after pool trading starts (950 min after 0.5% starts)
+
+## Important Notes
+
+* Only the Meteora team is able to change the default Dynamic Fee and Protocol Fee; projects have no backend access.
+
+* New config keys can only be created by Meteora. Highest fee % is 15% at the moment.
+
+* All newly created config will not have a dynamic fee schedule applied to it, unless Meteora manually specifies it.
+
+## How to choose a suitable Pool Config from the list?
+
+What fee parameters to choose depends on your project's needs. You will need to look at the [pool config list](https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs) and choose a suitable `pool_config_key` with your preferred fee parameters.
+
+If you want to create an Alpha Vault along with your new pool, you also need to find a `pool_config_key` that is mapped to a `vault_config_key` that meets your requirements.
+
+### Public Pool Config List
+
+* Pool config list: [https://amm-v2.meteora.ag/swagger-ui/#/pools/get\_all\_pool\_configs](https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs)
+
+* Devnet API: [https://devnet-amm-v2.meteora.ag/pool-configs](https://devnet-amm-v2.meteora.ag/pool-configs) You can also get the list of config keys from devnet API
+
+* API endpoint to return the associated fee curve for each existing config: [https://amm-v2.meteora.ag/swagger-ui/#/fee\_config/get\_config\_associated\_fee\_configs](https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs)
+
+  * Using this endpoint, integrators can input the config pubkey, and it will return an array of fee update timings for the config, if there's any.
+
+  * Integrators may choose a `pool_config_key` with a fee curve that suits your integration.
+
+* If there is no existing config in the list that fits your project's requirement, a new config needs to be created.
+
+* Only the Meteora team can create a new config to add it to the preset pool config list.
+
+### Default Pool Config used by Meteora Frontend
+
+* By default, Meteora's frontend is currently using this pool config key for Memecoin Pool creation: `FiENCCbPi3rFh5pW2AJ59HC53yM32eLaCjMKxRqanKFJ`
+
+* For the `FiENCCbPi3rFh5pW2AJ59HC53yM32eLaCjMKxRqanKFJ` pool config, it doesn't allow creation of any Alpha Vault, therefore it's field `vault_config_key` is `1111111...`
+
+### New Custom Pool Config and Fee Curve for Integrators / Launchpads
+
+* **Custom Pool Config Key:** Integrators such as launchpads or other partners may want to use their own unique custom pool config key, if they want `custom pool_creator_authority` to prevent front-running of the token launch pool.
+
+  * Note: New dedicated config keys can only be created by Meteora. Please reach out to us if this is required.
+
+* **Custom Fee Curve:** If you are an integrator, Meteora can also apply a custom fee curve/schedule for your pools, but we will need to create a dedicated config key for your team, where `pool_creator_authority` is linked to your signer wallet for pool creation. You would need to send us your signer wallet that would be used to deploy the pools.
+
+  * Note: Even with a dedicated config key for your team, Meteora would need to customize the fee curve/schedule for you. You can't do it on your own.
+
+* Custom Pool Config and Fee Curve is used by integrators such as Moonshot by DEX Screener.
+
+### Custom Fee Curve for a Specific Pool
+
+* If required, Meteora can set a custom fee curve for a single, specific pool. This would override the fee curve used by the pool's config key, doesn't matter which config key is used.
+
+## API to track associated Fee Curve for each Config
+
+Meteora has an API endpoint to return the associated fee curve for each existing config: [https://amm-v2.meteora.ag/swagger-ui/#/fee\_config/get\_config\_associated\_fee\_configs](https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs)
+
+Using this endpoint, integrators can input the config pubkey, and it will return an array of fee update timings for the config, if there's any. Integrators may then choose a config with a fee curve that suits their integration.
+
+### Steps:
+<Steps>
+  <Step>
+    Go to [https://amm-v2.meteora.ag/swagger-ui/#/pools/get\_all\_pool\_configs](https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs)
+  </Step>
+  <Step>
+    Press "Execute" and find and select the config you want to view
+  </Step>
+  <Step>
+    Check [https://amm-v2.meteora.ag/swagger-ui/#/fee\_config/get\_config\_associated\_fee\_configs](https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs) for any Dynamic Fee curve for that specific config
+  </Step>
+</Steps>
+
+#### Example: Moonshot Integration - Custom Config Key and Fee Curve
+
+<Frame>
+<img src="/images/for-memecoins/memecoins-4.png" alt="Moonshot Integration - Custom Config Key and Fee Curve" />
+</Frame>
+
+* After 14400 seconds since pool start trading, the fee rate will be 2.5%
+
+* After 86400 seconds since pool start trading, the fee rate will be 1%
+
+### **How do you view the starting fee for the config?**
+
+You can check the content of the config account itself, or input you config key account address in [https://amm-v2.meteora.ag/swagger-ui/#/pools/get\_all\_pool\_configs](https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs)
+
+**Example: Moonshot Integration - Fee Curve starting fee**
+
+Pool Dynamic Fee starts at 500 bps (5%), and protocol fee is 20%
+
+<Frame>
+<img src="/images/for-memecoins/memecoins-5.png" alt="Moonshot Integration - Fee Curve starting fee" />
+</Frame>
+
+**Combining the above two example parameters, the Moonshot Fee Curve is:**
+
+* Pool Dynamic Fee starts at 5%
+
+* After 14400 seconds from start of pool trading, the fee rate will be 2.5%
+
+* After 86400 seconds from start of pool trading, the fee rate will be 1%
+
+## What does each field in the Fee Config mean?
+
+* config\_address = the pool config key
+
+* trade\_fee\_bps = pool trading fee
+
+* protocol\_fee\_bps = protocol fee charged from pool trading fee
+
+* activation\_duration = used to determine when exactly the pool will start trading.
+
+* start trade time = current\_time + activation\_duration Or current\_slot + activation\_duration, depends on the activation\_type
+
+* vault\_config\_key = alpha vault config key. If it is `11111111111111111111111111111111`, means no alpha vault. If not, the pool can create an alpha vault. Note: This is NOT the same as the vault address.
+
+* pool\_creator\_authority = address which can use the pool config key to create a pool. If it is `11111111111111111111111111111111`, it's public and available for everyone to use
+
+* activation\_type = pool activation type. 0 = slot, 1 = time
+
+### Pool Config Example
+
+* Sample: [https://amm-v2.meteora.ag/pool-configs](https://amm-v2.meteora.ag/pool-configs)
+
+* Sample fields:
+
+`{ "config_address": "FiENCCbPi3rFh5pW2AJ59HC53yM32eLaCjMKxRqanKFJ", "trade_fee_bps": 1500, "protocol_fee_bps": 2000, "activation_duration": 0, "vault_config_key": "11111111111111111111111111111111", "pool_creator_authority": "11111111111111111111111111111111", "activation_type": 0 },`
+
+### User Flow Example
+
+A pool config may or may not have an associated vault config. There's no vault config associated when the `vault_config_key` is `11111111111111111111111111111111`
+
+When the pool config has a vault config, user can create the pool + Alpha Vault that is binded (auto-whitelisted) by the pool. The Alpha Vault created will inherit the parameters (Pro Rata / FCFS + buying\_cap, vesting duration, etc.) from the vault config.
+
+Let's say a user wants to create the pool ABC/SOL with an Alpha Vault, the user will need to:
+
+1. Check for pool config that have `vault_config_key` not =`1111...`, and `pool_creator_authority` is the user or `1111...` (accessible by the public)
+
+2. Based on the vault requirement the user wants, the user will need to:
+
+   a) Check all the pool configs from step 1, which are each mapped to a `vault_config_key`, as well as
+
+   b) Check for vault config and look for one that fits the requirement
+
+3. If the user finds a requirement that suits their needs, they can use that `pool_config_key` to create the pool, then use the pool config-mapped `vault_config_key` to create the vault. As long as `vault_config_key` is used, the vault is automatically whitelisted upon pool creation.
+
+All the settings are already predefined by `pool_config` + its mapped `vault_config_key`
+
+The permutations for pool config + Alpha vault are created by the Meteora team.
+
+#### **Pool Config Example**
+
+```json
+{
+"config_address": "8aPHoLN8ke6PhWeYA7ELi19fppptVYUCQvqKWR5yP1sn",
+"trade_fee_bps": 150,
+"protocol_fee_bps": 2000,
+"activation_duration": 1512000,
+"vault_config_key": "7ixojP8Zuu4csfTycHi8ywQymHm9zxAhu1TjnFuJaq2R",
+"pool_creator_authority": "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+"activation_type": 0
+},
+```
+
+#### Alpha Vault Config Example
+
+```json
+{
+  "address": "7ixojP8Zuu4csfTycHi8ywQymHm9zxAhu1TjnFuJaq2R",
+  "max_depositing_cap": 10,
+  "start_vesting_duration": 1,
+  "end_vesting_duration": 24107,
+  "depositing_duration_until_last_join_point": 24107,
+  "individual_depositing_cap": 1,
+  "escrow_fee": 0,
+  "activation_type": 0
+},
+```
+
+In this example above, only the `pool_creator_authority` `(5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi)` can use the pool config `8aPHoLN8ke6PhWeYA7ELi19fppptVYUCQvqKWR5yP1sn` to create a pool with the below settings:
+
+1. 1.5% fee
+
+2. 20% protocol fee
+
+3. pool start trade after 1512000 slot upon creation
+
+4. slot based activation
+
+and can create a binded Alpha Vault with FCFS config as shown below:
+
+1. max deposit cap = 10 token
+
+2. vested over 24106 slot after pool activate
+
+3. deposit opens at 24107 slot before vault crank
+
+4. every escrow maximum can only deposit 1 token
+
+## Full Pool and Vault Config List
+
+<CardGroup cols={1}>
+<Card title="Pool config list" href="https://amm-v2.meteora.ag/swagger-ui/#/pools/get\_all\_pool\_configs" icon="angle-right" iconType="solid" horizontal>
+[https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs](https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs)
+</Card>
+<Card title="Vault config list" href="https://amm-v2.meteora.ag/swagger-ui/#/alpha\_vault\_config/get\_all" icon="angle-right" iconType="solid" horizontal>
+[https://amm-v2.meteora.ag/swagger-ui/#/alpha\_vault\_config/get\_all](https://amm-v2.meteora.ag/swagger-ui/#/alpha_vault_config/get_all)
+</Card>
+</CardGroup>
+
+If your preferred configs are not available in the pre-defined config lists above, please contact the Meteora team. You will need your own unique config key specific to your integration.

@@ -1,0 +1,137 @@
+---
+title: "Using CPI"
+description: "Developers can refer to our example about a program that integrates with vault program on-chain here:"
+---
+
+<Card title="https://github.com/MeteoraAg/vault-periphery" href="https://github.com/MeteoraAg/vault-periphery" icon="github" iconType="solid" horizontal />
+
+### Add mercurial-vault to dependencies
+
+If you are using rust, you can include the mercurial-vault link in your Cargo.toml file under "dependencies".
+
+```bash
+mercurial-vault = { git = "https://github.com/mercurial-finance/vault-sdk", rev="9ea05048146878f5e22549ce270d0e5d6776ccc9", features = ["cpi"] }
+```
+
+### CPI to Vault program
+
+```rust
+//! Vault utilities
+
+use anchor_lang::prelude::*;
+use mercurial_vault::cpi::accounts::{DepositWithdrawLiquidity, WithdrawDirectlyFromStrategy};
+use mercurial_vault::cpi::*;
+use mercurial_vault::state::Vault;
+
+/// MercurialVault struct
+#[derive(Clone)]
+pub struct MercurialVault;
+
+impl anchor_lang::Id for MercurialVault {
+    fn id() -> Pubkey {
+        mercurial_vault::id()
+    }
+}
+/// VaultUtils struct
+pub struct VaultUtils;
+
+impl VaultUtils {
+    /// deposit to vault
+    #[allow(clippy::too_many_arguments)]
+    pub fn deposit<'info>(
+        vault: &AccountInfo<'info>,
+        lp_mint: &AccountInfo<'info>,
+        user_token: &AccountInfo<'info>,
+        user_lp: &AccountInfo<'info>,
+        user: &AccountInfo<'info>,
+        token_vault: &AccountInfo<'info>,
+        token_program: &AccountInfo<'info>,
+        vault_program: &AccountInfo<'info>,
+        token_amount: u64,
+        minimum_lp_amount: u64,
+    ) -> Result<()> {
+        let accounts = DepositWithdrawLiquidity {
+            vault: vault.to_account_info(),
+            lp_mint: lp_mint.to_account_info(),
+            user_token: user_token.to_account_info(),
+            user_lp: user_lp.to_account_info(),
+            user: user.to_account_info(),
+            token_vault: token_vault.to_account_info(),
+            token_program: token_program.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(vault_program.to_account_info(), accounts);
+        deposit(cpi_ctx, token_amount, minimum_lp_amount)
+    }
+    /// withdraw from vault
+    #[allow(clippy::too_many_arguments)]
+    pub fn withdraw<'info>(
+        vault: &AccountInfo<'info>,
+        lp_mint: &AccountInfo<'info>,
+        user_token: &AccountInfo<'info>,
+        user_lp: &AccountInfo<'info>,
+        user: &AccountInfo<'info>,
+        token_vault: &AccountInfo<'info>,
+        token_program: &AccountInfo<'info>,
+        vault_program: &AccountInfo<'info>,
+        unmint_amount: u64,
+        minimum_out_amount: u64,
+        signers: &[&[&[u8]]],
+    ) -> Result<()> {
+        let accounts = DepositWithdrawLiquidity {
+            vault: vault.to_account_info(),
+            lp_mint: lp_mint.to_account_info(),
+            user_token: user_token.to_account_info(),
+            user_lp: user_lp.to_account_info(),
+            user: user.to_account_info(),
+            token_vault: token_vault.to_account_info(),
+            token_program: token_program.to_account_info(),
+        };
+        let cpi_ctx =
+            CpiContext::new_with_signer(vault_program.to_account_info(), accounts, signers);
+
+        withdraw(cpi_ctx, unmint_amount, minimum_out_amount)
+    }
+    /// withdraw directly from strategy
+    #[allow(clippy::too_many_arguments)]
+    pub fn withdraw_directly_from_strategy<'info>(
+        vault: &AccountInfo<'info>,
+        strategy: &AccountInfo<'info>,
+        reserve: &AccountInfo<'info>,
+        strategy_program: &AccountInfo<'info>,
+        collateral_vault: &AccountInfo<'info>,
+        token_vault: &AccountInfo<'info>,
+        lp_mint: &AccountInfo<'info>,
+        fee_vault: &AccountInfo<'info>,
+        user_token: &AccountInfo<'info>,
+        user_lp: &AccountInfo<'info>,
+        user: &AccountInfo<'info>,
+        token_program: &AccountInfo<'info>,
+        vault_program: &AccountInfo<'info>,
+        remaining_accounts: &[AccountInfo<'info>],
+        unmint_amount: u64,
+        minimum_out_amount: u64,
+        signers: &[&[&[u8]]],
+    ) -> Result<()> {
+        let accounts = WithdrawDirectlyFromStrategy {
+            vault: vault.clone(),
+            strategy: strategy.clone(),
+            reserve: reserve.clone(),
+            strategy_program: strategy_program.clone(),
+            collateral_vault: collateral_vault.clone(),
+            token_vault: token_vault.clone(),
+            lp_mint: lp_mint.clone(),
+            fee_vault: fee_vault.clone(),
+            user_token: user_token.clone(),
+            user_lp: user_lp.clone(),
+            user: user.clone(),
+            token_program: token_program.clone(),
+        };
+
+        let cpi_ctx =
+            CpiContext::new_with_signer(vault_program.to_account_info(), accounts, signers)
+                .with_remaining_accounts(remaining_accounts.to_vec());
+
+        withdraw_directly_from_strategy(cpi_ctx, unmint_amount, minimum_out_amount)
+    }
+}
+```

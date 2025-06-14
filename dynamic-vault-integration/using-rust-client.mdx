@@ -1,0 +1,216 @@
+---
+title: "Using Rust-Client"
+---
+
+### Add mercurial-vault to dependencies
+
+If you are using rust, you can include the mercurial-vault link in your Cargo.toml file under "dependencies".
+
+```typescript
+mercurial-vault = { version="0.4.2", features= ["cpi", "mainnet"] }
+```
+
+You can access all the main functions after you've added the mercurial-vault dependency to your code.
+
+### Access Vault information through Vault State
+
+Find the vault pubkey based on the token\_mint (USDC, USDT, or SOL)
+
+```typescript
+let (vault, _vault_bump) = Pubkey::find_program_address(
+    &[b"vault".as_ref(), token_mint.as_ref(), mercurial_vault::get_base_key().as_ref()],
+    &mercurial_vault::id(),
+```
+
+Get the vault\_state using the vault pubkey
+
+```typescript
+let vault_state: mercurial_vault::state::Vault = program_client.account(vault)?;
+```
+
+Once you have the vault state, you can retrieve key vault information:
+
+**Total unlocked amount in vault**
+
+Get the total amount of tokens that are available for withdrawal. The vault will lock the yield claimed initially and release them over a pre-defined period of time.
+
+```typescript
+// Total unlocked amount in the vault available for withdrawal
+// current_time is current Solana node timestamp
+total_unlocked_amount = vault_data.get_unlocked_amount(current_time)
+```
+
+**Total reserve in the vault**
+
+We currently keep 10% of the total deposits in the vault to support swaps and immediate withdrawals.
+
+```typescript
+// Get the vault reserve value
+
+// Get the token vault data
+let token_data: anchor_spl::token::TokenAccount =
+    program_client.account(vault_data.token_vault)?;
+
+vault_reserves = token_data.amount //vault reserve value
+```
+
+**Total LP supply for the vault**
+
+Retrieve the total LP token amount in the vault.
+
+```typescript
+// Get total total LP supply
+let token_mint: anchor_spl::token::Mint = program_client.account(vault_data.lp_mint)?;
+total_lp_supply = token_mint.supply
+```
+
+#### Vault virtual price calculation
+
+Get the current virtual price for the vault.
+
+```typescript
+// Calculate vault virtual price using unlocked amount and lp supply
+virtual_price = total_unlocked_amount / total_lp_supply
+```
+
+### To deposit liquidity into the vault
+
+Retrieve the vault, token\_vaul&#x74;*,* lp\_min&#x74;*,* user\_token and user\_lp values
+
+```typescript
+// Retrieve the value for vault
+// You can use the one of our supported token_mints (you can find the token_mint values in the "Constants" section
+let (vault, _vault_bump) = Pubkey::find_program_address(
+    &[b"vault".as_ref(), token_mint.as_ref(), mercurial_vault::get_base_key().as_ref()],
+    &mercurial_vault::id(),
+);
+
+// Retrieve the value of token_vault
+let (token_vault, _token_vault_bump) = Pubkey::find_program_address(
+    &[b"token_vault".as_ref(), vault.as_ref()],
+    &program_client.id(),
+);
+
+//Retrieve the value of vault_state to get the lp_mint value
+let vault_state: mercurial_vault::state::Vault = program_client.account(vault)?;
+let lp_mint = vault_state.lp_mint;
+
+// Retrieve user_token and user_lp values using the get_or_create_ata fn
+let user_token = get_or_create_ata(program_client, token_mint, program_client.payer())?;
+let user_lp = get_or_create_ata(program_client, lp_mint, program_client.payer())?;
+```
+
+Execute the instruction to deposit liquidity into the pool
+
+```typescript
+let builder = program_client
+    .request()
+    .accounts(mercurial_vault::accounts::DepositWithdrawLiquidity {
+        vault: vault,
+        token_vault: token_vault,
+        lp_mint: lp_mint,
+        user_token,
+        user_lp,
+        user: program_client.payer(),
+        token_program: spl_token::id(),
+    })
+    .args(mercurial_vault::instruction::Deposit {
+        token_amount, // total amount of tokens to be deposited
+        minimum_lp_token_amount: 0,
+});
+
+let signature = builder.send()?;
+```
+
+### Withdraw liquidity from pool
+
+Retrieve the vault, token\_vaul&#x74;*,* lp\_min&#x74;*,* user\_token and user\_lp values
+
+```typescript
+// Retrieve the vault
+let (vault, _vault_bump) = Pubkey::find_program_address(
+    &[b"vault".as_ref(), token_mint.as_ref(), mercurial_vault::get_base_key().as_ref()],
+    &mercurial_vault::id(),
+);
+
+// Retrieve the vault of token_vault
+let (token_vault, _token_vault_bump) = Pubkey::find_program_address(
+    &[b"token_vault".as_ref(), vault.as_ref()],
+    &program_client.id(),
+);
+
+//Retrieve the value of vault_state to get the lp_mint value
+let vault_state: mercurial_vault::state::Vault = program_client.account(vault)?;
+let lp_mint = vault_state.lp_mint;
+
+// Retrieve user_token and user_lp values using the get_or_create_ata fn
+let user_token = get_or_create_ata(program_client, token_mint, program_client.payer())?;
+let user_lp = get_or_create_ata(program_client, lp_mint, program_client.payer())?;
+```
+
+Execute the instruction to withdraw liquidity from pool.
+
+```typescript
+let builder = program_client
+    .request()
+    .accounts(mercurial_vault::accounts::DepositWithdrawLiquidity {
+        vault: vault,
+        token_vault: token_vault,
+        lp_mint: lp_mint,
+        user_token,
+        user_lp,
+        user: program_client.payer(),
+        token_program: spl_token::id(),
+    })
+    .args(mercurial_vault::instruction::Withdraw {
+        unmint_amount, //total amount of LP tokens to withdraw
+        min_out_amount: 0,
+    });
+
+let signature = builder.send()?;
+```
+
+### Withdraw direct from Lending Platforms
+
+If you are integrating the vaults directly onto your platform, you can use this function to withdraw funds directly from a selected lending platform.
+
+You can retrieve the list of pubkeys of the lending platform pools integrated with the vault
+
+```typescript
+// Get the vault pubkey using the token_mint of the vault
+let (vault, _) = Pubkey::find_program_address(
+    &[b"vault".as_ref(), token_mint.as_ref(), mercurial_vault::get_base_key().as_ref()],
+    &mercurial_vault::id(),
+);
+
+// Retrieve the vault state
+let vault_data: mercurial_vault::state::Vault = program_client.account(vault)?;
+
+// Iterate through all the lending platform pools integrated with the vault
+for (i, &strategy_pubkey) in vault_data.strategies.iter().enumerate(){
+    // get strategy pubkey
+    println!("{}", strategy_pubkey);
+}
+```
+
+Call the function to withdraw funds from the selected strategy pool.
+
+```typescript
+// Get the strategy_state using the strategy_pubkey
+let strategy_state: mercurial_vault::state::Strategy =
+    program_client.account(strategy_pubkey)?;
+
+// Call the fn to withdraw funds directly from the strategy
+let strategy_handler = get_strategy_handler(strategy_state.strategy_type);
+strategy_handler.withdraw_directly_from_strategy(
+    &program_client,
+    strategy,
+    token_mint,
+    base,
+    unmint_amount,
+)?
+```
+
+You can find the example implementation for withdrawing from a Mango via the link below:
+
+<Card title="https://github.com/mercurial-finance/vault-sdk/blob/main/rust-client/src/strategy_handler/mango.rs" href="https://github.com/mercurial-finance/vault-sdk/blob/main/rust-client/src/strategy_handler/mango.rs" icon="github" iconType="solid" horizontal />

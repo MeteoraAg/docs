@@ -1,0 +1,49 @@
+---
+title: "Dynamic Vaults Overview"
+sidebarTitle: "Overview"
+description: "Dynamic Vaults is DeFi’s first dynamic yield infrastructure, where the vaults rebalance every few minutes across lending platforms to find the best possible yield while prioritizing keeping user funds as accessible as possible."
+---
+
+* Our off-chain yield optimizer keeper program will calculate the yield across all the lending platforms.
+
+* Every few minutes, the off-chain keeper will constantly monitor the key metrics within each lending pool/protocol.
+
+* The keeper will pick the highest APY based on the keeper calculation and deposit to the respective lending pools.
+
+* As the lending pools fluctuate based on its usage, a rebalance would occur every few minutes if necessary.
+
+* Key metrics includes: Total Deposit, Deposit Limits, Pool Utilization Rate, APY, and more
+
+## How does Dynamic Vaults work?
+
+Meteora Dynamic Vaults allow users and integrated protocols to deposit and/or withdraw assets from the vault program at any time. Deposited assets are distributed to various lending protocols like Solend and Tulip, with maximum allocation based on a combination of yield percentages and risk mitigation strategies around protocol audit, insurance coverage, and open source status.
+
+<Frame caption="Fig 1: Meteora Dynamic Vaults overview">
+  <img src="/images/dynamic-vault-integration/dynamic-vaults/~gitbook/image.png" />
+</Frame>
+
+The system will consist of 3 main components:
+
+## **1. Vault**
+
+Each Vault in the infra layer stores single token assets, e.g. USDC or SOL, and the majority of the assets will be allocated to various lending protocols to earn yield. The common tokens used in each connecting protocol, AMM or wallet will be stored in a single vault, e.g. USDC from AMM, and the wallet will be held in the USDC vault. Users and protocols can deposit liquidity to each Vault directly through a simple interface.
+
+## **2. Keeper - Hermes**
+
+We’ve created an off-chain keeper - Hermes to manage more complex logic and operations i.e. lending protocol monitoring and calculating optimal liquidity allocation across lending platforms etc.
+
+In the upcoming days, as Meteora launches the MET token and establishes the DAO with governance capabilities, the community will play a pivotal role in shaping the platform's future. The DAO will actively engage in discussions and strategic planning to determine liquidity allocation across partners' lending protocols. This decentralized decision-making process will further strengthen Meteora's position as a collaborative and community-driven DeFi ecosystem. Exciting times lie ahead as we collectively drive Meteora towards greater success and sustainability.
+
+For now, there are 3 main operations handled by Hermes:
+
+**Yield Optimizer** - Hermes will calculate the liquidity allocation across the lending platforms that will generate the most optimal overall APY for the vault. The calculation will require key data from the various lending platforms i.e. Deposit APY, utilization rate, liquidity in the pool, etc. This process will repeat once every few minutes, and if there is a delta between the new allocation and the current one, a rebalance crank will be sent to the vault to trigger deposits and withdrawals to/from the lending platforms.
+
+**Key Metrics Tracker** - As indicated above, the calculation of liquidity allocation requires various key data such as deposit APY and liquidity in the pool from the lending platforms. The tracker will consistently monitor, track and store this information in the system for use in calculations and for future references. These data are also exposed to potential integrators for them to display on their UIs or to support their own calculations or logic.
+
+**Risk Monitoring** - Hermes also runs a risk monitoring service to track utilization rates and reserve levels of lending protocols to safeguard user assets, ready to withdraw liquidity when thresholds are reached. For example, if the utilization rate of a lending pool is above 80%, Hermes will send a transaction to the vault to trigger a full liquidity withdrawal from the pool. All deposits into the pool will also be stopped for 12 hours, giving us sufficient time to investigate and assess if we will continue deposits or stop them completely until further notice. Full details of the various mechanisms are discussed in [Security](/dynamic-vault-integration/dynamic-vaults/security)
+
+## **3. SDK Module (Integration APIs)**
+
+To make it easy for DApps and Protocols like AMMs and wallets to integrate with our Dynamic Yield Layer, we have created a straightforward SDK and are building up an entire library of pre-built modules and code samples for rapid app development and plug-and-play.
+
+The liquidity in the protocols can be deposited into or withdrawn from the vaults directly via simple API calls. The vaults’ yield can be distributed back to the LPs of the integrated protocols.

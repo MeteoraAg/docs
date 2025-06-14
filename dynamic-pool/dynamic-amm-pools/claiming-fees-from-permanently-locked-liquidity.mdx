@@ -1,0 +1,72 @@
+---
+title: "Claiming Fees from Permanently Locked Liquidity"
+description: "If you are a memecoin or token project that wants to assure traders and your community, you can permanently lock your liquidity (your lose this liquidity forever) in your dynamic pool."
+---
+
+Simply navigate to the "Burn" tab and lock your Meteora LP token in the pool.
+
+<Frame>
+  <img src="/images/dynamic-pool/dynamic-amm-pools/amm-6.png" alt="Burn" />
+</Frame>
+
+After you permanently lock liquidity in the dynamic pool, you can even claim compounding trading fees from your locked liquidity, forever!
+
+<Frame>
+  <img src="/images/dynamic-pool/dynamic-amm-pools/amm-7.png" alt="Claim" />
+</Frame>
+
+## **Adding liquidity with one address but allowing a different address to claim fees on the permanently locked liquidity**
+
+For developers, our Dynamic AMM program allows one address to add liquidity first then send their own Meteora LP token to a different lock token account, so that the ability to claim fees goes to another user's address.
+
+For example, User A deposits liquidity, gets an LP token and permanently sends it to User B's lock token account, so that User B gets to claim the fees forever (not User A).
+
+### How do you identify a user's lock token account to transfer the LP token there?
+
+<Card title="Use this example:" href="https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk/blob/master/ts-client/src/examples/create_pool_and_lock_liquidity.ts#L110" icon="github" iconType="solid" horizontal>
+https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk/blob/master/ts-client/src/examples/create_pool_and_lock_liquidity.ts#L110
+</Card>
+### If I have 100 LP tokens, can I send 1 token to 100 different lock accounts?
+
+Yes.
+
+### How to verify the fee owner for the fees from perma-locked liquidity in the Dynamic AMM pool?
+
+* Go to the LP mint address on solscan
+
+* Under `Holders`, select the holder account (not the token account)
+
+* Click `Data` tab
+
+* Under `LockEscrow - JSON`, search for `owner` field and view the address
+
+
+<Frame>
+  <img src="/images/dynamic-pool/dynamic-amm-pools/amm-8.png" alt="Claim" />
+</Frame>
+
+## How are claimable fees calculated from perma-locked liquidity in Dynamic AMM Pools?
+
+We have a merchanism to slowly release locked LP tokens. In Dynamic AMM, fee is compound in LP tokens, so when there are swaps, value of LP token increases.
+
+We use virtual price to define the LP token value:
+
+`Virtual price = invariant_d / lp_supply = sqrt(a * b) / lp_supply`
+
+Each time a swap occurs, `invariant_d (or a * b)` will be increased, so the value of LP token increases, and we use that increase in the value of LP token to calculate the fee for user.
+
+**Example:**
+
+When a user locks LP tokens, we will monitor the virtual price of LP token as `v1`.
+
+When user claims fee, LP virtual price increases to `v2`.
+
+That is equal to the fee user should get = `total_locked_lp * (v2 - v1)`
+
+When translated to LP tokens at this time, we can calculate the amount of LP user can withdraw = `total_locked_lp * (v2 - v1) / v2`
+
+If the user locks `A0 lp_token` at the time `virtual_price = p0`
+
+* Then the invariant is maintained as: `Ai * pi = A0 * P0 = constant`
+
+* Because `pi` is increased overtime, so user will be able to withdraw `delta_A lp token` over time to maintain this invariant

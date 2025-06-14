@@ -1,0 +1,32 @@
+---
+title : "Algorithm to Find Optimal Yield Allocations"
+description: "In this section, we describe Hermes - our off-chain yield optimizer keeper program, diving into its algorithmic design for finding optimal yield allocations and the risk factors it helps to mitigate. Hermes contains the necessary program logic (monitoring and tracking of the lending pools) of the operator."
+---
+
+Annual Percentage Rate (APR) of lendings depends on a few factors: amount borrowed, amount deposited, interest rate model. The higher the amount borrowed, the higher the APR. When funds are deposited into a lending pool, borrowing interest will be shared amongst depositors, resulting in the decrease of deposit APR.
+
+The algorithm to search for optimal yield allocations begins by breaking liquidity to small portions (lines1-2). For each portion, we simulate deposits in all lending platforms and compare the APR after the simulated deposit (lines 4-8). We will then pick the platform with the highest APR for this portion and update the deposit amount on the platform in the simulation (lines 10-12). We repeat this until 100% of total liquidity is deposited in the simulation to find the optimum allocation (lines 5-12). By doing so, we are able to find the most optimized yield allocations amongst the changing APR values with each deposit and withdrawal.
+
+If the latest allocation differs from the last allocation by more than 0.1%, a rebalance crank is sent to withdraw or deposit into the lending protocols according to the latest allocation (lines 14-16).
+
+```bash
+#Off chain simulation
+1: portion ← x #x is minimally 100, set by admin
+2: deposit_amount ← vault.total_amount / portion
+3: last_allocation[] ← current allocation of vault.total_amount in each lending platform
+4: allocation[] ← track allocation after simulation to each lending platform
+5: FOR each portion
+6:     FOR each platform
+7:         Simulate deposit_amount to platform
+8:         APR[platform] ← APR of platform after simulated deposit
+9:     ENDFOR
+10:     highest_APR_platform ← Select platform with the highest APR in APR[platform]
+11:     allocation[highest_APR_platform] ← deposit_amount + allocation[highest_APR_platform]
+12:     Update deposit_amount to platform
+13: ENDFOR
+
+#On Chain Rebalance crank
+14: IF diff(allocation[], last_allocation[]) > 0.1% THEN
+15:     Send rebalance crank to allocate funds according to allocation[]
+16: ENDIF
+```

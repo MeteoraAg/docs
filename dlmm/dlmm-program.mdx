@@ -1,0 +1,64 @@
+---
+title: "DLMM Program"
+description: "With DLMM, LPs can provide liquidity within a specified price range also known as concentrated liquidity."
+---
+
+## Concentrated Liquidity
+
+This is especially useful for token pairs where trades happen within a tight range such as USDC/USDT where trades usually happen around the $0.99 - $1.01. Often, liquidity outside of this range is untouched and LPs do not earn fees. By concentrating all liquidity within the price range of $0.99 - $1.01, LPs will be able to optimise their trading fees earned.
+
+All bins except for the active one contain just one type of token (X or Y) because they have been depleted or waiting to be used. Only the active bin earns trading fees.
+
+## DLMM Bin Price
+
+- Liquidity is distributed across discrete bins with a fixed width and fixed price.
+
+- Within each bin, liquidity can be exchanged at a fixed price **X + Y = k** within each bin. Basically you add X tokens and take out Y tokens (or vice versa), until there is only just 1 type of token left.
+
+- Each bin represents a single price point, and difference between 2 consecutive bins is the bin step.
+
+- Bin steps are calculated based on the basis points set by the pool creator.
+
+  - For example, taking SOL/USDC. If the current price is $20 and the bin step is 25 basis points (0.25%), then the consecutive bins would be 20 x 1.0025 = 20.05, 20.05 \* 1.0025 = 20.10 and so on.
+
+- Liquidity pools are identified by its tuple of pooled assets token X, Token Y and bin step s: (X, Y, s)
+
+## Bin Liquidity
+
+Liquidity in each bin is calculated by the constant sum price variant, P.x+y=L, where _x_ is the quantity of token X, _y_ is the quantity of token Y, _L_ is the amount of liquidity in the bin and $$ P = \frac{\Delta u}{\Delta x} \cdot P $$. P is defined as the rate of change of Y reserves per change in X reserves, and is a price constant unique to each pool.
+
+P can be visualized as the gradient of the line in the following image:
+
+<Frame>
+<img src="/images/dlmm/dlmm-4.png" />
+</Frame>
+
+## Bin Composition
+
+All bins except for the active one contain just one type of token (X or Y) because they have been depleted or waiting to be used. Only the active bin earns trading fees.
+
+As P represents the slope of the line, it remains consistently uniform within every bin.
+
+In contrast to the constant product formula that you might be familiar with from other AMMs, the price is independent of the reserve amounts of both X and Y. To put it another way, if you have a set price P and a known quantity of x (or y), you cannot determine the value of y (or x). In constant product this is calculated by simply taking $$ y = \frac{P}{x} $$.
+
+Given that the composition of reserves, x and y, are independent of both price and liquidity, an additional variable is used to describe the reserves available in the bin. This variable, composition factor _c,_ is the percentage of bin liquidity composing of _y_:
+
+$$ y = \frac{L}{y} $$
+
+From this equation, we can deduce x and y, as follows:
+
+$$ y = cL $$
+
+$$ x = \frac{L}{P} (1 - c) $$
+
+## Market Aggregation
+
+The constant sum curve intercepts both the x and y axes, meaning that the reserves of X or Y token can be depleted. When this happens, the current price would move to the next bin either on the left or right.
+
+Active price bin is defined as the bin that contains reserves of both X and Y. Note that there can only be one active bin at any point in time. All bins to the left of the active bin will only contain token Y, while all bins to the right of it will only contain token X.
+
+<Frame>
+<img src="/images/dlmm/dlmm-5.jpg" />
+</Frame>
+
+A straightforward way to conceptualize this is by considering the SOL/USDC pool. Suppose we designate asset Y as USDC and asset X as SOL. Price P is determined by the amount of USDC per SOL. We can define the \$100 SOL bin as the active bin, with all bins to the left containing only USDC and all bins to the right containing only SOL. When there is significant demand for SOL, the active bin shifts to the right as the SOL reserves in the $100 bin get exhausted.

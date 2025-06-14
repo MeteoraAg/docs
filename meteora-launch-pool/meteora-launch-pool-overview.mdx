@@ -1,0 +1,110 @@
+---
+title: "Introduction"
+description: "The Meteora Launch Pool is a pool type designed for **new token launches**. It comes fundamentally equipped with a feature set that makes it optimal for bootstrapping liquidity for new tokens and making the tokens accessible on Jupiter and other trading integrations."
+---
+
+The Launch Pool has some differences from a standard DLMM Pool (e.g. those created via the Meteora UI). Its setup builds upon the standard DLMM pool tech and features to provide the following benefits:
+
+* Customisable DLMM pool to suit different project needs; design your liquidity distribution curve and other parameters using the [ILM curve tool at ilm.jup.ag](https://ilm.jup.ag/)
+
+* Ability to set your activation point (token launch timing)
+
+* Single-sided bootstrapping of liquidity using project tokens, without the need for initial USDC or SOL capital
+
+* Token immediately tradable on Jupiter (Swap, DCA, LO) and all Jupiter integrations at launch, including Phantom, Solflare, and Birdeye, and popular trading bots
+
+* Concentrated liquidity with zero-slippage bins and Dynamic Fees (average 6-7% for launch pools)
+
+## Who should use the Meteora Launch Pool?
+
+The Launch Pool is targeted at new projects and token creators on Solana looking for a customizable liquidity pool setup to bootstrap liquidity for their new token and help ensure widespread token accessibility and distribution.
+
+The aim is for projects to bootstrap liquidity on their terms, with the flexibility to set their preferred price curve, liquidity distribution, and launch parameters exactly the way they want. This is also the same underlying technology used by Jupiter LFG Launchpad.
+
+Anyone can use our docs to create their own permissionless Launch Pool to be used for their token launch.
+
+### Checklist of parameters required to set up the pool
+
+#### Liquidity distribution parameters
+
+Use the ILM (Intuitive Liquidity Modelling) tool[ https://ilm.jup.ag/](https://ilm.jup.ag/) to design the liquidity distribution for your pool and decide on your final parameters.
+
+* **Curvature**: Determines how liquidity is distributed across the price range
+
+* **Initial Price**: Initial price for the token at the start of the launch
+
+* **Maximum Price**: Maximum price for the token during the launch
+
+* **Percentage of Total Supply in the pool**
+
+* **Total Supply of the Token (in Millions)**
+
+* **Bin Step**: Determines the granularity of the price by changing the number of price bins available. Each bin represents a single price point, and the difference between 2 consecutive bins is the bin step. Bin steps are calculated based on basis points.
+
+* **Base Fee**: The minimum fee charged per swap in the pool.
+
+## **Code Example to Setup a Meteora** Launch Pool
+
+
+<CardGroup>
+  <Card title="Permissionless Launch Pool Setup" href="/meteora-launch-pool/meteora-launch-pool-with-alpha-vault-setup#id-1.-create-dlmm-pool" />
+</CardGroup>
+
+**Important notes:**
+
+* Currently, only SOL or USDC is accepted as the quote token when initializing a Meteora Launch Pool with Alpha Vault in a permissionless setup. Since the Alpha Vault can't tell what the quote token would be, the quote token is limited to SOL or USDC. However, any quote token can be used if you use a config key that doesn't have Alpha Vault.
+
+* If you plan to use a multisig on the Meteora website, please make sure it is the SquadsX multisig, as that is the only type supported on Meteora website. Otherwise, you can't manage liquidity through the website.
+
+## Other Questions
+
+<AccordionGroup>
+  <Accordion title="Can the creator lock liquidity in the Meteora Launch Pool?">
+    Yes. But currently, locking liquidity is only possible for a new token launch on a Launch Pool (where positions are created before the pool activates).
+
+    At the moment, tokens that have already launched on existing markets won't be able to lock liquidity in a standard DLMM Pool.
+
+    Fees can still be claimed while liquidity is locked.
+  </Accordion>
+
+  <Accordion title="Any constraints on the quote token?">
+    No constraint on the quote token for a Meteora Launch Pool.
+
+    However, if the Meteora Launch Pool is being launched with an Alpha Vault, SOL or USDC must be used as the quote token.
+
+    The base token cannot be SOL or USDC for both the Meteora Launch Pool and the standard DLMM Pool.
+  </Accordion>
+
+  <Accordion title="How do you check if the Meteora Launch Pool is disabled for trading?">
+    Currently, only Meteora can disable the pool from trading.
+
+    To check that the pool is disabled, go to: `https://explorer.solana.com/address/<pool address>/anchor-account`
+
+    Check for `Status = 1`
+  </Accordion>
+
+  <Accordion title="Can the creator choose the token to earn as swap fees?">
+    Not at the moment.
+
+    We are working on enabling this at a later stage but this feature isn't live yet.
+
+    IF we were were to enable this, the general process would look like this:
+
+    The creator of a Meteora Launch Pool would be able to choose between 3 options when it comes to which token is charged and earned as swap fees (that go to the fee owner):
+
+    * Token A
+
+    * Token B
+
+    * Token A or B depending on the swap
+
+    When fee is charged in:
+
+    * Token A | Swap A to B => A fee, Swap B to A => A fee
+
+    * Token B | Swap A to B => B fee, Swap B to A => B fee
+
+    * Token A or B depending on the swap | Swap A to B => A fee, Swap B to A => B fee
+
+  </Accordion>
+</AccordionGroup>

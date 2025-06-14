@@ -1,0 +1,56 @@
+---
+title: "Security"
+description: "This section describes the security measures we put in place to mitigate the risk factors"
+---
+
+This section describes the security measures we put in place to mitigate the risk factors
+
+Apart from executing the algorithm to find optimal yield allocations, our keeper program also has risks to consider before it can decide on the actual allocation.
+
+Risks are generally categorized into 2 types:-
+
+* Operation risk
+
+* Lending risk
+
+### Operation Risk
+
+Risks that are related to source code such as when a partner protocol or team has a program update, or when lending platforms are not well audited. In minor cases, the source code changes break the integration, users are unable to perform any vault withdrawals or deposits. In major cases, the vault program or lending protocols may be exploited, losing the tokens in the vaults.
+
+We implement a maximum allocation mechanism that the vault can deposit into each lending pool to mitigate this risk.
+
+All lending protocols' maximum allocation starts at 100%. We will assess them across a set of criteria which includes the existence of audits, open-source code, insurance funds, main token pools, program multi-sig / verified & non-updatable status as well as the length of integration with Meteora. This set of criteria will eventually be governed by the DAO.
+
+For every criterion not met, we will reduce the maximum allocation allowed to the protocol according to this matrix:
+
+
+| Criteria                                   | Maximum allocation reduction, if not present |
+|--------------------------------------------|-------|
+| Audit                                      | 20    |
+| Open-source                                | 30    |
+| Official Insurance Funds?                  | 20    |
+| Main Pool                                  | 10    |
+| Existing integration > 1 month             | 10    |
+| Program multi-sig / or Verified & Non-Updatable | 20    |
+
+
+
+Example: Lending Protocol Xyz (with Audited, Open-sourced, Main Pool, and Program multi-sig)
+
+The score for allocation will be 100-20 (No official insurance funds) - 10 (Existing integration \< 1 month) = 70
+
+We also limit max allocation in each lending as 30% of total liquidity.
+
+Hermes is not allowed to withdraw funds from the lending protocols to external wallets. In the event that Hermes is hacked, the hackers will only be able to control the flow of funds to and from between the vaults and lending protocols; the principals are still safe in either of them.
+
+### Lending Risk
+
+This risk occurs when depositors are unable to withdraw their funds from the lending pools. This is caused when utilization rates of the reserves reach full capacity at 100% where borrowed amount equals the deposited amount, or when the amount of reserves remaining in the lending pools is less than the vault deposits. When this happens, depositors are unable to withdraw funds on demand.
+
+To avoid lending risks, we have developed the following mechanisms to protect principals:
+
+* Stretch allocations in multiple lendings to diversify and manage risk across them
+
+* Hermes consistently monitors the utilization rates of each lending pool and is ready to withdraw funds whenever the threshold is exceeded. Current thresholds are set at 80% - allowing us to participate in popular lending pools with higher utilization rates while still leaving a buffer for Hermes to withdraw funds when required.
+
+* Vaults always maintain a buffer in the lending reserve to allow Hermes buffer time to react to liquidity movements.
