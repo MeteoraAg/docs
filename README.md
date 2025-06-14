@@ -1,2 +1,3 @@
-# docs
-Meteora's Documentation
+# Meteora Documentation
+
+All things Meteora
