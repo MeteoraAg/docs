@@ -25,6 +25,35 @@ Rate Limiter requires the following parameters to be configured:
 
 With these parameters, the fee slope will increase by the **Fee Increment Bps** for each increment of **Reference Amount** of tokens swapped. This rate limiter will last for the duration of **Max Limiter Duration**. Any swap amount below the **Reference Amount** will be charged the **Cliff Fee Numerator**.
 
+## Requirements for Rate Limiter 
+
+<CardGroup>
+  <Card title="Quote Token Only" icon="circle-1" iconType="solid">
+    The rate limiter mode is only available if collect fee mode is in quote token only, and when the user buys the token (not sell).
+  </Card>
+  <Card title="Single Swap Per Transaction" icon="circle-2" iconType="solid">
+    Rate limiter doesn't allow user to send multiple swap instructions (or CPI) to the same pool in 1 transaction.
+  </Card>
+  <Card title="Mutually Exclusive with Fee Scheduler" icon="circle-3" iconType="solid">
+    Developers have to choose between using Fee Scheduler or Rate Limiter for their pool.
+  </Card>
+</CardGroup>
+
+## Example:
+
+If you have:
+
+- `reference_amount` = 1 SOL
+- `cliff_fee_numerator` = 1% (100 bps)
+- `fee_increment_bps` = 100 bps (1%)
+
+Then:
+
+- Trading 1 SOL: 1% fee
+- Trading 2 SOL: 1.5% average fee
+- Trading 3 SOL: 2% average fee
+- And so on...
+
 ## Which Launch Pools support Rate Limiter?
 
-Rate Limiter is available as an option for Dynamic Bonding Curve (DBC).
+Rate Limiter is available as an option for Dynamic Bonding Curve (DBC). Rate Limiter for DAMM V2 is coming soon.
