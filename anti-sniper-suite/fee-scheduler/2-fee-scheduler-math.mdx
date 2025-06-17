@@ -1,0 +1,42 @@
+---
+title: Fee Scheduler Math
+---
+
+There are two types of fee schedulers:
+
+1. **Linear**
+2. **Exponential**
+
+## Linear Fee Scheduler
+
+A linear fee scheduler is a fee reduction mechanism that decreases trading fees at a constant rate over time. 
+
+### Linear Fee Scheduler Formula
+
+For Linear (0) baseFeeMode:
+
+```
+ending_fee = cliff_fee_numerator - (period * reduction_factor)
+```
+
+Where:
+- `cliff_fee_numerator`: The initial fee amount at the start
+- `number_of_periods`: The number of time periods
+- `reduction_factor`: The constant amount by which the fee decreases each period (expressed in basis points)
+
+## Exponential Fee Scheduler
+
+An exponential fee scheduler is a fee reduction mechanism that decreases trading fees by a percentage of the current rate over time. 
+
+### Exponential Fee Scheduler Formula
+
+For Exponential (1) baseFeeMode:
+
+```
+ending_fee = cliff_fee_numerator * (1 - reduction_factor/10_000)^period
+```
+
+Where:
+- `cliff_fee_numerator`: The initial fee amount at the start
+- `reduction_factor`: The reduction factor (expressed in basis points)
+- `number_of_periods`: The number of time period
