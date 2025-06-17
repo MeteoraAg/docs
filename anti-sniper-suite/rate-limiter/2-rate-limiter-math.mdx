@@ -1,0 +1,51 @@
+---
+title: Rate Limiter Math
+---
+
+Rate Limiter is a configurable fee slope that can charge fees ranging from the configured `base_fee` up to 99% fee (`MAX_FEE`).
+
+## Rate Limiter Formula
+
+The rate limiter uses a progressive fee calculation with the following key components:
+
+Parameters:
+- `reference_amount` (x₀): The base reference amount
+- `cliff_fee_numerator` (c): The base fee rate
+- `fee_increment_bps` (i): The fee increment in basis points
+- `max_limiter_duration`: Duration for which the rate limiter is active
+
+
+The formula depends on the relationship between input_amount and reference_amount:
+
+### Case 1: input_amount ≤ reference_amount
+
+```
+fee = input_amount × c
+```
+
+### Case 2: input_amount > reference_amount
+
+First, decompose the excess amount:
+
+```
+input_amount = reference_amount + (a × reference_amount + b)
+```
+
+where:
+- `a`: (input_amount - reference_amount) / reference_amount (integer division)
+- `b`: (input_amount - reference_amount) % reference_amount (remainder)
+
+Then calculate fees based on whether we exceed the maximum index:
+
+##### If `a < max_index`
+
+```
+fee = x₀ × (c + c×a + i×a×(a+1)/2) + b × (c + i×(a+1))
+```
+
+##### If `a ≥ max_index`
+
+```
+d = a - max_index
+fee = x₀ × (c + c×max_index + i×max_index×(max_index+1)/2) + (d×x₀ + b) × MAX_FEE
+```
