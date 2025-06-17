@@ -14,38 +14,40 @@ Parameters:
 - `fee_increment_bps` (i): The fee increment in basis points
 - `max_limiter_duration`: Duration for which the rate limiter is active
 
-
 The formula depends on the relationship between input_amount and reference_amount:
 
 ### Case 1: input_amount ≤ reference_amount
 
-```
-fee = input_amount × c
-```
+<div align="center">
+$$Fee = InputAmount \times c$$
+</div>
 
 ### Case 2: input_amount > reference_amount
 
 First, decompose the excess amount:
 
-```
-input_amount = reference_amount + (a × reference_amount + b)
-```
+<div align="center">
+$$InputAmount = x_0 + (a \times x_0 + b)$$
+</div>
 
 where:
-- `a`: (input_amount - reference_amount) / reference_amount (integer division)
-- `b`: (input_amount - reference_amount) % reference_amount (remainder)
+- `a`: floor division of (InputAmount - x₀) / x₀
+- `b`: remainder of (InputAmount - x₀) mod x₀
 
 Then calculate fees based on whether we exceed the maximum index:
 
 ##### If `a < max_index`
 
-```
-fee = x₀ × (c + c×a + i×a×(a+1)/2) + b × (c + i×(a+1))
-```
+<div align="center">
+$$Fee = x_0 \times (c + c \times a + i \times a \times (a+1) / 2) + b \times (c + i \times (a+1))$$
+</div>
 
 ##### If `a ≥ max_index`
 
-```
-d = a - max_index
-fee = x₀ × (c + c×max_index + i×max_index×(max_index+1)/2) + (d×x₀ + b) × MAX_FEE
-```
+<div align="center">
+$$d = a - MaxIndex$$
+</div>
+
+<div align="center">
+$$\small Fee = x_0 \times (c + c \times MaxIndex + i \times MaxIndex \times (MaxIndex+1) / 2) + (d \times x_0 + b) \times MaxFee$$
+</div>
