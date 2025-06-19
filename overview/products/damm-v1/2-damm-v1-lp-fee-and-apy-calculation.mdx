@@ -1,32 +1,32 @@
 ---
-title: "Dynamic AMM LP Fee and APY Calculation"
+title: "DAMM V1 LP Fee and APY Calculation"
 ---
 
 In order to enhance transparency for our LPs concerning the APY associated with their deposited assets, we compute and display various information, for example: Liquidity Provider Fee, Protocol Fee, 365d Yield/TVL, and LM rewards APR.
 
-## Liquidity Provider Fee
+# Liquidity Provider Fee
 The amount of fees charged on each trade that goes to liquidity providers (LPs).
 
-## Protocol Fee
+# Protocol Fee
 The amount of fees charged on each trade that goes to the protocol. Protocol Fee is a % of the LP Fee. 
 
 For our initial testing phase, Protocol Fee has been set as 20% of the LP Fee, for all volatile Dynamic AMM Pools.
 
-## Base APY 
+# Base APY 
 The base APY offered is subject to variation and is based on the prevailing trading activity and yield obtained from lending platforms. The calculation of APY is contingent on the increase in virtual price over a specific time period.
 
 ```math
-\text{base APY} = \left(\left(\frac{\text{Virtual Price}_2}{\text{Virtual Price}_1}\right)^{\frac{1 \text{ year}}{\text{timeframe}}} - 1\right) \times 100
+\text{base APY} = \left(\left(\frac{\text{VirtualPrice2}}{\text{VirtualPrice1}}\right)^{\frac{1 \text{ year}}{\text{Timeframe}}} - 1\right) \times 100
 ```
 
 Where:
-- Virtual Price₂: Latest Virtual Price value
-- Virtual Price₁: Previous Virtual Price value in the last 24 Hours
-- Timeframe: Time difference between Virtual Price₁ and Virtual Price₂ (in seconds)
+- **VirtualPrice2**: Latest Virtual Price value
+- **VirtualPrice1**: Previous Virtual Price value in the last 24 Hours
+- **Timeframe**: Time difference between Virtual Price 1 and Virtual Price 2 (in seconds)
 
 > **Note**: The Virtual Price represents the value of your pool share and is determined by dividing the pool's total value by the number of LP tokens (VP = pool_value / LP token). The pool's value rises as a result of a swap fee being charged on each trade or when assets deposited in lending pools generate lending yield. This increase in pool value corresponds to a rise in the Virtual Price.
 
-## 365d Yield/TVL
+# 365d Yield/TVL
 The ratio of the aggregate swap fees accrued over a 1-year period to the total liquidity available in the pool represents the efficiency metric that informs LPs which pool generates the most trading fees. This data empowers LPs with valuable insights into pool performance.
 
 ```math
@@ -37,7 +37,7 @@ Where:
 - 24 hour fee: Swap fee generated in the last 24 hour in $
 - Total Liquidity of pool: Total value of the assets stored in the AMM pool in $
 
-## LM APR
+# LM APR
 This refers to the APR that is calculated based on the rewards provided by the team or partner protocols through Liquidity Mining (LM), such as ABR, LDO rewards, etc.
 
 ```math
@@ -45,6 +45,6 @@ This refers to the APR that is calculated based on the rewards provided by the t
 ```
 
 Where:
-- Farm reward per day: Token reward per day × token reward USD rate
-- Farm TVL: (Pool LP staked / Pool LP supply) × Pool TVL
-- Pool TVL: Pool token A × token A USD rate + Pool token B × token B USD rate
+- **Farm reward per day**: Token reward per day × token reward USD rate
+- **Farm TVL**: (Pool LP staked / Pool LP supply) × Pool TVL
+- **Pool TVL**: Pool token A × token A USD rate + Pool token B × token B USD rate
