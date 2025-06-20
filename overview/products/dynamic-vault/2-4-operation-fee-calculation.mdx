@@ -1,0 +1,90 @@
+---
+title: "Operation Fee Calculation"
+---
+
+When an operator submits a `deposit_strategy` or `withdraw_strategy` transaction (i.e., when assets are rebalanced between lending protocols), we call this the **rebalance crank**.
+
+A fee is collected to the [fee_vault](https://solscan.io/account/9kZeN47U2dubGbbzMrzzoRAUvpuxVLRcjW9XiFpYjUo4#splTransfers) every time the operator sends a rebalance crank. This fee is paid in vault LP SPL tokens and can be seen at the fee_vault address.
+
+Currently, we charge **5% of profit** as the operation (performance) fee.
+
+---
+
+## Variables
+
+**Before rebalance:**
+
+- `vault.total_amount`: $t_1$
+- `lp_mint.total_supply`: $p_1$
+- **Virtual price** (value of LP token): $v_1 = t_1 / p_1$
+
+**After rebalance:**
+
+- `vault.total_amount`: $t_2$
+- `lp_mint.total_supply`: $p_1$
+- **Virtual price**: $v_2 = t_2 / p_1$
+
+---
+
+## Fee Calculation
+
+We charge an operation fee:
+
+<div align="center">
+$fee = 0.05 \times (t_2 - t_1)$
+</div>
+
+---
+
+## Adjusting Virtual Price After Fee
+
+After deducting the fee, the virtual price becomes:
+
+<div align="center">
+$v_{21} = (t_2 - fee) / p_1$
+</div>
+
+However, the vault does **not** send tokens directly to the treasury token account (since it may not have enough liquidity). Instead, the vault **mints additional LP tokens** for the fee_vault.
+
+Let $\delta$ be the number of new LP tokens minted for the fee. The new virtual price is:
+
+<div align="center">
+$v_{22} = t_2 / (p_1 + \delta)$
+</div>
+
+We want the virtual price after fee to remain the same, so set $v_{21} = v_{22}$:
+
+<div align="center">
+$(t_2 - fee) / p_1 = t_2 / (p_1 + \delta)$
+</div>
+
+---
+
+## Solving for $\delta$
+
+Rearranging the equation above, we get:
+
+<div align="center">
+$\delta = (p_1 \times fee) / (t_2 - fee)$
+</div>
+
+Or, substituting $fee = 0.05 \times (t_2 - t_1)$:
+
+<div align="center">
+$\delta = (p_1 \times 0.05 \times (t_2 - t_1)) / (t_2 - 0.05 \times (t_2 - t_1))$
+</div>
+
+Which simplifies to:
+
+<div align="center">
+$$
+\delta = (p_1 \times 0.05 \times (t_2 - t_1)) / (0.95 \times t_2 + 0.05 \times t_1)
+$$
+</div>
+
+---
+
+**Summary:**  
+- The operation fee is 5% of the profit from each rebalance crank.
+- The fee is paid by minting new LP tokens to the fee_vault, not by transferring underlying assets.
+- The number of LP tokens minted is calculated to ensure the virtual price for LP holders remains consistent after the fee is taken.
