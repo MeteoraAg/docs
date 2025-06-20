@@ -1,0 +1,74 @@
+---
+title: "Algorithm to Find Optimal Yield Allocations"
+---
+
+Hermes is our off-chain yield optimizer (keeper) program, designed to dynamically allocate liquidity across lending platforms for optimal yield while managing risk. Below, we break down its algorithmic approach and the rationale behind each step.
+
+---
+
+## How Hermes Optimizes Yield
+
+<Callout type="info" emoji="⚡">
+**Hermes** continuously monitors lending pools and simulates allocations to maximize yield for vault depositors.
+</Callout>
+
+### Key Factors Affecting APR
+
+<CardGroup>
+  <Card title="Amount Borrowed" icon="arrow-up-right" iconType="solid">
+    Higher utilization (more borrowed) increases APR for depositors.
+  </Card>
+  <Card title="Amount Deposited" icon="bank" iconType="solid">
+    More deposits dilute the APR, as interest is shared among more depositors.
+  </Card>
+  <Card title="Interest Rate Model" icon="chart-line" iconType="solid">
+    Each platform’s model determines how APR changes with utilization.
+  </Card>
+</CardGroup>
+
+---
+
+## Step-by-Step: Optimal Allocation Algorithm
+
+<Steps>
+  <Step title="1. Divide Liquidity into Portions">
+    Liquidity is split into small portions (e.g., 100+), configurable by admin.
+  </Step>
+  <Step title="2. Simulate Deposits Across Platforms">
+    For each portion, simulate depositing it into every lending platform and calculate the resulting APR.
+  </Step>
+  <Step title="3. Select Highest APR">
+    Assign the portion to the platform offering the highest simulated APR.
+  </Step>
+  <Step title="4. Update Simulated Allocations">
+    Update the simulated allocation and repeat until all liquidity is distributed.
+  </Step>
+  <Step title="5. Compare to Previous Allocation">
+    If the new allocation differs from the previous by more than 0.1%, trigger a rebalance.
+  </Step>
+</Steps>
+
+---
+
+## Pseudocode
+
+```
+#Off chain simulation
+portion ← x #x is minimally 100, set by admin
+deposit_amount ← vault.total_amount / portion
+last_allocation[] ← current allocation of vault.total_amount in each lending platform
+allocation[] ← track allocation after simulation to each lending platform
+FOR each portion
+    FOR each platform
+        Simulate deposit_amount to platform
+        APR[platform] ← APR of platform after simulated deposit
+    ENDFOR
+    highest_APR_platform ← Select platform with the highest APR in APR[platform]
+    allocation[highest_APR_platform] ← deposit_amount + allocation[highest_APR_platform]
+    Update deposit_amount to platform
+ENDFOR
+#On Chain Rebalance crank
+IF diff(allocation[], last_allocation[]) > 0.1% THEN
+    Send rebalance crank to allocate funds according to allocation[]
+ENDIF
+```
