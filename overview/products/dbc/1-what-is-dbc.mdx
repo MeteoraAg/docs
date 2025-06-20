@@ -7,6 +7,30 @@ Dynamic Bonding Curve (DBC) program is a permissionless launch pool protocol tha
 
 With direct integration into Jupiter and other trading platforms, traders can trade these launch tokens immediately across all these integrations. 
 
+# How does it work?
+
+<Steps>
+  <Step title="Partner creates a unique config key">
+    Partners (launchpads) create a unique configuration key that includes all settings that covers from the Dynamic Bonding Curve creation to the migration of the liquidity to the actual DAMM pool. This can be done using the DBC SDK or via the config key generation UI on launch.meteora.ag
+  </Step>
+  <Step title="Creators create DBC token pools">
+    Creators (token pool creators) can create a Dynamic Bonding Curve token pool using the partner's config key. This will mint a new token.
+    <Note>You cannot create a DBC token pool with an existing token.</Note>
+  </Step>
+  <Step title="Trading platforms can swap">
+    Trading platforms and trading bots (e.g., Jupiter, Axiom, Photon, etc.) can **immediately** swap with the Dynamic Bonding Curve pool.
+  </Step>
+  <Step title="DBC reaches minimum quote threshold">
+    When the DBC pool reaches a pre-defined minimum quote threshold (specified in the config key), no one can swap with that pool anymore and that pool is prepared for migration.
+  </Step>
+  <Step title="Meteora auto migrator service creates a DAMM pool">
+    Meteora's auto migrator keeper service then migrates the DBC pool by sending a crank to create a new Meteora Dynamic AMM v1 or v2 pool
+  </Step>
+  <Step title="LP tokens or NFTs are locked or claimed by partner or creator">
+    Upon migration, depending on the pool's config key, LP tokens or NFTs are either locked or claimable by the partner or creator. This is specified in the `creator_lp_percentage`, `partner_lp_percentage`, `creator_locked_lp_percentage` and `partner_locked_lp_percentage` fields.
+  </Step>
+</Steps>
+
 # Key Benefits
 
 <CardGroup>
