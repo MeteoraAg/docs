@@ -3,9 +3,7 @@ title: Getting Started
 description: DAMM v2
 ---
 
-# Rust SDK
-
-The `rust-sdk` provides a convenient way to interact with the DAMM v2 protocol and get swap quotes.
+The `rust-sdk` provides a convenient way to interact with the DAMM v2 program and get swap quotes.
 
 Before you begin, here are some important resources:
 
@@ -20,69 +18,7 @@ To use the Rust SDK, you need to add it as a dependency in your `Cargo.toml` fil
 [dependencies]
 rust-sdk = { path = "../rust-sdk" } # Adjust the path accordingly
 cp-amm = { path = "../programs/cp-amm" } # The sdk also needs the cp-amm crate
-```
-
-## Usage
-
-The primary function in the SDK is `get_quote`, which calculates the result of a swap.
-
-Here's an example of how to use it:
-
-```rust
-use cp_amm::state::{Pool, fee::FeeMode, SwapResult};
-use rust_sdk::quote::get_quote;
-
-fn main() {
-    // You need to have a `Pool` instance.
-    // In a real scenario, you would fetch this from the blockchain.
-    // For this example, let's create a placeholder pool.
-    // NOTE: This is a simplified example. A real pool has many more fields.
-    // You would typically deserialize on-chain account data to get a Pool.
-    let pool = Pool {
-        // ... fill in with necessary pool fields for a quote
-        // For example:
-        token_a_mint: Default::default(),
-        token_b_mint: Default::default(),
-        token_a_vault: Default::default(),
-        token_b_vault: Default::default(),
-        pool_mint: Default::default(),
-        
-        token_a_amount: 1_000_000_000,
-        token_b_amount: 1_000_000_000,
-        
-        activation_type: 0, // 0 for Slot, 1 for Timestamp
-        activation_point: 0,
-        
-        // Fee-related fields
-        pool_fees: Default::default(),
-        collect_fee_mode: 0, // 0 for A, 1 for B, 2 for Both
-        // ... and other fields
-        ..Default::default()
-    };
-
-    let current_timestamp = 1672531200; // Example timestamp
-    let current_slot = 1000;
-    let actual_amount_in = 100_000;
-    let a_to_b = true; // Swapping from token A to token B
-    let has_referral = false;
-
-    match get_quote(
-        &pool,
-        current_timestamp,
-        current_slot,
-        actual_amount_in,
-        a_to_b,
-        has_referral,
-    ) {
-        Ok(swap_result) => {
-            println!("Swap Quote: {:?}", swap_result);
-            println!("Amount out: {}", swap_result.amount_out);
-        }
-        Err(e) => {
-            println!("Error getting quote: {}", e);
-        }
-    }
-}
+solana-sdk = "1.18.12" # For Pubkey
 ```
 
 ## API Reference
@@ -93,7 +29,7 @@ Calculates the result of a swap for a given pool.
 
 #### Parameters
 
-- `pool: &Pool`: A reference to the `Pool` state account.
+- `pool: &Pool`: A reference to the `Pool` state account, deserialized from on-chain data.
 - `current_timestamp: u64`: The current blockchain timestamp.
 - `current_slot: u64`: The current blockchain slot.
 - `actual_amount_in: u64`: The amount of the input token to be swapped.
