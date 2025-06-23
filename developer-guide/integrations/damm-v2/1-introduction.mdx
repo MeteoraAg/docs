@@ -1,3 +1,81 @@
 ---
 title: Introduction
 ---
+
+# Dynamic Automated Market Maker v2 (DAMM v2)
+
+Initialize your own constant product liquidity pool with DAMM v2. DAMM v2 allows you to optimize transaction fees, an option to set single-side liquidity, the flexibility of concentrating liquidty providing etc.
+
+## Program Address
+
+- Mainnet-beta: `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
+- Devnet: `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
+
+## Resources
+
+- [DAMM v2 Program](https://github.com/MeteoraAg/damm-v2)
+- [DAMM v2 Typescript SDK](https://github.com/MeteoraAg/damm-v2-sdk)
+- [Interface Definition Language (IDL)](https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json)
+
+## Instructions
+
+Below are the main instructions and actions available in DAMM v2, grouped by user role:
+
+### Token Team (On-Chain Liquidity Mining)
+- `fund_reward`: Fund rewards for on-chain liquidity mining.
+- `withdraw_ineligible_reward`: Withdraw ineligible rewards.
+
+### Partner (Launchpad)
+- `claim_partner_fee`: Claim partner fee.
+
+### Token Deployer
+- `initialize_pool`: Create a new pool from a static config key.
+- `initialize_pool_with_dynamic_config`: Create a new pool from a dynamic config key.
+- `initialize_customizable_pool`: Create a new pool with customizable parameters. Should only be used by the token deployer, as the token can't be leaked.
+
+### Liquidity Provider
+- `create_position`: Create a new position NFT that holds liquidity to be deposited later.
+- `add_liquidity`: Add liquidity to a pool.
+- `remove_liquidity`: Remove liquidity from a pool.
+- `remove_all_liquidity`: Remove all liquidity from a pool.
+- `claim_position_fee`: Claim position fee.
+- `lock_position`: Lock position with a vesting schedule.
+- `refresh_vesting`: Refresh vesting schedule.
+- `permanent_lock_position`: Lock position permanently.
+- `claim_reward`: Claim rewards from on-chain liquidity mining.
+
+### Trading Bot / User
+- `swap`: Swap with the pool.
+
+## Config Key Parameters 
+
+<CardGroup>
+  <Card title="vault_config_key">
+    <b>Type:</b> <code>address</code><br/>
+    Alpha-vault address that is able to buy from the pool before <code>activation_point</code>.
+  </Card>
+  <Card title="pool_creator_authority">
+    <b>Type:</b> <code>address</code><br/>
+    If this address is non-default, then only this address can create a pool with that config key (useful for launchpad scenarios).
+  </Card>
+  <Card title="pool_fees">
+    <b>Type:</b> <code>object</code><br/>
+    Includes base fee scheduler, dynamic fee, protocol fee percent, partner fee percent, and referral fee percent configuration.
+  </Card>
+  <Card title="activation_type">
+    <b>Type:</b> <code>0 | 1</code><br/>
+    Determines whether pools are run in <b>slot</b> (<code>0</code>) or <b>timestamp</b> (<code>1</code>).
+  </Card>
+  <Card title="collect_fee_mode">
+    <b>Type:</b> <code>0 | 1</code><br/>
+    Determines whether the pool should collect fees in both tokens (<code>1</code>) or only one token (<code>0</code>).
+  </Card>
+  <Card title="sqrt_min_price">
+    <b>Type:</b> <code>number</code><br/>
+    Square root of the minimum price for pools.
+  </Card>
+  <Card title="sqrt_max_price">
+    <b>Type:</b> <code>number</code><br/>
+    Square root of the maximum price for pools.
+  </Card>
+</CardGroup>
