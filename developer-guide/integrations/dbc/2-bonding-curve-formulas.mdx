@@ -1,0 +1,125 @@
+---
+title: Bonding Curve Formulas
+---
+
+The Dynamic Bonding Curve is a customizable bonding curve that allows you to configure up to 16 curve segments to control the curve's shape and price action. Each curve segment follows a constant product formula:
+
+<div align="center">
+$$x \times y = k$$
+</div>
+
+## Mathematical Foundation
+
+A simple constant product formula can be expressed as:
+
+<div align="center">
+$$x \times y = Virtual Base Reserve \times Virtual Curve Reserve$$
+</div>
+
+This can also be represented as:
+
+<div align="center">
+$$x \times y = \text{Liquidity}^2$$
+</div>
+
+Where:
+
+<div align="center">
+
+$$
+\text{Liquidity} = \sqrt{\,\text{Virtual Base Reserve} \times \text{Virtual Curve Reserve}\,}
+$$
+
+</div>
+
+With a constraint on `migration_quote_threshold`, this can be presented as a function of liquidity, minimum price, and maximum price. We denote:
+- `l` = liquidity
+- `pa` = minimum price  
+- `pb` = maximum price
+
+Therefore:
+
+<div align="center">
+
+$$
+\text{Bonding Curve Constant Product} = f(l, p_a, p_b)
+$$
+
+</div>
+
+### Example Configuration
+
+Consider a pool with the following configuration:
+
+```
+sqrt_start_price = 1
+curve = [
+  (sqrt_price = 2, liquidity = 100),
+  (sqrt_price = 4, liquidity = 500)
+]
+```
+
+The bonding curve will function across 2 price ranges:
+
+- **Range 1**: `(l = 100, pa = 1, pb = 2)`
+- **Range 2**: `(l = 500, pa = 2, pb = 4)`
+
+<Note>These are just example values and are not real values in the actual curve. You will have to calculate the actual `sqrt_price` and `liquidity` values which will be much bigger.</Note>
+
+# Core Formulas
+
+Below are the core formulas used in the dynamic bonding curve program. We use the following notation:
+
+- Let $L_i$ = liquidity in $i$ index
+- Let $P_i$ = price at $i$ index
+- $P_{i-1}$ = price at the lower boundary of $i$ index
+
+---
+
+### 1. Bonding Curve Amount
+
+The total amount of base mint tokens in the bonding curve is given by:
+
+<div align="center">
+
+$$
+\text{Bonding Curve Amount} = \sum_{i} L_i \left( \frac{1}{P_{i-1}} - \frac{1}{P_i} \right)
+$$
+
+</div>
+
+---
+
+### 2. Migration Quote Threshold
+
+The migration quote threshold required for the pool to migrate is calculated as:
+
+<div align="center">
+
+$$
+\text{Migration Quote Threshold} = \sum_{i} L_i (P_i - P_{i-1})
+$$
+
+</div>
+
+---
+
+### 3. Migration Price Calculation
+
+To determine the migration price squared ($p_\text{max}^2$) during migration, use:
+
+<div align="center">
+
+$$
+p_\text{max}^2 = \frac{\text{Migration Quote Threshold} \times (1 - \text{Migration Fee Percentage})}{\text{Migration Amount}}
+$$
+
+</div>
+
+Where:
+- $\text{Migration Fee Percentage}$ is the fee (as a decimal, e.g., 0.01 for 1%)
+- $\text{Migration Amount}$ is the total amount of base mint tokens being migrated
+
+---
+
+These formulas allow you to compute swap amounts, migration thresholds, and price limits for any custom liquidity distribution along the bonding curve.
