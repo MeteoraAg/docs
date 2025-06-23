@@ -4,33 +4,29 @@ title: Bonding Curve Formulas
 
 The Dynamic Bonding Curve is a customizable bonding curve that allows you to configure up to 16 curve segments to control the curve's shape and price action. Each curve segment follows a constant product formula:
 
-<div align="center">
-$$x \times y = k$$
-</div>
+```math
+x \times y = k
+```
 
 ## Mathematical Foundation
 
 A simple constant product formula can be expressed as:
 
-<div align="center">
+```math
 $$x \times y = Virtual Base Reserve \times Virtual Curve Reserve$$
-</div>
+```
 
 This can also be represented as:
 
-<div align="center">
-$$x \times y = \text{Liquidity}^2$$
-</div>
+```math
+x \times y = \text{Liquidity}^2
+```
 
 Where:
 
-<div align="center">
-
-$$
+```math
 \text{Liquidity} = \sqrt{\,\text{Virtual Base Reserve} \times \text{Virtual Curve Reserve}\,}
-$$
-
-</div>
+```
 
 With a constraint on `migration_quote_threshold`, this can be presented as a function of liquidity, minimum price, and maximum price. We denote:
 - `l` = liquidity
@@ -39,13 +35,9 @@ With a constraint on `migration_quote_threshold`, this can be presented as a fun
 
 Therefore:
 
-<div align="center">
-
-$$
+```math
 \text{Bonding Curve Constant Product} = f(l, p_a, p_b)
-$$
-
-</div>
+```
 
 ### Example Configuration
 
@@ -66,7 +58,7 @@ The bonding curve will function across 2 price ranges:
 
 <Note>These are just example values and are not real values in the actual curve. You will have to calculate the actual `sqrt_price` and `liquidity` values which will be much bigger.</Note>
 
-# Core Formulas
+## Core Formulas
 
 Below are the core formulas used in the dynamic bonding curve program. We use the following notation:
 
@@ -80,13 +72,9 @@ Below are the core formulas used in the dynamic bonding curve program. We use th
 
 The total amount of base mint tokens in the bonding curve is given by:
 
-<div align="center">
-
-$$
+```math
 \text{Bonding Curve Amount} = \sum_{i} L_i \left( \frac{1}{P_{i-1}} - \frac{1}{P_i} \right)
-$$
-
-</div>
+```
 
 ---
 
@@ -94,13 +82,9 @@ $$
 
 The migration quote threshold required for the pool to migrate is calculated as:
 
-<div align="center">
-
-$$
+```math
 \text{Migration Quote Threshold} = \sum_{i} L_i (P_i - P_{i-1})
-$$
-
-</div>
+```
 
 ---
 
@@ -108,17 +92,13 @@ $$
 
 To determine the migration price squared ($p_\text{max}^2$) during migration, use:
 
-<div align="center">
-
-$$
+```math
 p_\text{max}^2 = \frac{\text{Migration Quote Threshold} \times (1 - \text{Migration Fee Percentage})}{\text{Migration Amount}}
-$$
-
-</div>
+```
 
 Where:
-- $\text{Migration Fee Percentage}$ is the fee (as a decimal, e.g., 0.01 for 1%)
-- $\text{Migration Amount}$ is the total amount of base mint tokens being migrated
+- `Migration Fee Percentage` is the fee (as a decimal, e.g., 0.01 for 1%)
+- `Migration Amount` is the total amount of base mint tokens being migrated
 
 ---
 
