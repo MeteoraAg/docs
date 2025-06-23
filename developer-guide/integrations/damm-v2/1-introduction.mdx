@@ -16,6 +16,57 @@ Initialize your own constant product liquidity pool with DAMM v2. DAMM v2 allows
 - [DAMM v2 Program](https://github.com/MeteoraAg/damm-v2)
 - [DAMM v2 Typescript SDK](https://github.com/MeteoraAg/damm-v2-sdk)
 - [Interface Definition Language (IDL)](https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json)
+- Pool Authority of DAMM v2: [HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC](https://solscan.io/account/HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC)
+
+## Features
+
+### Position NFT
+
+The position state manages `unlocked_liquidity` + `locked_liquidity` + `vested liquidity`. 
+
+User can interact with the following flows in the same, single position:
+
+- Permanently lock part of the liquidity
+- Create multiple vesting schedules
+- Add more liquidity (unlocked liquidity)
+
+The Position NFT is also a transferrable NFT that can be sent to other wallets.
+
+### Farming
+
+For DAMM v2, there is an in-built farming mechanism within the program. This is unlike DAMM v1, where there is a separate farming program.
+
+Each specific pool in DAMM v2 can create farming rewards and the pool has its own unique reward vault. Each reward vault can have a maximum of 2 types of reward tokens. 
+
+When the `initialize_reward` program endpoint is used, a `reward_vault` for the specific pool is created, and the initiator can specify the reward token (max 2 types) for the `reward_vault` 
+
+Rewards will be shared with all liquidity providers over the farming duration.
+
+Currently, in this beta stage:
+1. The `initialize_reward` program endpoint can only be initialized by Meteora's admin
+2. Only a whitelisted funder address can fund rewards into this `reward_vault` 
+
+So for now, projects have to reach out to the Meteora team to create a farm and add rewards. We're exploring ways to make this process permissionless at a later stage.
+
+### Fee Collection
+
+DAMM v2 pools can collect fees in quote token or output token.
+
+#### Quote Token `collect_fee_mode`
+
+- Swap Quote Token to Base Token, then fees are taken from Quote Token before swap.
+- Swap Base Token to Quote Token, then fees are taken from Quote Token after swap.
+
+#### Output Token `collect_fee_mode`
+
+- Swap Quote Token to Base Token, then fees are taken from Base Token after swap.
+- Swap Base Token to Quote Token, then fees are taken from Quote Token after swap.
+
+### Min-Max Price
+
+In general, you can set a min-max price range for a balanced pool as DAMM v2 is a constant product AMM that follows a balanced ratio deposit.
+
+If you need to set a min-max price range, as well as implement imbalanced deposits for the pool, you need to use [DLMM](/overview/products/dlmm/1-what-is-dlmm.mdx) instead.
 
 ## Instructions
 
