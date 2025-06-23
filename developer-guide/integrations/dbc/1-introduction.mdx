@@ -1,3 +1,59 @@
 ---
 title: Introduction
 ---
+
+# Dynamic Bonding Curve (DBC)
+
+Build your own fully customizable bonding curve with DBC. DBC allows you to configure everything from the curve shape to the trading fees.
+
+## Flow of DBC Pool -> DAMM Pool
+
+### Concepts 
+- Pre-bonding: DBC pool - where the newly minted token discovers its price. No need for an LP.
+- Post-bonding: DAMM pool - where the accumulated `quote_mint` tokens in the bonding curve + a portion of the `base_mint` tokens are migrated to form the liquidity pool of the new token
+- Partner: Launchpad
+- Creator: Token Pool Creator
+
+### Flow
+<Steps>
+  <Step title="Step 1: Create DBC Config Key">
+    Partner creates a DBC Config Key that consists of the curve shape, migrated pool fee, and many more.
+  </Step>
+  <Step title="Step 2: Create DBC Token Pool">
+    Creator creates a DBC Token Pool with the Partner's DBC Config Key. This action will mint the new token and initialise a DBC Pool.
+  </Step>
+  <Step title="Step 3: Trade DBC Token Pool">
+    The DBC Token Pool is tradeable on all trading terminals and trading bots (including Jupiter Pro, Axiom, Photon, GMGN, BullX etc.)
+  </Step>
+  <Step title="Step 4: Migrate to DAMM Pool">
+    Once the DBC Token Pool has accumulated enough `quote_mint` tokens (`pool_state::quote_reserve >= pool_config::migration_quote_threshold`), our migrator keeper will automatically migrate the DBC pool to a DAMM Pool.
+    <Note>The `migration_quote_threshold` and a portion of the `base_mint` tokens will form the liquidity pool of the DAMM Pool.</Note>
+  </Step>
+  <Step title="Step 5: Trade DAMM Pool">
+    The DAMM Pool is also tradeable on all trading terminals and trading bots (including Jupiter Pro, Axiom, Photon, GMGN, BullX etc.)
+  </Step>
+</Steps>
+
+## Migration
+
+### Migration Keeper
+
+We run 2 migration keepers on Mainnet to automatically migrate DBC pools to DAMM pools.
+
+Keeper addresses that we are running:
+- [CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY](https://solscan.io/account/CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY)
+- [DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW](https://solscan.io/account/DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW)
+
+Our migration keepers have a `migration_quote_threshold` requirement (depending on your `quote_mint`) of at least:
+- 10 SOL
+- 1000 USDC
+- 1500 JUP
+
+<Note>The Migration Keeper only runs on Mainnet.</Note>
+
+### Manual Migrator
+
+We have created a [Manual Migrator](https://migrator.meteora.ag) user interface that allows you to manually migrate your DBC pool to a DAMM pool on both Mainnet and Devnet. 
+
+<Note>Depending on your DBC Config Key, the migration process will require you to sign more than one transaction to call each instruction.</Note>
+
