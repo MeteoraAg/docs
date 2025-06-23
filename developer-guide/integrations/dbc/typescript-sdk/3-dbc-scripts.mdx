@@ -1,0 +1,873 @@
+---
+title: DBC Scripts
+---
+
+## Table of Contents
+
+### DBC Scripts
+- [Create DBC Config Key](#create-dbc-config-key)
+- [Create DBC Token Pool](#create-dbc-token-pool)
+- [Swap Buy in DBC Token Pool](#swap-buy-in-dbc-token-pool)
+- [Swap Quote in DBC Token Pool](#swap-quote-in-dbc-token-pool)
+- [Migrate to DAMM V1](#migrate-to-damm-v1)
+- [Migrate to DAMM V2](#migrate-to-damm-v2)
+
+## Create DBC Config Key
+
+This script creates a DBC Config Key using the `buildCurveWithMarketCap` function (this function helps to abstract the math complexity of creating a DBC Config Key).
+
+```typescript
+import {
+    Connection,
+    Keypair,
+    PublicKey,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js'
+import {
+    buildCurveWithMarketCap,
+    DynamicBondingCurveClient,
+    ActivationType,
+    CollectFeeMode,
+    BaseFeeMode,
+    MigrationFeeOption,
+    MigrationOption,
+    TokenDecimal,
+    TokenType,
+    TokenUpdateAuthorityOption,
+} from '@meteora-ag/dynamic-bonding-curve-sdk'
+import { NATIVE_MINT } from '@solana/spl-token'
+
+async function buildCurveWithMarketCapAndCreateConfig() {
+    const keypair = []
+    const wallet = Keypair.fromSecretKey(new Uint8Array(keypair))
+    console.log(`Using wallet: ${wallet.publicKey.toString()}`)
+
+    const connection = new Connection(
+        'https://api.mainnet-beta.solana.com',
+        'confirmed'
+    )
+
+    const config = Keypair.generate()
+    console.log(`Config account: ${config.publicKey.toString()}`)
+
+    const curveConfig = buildCurveWithMarketCap({
+        totalTokenSupply: 1000000000,
+        initialMarketCap: 30,
+        migrationMarketCap: 540,
+        migrationOption: MigrationOption.MET_DAMM_V2,
+        tokenBaseDecimal: TokenDecimal.SIX,
+        tokenQuoteDecimal: TokenDecimal.NINE,
+        lockedVestingParam: {
+            totalLockedVestingAmount: 0,
+            numberOfVestingPeriod: 0,
+            cliffUnlockAmount: 0,
+            totalVestingDuration: 0,
+            cliffDurationFromMigrationTime: 0,
+        },
+        baseFeeParams: {
+            baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+            feeSchedulerParam: {
+                startingFeeBps: 100,
+                endingFeeBps: 100,
+                numberOfPeriod: 0,
+                totalDuration: 0,
+            },
+        },
+        dynamicFeeEnabled: true,
+        activationType: ActivationType.Slot,
+        collectFeeMode: CollectFeeMode.Both,
+        migrationFeeOption: MigrationFeeOption.FixedBps100,
+        tokenType: TokenType.SPL,
+        partnerLpPercentage: 0,
+        creatorLpPercentage: 0,
+        partnerLockedLpPercentage: 50,
+        creatorLockedLpPercentage: 50,
+        creatorTradingFeePercentage: 50,
+        leftover: 0,
+        tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+        migrationFee: {
+            feePercentage: 0,
+            creatorFeePercentage: 0,
+        },
+    })
+
+    console.log(curveConfig)
+
+    try {
+        const client = new DynamicBondingCurveClient(connection, 'confirmed')
+
+        const transaction = await client.partner.createConfig({
+            config: config.publicKey,
+            feeClaimer: new PublicKey('YOUR_FEE_CLAIMER_ADDRESS'),
+            leftoverReceiver: new PublicKey('YOUR_LEFTOVER_RECEIVER_ADDRESS'),
+            payer: wallet.publicKey,
+            quoteMint: NATIVE_MINT,
+            ...curveConfig,
+        })
+
+        const { blockhash } = await connection.getLatestBlockhash('confirmed')
+        transaction.recentBlockhash = blockhash
+        transaction.feePayer = wallet.publicKey
+
+        transaction.partialSign(config)
+
+        const signature = await sendAndConfirmTransaction(
+            connection,
+            transaction,
+            [wallet, config],
+            { commitment: 'confirmed' }
+        )
+
+        console.log(`Config created successfully!`)
+        console.log(
+            `Transaction: https://solscan.io/tx/${signature}`
+        )
+        console.log(`Config address: ${config.publicKey.toString()}`)
+    } catch (error) {
+        console.error('Failed to create config:', error)
+    }
+}
+
+buildCurveWithMarketCapAndCreateConfig()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error)
+        process.exit(1)
+    })
+
+```
+
+## Create DBC Token Pool
+
+This script creates a DBC Token Pool using the `createPool` function.
+
+```typescript
+import {
+    Connection,
+    Keypair,
+    PublicKey,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js'
+import { DynamicBondingCurveClient } from '@meteora-ag/dynamic-bonding-curve-sdk'
+
+async function createPool() {
+    const payerKeypair = []
+    const payer = Keypair.fromSecretKey(new Uint8Array(payerKeypair))
+    console.log(`Payer wallet: ${payer.publicKey.toString()}`)
+
+    const poolCreatorKeypair = []
+    const poolCreator = Keypair.fromSecretKey(
+        new Uint8Array(poolCreatorKeypair)
+    )
+    console.log(`Pool creator wallet: ${poolCreator.publicKey.toString()}`)
+
+    const connection = new Connection(
+        'https://api.mainnet-beta.solana.com',
+        'confirmed'
+    )
+
+    const configAddress = new PublicKey('YOUR_CONFIG_KEY_ADDRESS')
+    console.log(`Using config: ${configAddress.toString()}`)
+
+    try {
+        const baseMint = Keypair.generate()
+        console.log(`Generated base mint: ${baseMint.publicKey.toString()}`)
+
+        const createPoolParam = {
+            baseMint: baseMint.publicKey,
+            config: configAddress,
+            name: 'YOUR_POOL_NAME',
+            symbol: 'YOUR_POOL_SYMBOL',
+            uri: 'YOUR_POOL_IMAGE_URI',
+            payer: payer.publicKey,
+            poolCreator: poolCreator.publicKey,
+        }
+
+        const client = new DynamicBondingCurveClient(connection, 'confirmed')
+
+        console.log('Creating pool transaction...')
+        const poolTransaction = await client.pool.createPool(createPoolParam)
+
+        const signature = await sendAndConfirmTransaction(
+            connection,
+            poolTransaction,
+            [payer, baseMint, poolCreator],
+            {
+                commitment: 'confirmed',
+                skipPreflight: true,
+            }
+        )
+        console.log('Transaction confirmed!')
+        console.log(
+            `Pool created: https://solscan.io/tx/${signature}?cluster=devnet`
+        )
+    } catch (error) {
+        console.error('Failed to create pool:', error)
+        console.log('Error details:', JSON.stringify(error, null, 2))
+    }
+}
+
+createPool()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error)
+        process.exit(1)
+    })
+
+```
+
+## Swap Buy in DBC Token Pool
+
+This script initializes a swap buy transaction in a DBC Token Pool using the `swap` function.
+
+```typescript
+import {
+    Connection,
+    Keypair,
+    PublicKey,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js'
+import { DynamicBondingCurveClient } from '@meteora-ag/dynamic-bonding-curve-sdk'
+import BN from 'bn.js'
+
+async function swapBuy() {
+    const keypair = []
+    const wallet = Keypair.fromSecretKey(new Uint8Array(keypair))
+    console.log(`Using wallet: ${wallet.publicKey.toString()}`)
+
+    const connection = new Connection(
+        'https://api.mainnet-beta.solana.com',
+        'confirmed'
+    )
+
+    const poolAddress = new PublicKey('YOUR_POOL_ADDRESS')
+    console.log(`Swapping in pool: ${poolAddress.toString()}`)
+
+    try {
+        const client = new DynamicBondingCurveClient(connection, 'confirmed')
+
+        const swapParam = {
+            amountIn: new BN(1 * 1e9), // 1 SOL
+            minimumAmountOut: new BN(0), // Can get this param from swapQuote
+            swapBaseForQuote: false,
+            owner: wallet.publicKey,
+            pool: poolAddress,
+            referralTokenAccount: null, // Can parse in a token account address to collect fees
+        }
+
+        const swapTransaction = await client.pool.swap(swapParam)
+
+        const swapSignature = await sendAndConfirmTransaction(
+            connection,
+            swapTransaction,
+            [wallet],
+            {
+                commitment: 'confirmed',
+                skipPreflight: true,
+                maxRetries: 5,
+            }
+        )
+
+        console.log(
+            `Swap executed: https://solscan.io/tx/${swapSignature}?cluster=devnet`
+        )
+    } catch (error) {
+        console.error('Failed to execute swap:', error)
+    }
+}
+
+swapBuy()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error)
+        process.exit(1)
+    })
+
+```
+
+## Swap Quote in DBC Token Pool
+
+This script initializes a swap quotation in a DBC Token Pool using the `swapQuote` function.
+
+```typescript
+import { Connection, PublicKey } from '@solana/web3.js'
+import { DynamicBondingCurveClient } from '@meteora-ag/dynamic-bonding-curve-sdk'
+import BN from 'bn.js'
+
+async function swapQuote() {
+    const connection = new Connection(
+        'https://api.mainnet-beta.solana.com',
+        'confirmed'
+    )
+
+    const poolAddress = new PublicKey('YOUR_POOL_ADDRESS')
+    console.log(`Getting swap quote for pool: ${poolAddress.toString()}`)
+
+    try {
+        const client = new DynamicBondingCurveClient(connection, 'confirmed')
+
+        const virtualPoolState = await client.state.getPool(poolAddress)
+        if (!virtualPoolState) {
+            throw new Error(`Pool not found: ${poolAddress.toString()}`)
+        }
+
+        const poolConfigState = await client.state.getPoolConfig(
+            virtualPoolState.config
+        )
+
+        const amountIn = new BN('383233860117676543')
+        const swapBaseForQuote = true
+        const hasReferral = false
+        const currentPoint = new BN(0)
+
+        console.log('Calculating swap quote...')
+        try {
+            if (
+                !virtualPoolState.sqrtPrice ||
+                virtualPoolState.sqrtPrice.isZero()
+            ) {
+                throw new Error(
+                    'Invalid pool state: sqrtPrice is zero or undefined'
+                )
+            }
+
+            if (!poolConfigState.curve || poolConfigState.curve.length === 0) {
+                throw new Error('Invalid config state: curve is empty')
+            }
+
+            const quote = await client.pool.swapQuote({
+                virtualPool: virtualPoolState,
+                config: poolConfigState,
+                swapBaseForQuote,
+                amountIn,
+                slippageBps: 100,
+                hasReferral,
+                currentPoint,
+            })
+
+            console.log('Swap Quote:', {
+                amountIn: amountIn.toString(),
+                amountOut: quote.amountOut.toString(),
+                minimumAmountOut: quote.minimumAmountOut.toString(),
+                nextSqrtPrice: quote.nextSqrtPrice.toString(),
+                fee: {
+                    trading: quote.fee.trading.toString(),
+                    protocol: quote.fee.protocol.toString(),
+                    referral: quote.fee.referral?.toString() || '0',
+                },
+                price: {
+                    beforeSwap: quote.price.beforeSwap.toString(),
+                    afterSwap: quote.price.afterSwap.toString(),
+                },
+            })
+        } catch (error) {
+            console.error('Failed to calculate swap quote:', error)
+            console.log('Pool state:', {
+                sqrtPrice:
+                    virtualPoolState.sqrtPrice?.toString() || 'undefined',
+                baseReserve:
+                    virtualPoolState.baseReserve?.toString() || 'undefined',
+                quoteReserve:
+                    virtualPoolState.quoteReserve?.toString() || 'undefined',
+            })
+            console.log('Config state:', {
+                curveLength: poolConfigState.curve?.length || 0,
+                collectFeeMode: poolConfigState.collectFeeMode,
+            })
+        }
+    } catch (error) {
+        console.error('Failed to get swap quote:', error)
+        console.log('Error details:', JSON.stringify(error, null, 2))
+    }
+}
+
+swapQuote()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error)
+        process.exit(1)
+    })
+
+```
+
+## Migrate to DAMM v1
+
+This script migrates a DBC Token Pool to DAMM V1. 
+
+The migration process follows these steps:
+
+1. Create Migration Metadata (skip if metadata exists)
+2. Create Locker (checks if baseMint token has Locked Vesting, and if lockEscrow has been created)
+3. Migrate to DAMM V1 (if isMigrated = 0)
+4.1. Lock Partner LP (if partnerLockedLpPercentage > 0)
+4.2. Lock Creator LP (if creatorLockedLpPercentage > 0)
+4.3. Claim Partner LP (if partnerLpPercentage > 0)
+4.4. Claim Creator LP (if creatorLpPercentage > 0)
+
+```typescript
+import {
+    Connection,
+    Keypair,
+    PublicKey,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js'
+import {
+    deriveDammV1MigrationMetadataAddress,
+    deriveBaseKeyForLocker,
+    deriveEscrow,
+    DAMM_V1_MIGRATION_FEE_ADDRESS,
+    DynamicBondingCurveClient,
+} from '@meteora-ag/dynamic-bonding-curve-sdk'
+import { BN } from 'bn.js'
+
+async function migrateToDammV1() {
+    const keypair = []
+    const wallet = Keypair.fromSecretKey(new Uint8Array(keypair))
+    console.log(`Using wallet: ${wallet.publicKey.toString()}`)
+
+    const connection = new Connection(
+        'https://api.mainnet-beta.solana.com',
+        'confirmed'
+    )
+
+    try {
+        const client = new DynamicBondingCurveClient(connection, 'confirmed')
+
+        const poolAddress = new PublicKey(
+            'YOUR_POOL_ADDRESS'
+        )
+
+        const poolState = await client.state.getPool(poolAddress)
+
+        const config = new PublicKey(
+            'YOUR_CONFIG_KEY_ADDRESS'
+        )
+
+        const poolConfigState = await client.state.getPoolConfig(config)
+
+        // Step 1: Check if migration metadata exists
+        console.log('Checking if migration metadata exists...')
+        const migrationMetadata =
+            deriveDammV1MigrationMetadataAddress(poolAddress)
+        console.log('Migration metadata address:', migrationMetadata.toString())
+
+        const metadataAccount =
+            await connection.getAccountInfo(migrationMetadata)
+        if (!metadataAccount) {
+            console.log('Creating migration metadata...')
+            const createMetadataTx =
+                await client.migration.createDammV1MigrationMetadata({
+                    payer: wallet.publicKey,
+                    virtualPool: poolAddress,
+                    config: config,
+                })
+
+            const { blockhash } =
+                await connection.getLatestBlockhash('confirmed')
+            createMetadataTx.recentBlockhash = blockhash
+            createMetadataTx.feePayer = wallet.publicKey
+
+            const metadataSignature = await sendAndConfirmTransaction(
+                connection,
+                createMetadataTx,
+                [wallet],
+                { commitment: 'confirmed' }
+            )
+
+            console.log(`Migration metadata created successfully!`)
+            console.log(
+                `Transaction: https://solscan.io/tx/${metadataSignature}?cluster=devnet`
+            )
+        } else {
+            console.log('Migration metadata already exists')
+        }
+
+        // Step 2: Check for locked vesting and create locker if needed
+        if (
+            poolConfigState.lockedVestingConfig.amountPerPeriod.gt(new BN(0)) ||
+            poolConfigState.lockedVestingConfig.cliffUnlockAmount.gt(new BN(0))
+        ) {
+            // Check if escrow already exists
+            const base = deriveBaseKeyForLocker(poolAddress)
+            const escrow = deriveEscrow(base)
+
+            const escrowAccount = await connection.getAccountInfo(escrow)
+
+            if (!escrowAccount) {
+                console.log('Found locked vesting, creating locker...')
+                const createLockerTx = await client.migration.createLocker({
+                    virtualPool: poolAddress,
+                    payer: wallet.publicKey,
+                })
+
+                const { blockhash: lockerBlockhash } =
+                    await connection.getLatestBlockhash('confirmed')
+                createLockerTx.recentBlockhash = lockerBlockhash
+                createLockerTx.feePayer = wallet.publicKey
+
+                const lockerSignature = await sendAndConfirmTransaction(
+                    connection,
+                    createLockerTx,
+                    [wallet],
+                    { commitment: 'confirmed' }
+                )
+
+                console.log(`Locker created successfully!`)
+                console.log(
+                    `Transaction: https://solscan.io/tx/${lockerSignature}?cluster=devnet`
+                )
+            } else {
+                console.log('Escrow already exists, skipping locker creation')
+            }
+        } else {
+            console.log('No locked vesting found, skipping locker creation')
+        }
+
+        // Step 3: Migrate to DAMM V1
+        if (!poolState.isMigrated) {
+            console.log('Migrating to DAMM V1...')
+            const migrateTx = await client.migration.migrateToDammV1({
+                payer: wallet.publicKey,
+                virtualPool: poolAddress,
+                dammConfig:
+                    DAMM_V1_MIGRATION_FEE_ADDRESS[
+                        poolConfigState.migrationFeeOption
+                    ],
+            })
+
+            const { blockhash: migrateBlockhash } =
+                await connection.getLatestBlockhash('confirmed')
+            migrateTx.recentBlockhash = migrateBlockhash
+            migrateTx.feePayer = wallet.publicKey
+
+            const migrateSignature = await sendAndConfirmTransaction(
+                connection,
+                migrateTx,
+                [wallet],
+                { commitment: 'confirmed' }
+            )
+
+            console.log(`Migration to DAMM V1 completed successfully!`)
+            console.log(
+                `Transaction: https://solscan.io/tx/${migrateSignature}?cluster=devnet`
+            )
+        } else {
+            console.log('Pool already migrated to DAMM V1')
+        }
+
+        // Step 4.1: Lock LP tokens for creator and partner
+        if (poolConfigState.creatorLockedLpPercentage > 0) {
+            console.log('Locking LP tokens for creator...')
+            const lockCreatorTx = await client.migration.lockDammV1LpToken({
+                payer: wallet.publicKey,
+                virtualPool: poolAddress,
+                dammConfig:
+                    DAMM_V1_MIGRATION_FEE_ADDRESS[
+                        poolConfigState.migrationFeeOption
+                    ],
+                isPartner: false,
+            })
+
+            const { blockhash: lockCreatorBlockhash } =
+                await connection.getLatestBlockhash('confirmed')
+            lockCreatorTx.recentBlockhash = lockCreatorBlockhash
+            lockCreatorTx.feePayer = wallet.publicKey
+
+            const lockCreatorSignature = await sendAndConfirmTransaction(
+                connection,
+                lockCreatorTx,
+                [wallet],
+                { commitment: 'confirmed' }
+            )
+
+            console.log(`LP tokens locked for creator successfully!`)
+            console.log(
+                `Transaction: https://solscan.io/tx/${lockCreatorSignature}`
+            )
+        }
+
+        // Step 4.2: Lock LP tokens for partner
+        if (poolConfigState.partnerLockedLpPercentage > 0) {
+            console.log('Locking LP tokens for partner...')
+            const lockCreatorTx = await client.migration.lockDammV1LpToken({
+                payer: wallet.publicKey,
+                virtualPool: poolAddress,
+                dammConfig:
+                    DAMM_V1_MIGRATION_FEE_ADDRESS[
+                        poolConfigState.migrationFeeOption
+                    ],
+                isPartner: false,
+            })
+
+            const { blockhash: lockCreatorBlockhash } =
+                await connection.getLatestBlockhash('confirmed')
+            lockCreatorTx.recentBlockhash = lockCreatorBlockhash
+            lockCreatorTx.feePayer = wallet.publicKey
+
+            const lockCreatorSignature = await sendAndConfirmTransaction(
+                connection,
+                lockCreatorTx,
+                [wallet],
+                { commitment: 'confirmed' }
+            )
+
+            console.log(`LP tokens locked for creator successfully!`)
+            console.log(
+                `Transaction: https://solscan.io/tx/${lockCreatorSignature}`
+            )
+        }
+
+        // Step 4.3: Claim LP tokens for creator
+        if (poolConfigState.creatorLpPercentage > 0) {
+            console.log('Claiming LP tokens for creator...')
+
+            const claimCreatorTx = await client.migration.claimDammV1LpToken({
+                payer: wallet.publicKey,
+                virtualPool: poolAddress,
+                dammConfig:
+                    DAMM_V1_MIGRATION_FEE_ADDRESS[
+                        poolConfigState.migrationFeeOption
+                    ],
+                isPartner: false,
+            })
+
+            const { blockhash: claimCreatorBlockhash } =
+                await connection.getLatestBlockhash('confirmed')
+            claimCreatorTx.recentBlockhash = claimCreatorBlockhash
+            claimCreatorTx.feePayer = wallet.publicKey
+
+            const claimCreatorSignature = await sendAndConfirmTransaction(
+                connection,
+                claimCreatorTx,
+                [wallet],
+                { commitment: 'confirmed' }
+            )
+
+            console.log(`LP tokens claimed for creator successfully!`)
+            console.log(
+                `Transaction: https://solscan.io/tx/${claimCreatorSignature}?cluster=devnet`
+            )
+        }
+
+        // Step 4.4: Claim LP tokens for partner
+        if (poolConfigState.partnerLpPercentage > 0) {
+            console.log('Claiming LP tokens for partner...')
+            const claimPartnerTx = await client.migration.claimDammV1LpToken({
+                payer: wallet.publicKey,
+                virtualPool: poolAddress,
+                dammConfig:
+                    DAMM_V1_MIGRATION_FEE_ADDRESS[
+                        poolConfigState.migrationFeeOption
+                    ],
+                isPartner: true,
+            })
+
+            const { blockhash: claimPartnerBlockhash } =
+                await connection.getLatestBlockhash('confirmed')
+            claimPartnerTx.recentBlockhash = claimPartnerBlockhash
+            claimPartnerTx.feePayer = wallet.publicKey
+
+            const claimPartnerSignature = await sendAndConfirmTransaction(
+                connection,
+                claimPartnerTx,
+                [wallet],
+                { commitment: 'confirmed' }
+            )
+
+            console.log(`LP tokens claimed for partner successfully!`)
+            console.log(
+                `Transaction: https://solscan.io/tx/${claimPartnerSignature}?cluster=devnet`
+            )
+        }
+    } catch (error) {
+        console.error('Failed to migrate to DAMM V1:', error)
+    }
+}
+
+migrateToDammV1()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error)
+        process.exit(1)
+    })
+
+```
+
+## Migrate to DAMM v2
+
+This script migrates a DBC Token Pool to DAMM V2.
+
+The migration process follows these steps:
+
+1. Create Migration Metadata (skip if metadata exists)
+2. Create Locker (checks if baseMint token has Locked Vesting, and if lockEscrow has been created)
+3. Migrate to DAMM V2 (if isMigrated = 0)
+
+```typescript
+import {
+    Connection,
+    Keypair,
+    PublicKey,
+    sendAndConfirmTransaction,
+} from '@solana/web3.js'
+import {
+    DynamicBondingCurveClient,
+    DAMM_V2_MIGRATION_FEE_ADDRESS,
+    deriveDammV2MigrationMetadataAddress,
+    deriveBaseKeyForLocker,
+    deriveEscrow,
+} from '@meteora-ag/dynamic-bonding-curve-sdk'
+import { BN } from 'bn.js'
+
+async function migrateToDammV2() {
+    const keypair = []
+    const wallet = Keypair.fromSecretKey(new Uint8Array(keypair))
+    console.log(`Using wallet: ${wallet.publicKey.toString()}`)
+
+    const connection = new Connection(
+        'https://api.mainnet-beta.solana.com',
+        'confirmed'
+    )
+
+    try {
+        const client = new DynamicBondingCurveClient(connection, 'confirmed')
+
+        const poolAddress = new PublicKey(
+            '6tCCyVyaXRZ2x1pzAAK5fA3FXRhDuH3NQ5cyUTUuv4Xv'
+        )
+
+        const virtualPoolState = await client.state.getPool(poolAddress)
+
+        const config = new PublicKey(
+            '6tCCyVyaXRZ2x1pzAAK5fA3FXRhDuH3NQ5cyUTUuv4Xv'
+        )
+
+        const poolConfigState = await client.state.getPoolConfig(config)
+
+
+        if (!virtualPoolState) {
+            throw new Error(`Pool not found: ${poolAddress.toString()}`)
+        }
+
+        // Step 1: Check if migration metadata exists
+        console.log('Checking if migration metadata exists...')
+        const migrationMetadata =
+            deriveDammV2MigrationMetadataAddress(poolAddress)
+        console.log('Migration metadata address:', migrationMetadata.toString())
+
+        const metadataAccount =
+            await connection.getAccountInfo(migrationMetadata)
+        if (!metadataAccount) {
+            console.log('Creating migration metadata...')
+            const createMetadataTx =
+                await client.migration.createDammV2MigrationMetadata({
+                    payer: wallet.publicKey,
+                    virtualPool: poolAddress,
+                    config: config,
+                })
+
+            const { blockhash } =
+                await connection.getLatestBlockhash('confirmed')
+            createMetadataTx.recentBlockhash = blockhash
+            createMetadataTx.feePayer = wallet.publicKey
+
+            const metadataSignature = await sendAndConfirmTransaction(
+                connection,
+                createMetadataTx,
+                [wallet],
+                { commitment: 'confirmed' }
+            )
+
+            console.log(`Migration metadata created successfully!`)
+            console.log(
+                `Transaction: https://solscan.io/tx/${metadataSignature}?cluster=devnet`
+            )
+        } else {
+            console.log('Migration metadata already exists')
+        }
+
+        // Step 2: Check for locked vesting and create locker if needed
+        if (
+            poolConfigState.lockedVestingConfig.amountPerPeriod.gt(new BN(0)) ||
+            poolConfigState.lockedVestingConfig.cliffUnlockAmount.gt(new BN(0))
+        ) {
+            // Check if locker already exists
+            const base = deriveBaseKeyForLocker(poolAddress)
+            const escrow = deriveEscrow(base)
+            const escrowAccount = await connection.getAccountInfo(escrow)
+
+            if (!escrowAccount) {
+                console.log('Locker not found, creating locker...')
+                const createLockerTx = await client.migration.createLocker({
+                    virtualPool: poolAddress,
+                    payer: wallet.publicKey,
+                })
+
+                const { blockhash: lockerBlockhash } =
+                    await connection.getLatestBlockhash('confirmed')
+                createLockerTx.recentBlockhash = lockerBlockhash
+                createLockerTx.feePayer = wallet.publicKey
+
+                const lockerSignature = await sendAndConfirmTransaction(
+                    connection,
+                    createLockerTx,
+                    [wallet],
+                    { commitment: 'confirmed' }
+                )
+
+                console.log(`Locker created successfully!`)
+                console.log(
+                    `Transaction: https://solscan.io/tx/${lockerSignature}?cluster=devnet`
+                )
+            } else {
+                console.log('Locker already exists, skipping creation')
+            }
+        } else {
+            console.log('No locked vesting found, skipping locker creation')
+        }
+
+        // Step 3: Migrate to DAMM V2
+        if (!virtualPoolState.isMigrated) {
+            console.log('Migrating to DAMM V2...')
+            const migrateTx = await client.migration.migrateToDammV2({
+                payer: wallet.publicKey,
+                virtualPool: poolAddress,
+                dammConfig: DAMM_V2_MIGRATION_FEE_ADDRESS[poolConfigState.migrationFeeOption],
+            })
+
+            const { blockhash: migrateBlockhash } =
+                await connection.getLatestBlockhash('confirmed')
+            migrateTx.transaction.recentBlockhash = migrateBlockhash
+            migrateTx.transaction.feePayer = wallet.publicKey
+
+            const migrateSignature = await sendAndConfirmTransaction(
+                connection,
+                migrateTx.transaction,
+                [
+                    wallet,
+                    migrateTx.firstPositionNftKeypair,
+                    migrateTx.secondPositionNftKeypair,
+                ],
+                { commitment: 'confirmed' }
+            )
+
+            console.log(`Migration to DAMM V2 completed successfully!`)
+            console.log(
+                `Transaction: https://solscan.io/tx/${migrateSignature}?cluster=devnet`
+            )
+        } else {
+            console.log('Pool already migrated to DAMM V2')
+        }
+    } catch (error) {
+        console.error('Failed to migrate to DAMM V2:', error)
+    }
+}
+
+migrateToDammV2()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error)
+        process.exit(1)
+    })
+
+```
