@@ -18,9 +18,9 @@ The total swap fee ($f_s$) will have two components:
 
 The **total swap fee** is calculated as:
 
-<div align="center">
-$$f_s = f_b + f_v$$
-</div>
+```math
+f_s = f_b + f_v
+```
 
 The variable fee ($f_v$) is a function of real-time price volatility. The fee rate will be applied to the swap amount in each liquidity bin and distributed proportionally to the LPs in that bin.
 
@@ -50,9 +50,9 @@ The fee math calculation for the scheduler can be found [here](/anti-sniper-suit
 
 The variable fee is the core of the dynamic fee mechanism. It increases with market volatility.
 
-<div align="center">
-$$f_v = (v_a \times s)^2 \times C / 100000000000$$
-</div>
+```math
+f_v = (v_a \times s)^2 \times C / 100000000000
+```
 
 where:
 - **Volatility Accumulator** ($v_a$): A measure of recent price volatility
@@ -63,9 +63,9 @@ where:
 
 The Volatility Accumulator tracks price movements. It's updated with every swap.
 
-<div align="center">
-$$v_a = \min(v_{max}, v_r + \Delta p \times 10000)$$
-</div>
+```math
+v_a = \min(v_{max}, v_r + \Delta p \times 10000)
+```
 
 where:
 - **Max Volatility Accumulator** ($v_{max}$): A cap on the volatility measure to prevent fees from becoming excessively high
@@ -75,9 +75,9 @@ where:
 ## Price Change
 The price change is calculated based on the change in the square root of the price.
 
-<div align="center">
-$$\Delta p = (\sqrt{p_c / p_r} - 1) / s \times 2$$
-</div>
+```math
+\Delta p = (\sqrt{p_c / p_r} - 1) / s \times 2
+```
 
 where $p_c$ is current price and $p_r$ is reference price.
 
@@ -85,9 +85,9 @@ where $p_c$ is current price and $p_r$ is reference price.
 
 To ensure that the dynamic fee reflects recent volatility, the Volatility Reference decays over time.
 
-<div align="center">
-$$v_r = v_a \times R / 10000$$
-</div>
+```math
+v_r = v_a \times R / 10000
+```
 
 The decay mechanism is based on the time elapsed since the last significant trade:
 

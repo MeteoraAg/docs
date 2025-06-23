@@ -16,38 +16,44 @@ Parameters:
 
 The formula depends on the relationship between input_amount and reference_amount:
 
-### Case 1: input_amount ≤ reference_amount
+### Case 1: `input_amount ≤ reference_amount`
 
-<div align="center">
-$$Fee = InputAmount \times c$$
-</div>
+```math
+\text{Fee} = \text{Input Amount} \times \text{c}
+```
 
-### Case 2: input_amount > reference_amount
+### Case 2: `input_amount > reference_amount`
 
 First, decompose the excess amount:
 
-<div align="center">
-$$InputAmount = x_0 + (a \times x_0 + b)$$
-</div>
+```math
+\text{Input Amount} = x_0 + (a \times x_0 + b)
+```
 
 where:
-- `a`: floor division of (InputAmount - x₀) / x₀
-- `b`: remainder of (InputAmount - x₀) mod x₀
+- `a`: floor division of `(Input Amount - x₀) / x₀`
+- `b`: remainder of `(Input Amount - x₀) mod x₀`
 
 Then calculate fees based on whether we exceed the maximum index:
 
 ##### If `a < max_index`
 
-<div align="center">
-$$Fee = x_0 \times (c + c \times a + i \times a \times (a+1) / 2) + b \times (c + i \times (a+1))$$
+<div style={{ fontSize: "0.88em" }}>
+```math
+\text{Fee} = x_0 \times (c + c \times a + i \times a \times (a+1) / 2) + b \times (c + i \times (a+1))
+```
 </div>
 
 ##### If `a ≥ max_index`
 
-<div align="center">
-$$d = a - MaxIndex$$
+<div style={{ fontSize: "0.88em" }}>
+```math
+d = a - \text{Max Index}
+```
 </div>
 
-<div align="center">
-$$\small Fee = x_0 \times (c + c \times MaxIndex + i \times MaxIndex \times (MaxIndex+1) / 2) + (d \times x_0 + b) \times MaxFee$$
+<div style={{ fontSize: "0.88em" }}>
+```math
+\text{Fee} = x_0 \times (c + c \times \text{Max Index} + i \times \text{Max Index} \times (\text{Max Index}+1) / 2) + (d \times x_0 + b) \times \text{Max Fee}
+```
 </div>
