@@ -2,3 +2,71 @@
 title: Getting Started
 description: DAMM v1
 ---
+
+This guide provides instructions on how to get started with the DAMM v2 TypeScript SDK.
+
+Before you begin, here are some important resources:
+
+-   **Program ID (Mainnet & Devnet):** `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`
+-   **TypeScript SDK Repository:** [@meteora-ag/dynamic-amm-sdk](https://github.com/MeteoraAg/damm-v1-sdk)
+
+## Installation
+
+To use the SDK in your project, install it using your preferred package manager:
+
+```bash
+npm install @meteora-ag/dynamic-amm-sdk
+# or
+pnpm install @meteora-ag/dynamic-amm-sdk
+# or
+yarn add @meteora-ag/dynamic-amm-sdk
+```
+
+## Initialization
+
+Once installed, you can initialize the SDK in your TypeScript/JavaScript project like this:
+
+```typescript
+import AmmImpl, { MAINNET_POOL } from '@meteora-ag/dynamic-amm-sdk';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+
+const mainnetConnection = new Connection('https://api.mainnet-beta.solana.com');
+
+// Create pool instances
+
+// e.g. creating a constant product pool
+const constantProductPool = await AmmImpl.create(mainnetConnection, MAINNET_POOL.USDC_SOL);
+
+// e.g. creating a stable pool
+const stablePool = await AmmImpl.create(mainnetConnection, MAINNET_POOL.USDT_USDC);
+
+// e.g. creating a pool with an existing pool address
+const pool = await AmmImpl.create(mainnetConnection, new PublicKey('...'));
+
+// e.g. creating multiple pools
+const pools = [MAINNET_POOL.USDC_SOL, MAINNET_POOL.USDT_USDC];
+const [constantProductPool, stablePool] = await AmmImpl.createMultiple(mainnetConnection, pools);
+```
+
+## Testing the SDK (for contributors)
+
+If you have cloned the SDK repository and want to run the built-in tests:
+
+```bash
+# Install dependencies
+cd ts-client
+bun install
+
+# Run tests
+bun test
+```
+
+## Development Resources
+
+### Faucets
+
+<CardGroup cols={1}>
+  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.raccoons.dev/">
+    <p>When working on devnet, you might need test tokens. Here is a helpful faucet.</p>
+  </Card>
+</CardGroup>
