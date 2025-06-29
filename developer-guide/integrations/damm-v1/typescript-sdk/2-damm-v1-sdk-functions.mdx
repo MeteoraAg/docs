@@ -10,17 +10,17 @@ title: DAMM v1 SDK Functions
 - [createPermissionlessConstantProductMemecoinPoolWithConfig](#createPermissionlessConstantProductMemecoinPoolWithConfig)
 
 ### State Functions
--[getLpSupply](#getLpSupply)
--[getUserBalance](#getUserBalance)
--[getSwapQuote](#getSwapQuote)
--[getDepositQuote](#getDepositQuote)
--[getWithdrawQuote](#getWithdrawQuote)
--[updateState](#updateState)
+- [getLpSupply](#getLpSupply)
+- [getUserBalance](#getUserBalance)
+- [getSwapQuote](#getSwapQuote)
+- [getDepositQuote](#getDepositQuote)
+- [getWithdrawQuote](#getWithdrawQuote)
+- [updateState](#updateState)
 
 ### Pool Functions
--[deposit](#deposit)
--[withdraw](#withdraw)
--[swap](#swap)
+- [deposit](#deposit)
+- [withdraw](#withdraw)
+- [swap](#swap)
 
 ---
 
@@ -33,6 +33,101 @@ Creates a new permissionless constant product pool with a predefined configurati
 #### Function
 ```typescript
 async createPermissionlessConstantProductPoolWithConfig(
+  connection: Connection,
+  payer: PublicKey,
+  tokenAMint: PublicKey,
+  tokenBMint: PublicKey,
+  tokenAAmount: BN,
+  tokenBAmount: BN,
+  config: PublicKey,
+  opt?: {
+    cluster?: Cluster;
+    programId?: string;
+    lockLiquidity?: boolean;
+    swapLiquidity?: {
+      inAmount: BN;
+      minAmountOut: BN;
+    };
+    skipAAta?: boolean;
+    skipBAta?: boolean;
+  }
+): Promise<Transaction>
+```
+
+#### Parameters
+```typescript
+connection: Connection          // The Solana connection instance
+payer: PublicKey               // The wallet paying for the transaction
+tokenAMint: PublicKey          // The mint address for token A
+tokenBMint: PublicKey          // The mint address for token B
+tokenAAmount: BN               // Initial amount of token A to deposit
+tokenBAmount: BN               // Initial amount of token B to deposit
+config: PublicKey              // The configuration account for the pool
+opt?: {                        // Optional parameters
+  cluster?: Cluster;           // The Solana cluster (mainnet, devnet, etc.)
+  programId?: string;          // Custom program ID if different from default
+  lockLiquidity?: boolean;     // Whether to permanently lock the initial liquidity
+  swapLiquidity?: {            // Optional swap parameters for initial liquidity
+    inAmount: BN;              // Amount to swap in
+    minAmountOut: BN;          // Minimum amount to receive from swap
+  };
+  skipAAta?: boolean;          // Skip creating associated token account for token A
+  skipBAta?: boolean;          // Skip creating associated token account for token B
+}
+```
+
+#### Returns
+
+A transaction that can be signed and sent to the network.
+
+#### Example
+```typescript
+// First, prepare the pool creation parameters
+const configState = await cpAmm.getConfigState(configAccount);
+const initPrice = 10; // 1 base token = 10 quote token
+const {actualInputAmount, consumedInputAmount, outputAmount, liquidityDelta} = cpAmm.getDepositQuote({
+  inAmount: new BN(5_000_000_000), // 5 tokenA (base token) with 9 decimals
+  isTokenA: true;
+  minSqrtPrice: configState.sqrtMinPrice,
+  maxSqrtPrice: configState.sqrtMinPrice,
+  sqrtPrice: getSqrtPriceFromPrice(initPrice, tokenADecimal, tokenBDecimal),
+  inputTokenInfo, // provide if input token is token2022
+  outputTokenInfo // provide if output token is token2022
+})
+
+const createPoolTx = await cpAmm.createPool({
+  payer: wallet.publicKey,
+  creator: wallet.publicKey,
+  config: configAddress,
+  positionNft: positionNftMint,
+  tokenAMint,
+  tokenBMint,
+  activationPoint: null,
+  tokenAAmount: consumedInputAmount,
+  tokenBAmount: outputAmount,
+  initSqrtPrice: getSqrtPriceFromPrice(initPrice, tokenADecimal, tokenBDecimal);,
+  liquidityDelta: liquidityDelta,
+  tokenAProgram,
+  tokenBProgram
+});
+```
+
+#### Notes
+- Both token amounts must be greater than zero
+- If using native SOL, it will be automatically wrapped to wSOL
+- The `config` parameter should be a valid configuration account
+- Pool creation automatically creates an initial position
+- Use `preparePoolCreationParams` to calculate proper `initSqrtPrice` and `liquidityDelta`
+
+---
+
+### createPermissionlessPool
+
+Creates a new permissionless constant product pool. 
+
+#### Function
+```typescript
+async createPermissionlessPool(
   connection: Connection,
   payer: PublicKey,
   tokenAMint: PublicKey,

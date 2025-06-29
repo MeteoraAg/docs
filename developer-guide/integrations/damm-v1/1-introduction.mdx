@@ -2,3 +2,104 @@
 title: Introduction
 ---
 
+Initialize your own constant product liquidity pool with DAMM v1. DAMM v1 allows you to earn fees from both swap fees and yield rewards from lending platforms.
+
+## Program Address
+
+- Mainnet-beta: `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`
+- Devnet: `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`
+
+## Resources
+
+- [DAMM v1 Typescript SDK](https://github.com/MeteoraAg/damm-v1-sdk)
+- [Interface Definition Language Types (IDL Types)](https://github.com/MeteoraAg/damm-v1-sdk/blob/main/ts-client/src/amm/idl.ts)
+
+## Features
+
+### Multi-Curve Support
+- **Constant Product Curve**: Traditional Uniswap-style `x * y = k` model for general token pairs
+- **Stable Swap Curve**: Curve-style stable swap with customizable amplification coefficient (`A`) for stable/correlated assets, providing tighter spreads around 1:1 ratio
+
+### Pool Types
+- **Permissioned Pools**: Admin-controlled pools with custom parameters
+- **Permissionless Pools**: Anyone can create pools with default or custom fee tiers
+- **Customizable Pools**: Permissionless pools with flexible parameters
+
+### Liquidity Operations
+- **Add Balanced Liquidity**: Deposit tokens in pool ratio
+- **Remove Balanced Liquidity**: Withdraw tokens proportionally
+- **Add Imbalanced Liquidity**: Deposit in custom ratios (stable pools only)
+- **Remove Single-Side Liquidity**: Withdraw only one token type (stable pools only)
+
+### Built on Mercurial Dynamic Yield Infrastructure
+- **Automatic Yield Generation**: Deposited assets earn yield automatically
+- **LP Token Benefits**: Tokens represent claims on both trading fees and vault yields
+
+### Virtual Price Tracking
+- **Dynamic Pricing**: LP token pricing based on pool performance
+- **Fee Distribution**: Proportional to locked amounts and duration
+
+### Stake/Interest-Bearing Token Pools
+- **Marinade Finance**: mSOL/SOL pools with virtual price tracking
+- **Lido**: stSOL/SOL pools
+- **SPL Stake Pool**: Generic stake pool token support
+- **Virtual Price Updates**: Automatic price adjustments based on staking rewards
+
+### Configuration Parameters
+
+<CardGroup>
+  <Card title="trade_fee_numerator">
+    <b>Type:</b> <code>u64</code><br/>
+    Fee charged to traders that goes to liquidity providers. Uses fixed denominator of 100,000.<br/>
+    <b>Valid Range:</b><br/>
+    - Minimum: 250 (0.25%)<br/>
+    - Maximum: 15,000 (15%) for alpha vault/public configs<br/>
+    - Maximum: 99,000 (99%) for private configs
+  </Card>
+
+  <Card title="protocol_trade_fee_numerator">
+    <b>Type:</b> <code>u64</code><br/>
+    Fee charged to protocol treasury. Uses fixed denominator of 100,000.<br/>
+    <b>Valid Range:</b> 0 to < 100,000<br/>
+    <b>Default:</b> 20,000 (20%) for constant product pools
+  </Card>
+
+  <Card title="partner_fee_numerator">
+    <b>Type:</b> <code>u64</code><br/>
+    Share of protocol fees given to pool creator/partner. Uses fixed denominator of 100,000.<br/>
+    <b>Valid Range:</b> 0 to 50,000 (50%)
+  </Card>
+
+  <Card title="activation_duration">
+    <b>Type:</b> <code>u64</code><br/>
+    Duration until pool becomes publicly tradeable, measured in slots or seconds based on activation_type.<br/>
+    <b>Calculation:</b> activation_point = current_time + activation_duration
+  </Card>
+
+  <Card title="activation_type">
+    <b>Type:</b> <code>0 | 1</code><br/>
+    Determines whether pools use slot-based (<code>0</code>) or timestamp-based (<code>1</code>) activation.<br/>
+    <b>Buffers:</b><br/>
+    - Production: 9,000 slots (≈1 hour) or 3,600 seconds<br/>
+    - Test: 5 slots/seconds
+  </Card>
+
+  <Card title="pool_creator_authority">
+    <b>Type:</b> <code>Pubkey</code><br/>
+    Controls who can create pools using this config.<br/>
+    - Default pubkey = Public config (anyone can use)<br/>
+    - Specific pubkey = Private config (only that authority)
+  </Card>
+
+  <Card title="vault_config_key">
+    <b>Type:</b> <code>Pubkey</code><br/>
+    Enables pre-activation trading for specific vault.<br/>
+    - Default pubkey = No alpha vault<br/>
+    - Specific pubkey = Alpha vault enabled
+  </Card>
+
+  <Card title="index">
+    <b>Type:</b> <code>u64</code><br/>
+    Unique identifier for config PDA derivation. Auto-incremented to find unused index.
+  </Card>
+</CardGroup>
