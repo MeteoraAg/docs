@@ -47,3 +47,49 @@ title: DLMM SDK Functions
 - [autoFillYByStrategy](#autoFillYByStrategy)
 
 ---
+
+## Pool Functions
+
+### create
+
+Creates an instance of the DLMM pool given the pool address.
+
+#### Function
+```typescript
+async create(
+    connection: Connection, 
+    dlmm: PublicKey, 
+    opt?: {
+        cluster?: Cluster | "localhost"; 
+        programId?: PublicKey; 
+    }
+): Promise<DLMM>
+```
+
+#### Parameters
+```typescript
+connection: Connection         // Solana connection instance
+dlmm: PublicKey                // The DLMM pool address
+opt?: {                        // Optional parameters
+  cluster?: Cluster | "localhost"; // The Solana cluster (mainnet, devnet, etc.)
+  programId?: PublicKey; // Custom program ID if different from default
+}
+```
+
+#### Returns
+
+An instance of the DLMM pool.
+
+#### Example
+```typescript
+// Creating a DLMM pool
+// You can get your desired pool address from the API https://dlmm-api.meteora.ag/pair/all
+const USDC_USDT_POOL = new PublicKey('ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq')
+const dlmmPool = await DLMM.create(connection, USDC_USDT_POOL);
+```
+
+#### Notes
+- The pool addresses can be fetched from the DLMM API https://dlmm-api.meteora.ag/pair/all
+- The `opt` parameter is optional and can be used to specify the cluster and program ID.
+
+---
