@@ -1,0 +1,211 @@
+---
+title: Vault Quickstart
+---
+
+# Quick Start Guide
+
+<Note>This is a devnet quickstart guide.</Note>
+
+## 1. Install Mercurial Vaults Dependencies
+
+```bash
+npm i @mercurial-finance/vault-sdk @project-serum/anchor @solana/web3.js @solana/spl-token @solana/spl-token-registry
+```
+
+## 2. Import the needed libraries
+
+```typescript
+import { StaticTokenListResolutionStrategy, TokenInfo } from "@solana/spl-token-registry";
+import { AnchorProvider } from '@project-serum/anchor';
+import VaultImpl from '@mercurial-finance/vault-sdk';
+import { BN } from 'bn.js';
+```
+
+## 3. Set up the connection, wallet and provider necessary to interact with the network
+
+Set up the devnet connection:
+
+```typescript
+const devnetConnection = new Connection('https://api.devnet.solana.com/', { commitment: 'confirmed' });
+```
+
+Set up your mock wallet. We will be using the devnet wallet address for this demo:
+
+```typescript
+const mockWallet = new Wallet(new Keypair());
+```
+
+Finally, set up the Provider using the devnetConnection and mock wallet object:
+
+```typescript
+const provider = new AnchorProvider(devnetConnection, mockWallet, {
+    commitment: 'confirmed',
+});
+```
+
+## 4. Airdrop SOL into the devnet wallet
+
+As this demo will be done using a devnet wallet, we can use the Solana airdrop function to deposit some initial SOL into the wallet.
+
+Define the SOL airdrop function as shown below. We have already included this function in the util.ts file for easy access and use:
+
+```typescript
+const airDropSol = async (connection: Connection, publicKey: PublicKey, amount = 1 * LAMPORTS_PER_SOL) => {
+    try {
+        const airdropSignature = await connection.requestAirdrop(
+            publicKey,
+            amount,
+        );
+        const latestBlockHash = await connection.getLatestBlockhash();
+        await connection.confirmTransaction({
+            blockhash: latestBlockHash.blockhash,
+            lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+            signature: airdropSignature,
+        });
+    } catch (error) {
+        console.error(error);
+        throw error;
+    }
+};
+```
+
+To trigger the airdrop to your devnet wallet, simply call the function with devnetConnection and your mockWallet public key as input parameters:
+
+```typescript
+// Airdrop to devnet wallet
+await airDropSol(devnetConnection, mockWallet.publicKey);
+```
+
+## 5. Initialize the Vault
+
+Retrieve the token info required to initialize the vault instance. We use the SOL token as an example here:
+
+```typescript
+// Retrieve the token info for the vault (example: SOL)
+const tokenMap = new StaticTokenListResolutionStrategy().resolve();
+const SOL_TOKEN_INFO = tokenMap.find(token => token.symbol === 'SOL') as TokenInfo;
+```
+
+Set up the vault instance using the connection and the token info:
+
+```typescript
+// Getting a Vault Implementation instance (SOL)
+const vault: VaultImpl = await VaultImpl.create(
+    devnetConnection,
+    SOL_TOKEN_INFO,
+    {
+        cluster: 'devnet'
+    }
+);
+```
+
+If you are an affiliate partner, you have to pass in an additional parameter - affiliateId when setting up the vault instance. The affiliateId is the partner wallet address that was used to set up the affiliate relationship with the Mercurial Dynamic Yield layer:
+
+```typescript
+// Getting a Vault Implementation instance (SOL)
+const vaultImpl: VaultImpl = await VaultImpl.create(
+    devnetConnection,
+    SOL_TOKEN_INFO,
+    {
+        cluster: 'devnet',
+        // Replace with your own Partner ID!
+        affiliateId: new PublicKey('7236FoaWTXJyzbfFPZcrzg3tBpPhGiTgXsGWvjwrYfiF')
+    }
+);
+```
+
+## 6. Get key data from the vault instance
+
+Retrieve on-chain data from the vault and off-chain APY data from API. Key info includes total amount currently unlocked for user withdrawals, virtual price and the various strategies connected to the vault. The code for this can be found in getVaultDetails.ts:
+
+```typescript
+// Get on-chain data from the vault and off-chain data from the api
+export const getVaultDetails = async (vaultImpl: VaultImpl) => {
+    //Get the total unlocked amount in vault that is withdrawable by users
+    const vaultUnlockedAmount = (await vaultImpl.getWithdrawableAmount()).toNumber();
+    //Calculate virtual price using the vault's unlocked amount and lp supply
+    const virtualPrice = (vaultUnlockedAmount / vaultImpl.lpSupply.toNumber()) || 0;
+
+    // Get the off-chain data from API
+    const URL = KEEPER_URL['devnet'];
+    const vaultStateAPI: VaultStateAPI = await (await fetch(`${URL}/vault_state/${SOL_TOKEN_INFO.address}`)).json();
+    const totalAllocation = vaultStateAPI.strategies.reduce((acc, item) => acc + item.liquidity, vaultStateAPI.token_amount)
+
+    return {
+        lpSupply: (await vaultImpl.getVaultSupply()).toString(),
+        withdrawableAmount: vaultUnlockedAmount,
+        virtualPrice,
+        usd_rate: vaultStateAPI.usd_rate,
+        closest_apy: vaultStateAPI.closest_apy, // 1 hour average APY
+        average_apy: vaultStateAPI.average_apy, // 24 hour average APY
+        long_apy: vaultStateAPI.long_apy, // 7 day average APY
+        earned_amount: vaultStateAPI.earned_amount, // total fees earned by vault
+        virtual_price: vaultStateAPI.virtual_price,
+        total_amount: vaultStateAPI.total_amount,
+        total_amount_with_profit: vaultStateAPI.total_amount_with_profit,
+        token_amount: vaultStateAPI.token_amount,
+        fee_amount: vaultStateAPI.fee_amount,
+        lp_supply: vaultStateAPI.lp_supply,
+        strategyAllocation: vaultStateAPI.strategies
+            .map(item => ({
+                name: item.strategy_name,
+                liquidity: item.liquidity,
+                allocation: ((item.liquidity / totalAllocation) * 100).toFixed(0),
+                maxAllocation: item.max_allocation,
+            }))
+            .concat({
+                name: 'Vault Reserves',
+                liquidity: vaultStateAPI.token_amount,
+                allocation: ((vaultStateAPI.token_amount / totalAllocation) * 100).toFixed(0),
+                maxAllocation: 0,
+            })
+            .sort((a, b) => b.liquidity - a.liquidity),
+    }
+}
+```
+
+You can trigger the function and get the vault details via the following:
+
+```typescript
+const vaultDetails = await getVaultDetails(vault);
+console.log(vaultDetails);
+```
+
+## 7. To deposit tokens into the vault
+
+The steps below will allow you to deposit tokens into the vault by specifying the source wallet and the amount you want to deposit:
+
+```typescript
+// Deposits into the vault 
+const depositAmount = 0.1;
+const depositTx = await vault.deposit(mockWallet.publicKey, new BN(depositAmount * 10 ** SOL_TOKEN_INFO.decimals)); // 0.1 SOL
+const depositResult = await provider.sendAndConfirm(depositTx);
+```
+
+## 8. To withdraw tokens from the vault
+
+The steps below will allow you to withdraw tokens from the vault by specifying the destination wallet and the amount you want to withdraw from the vault:
+
+```typescript
+// Withdraw from the vault
+const withdrawAmount = 0.05;
+const withdrawTx = await vault.withdraw(mockWallet.publicKey, new BN(withdrawAmount * 10 ** SOL_TOKEN_INFO.decimals)); // 0.05 SOL
+const withdrawResult = await provider.sendAndConfirm(withdrawTx); // Transaction hash    
+```
+
+## 9. Retrieve affiliate partner info (only if you are set up as an affiliate partner)
+
+If you are an affiliate partner, you can retrieve information about the partner account:
+
+```typescript
+const partnerInfo = await vaultImpl.getAffiliateInfo();
+console.log('Result:', {
+        'publicKey': mockWallet.publicKey.toString(),
+        'balance': (await vaultImpl.getUserBalance(mockWallet.publicKey)).toString(),
+        'Partner Token': partnerInfo.partnerToken.toString(),
+        'Vault': partnerInfo.vault.toString(),
+        'Total Fee': partnerInfo.totalFee.toString(),
+        'Fee Ratio': partnerInfo.feeRatio.toString(),
+        'Cumulative Fee': partnerInfo.cummulativeFee.toString(),
+})
+```
