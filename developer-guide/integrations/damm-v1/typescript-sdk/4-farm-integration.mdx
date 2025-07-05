@@ -1,0 +1,87 @@
+---
+title: Farm Integration
+---
+
+This guide provides instructions on how to integrate DAMM v1 pools with farms.
+
+Before you begin, here are some important resources:
+
+- **Program ID (Mainnet & Devnet):** `FarmuwXPWXvefWUeqFAa5w6rifLkq5X6E8bimYvrhCB1`
+- **TypeScript SDK Repository:** [@mercurial-finance/farming-sdk](https://github.com/MeteoraAg/reward-pool)
+
+## Install Dependencies and Initialize PoolFarmImpl Instance
+
+### Install Dependencies
+
+```bash
+npm i @mercurial-finance/farming-sdk @project-serum/anchor @solana/web3.js @solana/spl-token @solana/spl-token-registry
+```
+
+### 1.2 Initialize PoolFarmImpl Instance
+
+```typescript
+import { PoolFarmImpl } from "@mercurial-finance/farming-sdk";
+import { Wallet, AnchorProvider } from "@coral-xyz/anchor";
+import { Connection, PublicKey, Keypair } from "@solana/web3.js";
+
+// Connection, Wallet, and AnchorProvider to interact with the network
+const mainnetConnection = new Connection("https://api.mainnet-beta.solana.com");
+const mockWallet = new Wallet(new Keypair());
+const provider = new AnchorProvider(mainnetConnection, mockWallet, {
+  commitment: "confirmed",
+});
+
+// Alternatively, to use Solana Wallet Adapter
+
+const USDC_acUSDC_POOL = new PublicKey(
+  "6ZLKLjMd2KzH7PPHCXUPgbMAtdTT37VgTtdeXWLoJppr"
+); // Pool Address can get from https://docs.meteora.ag/dynamic-pools-integration/dynamic-pool-api/pool-info
+
+const farmingPools = await PoolFarmImpl.getFarmAddressesByPoolAddress(
+  USDC_acUSDC_POOL
+);
+// farmingPools is an array (A pool can have multiple farms)
+const farmingPool = farmingPools[0];
+const farm = await PoolFarmImpl.create(
+  mainnetConnection,
+  farmingPool.farmAddress
+);
+```
+
+## 2. Code Examples to Interact with the PoolFarmImpl
+
+### Stake
+
+```typescript
+// https://station.jup.ag/blog/jupiter-token-list-api#endpoints
+const tokenList = await fetch('https://token.jup.ag/all').then(res => res.json());
+const USDC = tokenList.find(token => token.address === <USDC_ADDRESS>);
+const USDT = tokenList.find(token => token.address === <USDT_ADDRESS>);
+
+// Get pool lp balance from `@mercurial-finance/dynamic-amm-sdk` package
+const pool = await AmmImpl.create(connection, MAINNET_POOL.USDC_USDT, USDC, USDT);
+const lpBalance = await pool.getUserBalance(mockWallet.publicKey);
+
+const stakeTx = await farm.deposit(mockWallet.publicKey, lpBalance); // Web3 Transaction Object
+const stakeResult = await provider.sendAndConfirm(stakeTx); // Transaction hash
+```
+
+### Check Stake Balance
+
+```typescript
+const farmBalance = await farm.getUserBalance(mockWallet.publicKey);
+```
+
+### Claim
+
+```typescript
+const claimTx = await farm.claim(mockWallet.publicKey);
+const claimResult = await provider.sendAndConfirm(claimTx); // Transaction hash
+```
+
+### Unstake
+
+```typescript
+const unStakeTx = await farm.withdraw(mockWallet.publicKey, farmBalance); // Web3 Transaction Object
+const unstakeResult = await provider.sendAndConfirm(unStakeTx); // Transaction hash
+```
