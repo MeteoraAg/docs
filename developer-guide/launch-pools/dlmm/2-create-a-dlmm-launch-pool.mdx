@@ -1,0 +1,188 @@
+---
+title: "Create a DLMM Launch Pool"
+---
+
+DLMM Launch Pool is a special pool type designed for new token launches. 
+
+It is based on DLMM and comes fundamentally equipped with a feature set that makes it optimal for bootstrapping liquidity for new tokens and making the tokens accessible on Jupiter and other trading integrations.
+
+DLMM Launch Pools can also be created with an Alpha Vault as part of the token launch process. This is optional.
+
+Below we provide the steps to use Bun to configure and run sample scripts to conveniently set up a DLMM Launch Pool on your own. 
+
+## Getting Started
+
+- Clone repo: https://github.com/MeteoraAg/meteora-pool-setup 
+
+- Config list to reference: https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config
+
+- Readme: https://github.com/MeteoraAg/meteora-pool-setup/blob/main/README.md
+
+## Dependencies
+
+Install Bun: You'll also need bun to run the scripts. Install it via bun installation. Then install the dependencies by running the command bun install
+
+## Scripts
+
+The following code examples can be used to initialize and seed a DLMM liquidity pool on Meteora using a customizable permissionless liquidity bin pair (LB pair). It allows you to configure parameters for the pool, including fees, pricing, curvature, and activation conditions, before executing initialization and seeding commands.
+
+### 1. Create DLMM Launch Pool
+
+Clone repo: https://github.com/MeteoraAg/meteora-pool-setup 
+
+Select an example config to reference and change the parameters inside according to your needs: https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config
+
+Run the script with the config file which is updated with your preferred parameters.
+
+For example, run: 
+
+```bash
+bun run src/create_pool.ts --config ./config/create_dlmm_pool.json
+```
+
+Replace `./config/create_dlmm_pool.json` with the path to your config file, after you have set your config parameters.
+
+**Important Notes:**
+
+- The max bin step you can set for a DLMM pool is 400 bin step.
+
+- When creating a DLMM pool, there are 3 roles in position that you can config: 
+
+  - Position Owner: Wallet that owns the liquidity 
+
+  - Operator: Wallet that can deposit and withdraw tokens on behalf of the Position Owner 
+
+  - Fee Owner: Wallet that gets the fees from that position
+
+During the initialization of the DLMM pool, pool creator needs to have at least 1 lamport worth of the base token in the wallet to prove ownership.
+
+If you plan to use a multisig on the Meteora website, please make sure it is the SquadsX multisig, as that is the only type supported on Meteora website. Otherwise, you can't manage liquidity through the website.
+
+### 2. Seed liquidity
+
+There are two different strategy options when it comes to seeding liquidity in a DLMM Launch Pool.
+
+#### 2.1 Seed liquidity using ilm curve distribution strategy
+
+This is the standard type of token launch liquidity distribution used by past LFG projects such as JUP, WEN, CLOUD etc.
+
+You can first use this ilm curve tool to determine the suitable parameters for your launch.
+
+Reference this config file https://github.com/MeteoraAg/meteora-pool-setup/blob/main/config/seed_liquidity_lfg.json and set your preferred parameters.
+
+Run the script with the config file which is set with your preferred parameters.
+
+For example, run:
+
+```bash
+bun run src/seed_liquidity_lfg.ts --config ./config/seed_liquidity_lfg.json
+```
+
+Replace `./config/seed_liquidity_lfg.json` with the path to your config file, after you have set your config parameters.
+
+#### 2.2 Seed liquidity using single bin strategy
+
+This is a unique token launch strategy where all liquidity is allocated into a single bin.
+
+Reference this config file https://github.com/MeteoraAg/meteora-pool-setup/blob/main/config/seed_liquidity_single_bin.json and set your preferred parameters.
+
+Run the script with the config file which is set with your preferred parameters.
+
+For example, run:
+
+```bash
+bun run src/seed_liquidity_single_bin.ts --config ./config/seed_liquidity_single_bin.json
+```
+
+Replace `./config/seed_liquidity_single_bin.json` with the path to your config file, after you have set your config parameters.
+
+**Important Notes:**
+
+When seeding liquidity using the endpoint, both Operator and Position Owner need to have at least 1 lamport worth of the base tokens to prove ownership. If the Position Owner doesn't have any base tokens, then the Operator will need to send 1 lamport worth of the base token to Position Owner. But the script will check if Position Owner has tokens and if not, it will bundle a transfer instruction to send 1 lamport worth of the base token from the Operator to the Position Owner. 
+
+In the code example, lock_release_point refers to the time the liquidity position can be withdrawn. If it is set to zero, it means the position can be withdrawn immediately after trading starts. If it is set to an extremely large number, it means the position can only be withdrawn in the distant future, essentially "locking" the liquidity position. However, since DLMM doesn't cover an infinite price range, if the price is out of range, the locked position won't get any fees.
+
+If you plan to use a multisig on the Meteora website, please make sure it is the SquadsX multisig, as that is the only type supported on Meteora website. Otherwise, you can't manage liquidity through the website.
+
+### 3. Set DLMM Launch Pool status
+
+You are able to disable the pool prior to pool activation time (before trading starts) and enable it later before or after pool activation time. After pool activation time, once enabled the pool cannot be disabled by you again.
+
+Reference this config file https://github.com/MeteoraAg/meteora-pool-setup/blob/main/config/set_dlmm_pool_status.json and set your preferred parameters.
+
+Run the script with the config file which is set with your preferred parameters.
+
+For example, run:
+
+```bash
+bun run src/set_dlmm_pool_status.ts --config ./config/set_dlmm_pool_status.json
+```
+
+Replace `./config/set_dlmm_pool_status.json` with the path to your config file, after you have set your config parameters.
+
+### After deployment
+
+To view pool on the UI, access the link below
+
+For DLMM pool: https://app.meteora.ag/dlmm/`POOL_ADDRESS`
+
+### When can you withdraw tokens from the pool to the position owner?
+
+CustomizablePermissionless DLMM: After pool activation point (trading starts)
+
+### Other Configuration Details
+
+There are various config files that can be found in the config directory. 
+
+It contains all the configurations required to run the scripts. We also need to provide the keypair for the payer wallet in keypair.json file.
+
+<Note>DLMM Pool can also lock liquidity, so the lock_release_point can be set to some indefinite time then it 'unlocks'</Note>
+
+### General configuration
+- `rpcUrl`: Solana RPC URL to get data and send transactions.
+
+- `keypairFilePath`: Keypair file path to send transactions.
+
+- `dryRun`: Set to true to send transactions.
+
+- `computeUnitPriceMicroLamports`: CU price in micro lamports unit. For example: 100000.
+
+- `createBaseToken`: Configuration to create base token.
+
+- `baseMint`: Base token address if the createBaseToken field is not set.
+
+- `quoteSymbol`: Quote token symbol, only SOL or USDC is supported.
+
+- `quoteMint`: Quote token mint, in case the user wants to create a DLMM launch pool with a token other than SOL or USDC.
+
+- `dlmm`: DLMM pool configuration.
+
+**Some configuration constraints:**
+
+- `createBaseToken` and `baseMint` cannot be used together.
+
+- `dynamicAmm` and `dlmm` cannot be used together.
+
+**Create Base Token configuration**
+
+- `mintBaseTokenAmount`: Base token amount to be minted.
+
+### DLMM configuration
+
+- `binStep`: DLMM pool bin step.
+
+- `feeBps`: Fee bps for DLMM pool.
+
+- `initialPrice`: Initial pool price.
+
+- `activationType`: To activate pool trading based on slot or timestamp.
+
+- `activationPoint`: To activate pool trading at a point, either slot valut or timestamp value based on activationType.
+
+- `priceRounding`: Should be up or down.
+
+- `hasAlphaVault`: Whether alpha vault is enabled or not for this pool.
+
+- `creatorPoolOnOffControl`: Allow creator to turn on/off pool control.
+
+<Note>There is only one DLMM pool that can be created with the same base and quote tokens, using the instruction initializeCustomizablePermissionlessLbPair. So if users are using that instruction to create a new DLMM pool with the same base and quote tokens, but with different parameters, then the transaction will be failed.</Note>

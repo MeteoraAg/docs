@@ -1,0 +1,146 @@
+---
+title: "Create a Memecoin v1 Launch Pool"
+---
+
+Memecoin Pools v1 are a subset of Dynamic AMM Pools designed specifically for token launches with permanently locked liquidity and fee scheduling capabilities.
+
+A Memecoin Pool v1 is a Dynamic AMM Pool that has a fee scheduler, with liquidity permanently locked at pool creation. This makes it ideal for integration with platforms such as memecoin launchpads to support liquidity and trading for tokens after they have graduated from the launchpad.
+
+## Getting Started
+
+- Dynamic AMM SDK: https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk
+- NPM: https://www.npmjs.com/package/@mercurial-finance/dynamic-amm-sdk
+- Dynamic AMM Program ID: `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`
+- Dynamic AMM API endpoints: https://amm-v2.meteora.ag/swagger-ui/
+- Devnet: https://devnet.meteora.ag/
+
+## Dependencies
+
+Install the required dependencies:
+
+```bash
+# NPM
+npm i @meteora-ag/dynamic-amm-sdk @coral-xyz/anchor @solana/web3.js @solana/spl-token
+
+# YARN
+yarn add @meteora-ag/dynamic-amm-sdk @coral-xyz/anchor @solana/web3.js @solana/spl-token
+```
+
+## Scripts
+
+### 1. Initialize AmmImpl Instance
+
+```typescript
+import AmmImpl, { MAINNET_POOL } from '@meteora-ag/dynamic-amm-sdk';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
+
+// Connection, Wallet, and AnchorProvider to interact with the network
+const mainnetConnection = new Connection('https://api.mainnet-beta.solana.com');
+const mockWallet = new Wallet(new Keypair());
+const provider = new AnchorProvider(mainnetConnection, mockWallet, {
+  commitment: 'confirmed',
+});
+// Alternatively, to use Solana Wallet Adapter
+
+// Create single instance
+const constantProductPool = await AmmImpl.create(mainnetConnection, MAINNET_POOL.USDC_SOL);
+const stablePool = await AmmImpl.create(mainnetConnection, MAINNET_POOL.USDT_USDC);
+// Or with any other pool address, refer to the pool creation section below
+const pool = await AmmImpl.create(mainnetConnection, new PublicKey('...'));
+
+// If you need to create multiple, can consider using `createMultiple`
+const pools = [MAINNET_POOL.USDC_SOL, MAINNET_POOL.USDT_USDC];
+const [constantProductPool, stablePool] = await AmmImpl.createMultiple(mainnetConnection, pools);
+```
+
+### 2. Fee Schedule Setup: Choose a Pool and Fee Config
+
+What fee parameters to choose depends on your project's needs. You will need to look at the pool config list and choose a suitable `pool_config_key` with your preferred fee parameters.
+
+**Important Notes:**
+
+- If you want to create an Alpha Vault along with your new pool, you also need to find a `pool_config_key` that is mapped to a `vault_config_key` that meets your requirements.
+- If none of the `pool_config_key` in the list meet your requirements, please reach out to Meteora for a custom pool config key.
+
+#### 2.1 Public Pool Config List
+
+- Pool config list: https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs 
+- Devnet API: https://devnet-amm-v2.meteora.ag/pool-configs
+- API endpoint to return the associated fee curve for each existing config: https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs  
+
+Using this endpoint, integrators can input the config pubkey, and it will return an array of fee update timings for the config, if there's any. 
+
+Integrators may choose a `pool_config_key` with a fee curve that suits your integration.
+
+**Important Notes:**
+
+- If there is no existing config in the list that fits your project's requirement, a new config needs to be created.
+- Only the Meteora team can create a new config to add it to the preset pool config list.
+
+#### 2.2 Default Pool Config Used by Meteora Frontend
+
+By default, Meteora's frontend is currently using this pool config key for Memecoin Pool creation: `FiENCCbPi3rFh5pW2AJ59HC53yM32eLaCjMKxRqanKFJ`
+
+**Important Notes:**
+
+- For the `FiENCCbPi3rFh5pW2AJ59HC53yM32eLaCjMKxRqanKFJ` pool config, it doesn't allow creation of any Alpha Vault, therefore its field `vault_config_key` is `1111111...`
+
+#### 2.3 New Custom Pool Config and Fee Curve for Integrators / Launchpads
+
+**Custom Pool Config Key:** Integrators such as launchpads or other partners may need to use their own unique custom pool config key, if they want custom `pool_creator_authority` to prevent front-running of the token launch pool.
+
+**Custom Fee Curve:** If you are an integrator, Meteora can also apply a custom fee curve/schedule for your pools, but we will need to create a dedicated config key for your team, where `pool_creator_authority` is linked to your signer wallet for pool creation.
+
+**Important Notes:**
+
+- New dedicated config keys can only be created by Meteora. Please reach out to us if this is required.
+- The `pool_creator_authority` doesn't work with program address. It's not a program whitelist, it needs to be a PDA (program derived address) or normal account.
+- Even with a dedicated config key for your team, Meteora would need to customize the fee curve/schedule for you. You can't do it on your own.
+- Custom Pool Config and Fee Curve is used by integrators such as Moonshot by DEX Screener.
+
+#### 2.4 Custom Fee Curve for a Specific Pool
+
+If required, Meteora can set a custom fee curve for a single, specific pool. This would override the fee curve used by the pool's config key, doesn't matter which config key is used.
+
+<Note>For more information about setting Pool and Fee Config for Memecoin Pools, please read here.</Note>
+
+### 3. Create a Memecoin Pool
+
+After you have selected your preferred `pool_config_key`, reference this example: https://github.com/MeteoraAg/dynamic-amm-sdk/blob/main/ts-client/src/examples/create_pool_and_lock_liquidity.ts 
+
+Using the example, update it with your pool config key selected and other parameters in order to create a Memecoin Pool - which is a Dynamic AMM Pool with a fee scheduler and with liquidity (LP tokens) locked to the user's own lock escrow account.
+
+#### 3.1 Assign Fee Recipients for Permanently-Locked Liquidity
+
+Please refer to the section under `let allocations = [` in the example code:
+
+https://github.com/MeteoraAg/dynamic-amm-sdk/blob/main/ts-client/src/examples/create_pool_and_lock_liquidity.ts#L121  
+
+In the config file, you can specify different wallet addresses to receive fees from the locked liquidity, and the % to allocate to each wallet. 
+
+**Important Notes:**
+
+- Multiple wallets are possible, but their allocations must add up to 100%.
+
+### After deployment
+
+To view pool on the UI, access the link below:
+
+For Memecoin Pool: https://app.meteora.ag/pools/`POOL_ADDRESS`
+
+### Important: Lock Liquidity Before Pool Activation
+
+**For Memecoins that want to permanently lock liquidity, lock it before Pool activation time.**
+
+If the project wants to permanently lock liquidity in the Memecoin pool, they should ideally lock the liquidity BEFORE the pool starts trading, so that swap fees from locked liquidity are captured the second trading starts.
+
+In a scenario where:
+
+- The pool started trading - t0
+- Liquidity gets deposited to the pool by the project, but not locked - t1
+- Subsequently, that liquidity is permanently locked by the project - t2
+
+The project will not be able to claim swap fees earned from t1 to t2, since fees from t1 to t2 are assigned to the LP token before the LP token gets permanently locked. When the LP token gets locked, the earlier fees are locked along with it.
+
+The project will only be able to claim swap fees from locked liquidity starting from t2.
