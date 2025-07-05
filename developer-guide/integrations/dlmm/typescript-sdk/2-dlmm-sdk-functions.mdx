@@ -2,79 +2,13 @@
 title: DLMM SDK Functions
 ---
 
-## Table of Contents
-
-### Pool Functions
-- [create](#create)
-- [createMultiple](#createMultiple)
-- [createCustomizablePermissionlessLbPair](#createCustomizablePermissionlessLbPair)
-- [createCustomizablePermissionlessLbPair2](#createCustomizablePermissionlessLbPair2)
-- [createLbPair](#createLbPair)
-- [createLbPair2](#createLbPair2)
-- [initializePositionAndAddLiquidityByStrategy](#initializePositionAndAddLiquidityByStrategy)
-- [addLiquidityByStrategy](#addLiquidityByStrategy)
-- [removeLiquidity](#removeLiquidity)
-- [swapQuote](#swapQuote)
-- [swapQuoteExactOut](#swapQuoteExactOut)
-- [swapExactOut](#swapExactOut)
-- [swapWithPriceImpact](#swapWithPriceImpact)
-- [swap](#swap)
-- [claimLMReward](#claimLMReward)
-- [claimAllLMRewards](#claimAllLMRewards)
-- [claimSwapFee](#claimSwapFee)
-- [claimAllSwapFee](#claimAllSwapFee)
-- [claimAllRewards](#claimAllRewards)
-- [claimAllRewardsByPosition](#claimAllRewardsByPosition)
-- [closePosition](#closePosition)
-- [closePositionIfEmpty](#closePositionIfEmpty)
-- [quoteCreatePosition](#quoteCreatePosition)
-- [createEmptyPosition](#createEmptyPosition)
-- [seedLiquidity](#seedLiquidity)
-- [seedLiquiditySingleBin](#seedLiquiditySingleBin)
-- [initializeBinArrays](#initializeBinArrays)
-- [initializePositionByOperator](#initializePositionByOperator)
-- [setPairStatusPermissionless](#setPairStatusPermissionless)
-- [setActivationPoint](#setActivationPoint)
-- [setPairStatus](#setPairStatus)
-
-### State Functions
-- [getLbPairs](#getLbPairs)
-- [getCustomizablePermissionlessLbPairIfExists](#getCustomizablePermissionlessLbPairIfExists)
-- [getPosition](#getPosition)
-- [getAllPresetParameters](#getAllPresetParameters)
-- [getAllLbPairPositionsByUser](#getAllLbPairPositionsByUser)
-- [refetchStates](#refetchStates)
-- [getBinArrays](#getBinArrays)
-- [getBinArrayForSwap](#getBinArrayForSwap)
-- [getFeeInfo](#getFeeInfo)
-- [getDynamicFee](#getDynamicFee)
-- [getEmissionRate](#getEmissionRate)
-- [getBinsAroundActiveBin](#getBinsAroundActiveBin)
-- [getBinsBetweenMinAndMaxPrice](#getBinsBetweenMinAndMaxPrice)
-- [getBinsBetweenLowerAndUpperBound](#getBinsBetweenLowerAndUpperBound)
-- [getActiveBin](#getActiveBin)
-- [getPositionsByUserAndLbPair](#getPositionsByUserAndLbPair)
-- [getPairPubkeyIfExists](#getPairPubkeyIfExists)
-- [getMaxPriceInBinArrays](#getMaxPriceInBinArrays)
-- [getLbPairLockInfo](#getLbPairLockInfo)
-- [canSyncWithMarketPrice](#canSyncWithMarketPrice)
-- [isSwapDisabled](#isSwapDisabled)
-
-### Helper Functions
-- [syncWithMarketPrice](#syncWithMarketPrice)
-- [toPricePerLamport](#toPricePerLamport)
-- [fromPricePerLamport](#fromPricePerLamport)
-- [calculateFeeInfo](#calculateFeeInfo)
-
----
-
 ## Pool Functions
 
 ### create
 
 Creates an instance of the DLMM pool given the pool address.
 
-#### Function
+**Function**
 ```typescript
 async create(
     connection: Connection, 
@@ -86,7 +20,7 @@ async create(
 ): Promise<DLMM>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 connection: Connection         // Solana connection instance
 dlmm: PublicKey                // The DLMM pool address
@@ -96,11 +30,11 @@ opt?: {                        // Optional parameters
 }
 ```
 
-#### Returns
+**Returns**
 
 An instance of the DLMM pool.
 
-#### Example
+**Example**
 ```typescript
 // Creating a DLMM pool
 // You can get your desired pool address from the API https://dlmm-api.meteora.ag/pair/all
@@ -108,7 +42,7 @@ const USDC_USDT_POOL = new PublicKey('ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpm
 const dlmmPool = await DLMM.create(connection, USDC_USDT_POOL);
 ```
 
-#### Notes
+**Notes**
 - The pool addresses can be fetched from the DLMM API https://dlmm-api.meteora.ag/pair/all
 - The `opt` parameter is optional and can be used to specify the cluster and program ID.
 
@@ -118,7 +52,7 @@ const dlmmPool = await DLMM.create(connection, USDC_USDT_POOL);
 
 Creates multiple instances of the DLMM pool given the pool addresses.
 
-#### Function
+**Function**
 ```typescript
 async createMultiple(
     connection: Connection, 
@@ -130,7 +64,7 @@ async createMultiple(
 ): Promise<DLMM[]>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 connection: Connection         // Solana connection instance
 dlmmList: Array<PublicKey>     // The array of DLMM pool addresses
@@ -140,11 +74,11 @@ opt?: {                        // Optional parameters
 }
 ```
 
-#### Returns
+**Returns**
 
 An array of DLMM instances.
 
-#### Example
+**Example**
 ```typescript
 // Creating a DLMM pool
 // You can get your desired pool address from the API https://dlmm-api.meteora.ag/pair/all
@@ -152,7 +86,7 @@ const USDC_USDT_POOL = new PublicKey('ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpm
 const dlmmPool = await DLMM.createMultiple(connection, [USDC_USDT_POOL, ...]);
 ```
 
-#### Notes
+**Notes** 
 - The pool addresses can be fetched from the DLMM API https://dlmm-api.meteora.ag/pair/all
 - The `opt` parameter is optional and can be used to specify the cluster and program ID.
 
@@ -162,7 +96,7 @@ const dlmmPool = await DLMM.createMultiple(connection, [USDC_USDT_POOL, ...]);
 
 Creates a customizable permissionless LB pair. This function only supports token program.
 
-#### Function
+**Function**
 ```typescript
 static async createCustomizablePermissionlessLbPair(
     connection: Connection,
@@ -183,7 +117,7 @@ static async createCustomizablePermissionlessLbPair(
 ): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 connection: Connection         // Solana connection instance
 binStep: BN                    // Bin step of the pair
@@ -199,11 +133,11 @@ creatorPoolOnOffControl?: boolean // Optional creator pool on/off control
 opt?: Opt                      // Optional parameters
 ```
 
-#### Returns
+**Returns**
 
 A transaction to create the customizable permissionless LB pair.
 
-#### Example
+**Example**
 ```typescript
 const WEN = new PublicKey('WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk')
 const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
@@ -232,8 +166,8 @@ const transaction = await DLMM.createCustomizablePermissionlessLbPair(
 );
 ```
 
-#### Notes
-- If Alpha Vault is enabled, the program will deterministically whitelist the alpha vault to swap before the pool start trading. Check: https://github.com/MeteoraAg/alpha-vault-sdk initialize{Prorata|Fcfs}Vault method to create the alpha vault.
+**Notes**
+- If Alpha Vault is enabled, the program will deterministically whitelist the alpha vault to swap before the pool start trading. Check: https://github.com/MeteoraAg/alpha-vault-sdk `initialize{Prorata|Fcfs}Vault` method to create the alpha vault.
 
 ---
 
@@ -241,7 +175,7 @@ const transaction = await DLMM.createCustomizablePermissionlessLbPair(
 
 Creates a customizable permissionless LB pair with specified parameters. This function supports both token and token2022 programs.
 
-#### Function
+**Function**
 ```typescript
 static async createCustomizablePermissionlessLbPair2(
     connection: Connection,
@@ -259,7 +193,7 @@ static async createCustomizablePermissionlessLbPair2(
 ): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 connection: Connection         // Solana connection instance
 binStep: BN                   // The bin step for the pair
@@ -275,11 +209,11 @@ creatorPoolOnOffControl?: boolean // Optional creator control flag
 opt?: Opt                     // Optional cluster and program ID
 ```
 
-#### Returns
+**Returns**
 
 A transaction to create the customizable permissionless LB pair.
 
-#### Example
+**Example**
 ```typescript
 const WEN = new PublicKey('WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk')
 const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
@@ -307,7 +241,7 @@ const transaction = await DLMM.createCustomizablePermissionlessLbPair2(
 );
 ```
 
-#### Notes
+**Notes**
 - This creates a customizable permissionless pair that supports both token and token2022 programs
 - The active bin ID represents the starting price of the pool
 - Fee is specified in basis points (100 = 1%)
@@ -318,7 +252,7 @@ const transaction = await DLMM.createCustomizablePermissionlessLbPair2(
 
 Creates a new liquidity pair that supports only token program.
 
-#### Function
+**Function**
 ```typescript
 static async createLbPair(
     connection: Connection,
@@ -333,7 +267,7 @@ static async createLbPair(
 ): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 connection: Connection        // Solana connection instance
 funder: PublicKey             // The public key of the funder
@@ -346,11 +280,11 @@ activeId: BN                  // The ID of the initial active bin
 opt?: Opt                     // Optional parameters
 ```
 
-#### Returns
+**Returns**
 
 A transaction to create the LB pair.
 
-#### Example
+**Example**
 ```typescript
 const WEN = new PublicKey('WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk')
 const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
@@ -380,7 +314,7 @@ const transaction = await DLMM.createLbPair(
 );
 ```
 
-#### Notes
+**Notes**
 - Throws an error if the pair already exists
 - Only supports token program
 
@@ -390,7 +324,7 @@ const transaction = await DLMM.createLbPair(
 
 Creates a new liquidity pair that supports both token and token2022 programs.
 
-#### Function
+**Function**
 ```typescript
 static async createLbPair2(
     connection: Connection,
@@ -403,7 +337,7 @@ static async createLbPair2(
 ): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 connection: Connection        // Solana connection instance
 funder: PublicKey             // The public key of the funder
@@ -414,11 +348,11 @@ activeId: BN                  // The ID of the initial active bin
 opt?: Opt                     // Optional parameters
 ```
 
-#### Returns
+**Returns**
 
 A transaction to create the LB pair.
 
-#### Example
+**Example**
 ```typescript
 const WEN = new PublicKey('WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk')
 const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
@@ -445,7 +379,7 @@ const transaction = await DLMM.createLbPair2(
 );
 ```
 
-#### Notes
+**Notes**
 - Throws an error if the pair already exists
 - Supports both token and token2022 programs
 
@@ -455,7 +389,7 @@ const transaction = await DLMM.createLbPair2(
 
 Initializes a new position and adds liquidity using a specified strategy.
 
-#### Function
+**Function**
 ```typescript
 async initializePositionAndAddLiquidityByStrategy({
     positionPubKey,
@@ -467,7 +401,7 @@ async initializePositionAndAddLiquidityByStrategy({
 }: TInitializePositionAndAddLiquidityParamsByStrategy): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 positionPubKey: PublicKey     // The public key of the position account (usually new Keypair())
 totalXAmount: BN              // Total amount of token X to add
@@ -477,11 +411,11 @@ user: PublicKey               // The public key of the user account
 slippage?: number             // Optional slippage percentage
 ```
 
-#### Returns
+**Returns**
 
 A transaction for initializing the position and adding liquidity.
 
-#### Example
+**Example**
 ```typescript
 const positionKeypair = new Keypair();
 
@@ -489,7 +423,7 @@ const btcInAmount = new BN(1).mul(new BN(10 ** btcDecimal));
 const usdcInAmount = new BN(24000).mul(new BN(10 ** usdcDecimal));
 
 const strategy = {
-  strategyType: StrategyType.SpotBalanced
+  strategyType: StrategyType.SpotBalanced,
   minBinId: 8388600,
   maxBinId: 8388620,
 };
@@ -504,7 +438,7 @@ const transaction = await dlmmPool.initializePositionAndAddLiquidityByStrategy({
 });
 ```
 
-#### Notes
+**Notes**
 - `positionPubKey`: The public key of the position account. (usually use `new Keypair()`)
 - `totalXAmount`: The total amount of token X to be added to the liquidity pool.
 - `totalYAmount`: The total amount of token Y to be added to the liquidity pool.
@@ -518,7 +452,7 @@ const transaction = await dlmmPool.initializePositionAndAddLiquidityByStrategy({
 
 Adds liquidity to an existing position using a specified strategy.
 
-#### Function
+**Function**
 ```typescript
 async addLiquidityByStrategy({
     positionPubKey,
@@ -530,7 +464,7 @@ async addLiquidityByStrategy({
 }: TInitializePositionAndAddLiquidityParamsByStrategy): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 positionPubKey: PublicKey     // The public key of the existing position
 totalXAmount: BN              // Total amount of token X to add
@@ -540,11 +474,11 @@ user: PublicKey               // The public key of the user account
 slippage?: number             // Optional slippage percentage
 ```
 
-#### Returns
+**Returns**
 
 A transaction for adding liquidity to the position.
 
-#### Example
+**Example**
 ```typescript
 const btcInAmount = new BN(1).mul(new BN(10 ** btcDecimal));
 const usdcInAmount = new BN(24000).mul(new BN(10 ** usdcDecimal));
@@ -556,14 +490,14 @@ const transaction = await dlmmPool.addLiquidityByStrategy({
   strategy: {
     minBinId: 8388600,
     maxBinId: 8388620,
-    strategyType: StrategyType.SpotBalanced
+    strategyType: StrategyType.SpotBalanced,
   },
   user: userPublicKey,
   slippage: 1
 });
 ```
 
-#### Notes
+**Notes**
 - `positionPubKey`: The public key of the position account. (usually use `new Keypair()`)
 - `totalXAmount`: The total amount of token X to be added to the liquidity pool.
 - `totalYAmount`: The total amount of token Y to be added to the liquidity pool.
@@ -577,7 +511,7 @@ const transaction = await dlmmPool.addLiquidityByStrategy({
 
 Removes liquidity from a position with options to claim rewards and close the position.
 
-#### Function
+**Function**
 ```typescript
 async removeLiquidity({
     user,
@@ -596,7 +530,7 @@ async removeLiquidity({
 }): Promise<Transaction | Transaction[]>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 user: PublicKey               // The public key of the user account
 position: PublicKey           // The public key of the position account
@@ -606,11 +540,11 @@ bps: BN                       // Percentage of liquidity to remove (in basis poi
 shouldClaimAndClose?: boolean // Whether to claim rewards and close position
 ```
 
-#### Returns
+**Returns**
 
 A transaction or array of transactions for removing liquidity.
 
-#### Example
+**Example**
 ```typescript
 // Remove 50% of liquidity from position
 const transaction = await dlmmPool.removeLiquidity({
@@ -623,7 +557,7 @@ const transaction = await dlmmPool.removeLiquidity({
 });
 ```
 
-#### Notes
+**Notes**
 - `user`: The public key of the user account.
 - `position`: The public key of the position account.
 - `fromBinId`: The ID of the starting bin to remove liquidity from. Must within position range.
@@ -637,7 +571,7 @@ const transaction = await dlmmPool.removeLiquidity({
 
 Returns a quote for a swap operation.
 
-#### Function
+**Function**
 ```typescript
 swapQuote(
     inAmount: BN,
@@ -649,7 +583,7 @@ swapQuote(
 ): SwapQuote
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 inAmount: BN                  // Amount of lamports to swap in
 swapForY: boolean             // True to swap X to Y, false for Y to X
@@ -659,11 +593,11 @@ isPartialFill?: boolean       // Whether partial fill is allowed
 maxExtraBinArrays?: number    // Maximum extra bin arrays to return
 ```
 
-#### Returns
+**Returns**
 
 A SwapQuote object containing swap information.
 
-#### Example
+**Example**
 ```typescript
 const binArrays = await dlmmPool.getBinArrayForSwap(true, 5);
 const swapQuote = dlmmPool.swapQuote(
@@ -676,7 +610,7 @@ const swapQuote = dlmmPool.swapQuote(
 );
 ```
 
-#### Notes
+**Notes**
 - `inAmount`: Amount of lamport to swap in
 - `swapForY`: Swap token X to Y when it is true, else reversed.
 - `allowedSlippage`: Allowed slippage for the swap. Expressed in BPS. To convert from slippage percentage to BPS unit: SLIPPAGE_PERCENTAGE * 100
@@ -690,7 +624,7 @@ const swapQuote = dlmmPool.swapQuote(
 
 Returns a quote for a swap with exact output amount.
 
-#### Function
+**Function**
 ```typescript
 swapQuoteExactOut(
     outAmount: BN,
@@ -701,7 +635,7 @@ swapQuoteExactOut(
 ): SwapQuoteExactOut
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 outAmount: BN                 // Amount of lamports to swap out
 swapForY: boolean             // True to swap X to Y, false for Y to X
@@ -710,11 +644,11 @@ binArrays: BinArrayAccount[]  // Bin arrays for the swap quote
 maxExtraBinArrays?: number    // Maximum extra bin arrays to return
 ```
 
-#### Returns
+**Returns**
 
 A SwapQuoteExactOut object containing swap information.
 
-#### Example
+**Example**
 ```typescript
 const binArrays = await dlmmPool.getBinArrayForSwap(true, 5);
 const swapQuote = dlmmPool.swapQuoteExactOut(
@@ -726,7 +660,7 @@ const swapQuote = dlmmPool.swapQuoteExactOut(
 );
 ```
 
-#### Notes
+**Notes**
 - `outAmount`: Amount of lamport to swap out
 - `swapForY`: Swap token X to Y when it is true, else reversed.
 - `allowedSlippage`: Allowed slippage for the swap. Expressed in BPS. To convert from slippage percentage to BPS unit: SLIPPAGE_PERCENTAGE * 100
@@ -739,7 +673,7 @@ const swapQuote = dlmmPool.swapQuoteExactOut(
 
 Executes a swap operation with exact output amount.
 
-#### Function
+**Function**
 ```typescript
 async swapExactOut({
     inToken,
@@ -752,7 +686,7 @@ async swapExactOut({
 }: SwapExactOutParams): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 inToken: PublicKey            // The public key of input token mint
 outToken: PublicKey           // The public key of output token mint
@@ -763,11 +697,11 @@ user: PublicKey               // The public key of the user account
 binArraysPubkey: PublicKey[]  // Array of bin arrays involved in swap
 ```
 
-#### Returns
+**Returns**
 
 A transaction for executing the exact out swap.
 
-#### Example
+**Example**
 ```typescript
 const swapTx = await dlmmPool.swapExactOut({
   inToken: tokenXMint,
@@ -780,7 +714,7 @@ const swapTx = await dlmmPool.swapExactOut({
 });
 ```
 
-#### Notes
+**Notes**
 - `inToken`: The public key of the input token mint.
 - `outToken`: The public key of the output token mint.
 - `outAmount`: The exact amount of output token to receive.
@@ -795,7 +729,7 @@ const swapTx = await dlmmPool.swapExactOut({
 
 Executes a swap with price impact constraints.
 
-#### Function
+**Function**
 ```typescript
 async swapWithPriceImpact({
     inToken,
@@ -808,7 +742,7 @@ async swapWithPriceImpact({
 }: SwapWithPriceImpactParams): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 inToken: PublicKey            // The public key of input token mint
 outToken: PublicKey           // The public key of output token mint
@@ -819,11 +753,11 @@ priceImpact: BN               // Accepted price impact in basis points
 binArraysPubkey: PublicKey[]  // Array of bin arrays involved in swap
 ```
 
-#### Returns
+**Returns**
 
 A transaction for executing the swap with price impact constraints.
 
-#### Example
+**Example**
 ```typescript
 const swapTx = await dlmmPool.swapWithPriceImpact({
   inToken: tokenXMint,
@@ -836,7 +770,7 @@ const swapTx = await dlmmPool.swapWithPriceImpact({
 });
 ```
 
-#### Notes
+**Notes**
 - `inToken`: The public key of the token to be swapped in.
 - `outToken`: The public key of the token to be swapped out.
 - `inAmount`: The amount of token to be swapped in.
@@ -851,7 +785,7 @@ const swapTx = await dlmmPool.swapWithPriceImpact({
 
 Executes a swap operation.
 
-#### Function
+**Function**
 ```typescript
 async swap({
     inToken,
@@ -864,7 +798,7 @@ async swap({
 }: SwapParams): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 inToken: PublicKey            // The public key of input token mint
 outToken: PublicKey           // The public key of output token mint
@@ -875,11 +809,11 @@ user: PublicKey               // The public key of the user account
 binArraysPubkey: PublicKey[]  // Array of bin arrays involved in swap
 ```
 
-#### Returns
+**Returns**
 
 A transaction for executing the swap.
 
-#### Example
+**Example**
 ```typescript
 // Execute swap
 const swapTx = await dlmmPool.swap({
@@ -893,7 +827,7 @@ const swapTx = await dlmmPool.swap({
 });
 ```
 
-#### Notes
+**Notes**
 - `inToken`: The public key of the token to be swapped in.
 - `outToken`: The public key of the token to be swapped out.
 - `inAmount`: The amount of token to be swapped in.
@@ -908,7 +842,7 @@ const swapTx = await dlmmPool.swap({
 
 Claims liquidity mining rewards for a specific position.
 
-#### Function
+**Function**
 ```typescript
 async claimLMReward({
     owner,
@@ -919,17 +853,17 @@ async claimLMReward({
 }): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 owner: PublicKey              // The public key of the position owner
 position: LbPosition          // The position object containing position data
 ```
 
-#### Returns
+**Returns**
 
 A transaction for claiming LM rewards.
 
-#### Example
+**Example**
 ```typescript
 // Claim LM rewards for a position
 const position = await dlmmPool.getPosition(positionPublicKey);
@@ -939,7 +873,7 @@ const claimTx = await dlmmPool.claimLMReward({
 });
 ```
 
-#### Notes
+**Notes**
 - This function is only available for LB pairs with liqudiity mining rewards.
 
 ---
@@ -948,7 +882,7 @@ const claimTx = await dlmmPool.claimLMReward({
 
 Claims all liquidity mining rewards for multiple positions.
 
-#### Function
+**Function**
 ```typescript
 async claimAllLMRewards({
     owner,
@@ -959,17 +893,17 @@ async claimAllLMRewards({
 }): Promise<Transaction[]>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 owner: PublicKey              // The public key of the positions owner
 positions: LbPosition[]       // Array of position objects
 ```
 
-#### Returns
+**Returns**
 
 Array of transactions for claiming all LM rewards.
 
-#### Example
+**Example**
 ```typescript
 const positions = await dlmmPool.getPositionsByUserAndLbPair(userPublicKey);
 const claimTxs = await dlmmPool.claimAllLMRewards({
@@ -978,7 +912,7 @@ const claimTxs = await dlmmPool.claimAllLMRewards({
 });
 ```
 
-#### Notes
+**Notes**
 - This function is only available for LB pairs with liqudiity mining rewards.
 
 ---
@@ -987,7 +921,7 @@ const claimTxs = await dlmmPool.claimAllLMRewards({
 
 Claims swap fees earned by a specific position.
 
-#### Function
+**Function**
 ```typescript
 async claimSwapFee({
     owner,
@@ -998,17 +932,17 @@ async claimSwapFee({
 }): Promise<Transaction | null>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 owner: PublicKey              // The public key of the position owner
 position: LbPosition          // The position object containing position data
 ```
 
-#### Returns
+**Returns**
 
 A transaction for claiming swap fees, or null if no fees to claim.
 
-#### Example
+**Example**
 ```typescript
 const position = await dlmmPool.getPosition(positionPublicKey);
 const claimFeeTx = await dlmmPool.claimSwapFee({
@@ -1017,7 +951,7 @@ const claimFeeTx = await dlmmPool.claimSwapFee({
 });
 ```
 
-#### Notes
+**Notes**
 -  The function `claimSwapFee` is used to claim swap fees for a specific position owned by a specific owner.
 
 ---
@@ -1026,7 +960,7 @@ const claimFeeTx = await dlmmPool.claimSwapFee({
 
 Claims swap fees for multiple positions.
 
-#### Function
+**Function**
 ```typescript
 async claimAllSwapFee({
     owner,
@@ -1037,17 +971,17 @@ async claimAllSwapFee({
 }): Promise<Transaction[]>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 owner: PublicKey              // The public key of the positions owner
 positions: LbPosition[]       // Array of position objects
 ```
 
-#### Returns
+**Returns**
 
 Array of transactions for claiming all swap fees.
 
-#### Example
+**Example**
 ```typescript
 // Claim all swap fees for user positions
 const positions = await dlmmPool.getPositionsByUserAndLbPair(userPublicKey);
@@ -1057,7 +991,7 @@ const claimFeeTxs = await dlmmPool.claimAllSwapFee({
 });
 ```
 
-#### Notes
+**Notes**
 - The `claimAllSwapFee` function to claim swap fees for multiple positions owned by a specific owner.
 
 ---
@@ -1066,7 +1000,7 @@ const claimFeeTxs = await dlmmPool.claimAllSwapFee({
 
 Claims all rewards (both LM rewards and swap fees) for multiple positions.
 
-#### Function
+**Function**
 ```typescript
 async claimAllRewards({
     owner,
@@ -1077,17 +1011,17 @@ async claimAllRewards({
 }): Promise<Transaction[]>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 owner: PublicKey              // The public key of the positions owner
 positions: LbPosition[]       // Array of position objects
 ```
 
-#### Returns
+**Returns**
 
 Array of transactions for claiming all rewards.
 
-#### Example
+**Example**
 ```typescript
 const positions = await dlmmPool.getPositionsByUserAndLbPair(userPublicKey);
 const claimAllTxs = await dlmmPool.claimAllRewards({
@@ -1096,7 +1030,7 @@ const claimAllTxs = await dlmmPool.claimAllRewards({
 });
 ```
 
-#### Notes
+**Notes**
 -  The `claimAllRewards` function to claim swap fees and LM rewards for multiple positions owned by a specific owner.
 
 ---
@@ -1105,7 +1039,7 @@ const claimAllTxs = await dlmmPool.claimAllRewards({
 
 Claims all rewards (both LM rewards and swap fees) for a specific position.
 
-#### Function
+**Function**
 ```typescript
 async claimAllRewardsByPosition({
     owner,
@@ -1116,17 +1050,17 @@ async claimAllRewardsByPosition({
 }): Promise<Transaction[]>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 owner: PublicKey              // The public key of the position owner
 position: LbPosition          // The position object to claim rewards for
 ```
 
-#### Returns
+**Returns**
 
 Array of transactions for claiming all rewards for the position.
 
-#### Example
+**Example**
 ```typescript
 // Claim all rewards for a specific position
 const position = await dlmmPool.getPosition(positionPublicKey);
@@ -1136,7 +1070,7 @@ const claimAllTxs = await dlmmPool.claimAllRewardsByPosition({
 });
 ```
 
-#### Notes
+**Notes**
 - The function `claimAllRewardsByPosition` allows a user to claim all rewards for a specific
 
 ---
@@ -1145,7 +1079,7 @@ const claimAllTxs = await dlmmPool.claimAllRewardsByPosition({
 
 Closes a position and recovers the rent.
 
-#### Function
+**Function**
 ```typescript
 async closePosition({
     owner,
@@ -1156,17 +1090,17 @@ async closePosition({
 }): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 owner: PublicKey              // The public key of the position owner
 position: LbPosition          // The position object to close
 ```
 
-#### Returns
+**Returns**
 
 A transaction for closing the position.
 
-#### Example
+**Example**
 ```typescript
 // Close a position
 const position = await dlmmPool.getPosition(positionPublicKey);
@@ -1176,7 +1110,7 @@ const closeTx = await dlmmPool.closePosition({
 });
 ```
 
-#### Notes
+**Notes**
 - The function `closePosition` is used to close a position owned by a specific owner.
 
 ---
@@ -1185,7 +1119,7 @@ const closeTx = await dlmmPool.closePosition({
 
 Closes a position if it is empty, otherwise does nothing.
 
-#### Function
+**Function**
 ```typescript
 async closePositionIfEmpty({
     owner,
@@ -1196,17 +1130,17 @@ async closePositionIfEmpty({
 }): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 owner: PublicKey              // The public key of the position owner
 position: LbPosition          // The position object to close
 ```
 
-#### Returns
+**Returns**
 
 A transaction for closing the position if empty.
 
-#### Example
+**Example**
 ```typescript
 // Close position if empty
 const position = await dlmmPool.getPosition(positionPublicKey);
@@ -1216,7 +1150,7 @@ const closeTx = await dlmmPool.closePositionIfEmpty({
 });
 ```
 
-#### Notes
+**Notes**
 - The function `closePositionIfEmpty` is used to close a position owned by a specific owner if it is empty.
 
 ---
@@ -1225,33 +1159,33 @@ const closeTx = await dlmmPool.closePositionIfEmpty({
 
 Quotes the cost of creating a position with a given strategy.
 
-#### Function
+**Function**
 ```typescript
 async quoteCreatePosition({ strategy }: TQuoteCreatePositionParams)
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 strategy: StrategyParameters  // Strategy parameters containing min/max bin IDs
 ```
 
-#### Returns
+**Returns**
 
 An object containing cost breakdown information.
 
-#### Example
+**Example**
 ```typescript
 // Quote position creation cost
 const quote = await dlmmPool.quoteCreatePosition({
   strategy: {
     minBinId: 8388600,
     maxBinId: 8388620,
-    strategyType: StrategyType.SpotBalanced
+    strategyType: StrategyType.SpotBalanced,
   }
 });
 ```
 
-#### Notes
+**Notes**
 - The function `quoteCreatePosition` is used to quote the cost of creating a position with a given strategy.
 
 ---
@@ -1260,7 +1194,7 @@ const quote = await dlmmPool.quoteCreatePosition({
 
 Creates an empty position and initializes the corresponding bin arrays if needed.
 
-#### Function
+**Function**
 ```typescript
 async createEmptyPosition({
     positionPubKey,
@@ -1275,7 +1209,7 @@ async createEmptyPosition({
 })
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 positionPubKey: PublicKey     // The public key of the position account
 minBinId: number              // Lower bin ID of the position
@@ -1283,11 +1217,11 @@ maxBinId: number              // Upper bin ID of the position
 user: PublicKey               // The public key of the user account
 ```
 
-#### Returns
+**Returns**
 
 A transaction for creating the empty position.
 
-#### Example
+**Example**
 ```typescript
 const positionKeypair = Keypair.generate();
 const createTx = await dlmmPool.createEmptyPosition({
@@ -1298,7 +1232,7 @@ const createTx = await dlmmPool.createEmptyPosition({
 });
 ```
 
-#### Notes
+**Notes**
 - The function `createEmptyPosition` is used to create an empty position with specified min/max bin IDs.
 
 ---
@@ -1307,7 +1241,7 @@ const createTx = await dlmmPool.createEmptyPosition({
 
 Creates multiple grouped instructions. The grouped instructions will be [init ata + send lamport for token provde], [initialize bin array + initialize position instructions] and [deposit instruction]. Each grouped instructions can be executed parallelly.
 
-#### Function
+**Function**
 ```typescript
 async seedLiquidity(
     owner: PublicKey,
@@ -1324,7 +1258,7 @@ async seedLiquidity(
 ): Promise<SeedLiquidityResponse>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 owner: PublicKey              // The public key of the positions owner
 seedAmount: BN                // Lamport amount to be seeded to the pool
@@ -1339,11 +1273,11 @@ lockReleasePoint: BN          // Timelock point for position withdrawal
 shouldSeedPositionOwner?: boolean // Whether to send token to position owner
 ```
 
-#### Returns
+**Returns**
 
 A SeedLiquidityResponse containing grouped instructions and cost breakdown.
 
-#### Example
+**Example**
 ```typescript
 const curvature = 0.6;
 const minPrice = 0.000001;
@@ -1368,7 +1302,7 @@ const seedResponse = await dlmmPool.seedLiquidity(
 );
 ```
 
-#### Notes
+**Notes**
 - `owner`: The public key of the positions owner.
 - `seedAmount`: Lamport amount to be seeded to the pool.
 - `minPrice`: Start price in UI format
@@ -1386,7 +1320,7 @@ const seedResponse = await dlmmPool.seedLiquidity(
 
 Seeds liquidity into a single bin at a specific price.
 
-#### Function
+**Function**
 ```typescript
 async seedLiquiditySingleBin(
     payer: PublicKey,
@@ -1402,7 +1336,7 @@ async seedLiquiditySingleBin(
 ): Promise<SeedLiquiditySingleBinResponse>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 payer: PublicKey              // The public key of the tx payer
 base: PublicKey               // Base key for position derivation
@@ -1416,11 +1350,11 @@ lockReleasePoint: BN          // The lock release point of the position
 shouldSeedPositionOwner?: boolean // Whether to send token to position owner
 ```
 
-#### Returns
+**Returns**
 
 A SeedLiquiditySingleBinResponse containing instructions and cost breakdown.
 
-#### Example
+**Example**
 ```typescript
 const initialPrice = 0.000001;
 
@@ -1437,7 +1371,7 @@ const seedResponse = await dlmmPool.seedLiquiditySingleBin(
 );
 ```
 
-#### Notes
+**Notes**
 - `payer`: The public key of the tx payer.
 - `base`: Base key
 - `seedAmount`: Token X lamport amount to be seeded to the pool.
@@ -1455,22 +1389,22 @@ const seedResponse = await dlmmPool.seedLiquiditySingleBin(
 
 Initializes bin arrays for the given bin array indexes if they weren't initialized.
 
-#### Function
+**Function**
 ```typescript
 async initializeBinArrays(binArrayIndexes: BN[], funder: PublicKey)
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 binArrayIndexes: BN[]         // Array of bin array indexes to initialize
 funder: PublicKey             // The public key of the funder
 ```
 
-#### Returns
+**Returns**
 
 Array of transaction instructions to initialize the bin arrays.
 
-#### Example
+**Example**
 ```typescript
 // Initialize specific bin arrays
 const binArrayIndexes = [new BN(-1), new BN(0), new BN(1)];
@@ -1480,7 +1414,7 @@ const instructions = await dlmmPool.initializeBinArrays(
 );
 ```
 
-#### Notes
+**Notes**
 - The function `initializeBinArrays` is used to initialize bin arrays for the given bin array indexes if they weren't initialized.
 
 ---
@@ -1489,7 +1423,7 @@ const instructions = await dlmmPool.initializeBinArrays(
 
 Initializes a position with an operator that can manage it on behalf of the owner.
 
-#### Function
+**Function**
 ```typescript
 async initializePositionByOperator({
     lowerBinId,
@@ -1512,7 +1446,7 @@ async initializePositionByOperator({
 }): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 lowerBinId: BN                // Lower bin ID of the position
 positionWidth: BN             // Width of the position
@@ -1524,11 +1458,11 @@ base: PublicKey               // Base key for position derivation
 lockReleasePoint: BN          // The lock release point of the position
 ```
 
-#### Returns
+**Returns**
 
 A transaction for initializing the position by operator.
 
-#### Example
+**Example**
 ```typescript
 const initTx = await dlmmPool.initializePositionByOperator({
   lowerBinId: new BN(5660),
@@ -1542,7 +1476,7 @@ const initTx = await dlmmPool.initializePositionByOperator({
 });
 ```
 
-#### Notes
+**Notes**
 - `lowerBinId`: Lower bin ID of the position. This represent the lowest price of the position
 - `positionWidth`: Width of the position. This will decide the upper bin id of the position, which represents the highest price of the position. UpperBinId = lowerBinId + positionWidth
 - `owner`: Owner of the position.
@@ -1558,7 +1492,7 @@ const initTx = await dlmmPool.initializePositionByOperator({
 
 Sets the status of a permissionless LB pair to either enabled or disabled.
 
-#### Function
+**Function**
 ```typescript
 async setPairStatusPermissionless(
     enable: boolean,
@@ -1566,17 +1500,17 @@ async setPairStatusPermissionless(
 )
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 enable: boolean               // If true, enables the pair; if false, disables it
 creator: PublicKey            // The public key of the pool creator
 ```
 
-#### Returns
+**Returns**
 
 A transaction for setting the pair status.
 
-#### Example
+**Example**
 ```typescript
 const statusTx = await dlmmPool.setPairStatusPermissionless(
   true, 
@@ -1584,7 +1518,7 @@ const statusTx = await dlmmPool.setPairStatusPermissionless(
 );
 ```
 
-#### Notes
+**Notes**
 - Requires `creator_pool_on_off_control` to be true and type `CustomizablePermissionless`
 - Pool creator can enable/disable anytime before activation
 - After activation, creator can only enable the pair
@@ -1595,28 +1529,28 @@ const statusTx = await dlmmPool.setPairStatusPermissionless(
 
 Sets the activation point for the LB pair.
 
-#### Function
+**Function**
 ```typescript
 async setActivationPoint(activationPoint: BN)
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 activationPoint: BN           // The activation point (timestamp/slot)
 ```
 
-#### Returns
+**Returns**
 
 A transaction for setting the activation point.
 
-#### Example
+**Example**
 ```typescript
 const activationTx = await dlmmPool.setActivationPoint(
   new BN(Date.now() / 1000 + 3600)
 );
 ```
 
-#### Notes
+**Notes**
 - The function `setActivationPoint` is used to set the activation point for the LB pair.
 
 ---
@@ -1625,26 +1559,26 @@ const activationTx = await dlmmPool.setActivationPoint(
 
 Sets the pair status (enabled/disabled) for admin-controlled pairs.
 
-#### Function
+**Function**
 ```typescript
 async setPairStatus(enabled: boolean): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 enabled: boolean              // Whether to enable or disable the pair
 ```
 
-#### Returns
+**Returns**
 
 A transaction for setting the pair status.
 
-#### Example
+**Example**
 ```typescript
 const statusTx = await dlmmPool.setPairStatus(true); // enable
 ```
 
-#### Notes
+**Notes**
 - The function `setPairStatus` is used to set the pair status for admin-controlled pairs.
 
 ---
@@ -1655,7 +1589,7 @@ const statusTx = await dlmmPool.setPairStatus(true); // enable
 
 Retrieves all LB pair accounts for the DLMM program.
 
-#### Function
+**Function**
 ```typescript
 static async getLbPairs(
     connection: Connection,
@@ -1663,22 +1597,22 @@ static async getLbPairs(
 ): Promise<LbPairAccount[]>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 connection: Connection        // Solana connection instance
 opt?: Opt                     // Optional cluster and program ID
 ```
 
-#### Returns
+**Returns**
 
 An array of LB pair account objects.
 
-#### Example
+**Example**
 ```typescript
 const allPairs = await DLMM.getLbPairs(connection);
 ```
 
-#### Notes
+**Notes**
 - The function `getLbPairs` is used to retrieve all LB pair accounts for the DLMM program.
 
 ---
@@ -1687,7 +1621,7 @@ const allPairs = await DLMM.getLbPairs(connection);
 
 Retrieves the public key of a customizable permissionless LB pair if it exists.
 
-#### Function
+**Function**
 ```typescript
 static async getCustomizablePermissionlessLbPairIfExists(
     connection: Connection,
@@ -1697,7 +1631,7 @@ static async getCustomizablePermissionlessLbPairIfExists(
 ): Promise<PublicKey | null>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 connection: Connection        // Solana connection instance
 tokenX: PublicKey             // Token X mint address
@@ -1705,11 +1639,11 @@ tokenY: PublicKey             // Token Y mint address
 opt?: Opt                     // Optional parameters
 ```
 
-#### Returns
+**Returns**
 
 Public key of the pair if it exists, null otherwise.
 
-#### Example
+**Example**
 ```typescript
 const WEN = new PublicKey('WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk')
 const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
@@ -1730,26 +1664,26 @@ const pairPubkey = await DLMM.getCustomizablePermissionlessLbPairIfExists(
 
 Retrieves position information for a given position public key.
 
-#### Function
+**Function**
 ```typescript
 async getPosition(positionPubKey: PublicKey): Promise<LbPosition>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 positionPubKey: PublicKey     // The public key of the position account
 ```
 
-#### Returns
+**Returns**
 
 An LbPosition object containing position data and metadata.
 
-#### Example
+**Example**
 ```typescript
 const position = await dlmmPool.getPosition(positionPublicKey);
 ```
 
-#### Notes
+**Notes**
 - The function `getPosition` retrieves position information for a given public key and processes it using various data to return a `LbPosition` object.
 
 ---
@@ -1758,7 +1692,7 @@ const position = await dlmmPool.getPosition(positionPublicKey);
 
 Retrieves all preset parameter accounts for the DLMM program.
 
-#### Function
+**Function**
 ```typescript
 static async getAllPresetParameters(
     connection: Connection, 
@@ -1769,22 +1703,22 @@ static async getAllPresetParameters(
 }>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 connection: Connection         // Solana connection instance
 opt?: Opt                     // Optional cluster and program ID
 ```
 
-#### Returns
+**Returns**
 
 An object containing preset parameter accounts.
 
-#### Example
+**Example**
 ```typescript
 const presetParams = await DLMM.getAllPresetParameters(connection);
 ```
 
-#### Notes
+**Notes**
 - The function `getAllPresetParameters` is used to retrieve all preset parameter accounts for the DLMM program.
 
 ---
@@ -1793,7 +1727,7 @@ const presetParams = await DLMM.getAllPresetParameters(connection);
 
 Retrieves all LB pair positions for a given user.
 
-#### Function
+**Function**
 ```typescript
 static async getAllLbPairPositionsByUser(
     connection: Connection,
@@ -1802,18 +1736,18 @@ static async getAllLbPairPositionsByUser(
 ): Promise<Map<string, PositionInfo>>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 connection: Connection         // Solana connection instance
 userPubKey: PublicKey         // The user's wallet public key
 opt?: Opt                     // Optional cluster and program ID
 ```
 
-#### Returns
+**Returns**
 
 A Map containing LB pair addresses and their position information.
 
-#### Example
+**Example**
 ```typescript
 // Get all positions for a user
 const userPositions = await DLMM.getAllLbPairPositionsByUser(
@@ -1826,7 +1760,7 @@ userPositions.forEach((positionInfo, lbPairAddress) => {
 });
 ```
 
-#### Notes
+**Notes**
 - The function `getAllLbPairPositionsByUser` is used to retrieve all LB pair positions for a given user.
 
 ---
@@ -1835,26 +1769,26 @@ userPositions.forEach((positionInfo, lbPairAddress) => {
 
 Refetches and updates the current state of the DLMM instance.
 
-#### Function
+**Function**
 ```typescript
 async refetchStates(): Promise<void>
 ```
 
-#### Parameters
+**Parameters**
 
 None.
 
-#### Returns
+**Returns**
 
 Promise that resolves when states are updated.
 
-#### Example
+**Example**
 ```typescript
 await dlmmPool.refetchStates();
 console.log('Updated active bin:', dlmmPool.lbPair.activeId);
 ```
 
-#### Notes
+**Notes**
 - The function `refetchStates` is used to refetch and update the current state of the DLMM instance.
 
 ---
@@ -1863,25 +1797,25 @@ console.log('Updated active bin:', dlmmPool.lbPair.activeId);
 
 Returns all bin arrays for the current LB pair.
 
-#### Function
+**Function**
 ```typescript
 async getBinArrays(): Promise<BinArrayAccount[]>
 ```
 
-#### Parameters
+**Parameters**
 
 None.
 
-#### Returns
+**Returns**
 
 Array of bin array accounts.
 
-#### Example
+**Example**
 ```typescript
 const binArrays = await dlmmPool.getBinArrays();
 ```
 
-#### Notes
+**Notes**
 - The function `getBinArrays` is used to retrieve all bin arrays for the current LB pair.
 
 ---
@@ -1890,7 +1824,7 @@ const binArrays = await dlmmPool.getBinArrays();
 
 Retrieves bin arrays needed for a swap operation.
 
-#### Function
+**Function**
 ```typescript
 async getBinArrayForSwap(
     swapForY: boolean,
@@ -1898,22 +1832,22 @@ async getBinArrayForSwap(
 ): Promise<BinArrayAccount[]>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 swapForY: boolean             // Direction of swap (true for X to Y)
 count?: number                // Number of bin arrays to retrieve (default: 4)
 ```
 
-#### Returns
+**Returns**
 
 Array of bin array accounts for the swap.
 
-#### Example
+**Example**
 ```typescript
 const binArrays = await dlmmPool.getBinArrayForSwap(true, 5);
 ```
 
-#### Notes
+**Notes**
 - The function `getBinArrayAroundActiveBin` retrieves a specified number of `BinArrayAccount` objects from the blockchain, based on the active bin and its surrounding bin arrays.
 
 ---
@@ -1922,20 +1856,20 @@ const binArrays = await dlmmPool.getBinArrayForSwap(true, 5);
 
 Calculates and returns fee information for the pool.
 
-#### Function
+**Function**
 ```typescript
 getFeeInfo(): FeeInfo
 ```
 
-#### Parameters
+**Parameters**
 
 None.
 
-#### Returns
+**Returns**
 
 FeeInfo object containing fee percentages.
 
-#### Example
+**Example**
 ```typescript
 const feeInfo = dlmmPool.getFeeInfo();
 console.log('Base fee rate:', feeInfo.baseFeeRatePercentage.toString());
@@ -1943,7 +1877,7 @@ console.log('Max fee rate:', feeInfo.maxFeeRatePercentage.toString());
 console.log('Protocol fee:', feeInfo.protocolFeePercentage.toString());
 ```
 
-#### Notes
+**Notes**
 - The function `getFeeInfo` calculates and returns the base fee rate percentage, maximum fee rate percentage, and protocol fee percentage.
 
 ---
@@ -1952,26 +1886,26 @@ console.log('Protocol fee:', feeInfo.protocolFeePercentage.toString());
 
 Calculates the current dynamic fee for the pool.
 
-#### Function
+**Function**
 ```typescript
 getDynamicFee(): Decimal
 ```
 
-#### Parameters
+**Parameters**
 
 None.
 
-#### Returns
+**Returns**
 
 Current dynamic fee as a Decimal percentage.
 
-#### Example
+**Example**
 ```typescript
 const dynamicFee = dlmmPool.getDynamicFee();
 console.log('Current dynamic fee:', dynamicFee.toString(), '%');
 ```
 
-#### Notes
+**Notes**
 - The function `getDynamicFee` retrieves the current dynamic fee for the pool.
 
 ---
@@ -1980,27 +1914,27 @@ console.log('Current dynamic fee:', dynamicFee.toString(), '%');
 
 Returns the emission rates for LM rewards.
 
-#### Function
+**Function**
 ```typescript
 getEmissionRate(): EmissionRate
 ```
 
-#### Parameters
+**Parameters**
 
 None.
 
-#### Returns
+**Returns**
 
 An EmissionRate object containing reward emission rates.
 
-#### Example
+**Example**
 ```typescript
 const emissionRate = dlmmPool.getEmissionRate();
 console.log('Reward one rate:', emissionRate.rewardOne?.toString());
 console.log('Reward two rate:', emissionRate.rewardTwo?.toString());
 ```
 
-#### Notes
+**Notes**
 - The function `getEmissionRate` retrieves the emission rates for LM rewards.
 
 ---
@@ -2009,7 +1943,7 @@ console.log('Reward two rate:', emissionRate.rewardTwo?.toString());
 
 Retrieves bins around the active bin within specified ranges.
 
-#### Function
+**Function**
 ```typescript
 async getBinsAroundActiveBin(
     numberOfBinsToTheLeft: number,
@@ -2017,24 +1951,24 @@ async getBinsAroundActiveBin(
 ): Promise<{ activeBin: number; bins: BinLiquidity[] }>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 numberOfBinsToTheLeft: number  // Number of bins to retrieve on the left
 numberOfBinsToTheRight: number // Number of bins to retrieve on the right
 ```
 
-#### Returns
+**Returns**
 
 Object containing the active bin ID and array of bin liquidity data.
 
-#### Example
+**Example**
 ```typescript
 const { activeBin, bins } = await dlmmPool.getBinsAroundActiveBin(10, 10);
 console.log('Active bin:', activeBin);
 console.log('Total bins:', bins.length);
 ```
 
-#### Notes
+**Notes**
 - The function `getBinsAroundActiveBin` retrieves a specified number of bins to the left and right of the active bin and returns them along with the active bin ID.
 
 ---
@@ -2043,7 +1977,7 @@ console.log('Total bins:', bins.length);
 
 Retrieves bins within a specified price range.
 
-#### Function
+**Function**
 ```typescript
 async getBinsBetweenMinAndMaxPrice(
     minPrice: number,
@@ -2051,23 +1985,23 @@ async getBinsBetweenMinAndMaxPrice(
 ): Promise<{ activeBin: number; bins: BinLiquidity[] }>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 minPrice: number              // Minimum price for filtering bins
 maxPrice: number              // Maximum price for filtering bins
 ```
 
-#### Returns
+**Returns**
 
 Object containing the active bin ID and filtered bin liquidity data.
 
-#### Example
+**Example**
 ```typescript
 const result = await dlmmPool.getBinsBetweenMinAndMaxPrice(1.0, 1.2);
 console.log('Bins in price range:', result.bins.length);
 ```
 
-#### Notes
+**Notes**
 - The function `getBinsBetweenMinAndMaxPrice` retrieves a list of bins within a specified price range.
 
 ---
@@ -2076,7 +2010,7 @@ console.log('Bins in price range:', result.bins.length);
 
 Retrieves bins between specified bin IDs.
 
-#### Function
+**Function**
 ```typescript
 async getBinsBetweenLowerAndUpperBound(
     lowerBinId: number,
@@ -2086,7 +2020,7 @@ async getBinsBetweenLowerAndUpperBound(
 ): Promise<{ activeBin: number; bins: BinLiquidity[] }>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 lowerBinId: number            // Lower bound bin ID
 upperBinId: number            // Upper bound bin ID
@@ -2094,18 +2028,18 @@ lowerBinArray?: BinArray      // Optional cached lower bin array
 upperBinArray?: BinArray      // Optional cached upper bin array
 ```
 
-#### Returns
+**Returns**
 
 Object containing the active bin ID and bin liquidity data in the range.
 
-#### Example
+**Example**
 ```typescript
 const result = await dlmmPool.getBinsBetweenLowerAndUpperBound(
   8388600, 8388620
 );
 ```
 
-#### Notes
+**Notes**
 - The function `getBinsBetweenLowerAndUpperBound` retrieves a list of bins between a lower and upper bin ID and returns the active bin ID and the list of bins.
 
 ---
@@ -2114,27 +2048,27 @@ const result = await dlmmPool.getBinsBetweenLowerAndUpperBound(
 
 Retrieves information about the currently active bin.
 
-#### Function
+**Function**
 ```typescript
 async getActiveBin(): Promise<BinLiquidity>
 ```
 
-#### Parameters
+**Parameters**
 
 None.
 
-#### Returns
+**Returns**
 
 BinLiquidity object for the active bin.
 
-#### Example
+**Example**
 ```typescript
 const activeBin = await dlmmPool.getActiveBin();
 console.log('Active bin ID:', activeBin.binId);
 console.log('Active bin price:', activeBin.pricePerToken);
 ```
 
-#### Notes
+**Notes**
 - The function retrieves the active bin ID and its corresponding price.
 
 ---
@@ -2143,7 +2077,7 @@ console.log('Active bin price:', activeBin.pricePerToken);
 
 Retrieves positions by user for the current LB pair.
 
-#### Function
+**Function**
 ```typescript
 async getPositionsByUserAndLbPair(
     userPubKey?: PublicKey
@@ -2153,16 +2087,16 @@ async getPositionsByUserAndLbPair(
 }>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 userPubKey?: PublicKey        // Optional user public key
 ```
 
-#### Returns
+**Returns**
 
 Object containing active bin and user positions.
 
-#### Example
+**Example**
 ```typescript
 // Get user positions for this pool
 const result = await dlmmPool.getPositionsByUserAndLbPair(userPublicKey);
@@ -2170,7 +2104,7 @@ console.log('User has', result.userPositions.length, 'positions');
 console.log('Active bin:', result.activeBin.binId);
 ```
 
-#### Notes
+**Notes**
 - The function `getPositionsByUserAndLbPair` retrieves positions by user and LB pair, including active bin and user positions.
 
 ---
@@ -2179,7 +2113,7 @@ console.log('Active bin:', result.activeBin.binId);
 
 Retrieves the public key of an LB pair if it exists.
 
-#### Function
+**Function**
 ```typescript
 static async getPairPubkeyIfExists(
     connection: Connection,
@@ -2192,7 +2126,7 @@ static async getPairPubkeyIfExists(
 ): Promise<PublicKey | null>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 connection: Connection         // Solana connection instance
 tokenX: PublicKey             // Token X mint address
@@ -2203,11 +2137,11 @@ baseFeePowerFactor: BN        // Base fee power factor
 opt?: Opt                     // Optional parameters
 ```
 
-#### Returns
+**Returns**
 
 Public key of the pair if it exists, null otherwise.
 
-#### Example
+**Example**
 ```typescript
 const dlmm = await DLMM.create(connection, pairKey, opt);
 const pairPubkey = await DLMM.getPairPubkeyIfExists(
@@ -2220,7 +2154,7 @@ const pairPubkey = await DLMM.getPairPubkeyIfExists(
 );
 ```
 
-#### Notes
+**Notes**
 - The function `getPairPubkeyIfExists` retrieves the public key of an LB pair if it exists.
 
 ---
@@ -2229,29 +2163,29 @@ const pairPubkey = await DLMM.getPairPubkeyIfExists(
 
 Gets the maximum price from the provided bin arrays.
 
-#### Function
+**Function**
 ```typescript
 async getMaxPriceInBinArrays(
     binArrayAccounts: BinArrayAccount[]
 ): Promise<string>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 binArrayAccounts: BinArrayAccount[] // Array of bin array accounts
 ```
 
-#### Returns
+**Returns**
 
 Maximum price as a string.
 
-#### Example
+**Example**
 ```typescript
 const binArrays = await dlmmPool.getBinArrays();
 const maxPrice = await dlmmPool.getMaxPriceInBinArrays(binArrays);
 console.log('Maximum price:', maxPrice);
 ```
-#### Notes
+**Notes**
 - The function `getMaxPriceInBinArrays` retrieves the maximum price from the provided bin arrays.
 
 ---
@@ -2260,23 +2194,23 @@ console.log('Maximum price:', maxPrice);
 
 Retrieves all pair positions that have locked liquidity.
 
-#### Function
+**Function**
 ```typescript
 async getLbPairLockInfo(
     lockDurationOpt?: number
 ): Promise<PairLockInfo>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 lockDurationOpt?: number      // Minimum position lock duration to filter by
 ```
 
-#### Returns
+**Returns**
 
 A PairLockInfo object containing information about locked positions.
 
-#### Example
+**Example**
 ```typescript
 const lockInfo = await dlmmPool.getLbPairLockInfo(86400); // 1 day minimum
 console.log('Locked positions:', lockInfo.positions.length);
@@ -2287,7 +2221,7 @@ lockInfo.positions.forEach(pos => {
 });
 ```
 
-#### Notes
+**Notes**
 - The function `getLbPairLockInfo` retrieves all pair positions that have locked liquidity.
 
 ---
@@ -2296,22 +2230,22 @@ lockInfo.positions.forEach(pos => {
 
 Checks if the pool can sync with a given market price.
 
-#### Function
+**Function**
 ```typescript
 canSyncWithMarketPrice(marketPrice: number, activeBinId: number)
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 marketPrice: number           // Market price to check sync compatibility
 activeBinId: number           // Current active bin ID
 ```
 
-#### Returns
+**Returns**
 
 Boolean indicating if sync is possible.
 
-#### Example
+**Example**
 ```typescript
 // Check if can sync with market price
 const activeBin = await dlmmPool.getActiveBin();
@@ -2324,7 +2258,7 @@ if (canSync) {
 }
 ```
 
-#### Notes
+**Notes**
 - The function `canSyncWithMarketPrice` checks if the pool can sync with a given market price.
 
 ---
@@ -2333,21 +2267,21 @@ if (canSync) {
 
 Checks if swapping is disabled for a given swap initiator.
 
-#### Function
+**Function**
 ```typescript
 isSwapDisabled(swapInitiator: PublicKey)
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 swapInitiator: PublicKey      // Address of the swap initiator
 ```
 
-#### Returns
+**Returns**
 
 Boolean indicating if swap is disabled for the initiator.
 
-#### Example
+**Example**
 ```typescript
 const isDisabled = dlmmPool.isSwapDisabled(userPublicKey);
 
@@ -2358,7 +2292,7 @@ if (isDisabled) {
 }
 ```
 
-#### Notes
+**Notes**
 - Returns true if pair status is disabled
 - For permissioned pairs, checks activation time and pre-activation settings
 - Considers special pre-activation swap addresses
@@ -2371,7 +2305,7 @@ if (isDisabled) {
 
 Synchronizes the pool with a given market price.
 
-#### Function
+**Function**
 ```typescript
 async syncWithMarketPrice(
     marketPrice: number, 
@@ -2379,22 +2313,22 @@ async syncWithMarketPrice(
 ): Promise<Transaction>
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 marketPrice: number           // Market price to sync with
 owner: PublicKey              // Owner of the transaction
 ```
 
-#### Returns
+**Returns**
 
 Transaction for syncing with market price.
 
-#### Example
+**Example**
 ```typescript
 const syncTx = await dlmmPool.syncWithMarketPrice(1.05, userPublicKey);
 ```
 
-#### Notes
+**Notes**
 - The `syncWithMarketPrice` function is used to sync the liquidity pool with the market price.
 
 ---
@@ -2403,27 +2337,27 @@ const syncTx = await dlmmPool.syncWithMarketPrice(1.05, userPublicKey);
 
 Converts a real price of bin to a lamport value
 
-#### Function
+**Function**
 ```typescript
 toPricePerLamport(price: number): string
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 price: number                 // Real price to convert
 ```
 
-#### Returns
+**Returns**
 
 Price per lamport as a string.
 
-#### Example
+**Example**
 ```typescript
 const pricePerLamport = dlmmPool.toPricePerLamport(1.05);
 console.log('Price per lamport:', pricePerLamport);
 ```
 
-#### Notes
+**Notes**
 - The `toPricePerLamport` function is used to convert a real price of bin to a lamport value.
 
 ---
@@ -2432,25 +2366,25 @@ console.log('Price per lamport:', pricePerLamport);
 
 Converts a price per lamport value to a real price of bin
 
-#### Function
+**Function**
 ```typescript
 fromPricePerLamport(pricePerLamport: number): string
 ```
 
-#### Parameters
+**Parameters**
 ```typescript
 pricePerLamport: number       // Price per lamport to convert
 ```
 
-#### Returns
+**Returns**
 
 Real price as a string.
 
-#### Example
+**Example**
 ```typescript
 const realPrice = dlmmPool.fromPricePerLamport(1050000);
 console.log('Real price:', realPrice);
 ```
 
-#### Notes
+**Notes**
 - The `fromPricePerLamport` function is used to convert a price per lamport value to a real price of bin.
