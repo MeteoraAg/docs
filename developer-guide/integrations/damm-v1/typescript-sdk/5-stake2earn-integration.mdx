@@ -1,0 +1,411 @@
+---
+title: Stake2Earn Integration
+---
+
+Stake2Earn Pools are Dynamic AMM Memecoin Pools that are launched with the stake-to-earn mechanism. For more information, read here.
+
+`StakeForFee` is the technical term used in the docs to describe the Stake2Earn mechanism and program, while feeFarm refers to a Stake2Earn Vault.
+
+- **Memecoin Pool**: A Dynamic AMM Pool created with a fee scheduler and with initial liquidity perma-locked.
+- **Stake2Earn Vault**: Stake-to-earn farming mechanism and vault where top stakers can earn a share of fees from the locked liquidity.
+- **Stake2Earn Pool**: A Memecoin Pool with a Stake2Earn Vault.
+
+This guide provides instructions on how to integrate DAMM v1 pools with stake2earn.
+
+## Prerequisites
+
+Before you begin, here are some important resources:
+
+- **Program ID (Mainnet & Devnet):** `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP`
+- **TypeScript SDK Repository:** [@meteora-ag/m3m3](https://github.com/MeteoraAg/stake-for-fee-sdk)
+
+
+## Install Dependencies
+
+```bash
+npm i @meteora-ag/m3m3 @coral-xyz/anchor @solana/web3.js @solana/spl-token @solana/spl-token-registry
+```
+
+## Initialize StakeForFee Instance
+
+```typescript
+import StakeForFee from "@meteora-ag/m3m3";
+import { PublicKey } from "@solana/web3.js";
+import { Wallet, AnchorProvider } from "@project-serum/anchor";
+
+// Connection, Wallet, and AnchorProvider to interact with the network
+const mainnetConnection = new Connection("https://api.mainnet-beta.solana.com");
+const mockWallet = new Wallet(new Keypair());
+const provider = new AnchorProvider(mainnetConnection, mockWallet, {
+  commitment: "confirmed",
+});
+// Alternatively, to use Solana Wallet Adapter
+
+const poolAddress = new PublicKey(
+  "G2MRSjNjCbFUmMf32Z1aXYhy6pc1ihLyYg6orKedyjJG"
+);
+const m3m3 = await StakeForFee.create(connection, poolAddress);
+```
+
+## Code Examples to Interact with StakeForFee
+
+In the following code, feeFarm refers to the Stake2Earn Vault.
+
+### Stake
+
+```typescript
+const stakeAmount = new BN(
+  1_000 * 10 ** feeFarm.accountStates.tokenAMint.decimals
+); // 1,000 stake token (make sure you have enough balance in your wallet)
+const stakeTx = await feeFarm.stake(stakeAmount, mockWallet.publicKey);
+const stakeTxHash = await provider.sendAndConfirm(stakeTx); // Transaction hash
+```
+
+### Get Stake Balance and Claimable Balance
+
+```typescript
+await feeFarm.refreshStates(); // make sure to refresh states to get the latest data
+const userEscrow = await feeFarm.getUserStakeAndClaimBalance(
+  mockWallet.publicKey
+);
+const stakeBalance =
+  userStakeEscrow.stakeEscrow.stakeAmount.toNumber() /
+  10 ** feeFarm.accountStates.tokenAMint.decimals;
+const claimableFeeA = fromLamports(
+  userStakeEscrow.unclaimFee.feeA || 0,
+  feeFarm.accountStates.tokenAMint.decimals
+);
+const claimableFeeB = fromLamports(
+  userStakeEscrow.unclaimFee.feeB || 0,
+  feeFarm.accountStates.tokenBMint.decimals
+);
+```
+
+### Claim Fee
+
+```typescript
+const claimFeeTx = await feeVault.claimFee(
+  mockWallet.publicKey,
+  new BN(U64_MAX)
+); // second param is max amount, so usually we just put max number BN.js can support
+const claimfeeTxHash = await provider.sendAndConfirm(claimFeeTx); // Transaction hash
+```
+
+### Unstake
+
+```typescript
+const unstakeKeyPair = new Keypair();
+const unstakeTx = await feeVault.unstake(
+  userEscrow.stakeEscrow.stakeAmount,
+  unstakeKeyPair.publicKey,
+  mockWallet.publicKey
+);
+unstakeTx.partialSign(unstakeKeyPair); // Make sure to partial sign unstakeKeypair
+const unstakeTxHash = await provider.sendAndConfirm(unstakeTx); // Transaction hash
+```
+
+### Get Unstake Period (Seconds)
+
+```typescript
+const unstakePeriodInSeconds =
+  feeFarm.accountStates.feeVault.configuration.unstakeLockDuration.toNumber();
+```
+
+### Cancel Unstake
+
+```typescript
+const cancelUnstakeTx = await feeFarm.cancelUnstake(
+  unstakeKeyPair.publicKey,
+  mockWallet.publicKey
+);
+const cancelUnstakeTxHash = await provider.sendAndConfirm(cancelUnstakeTx);
+```
+
+### Withdraw
+
+```typescript
+const withdrawTx = await feeFarm.withdraw(
+  unstakeKeyPair.publicKey,
+  mockWallet.publicKey
+);
+const withdrawTxHash = await provider.sendAndConfirm(withdrawTx);
+```
+
+## How to Create a Memecoin Pool with Stake2Earn Vault
+
+### Important Reminder
+
+You are recommended to configure your Stake2Earn staking rewards distribution start time (fee claim start time) to be approximately 48 hours after launch. This allows more time for total fee rewards to accumulate from trading activity in the memecoin pool. A bigger total fee reward would help make your Stake2Earn Vault look more appealing to potential stakers.
+
+### TypeScript Code Example
+
+Use this example to create a Memecoin Pool with Stake2Earn Vault: https://github.com/MeteoraAg/stake-for-fee-sdk/blob/main/ts-client/src/examples/index.ts
+
+This code example includes the steps to:
+
+- Mint a token
+- Create dynamic vault and pool
+- Create Stake2Earn Vault
+- Lock user's LP to Stake2Earn Vault
+
+```typescript
+import AmmImpl from "@mercurial-finance/dynamic-amm-sdk";
+import { NATIVE_MINT } from "@solana/spl-token";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import { StakeForFee } from "../stake-for-fee";
+import {
+  DEFAULT_KEYPAIR_PATH,
+  DEVNET_URL,
+  handleSendTransaction,
+  initializeMintAndMint,
+  loadKeypairFromFile,
+} from "./utils";
+import { createFeeVault, createPool, lockLiquidityToFeeVault } from "./actions";
+import { U64_MAX } from "../stake-for-fee/constants";
+
+const connection = new Connection(DEVNET_URL);
+const poolConfigKey = new PublicKey(
+  "BdfD7rrTZEWmf8UbEBPVpvM3wUqyrR8swjAy5SNT8gJ2"
+);
+const mintADecimal = 9;
+const mintANativeAmountMultiplier = 10 ** mintADecimal;
+const mintAmount = 10_000;
+const stakeFarmAmount = 1_000;
+
+async function createPoolAndInteractWithFeeVaultExample() {
+  const keypair = loadKeypairFromFile(DEFAULT_KEYPAIR_PATH);
+  console.log(`Wallet ${keypair.publicKey} connected`);
+
+  const amountAToMint =
+    BigInt(mintAmount) * BigInt(mintANativeAmountMultiplier);
+  const amountAToDeposit =
+    BigInt(mintAmount - stakeFarmAmount) * BigInt(mintANativeAmountMultiplier); // 1,000 reserve to stake
+  const amountB = BigInt(1_000_000);
+
+  console.log("Create mint A");
+  const mintA = await initializeMintAndMint(
+    connection,
+    keypair,
+    keypair,
+    mintADecimal,
+    amountAToMint
+  );
+
+  console.log("1. Create dynamic vaults and pool");
+  const poolKey = await createPool(
+    keypair,
+    mintA,
+    NATIVE_MINT,
+    new BN(amountAToDeposit.toString()),
+    new BN(amountB.toString()),
+    poolConfigKey
+  );
+
+  const pool = await AmmImpl.create(connection, poolKey);
+
+  console.log("2. Create fee vault");
+  const currentSlot = await connection.getSlot("confirmed");
+  const currentOnchainTimestamp = await connection.getBlockTime(currentSlot);
+  // Number of top stakers
+  const topListLength = 10;
+  // Number of seconds to withdraw unstaked token
+  const unstakeLockDuration = new BN(3600 * 24);
+  // Number of seconds for the swap fee fully dripped to stakers
+  const secondsToFullUnlock = new BN(3600 * 24 * 7);
+  // Timestamp to start fee distribution / drip to stakers
+  const startFeeDistributeTimestamp = new BN(currentOnchainTimestamp + 10); // delay 10 seconds to be able to claim
+
+  await createFeeVault(
+    poolKey,
+    pool.poolState.tokenAMint,
+    keypair,
+    topListLength,
+    unstakeLockDuration,
+    secondsToFullUnlock,
+    startFeeDistributeTimestamp
+  );
+
+  console.log("3. Lock user LP for fee vault");
+  await lockLiquidityToFeeVault(poolKey, pool, keypair, 10_000); // 10_000 means 100% of LP is being lock
+
+  console.log("4. Connect to the fee vault");
+  const feeVault = await StakeForFee.create(connection, poolKey);
+
+  console.log("5. Stake amount");
+  const stakeAmount = new BN(
+    (BigInt(stakeFarmAmount) * BigInt(mintANativeAmountMultiplier)).toString()
+  ); // 1,000 stake token (make sure you have enough balance in your wallet)
+  const stakeTx = await feeVault.stake(stakeAmount, keypair.publicKey);
+  const stakeSignature = await handleSendTransaction(
+    connection,
+    stakeTx,
+    keypair
+  );
+  console.log("Stake Signature", stakeSignature);
+
+  console.log("6. Get stake balance");
+  await feeVault.refreshStates();
+  const userEscrow = await feeVault.getUserStakeAndClaimBalance(
+    keypair.publicKey
+  );
+  const stakeBalance =
+    userEscrow.stakeEscrow.stakeAmount.toNumber() /
+    10 ** feeVault.accountStates.tokenAMint.decimals;
+  console.log("Stake Balance", stakeBalance);
+  const claimableFeeA =
+    (userEscrow.unclaimFee.feeA.toNumber() || 0) /
+    10 ** feeVault.accountStates.tokenAMint.decimals;
+  console.log("Claimable Fee A", claimableFeeA);
+  const claimableFeeB =
+    (userEscrow.unclaimFee.feeB.toNumber() || 0) /
+    10 ** feeVault.accountStates.tokenBMint.decimals;
+  console.log("Claimable Fee B", claimableFeeB);
+
+  console.log("7. Claim fee");
+  const claimFeeTx = await feeVault.claimFee(
+    keypair.publicKey,
+    new BN(U64_MAX)
+  );
+  for (const [index, tx] of claimFeeTx.entries()) {
+    const signature = await handleSendTransaction(connection, tx, keypair);
+    console.log(`Claim Fee Signature ${index + 1}`, signature);
+  }
+
+  console.log("8. Unstake");
+  const unstakeKeyPair = new Keypair();
+  const unstakeTx = await feeVault.unstake(
+    userEscrow.stakeEscrow.stakeAmount,
+    unstakeKeyPair.publicKey,
+    keypair.publicKey
+  );
+  const unstakeSignature = await handleSendTransaction(connection, unstakeTx, [
+    unstakeKeyPair,
+    keypair,
+  ]);
+  console.log("Unstake Signature", unstakeSignature);
+
+  console.log("9. Cancel unstaked");
+  const cancelUnstake = await feeVault.cancelUnstake(
+    unstakeKeyPair.publicKey,
+    keypair.publicKey
+  );
+  const cancelUnstakeSignature = await handleSendTransaction(
+    connection,
+    cancelUnstake,
+    keypair
+  );
+  console.log("Cancel Unstake Signature", cancelUnstakeSignature);
+
+  // ⚠️ This only works after unstake period is over
+  console.log("10. Withdraw unstake");
+  const withdrawUnstake = await feeVault.withdraw(
+    unstakeKeyPair.publicKey,
+    keypair.publicKey
+  );
+  const withdrawUnstakeSignature = await handleSendTransaction(
+    connection,
+    withdrawUnstake,
+    keypair
+  );
+  console.log("Withdraw Unstake Signature", withdrawUnstakeSignature);
+}
+
+createPoolAndInteractWithFeeVaultExample()
+  .then(() => console.log("Done"))
+  .catch(console.error);
+```
+
+### CPI Example to Initialize a Stake2Earn Vault
+
+Logo [cpi-examples/programs/cpi-example/src/instructions/m3m3_cpi/initialize_vault.rs at main · MeteoraAg/cpi-examples](https://github.com/MeteoraAg/cpi-examples)
+
+Other examples: https://github.com/MeteoraAg/cpi-examples?tab=readme-ov-file
+
+### Script to Deploy a Stake2Earn Vault
+
+Alternatively, we also provide a convenient script to deploy a new Stake2Earn vault.
+
+**Note:** The following script is for deploying a new Stake2Earn vault only. To deploy a Memecoin Pool with permanently locked liquidity, please refer to Memecoin Pool Integration.
+
+#### Getting Started
+
+- **Clone repo:** https://github.com/MeteoraAg/meteora-pool-setup
+- **Config list to reference:** https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config
+- **Readme:** https://github.com/MeteoraAg/meteora-pool-setup/blob/main/README.md
+
+#### Dependencies
+
+**Install Bun:** You'll also need bun to run the scripts. Install it via bun installation. Then install the dependencies by running the command `bun install`
+
+#### Code Example
+
+https://github.com/MeteoraAg/meteora-pool-setup/blob/main/config/create_m3m3_farm.json
+
+```json
+{
+  "rpcUrl": "https://api.mainnet-beta.solana.com",
+  "dryRun": false,
+  "keypairFilePath": "keypair.json",
+  "computeUnitPriceMicroLamports": 100000,
+  "baseMint": "FvxPZWBViVsmzS11MGi3ybNGjTKChwdfXU3UWopBujTn",
+  "quoteSymbol": "SOL",
+  "m3m3": {
+    "topListLength": 100,
+    "unstakeLockDurationSecs": 25200,
+    "secondsToFullUnlock": 86400,
+    "startFeeDistributeTimestamp": 1737590400
+  },
+  "lockLiquidity": {
+    "allocations": [
+      {
+        "percentage": 100,
+        "address": "D2Yt1jtjjk6cPiwYKs6krtbjfjjYiQmYWbFtTrgL2WR2"
+      }
+    ]
+  }
+}
+```
+
+**Note:** You can also deploy a Memecoin Pool with a Stake2Earn Vault, as well as an Alpha Vault if required.
+
+## How to Create a Dynamic AMM Pool (Fixed Fee %) with Stake2Earn Vault
+
+If you are creating the pool using the instruction:
+
+`initializeCustomizablePermissionlessConstantProductPool`
+
+**CPI Example:** https://github.com/MeteoraAg/cpi-examples/blob/main/programs/cpi-example/src/instructions/dynamic_amm_cpi/initialize_customizable_permissionless_pool.rs
+
+It will be fixed fee. Same applies to a Dynamic AMM pool created using the script in this repo: https://github.com/MeteoraAg/meteora-pool-setup/tree/main
+
+`createPermissionlessConstantProductPoolWithConfig2`
+
+Make sure you choose the config account that doesn't have any Dynamic Fee.
+
+Check using https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs and make sure it returns no fee curve.
+
+## Important Considerations
+
+### Stake2Earn Staking Rewards Distribution Start Time
+
+You are recommended to configure your Stake2Earn staking rewards distribution start time (fee claim start time) to be approximately 48 hours after launch. This allows more time for total fee rewards to accumulate from trading activity in the memecoin pool. A bigger total fee reward would help make your Stake2Earn Vault look more appealing to potential stakers.
+
+### Difference Between Locking Liquidity via Stake2Earn vs Directly Locking Liquidity in the Memecoin Pool
+
+User lock and Stake2Earn lock use the same lock mechanism on a Dynamic AMM / Memecoin Pool. But users and Stake2Earn vaults have their own personal lock escrow account for the pool.
+
+When a user permanently locks liquidity directly on the Memecoin Pool page, the user is locking the LP token to their own personal escrow account for the pool. Fees from this locked liquidity go to the user's wallet.
+
+However, when a user locks via the Stake2Earn creation process, the user is locking the LP to their unique Stake2Earn Vault stake escrow account. Therefore, fees from this locked liquidity go to the Stake2Earn Vault, which then distributes fees to the top stakers.
+
+### How to Find the Stake2Earn Vault Address and a User Wallet's Unique Personal Stake Escrow Address?
+
+Use a wallet simulator (e.g. Sherlock extension) and paste the user's wallet address. Try to stake or unstake tokens in a Stake2Earn Vault.
+
+Click "Open explorer" and on the explorer page search for Vault and/or Stake Escrow fields to find the respective addresses.
+
+### Other Considerations
+
+- If you plan to use a multisig on the Meteora website, please make sure it is the SquadsX multisig, as that is the only type supported on Meteora website. Otherwise, you can't manage liquidity through the website.
+- There can only be one Stake2Earn Vault attached to each Memecoin Pool.
