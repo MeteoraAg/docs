@@ -2,7 +2,7 @@
 title: Pool State
 ---
 
-Key data retrieved from the pool state:
+# Key data retrieved from the pool state
 
 | Data | Description |
 |------|-------------|
@@ -22,7 +22,7 @@ Key data retrieved from the pool state:
 | `padding` | Reserved space for future use |
 | `curve_type` | The curve of the pool. Example: Constant product, stable |
 
-## Pool Fees
+# Pool Fees
 
 | Data | Description |
 |------|-------------|
@@ -31,20 +31,20 @@ Key data retrieved from the pool state:
 | `owner_trade_fee_numerator` | Numerator for owner trading fee |
 | `owner_trade_fee_denominator` | Denominator for owner trading fee |
 
-## Padding
+# Padding
 
 | Data | Description |
 |------|-------------|
 | `padding` | 512 bytes reserved for future use |
 
-## Curve Type
+# Curve Type
 
 | Data | Description |
 |------|-------------|
 | `ConstantProduct` | Indicate the pool is constant product pool |
 | `Stable` | Indicate the pool is stable swap pool |
 
-## Token Multiplier
+# Token Multiplier
 
 Because there are tokens with different decimals, the precision factor has been added to normalize the value to support tokens with different decimals in stable swap calculation.
 
@@ -54,7 +54,7 @@ Because there are tokens with different decimals, the precision factor has been 
 | `token_b_multiplier` | Multiplier for token B. Used to make sure that token A will have the same precision as token A |
 | `precision_factor` | The precision of token A and B of the pool |
 
-## Depeg
+# Depeg
 
 Store the information about the depeg stable swap pool.
 
@@ -64,7 +64,7 @@ Store the information about the depeg stable swap pool.
 | `base_cache_updated` | Store the last timestamp the base_virtual_price was updated |
 | `depeg_type` | Indicate the type of the depeg pool supported. If the pool is a depeg pool, token_b of the pool will always be to depeg token |
 
-## Depeg Type
+# Depeg Type
 
 | Data | Description |
 |------|-------------|
@@ -73,7 +73,7 @@ Store the information about the depeg stable swap pool.
 | `Lido` | The pool supports solido token (stSOL) |
 | `spl-stake` | The pool supports more LSTs like jitoSOL, bSOL, and more |
 
-## User Functions
+# User Functions
 
 | Function | Description |
 |----------|-------------|
@@ -84,14 +84,3 @@ Store the information about the depeg stable swap pool.
 | `swap` | User can exchange token B by deposit token A or vice versa. Swap fee will be charged based on the PoolFee parameter stored in the pool account. If the host fee account was passed as the remaining account during the swap, 20% of the admin trading fee will be taken by the host. Admin trading fee will be transferred to admin_token_a_fee or admin_token_b_fee based on the deposit mint token. The pool will deposit the user deposited token to the respective vault, and hold the minted vault LP. Meanwhile, the pool will burn the correct amount of vault LP by using vault SDK and transfer the token to the user. The process will fail when the vault does not have enough liquidity. |
 | `get_pool_info` | User can query the pool metric information, such as total token A amount, total token B amount, virtual price, and pool APY. |
 | `initialize_permissionless_pool` | Creates a new permissionless pool by depositing tokens A and B as bootstrap liquidity. |
-
-## Admin Functions
-
-| Function | Description |
-|----------|-------------|
-| `initialize_permissioned_pool` | Admin creates a new permissioned pool by depositing tokens A and B as bootstrap liquidity. |
-| `transfer_admin` | Transfer the admin of the pool to the new admin for permissioned pools. |
-| `set_pool_fees` | Set a new fee parameter for permissioned pools. |
-| `set_admin_fee_account` | Set a new admin token fee account to receive the swap fee for permissioned pools. |
-| `override_curve_param` | Update curve parameters. For example, amplification coefficient of stable swap for permissioned pools. |
-| `enable_or_disable_pool` | Enable or disable permissioned pools. A disabled pool will allow only remove balanced liquidity. |

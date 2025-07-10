@@ -93,7 +93,7 @@ Always use mainnet program IDs in examples unless specifically for devnet:
 Standard API patterns:
 
 - DLMM API: `https://dlmm-api.meteora.ag/`
-- DAMM API: `https://amm-v2.meteora.ag/`
+- DAMM API: `https://damm-api.meteora.ag/`
 - Devnet versions: Replace with `devnet-` prefix
 
 ## Frontmatter requirements for pages
