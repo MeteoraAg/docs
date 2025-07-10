@@ -7,18 +7,18 @@ This guide provides instructions on how to integrate DAMM v1 pools with farms.
 Before you begin, here are some important resources:
 
 - **Program ID (Mainnet & Devnet):** `FarmuwXPWXvefWUeqFAa5w6rifLkq5X6E8bimYvrhCB1`
-- **TypeScript SDK Repository:** [@mercurial-finance/farming-sdk](https://github.com/MeteoraAg/reward-pool)
+- **TypeScript SDK Repository:** [@meteora-ag/farming-sdk](https://github.com/MeteoraAg/reward-pool)
 
-## Install Dependencies
+# Install Dependencies
 
 ```bash
-npm i @mercurial-finance/farming-sdk @project-serum/anchor @solana/web3.js @solana/spl-token @solana/spl-token-registry
+npm i @meteora-ag/farming-sdk @project-serum/anchor @solana/web3.js @solana/spl-token @solana/spl-token-registry
 ```
 
-## Initialize PoolFarmImpl Instance
+# Initialize PoolFarmImpl Instance
 
 ```typescript
-import { PoolFarmImpl } from "@mercurial-finance/farming-sdk";
+import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
 import { Wallet, AnchorProvider } from "@coral-xyz/anchor";
 import { Connection, PublicKey, Keypair } from "@solana/web3.js";
 
@@ -46,9 +46,9 @@ const farm = await PoolFarmImpl.create(
 );
 ```
 
-## Code Examples to Interact with the PoolFarmImpl
+# Code Examples to Interact with the PoolFarmImpl
 
-### Stake
+## Stake
 
 ```typescript
 // https://station.jup.ag/blog/jupiter-token-list-api#endpoints
@@ -64,20 +64,20 @@ const stakeTx = await farm.deposit(mockWallet.publicKey, lpBalance); // Web3 Tra
 const stakeResult = await provider.sendAndConfirm(stakeTx); // Transaction hash
 ```
 
-### Check Stake Balance
+## Check Stake Balance
 
 ```typescript
 const farmBalance = await farm.getUserBalance(mockWallet.publicKey);
 ```
 
-### Claim
+## Claim
 
 ```typescript
 const claimTx = await farm.claim(mockWallet.publicKey);
 const claimResult = await provider.sendAndConfirm(claimTx); // Transaction hash
 ```
 
-### Unstake
+## Unstake
 
 ```typescript
 const unStakeTx = await farm.withdraw(mockWallet.publicKey, farmBalance); // Web3 Transaction Object

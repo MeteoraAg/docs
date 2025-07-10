@@ -2,9 +2,9 @@
 title: Dynamic Pool Configs
 ---
 
-Meteora's Dynamic AMM Pool or DLMM pool can be set up to start trading at a specific activation slot on the blockchain, or at a specific time based on sysvar clock.
+DAMM v1 Pool can be set up to start trading at a specific activation slot on the blockchain, or at a specific time based on sysvar clock.
 
-## Activation Fields
+# Activation Fields
 
 There are 2 fields involved:
 
@@ -16,11 +16,11 @@ Pool creator has the option to choose between using slot or time for activation.
 - If `Pool.activation_type == 0`, Pool starts trading when `current_slot >= pool.activation_point`
 - If `Pool.activation_type == 1`, Pool starts trading when `current_time >= pool.activation_point`
 
-## Pool Activation by Slot
+# Pool Activation by Slot
 
 Pool starts trading when `current_slot >= pool.activation_slot`
 
-## Pool Activation by Time (Clock)
+# Pool Activation by Time (Clock)
 
 You can create a pool with timestamp (clock or slot) by using this endpoint:
 
@@ -30,23 +30,21 @@ initialize_permissionless_constant_product_pool_with_config2
 
 In the new endpoint, pool creator is able to specify an `activation_point` for a pool, that allows token team to set a precise launch time for the pool.
 
-In the config account, there will be a max duration. This max duration (tbd by Meteora) determines the furthest point in time after pool creation where the `pool.activation_point` can be adjusted to.
+In the config account, there will be a max duration. This max duration (to be determined by Meteora) determines the furthest point in time after pool creation where the `pool.activation_point` can be adjusted to.
 
 For example, if the max duration is 7 days, `Pool.activation_point` must be &lt;= 7 days from pool creation.
 
-**Note:** For time, we are using sysvar clock.
+<Note>For time, we are using sysvar clock.</Note>
 
-## Important Reminders
+# Important Reminders
 
-### Claim start time should NOT be earlier than Pool activation time
+## Claim start time should NOT be earlier than Pool activation time
 
 For a new token launch, the project should ensure that token claiming from the Alpha Vault is NOT possible before the launch pool trading activation or before the token starts trading anywhere, whether on a Dynamic AMM or DLMM Pool. If users are able to claim tokens before the launch pool/token starts trading, they may create a separate market with a price that deviates from the project's preferred launch price. Read how to configure Alpha Vault timings here.
 
-### For Memecoins that want to permanently lock liquidity, lock it before Pool activation time
+## For Memecoins that want to permanently lock liquidity, lock it before Pool activation time
 
-A Dynamic AMM Pool with locked liquidity and fee scheduler is known as a Memecoin Pool.
-
-If the project wants to permanently lock liquidity in the Memecoin Pool, they should ideally lock the liquidity BEFORE the pool starts trading, so that swap fees from locked liquidity are captured the second trading starts.
+If the project wants to permanently lock liquidity in the DAMM v1 Pool, they should ideally lock the liquidity BEFORE the pool starts trading, so that swap fees from locked liquidity are captured the second trading starts.
 
 In a scenario where:
 

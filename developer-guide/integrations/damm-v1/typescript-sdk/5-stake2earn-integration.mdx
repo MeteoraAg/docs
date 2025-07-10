@@ -2,17 +2,9 @@
 title: Stake2Earn Integration
 ---
 
-Stake2Earn Pools are Dynamic AMM Memecoin Pools that are launched with the stake-to-earn mechanism. For more information, read here.
+This guide provides instructions on how to integrate DAMM v1 pools with Stake2Earn.
 
-`StakeForFee` is the technical term used in the docs to describe the Stake2Earn mechanism and program, while feeFarm refers to a Stake2Earn Vault.
-
-- **Memecoin Pool**: A Dynamic AMM Pool created with a fee scheduler and with initial liquidity perma-locked.
-- **Stake2Earn Vault**: Stake-to-earn farming mechanism and vault where top stakers can earn a share of fees from the locked liquidity.
-- **Stake2Earn Pool**: A Memecoin Pool with a Stake2Earn Vault.
-
-This guide provides instructions on how to integrate DAMM v1 pools with stake2earn.
-
-## Prerequisites
+# Prerequisites
 
 Before you begin, here are some important resources:
 
@@ -20,13 +12,13 @@ Before you begin, here are some important resources:
 - **TypeScript SDK Repository:** [@meteora-ag/m3m3](https://github.com/MeteoraAg/stake-for-fee-sdk)
 
 
-## Install Dependencies
+# Install Dependencies
 
 ```bash
 npm i @meteora-ag/m3m3 @coral-xyz/anchor @solana/web3.js @solana/spl-token @solana/spl-token-registry
 ```
 
-## Initialize StakeForFee Instance
+# Initialize StakeForFee Instance
 
 ```typescript
 import StakeForFee from "@meteora-ag/m3m3";
@@ -47,11 +39,11 @@ const poolAddress = new PublicKey(
 const m3m3 = await StakeForFee.create(connection, poolAddress);
 ```
 
-## Code Examples to Interact with StakeForFee
+# Code Examples to Interact with StakeForFee
 
 In the following code, feeFarm refers to the Stake2Earn Vault.
 
-### Stake
+## Stake
 
 ```typescript
 const stakeAmount = new BN(
@@ -61,7 +53,7 @@ const stakeTx = await feeFarm.stake(stakeAmount, mockWallet.publicKey);
 const stakeTxHash = await provider.sendAndConfirm(stakeTx); // Transaction hash
 ```
 
-### Get Stake Balance and Claimable Balance
+## Get Stake Balance and Claimable Balance
 
 ```typescript
 await feeFarm.refreshStates(); // make sure to refresh states to get the latest data
@@ -81,7 +73,7 @@ const claimableFeeB = fromLamports(
 );
 ```
 
-### Claim Fee
+## Claim Fee
 
 ```typescript
 const claimFeeTx = await feeVault.claimFee(
@@ -91,7 +83,7 @@ const claimFeeTx = await feeVault.claimFee(
 const claimfeeTxHash = await provider.sendAndConfirm(claimFeeTx); // Transaction hash
 ```
 
-### Unstake
+## Unstake
 
 ```typescript
 const unstakeKeyPair = new Keypair();
@@ -104,14 +96,14 @@ unstakeTx.partialSign(unstakeKeyPair); // Make sure to partial sign unstakeKeypa
 const unstakeTxHash = await provider.sendAndConfirm(unstakeTx); // Transaction hash
 ```
 
-### Get Unstake Period (Seconds)
+## Get Unstake Period (Seconds)
 
 ```typescript
 const unstakePeriodInSeconds =
   feeFarm.accountStates.feeVault.configuration.unstakeLockDuration.toNumber();
 ```
 
-### Cancel Unstake
+## Cancel Unstake
 
 ```typescript
 const cancelUnstakeTx = await feeFarm.cancelUnstake(
@@ -121,7 +113,7 @@ const cancelUnstakeTx = await feeFarm.cancelUnstake(
 const cancelUnstakeTxHash = await provider.sendAndConfirm(cancelUnstakeTx);
 ```
 
-### Withdraw
+## Withdraw
 
 ```typescript
 const withdrawTx = await feeFarm.withdraw(
@@ -131,15 +123,15 @@ const withdrawTx = await feeFarm.withdraw(
 const withdrawTxHash = await provider.sendAndConfirm(withdrawTx);
 ```
 
-## How to Create a Memecoin Pool with Stake2Earn Vault
+# How to Create a DAMM v1 with Stake2Earn Vault
 
-### Important Reminder
-
+<Note>
 You are recommended to configure your Stake2Earn staking rewards distribution start time (fee claim start time) to be approximately 48 hours after launch. This allows more time for total fee rewards to accumulate from trading activity in the memecoin pool. A bigger total fee reward would help make your Stake2Earn Vault look more appealing to potential stakers.
+</Note>
 
-### TypeScript Code Example
+# TypeScript Code Example
 
-Use this example to create a Memecoin Pool with Stake2Earn Vault: https://github.com/MeteoraAg/stake-for-fee-sdk/blob/main/ts-client/src/examples/index.ts
+Use this example to create a DAMM v1 with Stake2Earn Vault: https://github.com/MeteoraAg/stake-for-fee-sdk/blob/main/ts-client/src/examples/index.ts
 
 This code example includes the steps to:
 
@@ -316,31 +308,30 @@ createPoolAndInteractWithFeeVaultExample()
   .catch(console.error);
 ```
 
-### CPI Example to Initialize a Stake2Earn Vault
+# CPI Example to Initialize a Stake2Earn Vault
 
-Logo [cpi-examples/programs/cpi-example/src/instructions/m3m3_cpi/initialize_vault.rs at main · MeteoraAg/cpi-examples](https://github.com/MeteoraAg/cpi-examples)
-
-Other examples: https://github.com/MeteoraAg/cpi-examples?tab=readme-ov-file
+Initialize a Stake2Earn Vault: https://github.com/MeteoraAg/cpi-examples
 
 ### Script to Deploy a Stake2Earn Vault
 
 Alternatively, we also provide a convenient script to deploy a new Stake2Earn vault.
 
-**Note:** The following script is for deploying a new Stake2Earn vault only. To deploy a Memecoin Pool with permanently locked liquidity, please refer to Memecoin Pool Integration.
+<Note>
+The following script is only for deploying a new Stake2Earn vault only. To deploy a DAMM v1 with permanently locked liquidity, please refer to DAMM v1 Integration.
+</Note>
 
-#### Getting Started
+## Getting Started
 
-- **Clone repo:** https://github.com/MeteoraAg/meteora-pool-setup
-- **Config list to reference:** https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config
-- **Readme:** https://github.com/MeteoraAg/meteora-pool-setup/blob/main/README.md
+- **Repository:** https://github.com/MeteoraAg/meteora-pool-setup
+- **Pool config list:** https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config
 
-#### Dependencies
+## Dependencies
 
-**Install Bun:** You'll also need bun to run the scripts. Install it via bun installation. Then install the dependencies by running the command `bun install`
+```bash
+bun install
+```
 
-#### Code Example
-
-https://github.com/MeteoraAg/meteora-pool-setup/blob/main/config/create_m3m3_farm.json
+## Code Example
 
 ```json
 {
@@ -367,31 +358,17 @@ https://github.com/MeteoraAg/meteora-pool-setup/blob/main/config/create_m3m3_far
 }
 ```
 
-**Note:** You can also deploy a Memecoin Pool with a Stake2Earn Vault, as well as an Alpha Vault if required.
+<Note>
+You can deploy a DAMM v1 pool with a Stake2Earn Vault and Alpha Vault if required.
+</Note>
 
-## How to Create a Dynamic AMM Pool (Fixed Fee %) with Stake2Earn Vault
+# Important Considerations
 
-If you are creating the pool using the instruction:
-
-`initializeCustomizablePermissionlessConstantProductPool`
-
-**CPI Example:** https://github.com/MeteoraAg/cpi-examples/blob/main/programs/cpi-example/src/instructions/dynamic_amm_cpi/initialize_customizable_permissionless_pool.rs
-
-It will be fixed fee. Same applies to a Dynamic AMM pool created using the script in this repo: https://github.com/MeteoraAg/meteora-pool-setup/tree/main
-
-`createPermissionlessConstantProductPoolWithConfig2`
-
-Make sure you choose the config account that doesn't have any Dynamic Fee.
-
-Check using https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs and make sure it returns no fee curve.
-
-## Important Considerations
-
-### Stake2Earn Staking Rewards Distribution Start Time
+## Stake2Earn Staking Rewards Distribution Start Time
 
 You are recommended to configure your Stake2Earn staking rewards distribution start time (fee claim start time) to be approximately 48 hours after launch. This allows more time for total fee rewards to accumulate from trading activity in the memecoin pool. A bigger total fee reward would help make your Stake2Earn Vault look more appealing to potential stakers.
 
-### Difference Between Locking Liquidity via Stake2Earn vs Directly Locking Liquidity in the Memecoin Pool
+## Difference Between Locking Liquidity via Stake2Earn vs Directly Locking Liquidity in the Memecoin Pool
 
 User lock and Stake2Earn lock use the same lock mechanism on a Dynamic AMM / Memecoin Pool. But users and Stake2Earn vaults have their own personal lock escrow account for the pool.
 
@@ -399,13 +376,13 @@ When a user permanently locks liquidity directly on the Memecoin Pool page, the 
 
 However, when a user locks via the Stake2Earn creation process, the user is locking the LP to their unique Stake2Earn Vault stake escrow account. Therefore, fees from this locked liquidity go to the Stake2Earn Vault, which then distributes fees to the top stakers.
 
-### How to Find the Stake2Earn Vault Address and a User Wallet's Unique Personal Stake Escrow Address?
+## How to Find the Stake2Earn Vault Address and a User Wallet's Unique Personal Stake Escrow Address?
 
 Use a wallet simulator (e.g. Sherlock extension) and paste the user's wallet address. Try to stake or unstake tokens in a Stake2Earn Vault.
 
 Click "Open explorer" and on the explorer page search for Vault and/or Stake Escrow fields to find the respective addresses.
 
-### Other Considerations
+## Other Considerations
 
 - If you plan to use a multisig on the Meteora website, please make sure it is the SquadsX multisig, as that is the only type supported on Meteora website. Otherwise, you can't manage liquidity through the website.
 - There can only be one Stake2Earn Vault attached to each Memecoin Pool.

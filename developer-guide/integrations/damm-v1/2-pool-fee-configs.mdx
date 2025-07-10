@@ -2,29 +2,35 @@
 title: Pool Fee Configs
 ---
 
-## How to Choose a Suitable Pool Config
+# How to Choose a Suitable Pool Config
 
 What fee parameters to choose depends on your project's needs. You will need to look at the pool [config list](https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs) and choose a suitable `pool_config_key` with your preferred fee parameters.
 
 If you want to create an Alpha Vault along with your new pool, you also need to find a `pool_config_key` that is mapped to a `vault_config_key` that meets your requirements.
 
-## Public Pool Config List
+# Public Pool Config List
 
-**Mainnet Pool Config List API:** [https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs](https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs)
+<CardGroup cols={1}>
+  <Card title="Mainnet Pool Config List API" href="https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs" icon="link" iconType="solid">
+    Access the complete list of pool configurations available on Mainnet for DAMM v1 pools.
+  </Card>
+  <Card title="Devnet Pool Config List API" href="https://devnet-amm-v2.meteora.ag/pool-configs" icon="link" iconType="solid">
+    Access the complete list of pool configurations available on Devnet for testing and development.
+  </Card>
+  <Card title="Fee Curve Configuration API" href="https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs" icon="link" iconType="solid">
+    Get the associated fee curve configurations for each existing pool config.
+  </Card>
+</CardGroup>
 
-**Devnet Pool Config List API:** [https://devnet-amm-v2.meteora.ag/pool-configs](https://devnet-amm-v2.meteora.ag/pool-configs) 
+- Using these endpoint, pool creators can input the config pubkey, and it will return an array of fee update timings for the config.
 
-**API endpoint to return the associated fee curve for each existing config:** [https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs](https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs)
-
-- Using this endpoint, integrators can input the config pubkey, and it will return an array of fee update timings for the config, if there's any.
-
-- Integrators may choose a `pool_config_key` with a fee curve that suits your integration.
+- Pool creators may choose a `pool_config_key` with a fee curve that suits your integration.
 
 If there is no existing config in the list that fits your project's requirement, a new config needs to be created.
 
 <Note>Only the Meteora team can create a new config to add it to the preset pool config list.</Note>
 
-## Default Pool Config Used by Meteora Frontend
+# Default Pool Config Used by Meteora Frontend
 
 By default, Meteora's frontend is currently using this pool config key for Memecoin Pool creation: 
 
@@ -34,34 +40,40 @@ FiENCCbPi3rFh5pW2AJ59HC53yM32eLaCjMKxRqanKFJ
 
 For the `FiENCCbPi3rFh5pW2AJ59HC53yM32eLaCjMKxRqanKFJ` pool config, it doesn't allow creation of any Alpha Vault, therefore its field `vault_config_key` is `1111111...`
 
-## New Custom Pool Config and Fee Curve for Integrators / Launchpads
+# New Custom Pool Config and Fee Curve for Pool Creators
 
-### Custom Pool Config Key
+## Custom Pool Config Key
 
-Integrators such as launchpads or other partners may need to use their own unique custom pool config key, if they want custom `pool_creator_authority` to prevent front-running of the token launch pool.
+Pool creators may need to use their own unique custom pool config key, if they want custom `pool_creator_authority` to prevent front-running of the token launch pool.
 
 <Note>New dedicated config keys can only be created by Meteora. Please reach out to us if this is required.</Note>
 
-<Note>The `pool_creator_authority` doesn't work with program address. It's not a program whitelist, it needs to be a PDA (program derived address) or normal account.</Note>
+<Warning>The `pool_creator_authority` doesn't work with program address. It's not a program whitelist, it needs to be a PDA (program derived address) or normal account.</Warning>
 
 
-### Custom Fee Curve
+## Custom Fee Curve
 
-If you are an integrator, Meteora can also apply a custom fee curve/schedule for your pools, but we will need to create a dedicated config key for your team, where `pool_creator_authority` is linked to your signer wallet for pool creation. You would need to send us your signer wallet that would be used to deploy the pools.
+Meteora can also apply a custom fee curve/schedule for your pools, but we will need to create a dedicated config key for your team, where `pool_creator_authority` is linked to your signer wallet for pool creation. 
 
-<Note>Even with a dedicated config key for your team, Meteora would need to customize the fee curve/schedule for you. You can't do it on your own.</Note>
+<Note>You would need to send us your **signer wallet** that would be using to deploy the pools.</Note>
 
-## Custom Fee Curve for a Specific Pool
+<Warning>Even with a dedicated config key for your team, Meteora would need to customize the fee curve/schedule for you. You can't do it on your own.</Warning>
 
-If required, Meteora can set a custom fee curve for a single, specific pool. This would override the fee curve used by the pool's config key, doesn't matter which config key is used.
+# Custom Fee Curve for a Specific Pool
 
-## API to Track Associated Fee Curve for Each Config
+If required, Meteora can set a custom fee curve for a single, specific pool which would override the fee curve used by the pool's config key regardless of which config key is used.
 
-Meteora has an API endpoint to return the associated fee curve for each existing config: [https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs](https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs)
+# API to Track Associated Fee Curve for Each Config
 
-Using this endpoint, integrators can input the config pubkey, and it will return an array of fee update timings for the config, if there's any. Integrators may then choose a config with a fee curve that suits their integration.
+<CardGroup cols={1}>
+  <Card title="Fee Curve Configuration API" href="https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs" icon="link" iconType="solid">
+    Access the associated fee curve configurations for each existing pool config.
+  </Card>
+</CardGroup>
 
-### Steps to Check Fee Curves
+Using this endpoint, pool creators can input the config pubkey, and it will return an array of fee update timings for the config. Pool creators may then choose a config with a fee curve that suits their integration.
+
+## Steps to Check Fee Curves
 
 <Steps>
   <Step title="View All Pool Configs">
@@ -77,7 +89,7 @@ Using this endpoint, integrators can input the config pubkey, and it will return
   </Step>
 </Steps>
 
-## Understanding Pool Config Fields
+# Understanding Pool Config Fields
 
 | Field | Description |
 |-------|-------------|
@@ -93,7 +105,7 @@ Using this endpoint, integrators can input the config pubkey, and it will return
 - `current_time + activation_duration` OR
 - `current_slot + activation_duration` (depends on the `activation_type`)
 
-## Pool Config Example
+# Pool Config Example
 
 **Sample:** [https://amm-v2.meteora.ag/pool-configs](https://amm-v2.meteora.ag/pool-configs)
 
@@ -109,13 +121,13 @@ Using this endpoint, integrators can input the config pubkey, and it will return
 }
 ```
 
-## User Flow Example
+# User Flow Example
 
 A pool config may or may not have an associated vault config. There's no vault config associated when the `vault_config_key` is `11111111111111111111111111111111`.
 
 When the pool config has a vault config, user can create the pool + Alpha Vault that is binded (auto-whitelisted) by the pool. The Alpha Vault created will inherit the parameters (Pro Rata / FCFS + buying_cap, vesting duration, etc.) from the vault config.
 
-### Creating Pool ABC/SOL with an Alpha Vault
+## Creating Pool ABC/SOL with an Alpha Vault
 
 Let's say a user wants to create the pool ABC/SOL with an Alpha Vault, the user will need to:
 
@@ -129,9 +141,9 @@ Let's say a user wants to create the pool ABC/SOL with an Alpha Vault, the user 
 
 All the settings are already predefined by `pool_config` + its mapped `vault_config_key`.
 
-<Note>The permutations for pool config + Alpha vault are created by the Meteora team.</Note>
+<Note>The permutations for pool config + Alpha Vault are created by Meteora.</Note>
 
-### Pool Config Example
+## Pool Config Example
 
 ```json
 {
@@ -163,22 +175,22 @@ All the settings are already predefined by `pool_config` + its mapped `vault_con
 In this example above, only the `pool_creator_authority` => `5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi` can use the pool config `8aPHoLN8ke6PhWeYA7ELi19fppptVYUCQvqKWR5yP1sn` to create a pool with the below settings:
 
 - **1.5% fee**
-- **20% protocol fee**
-- Pool start trade after **1512000 slot** upon creation
+- **20% protocol fee** (this is fixed Meteora fee)
+- Pool starts trading after **1512000 slot** upon creation
 - **Slot based activation**
 
-And can create a binded Alpha Vault with **FCFS config** as shown below:
+You can also create a binded Alpha Vault with **FCFS config** as shown below:
 
 - Max deposit cap = **10 token**
 - Vested over **24106 slot** after pool activate
 - Deposit opens at **24107 slot** before vault crank
 - Every escrow maximum can only deposit **1 token**
 
-## Full Pool and Vault Config List
+# Full Pool and Vault Config List
 
 - **Pool config list:** [https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs](https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs)
 - **Vault config list:** [https://amm-v2.meteora.ag/swagger-ui/#/alpha_vault_config/get_all](https://amm-v2.meteora.ag/swagger-ui/#/alpha_vault_config/get_all)
 
-If your preferred configs are not available in the pre-defined config lists above, please contact the Meteora team. You will need your own unique config key specific to your integration.
+<Note>If your preferred configs are not available in the pre-defined config lists above, please contact the Meteora team. You will need your own unique config key specific to your integration.</Note>
 
 
