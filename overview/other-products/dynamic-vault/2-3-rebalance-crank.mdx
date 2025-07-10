@@ -22,21 +22,21 @@ And the state variables **after** the rebalance as:
 
 The vault calculates the total accrued interest (profit) after rebalance as:
 
-$$
+```math
 \text{profit} = (c_2 + a_2) - (c_1 + a_1)
-$$
+```
 
 Then, the vault updates the total amount:
 
-$$
+```math
 t_2 = t_1 + \text{profit}
-$$
+```
 
 Or, equivalently:
 
-$$
+```math
 t_2 = t_1 + (c_2 + a_2) - (c_1 + a_1)
-$$
+```
 
 The immediate release of profit generated to the LPs can result in opportunities for a sandwich attack, as seen in the scenario below:
 
@@ -66,29 +66,29 @@ To prevent sandwich attacks, the system does **not** distribute 100% of the yiel
 
 ---
 
-## How Yield Unlocking Works
+# How Yield Unlocking Works
 
 When a user adds or removes liquidity, the system uses the **unlocked amount** (not the full `vault.total_amount`) to calculate how many LP tokens to mint or burn. This is done via the `get_unlock_amount` function.
 
-### Calculation Steps
+## Calculation Steps
 
 1. **Calculate Duration Since Last Rebalance:**
 
-   $$
-   \text{duration} = \text{currentTime} - \text{lastReport}
-   $$
+```math
+\text{duration} = \text{currentTime} - \text{lastReport}
+```
 
 2. **Calculate Locked Fund Ratio:**
 
-   $$
-   \text{lockedFundRatio} = 1 - (\text{duration} \times \text{lockedProfitDegradation})
-   $$
+```math
+\text{lockedFundRatio} = 1 - (\text{duration} \times \text{lockedProfitDegradation})
+```
 
 3. **Calculate Unlocked Amount:**
 
-   $$
-   \text{unlockedAmount} = \text{totalAmount} - (\text{lastUpdatedLockedProfit} \times \text{lockedFundRatio})
-   $$
+```math
+\text{unlockedAmount} = \text{totalAmount} - (\text{lastUpdatedLockedProfit} \times \text{lockedFundRatio})
+```
 
 ---
 
