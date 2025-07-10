@@ -1,8 +1,8 @@
 ---
-title: "DLMM Dynamic Fee Calculation"
+title: "DLMM Fee Calculation"
 ---
 
-## Total Trading Fee
+# Total Trading Fee
 
 LPs earn a swap fee from traders when they perform a swap. The total swap fee ($f_s$) will have two components:
 
@@ -73,7 +73,7 @@ where:
 - **Volatility Accumulator** ($v_a(k)$): Captures instantaneous volatility
 - **Variable Fee Control Parameter** ($A$): Used to scale the variable fee component depending on the expected dynamics of the market
 
-## Volatility Accumulator
+### Volatility Accumulator
 
 Volatility on the DLMM is derived from the number of bin changes that occur over time. Each bin change is a fixed price movement of the bin step. The **Volatility Accumulator** ($v_a(k)$) allows us to use bin crossovers as a measure of volatility beyond a single transaction.
 
@@ -91,7 +91,7 @@ $v_a(k) = v_r + |i_r - (activeID + k)|$
 
 (Note: $activeID$ is the ID of the active bin **before** the swap is made.)
 
-### Volatility Reference
+#### Volatility Reference
 
 The **volatility reference** ($v_r$) depends on the time passed since the last transaction ($t$). We will define a window with an upper and lower bound. The lower bound of this window is defined as filter period ($t_f$), and upper bound as decay period ($t_d$).
 
@@ -129,7 +129,7 @@ $fee = (swap\ amount)_k \cdot (f_b + f_v)_k$
 
 </div>
 
-### Volatility Accumulator Example
+#### Example
 
 This example will show how the volatility accumulator will look as swaps are made.
 
@@ -143,7 +143,7 @@ This example will show how the volatility accumulator will look as swaps are mad
 
 Let $t_f = 1$ sec, $t_d = 5$ secs, $R = 0.5$, and active bin ID is 100.
 
-#### Swap 1
+##### **Swap 1**
 
 You make a trade that crosses \+3 bins to 103. So $0 \leq k \leq 3$:
 
@@ -160,7 +160,7 @@ $$
 
 At the end of swap 1, $v_a = 3$.
 
-#### Swap 2
+##### **Swap 2**
 
 John makes a trade 4 seconds later that crosses \+5 bins to 108. As $t = 4$, $v_r = R \cdot v_a$. So $0 \leq k \leq 5$:
 
@@ -178,7 +178,7 @@ $$
 
 At the end of swap 2, $v_a = 6.5$.
 
-#### Swap 3
+##### **Swap 3**
 
 Jane makes a trade 0.3 seconds later that crosses -2 bins to 106. As $t = 0.3 < t_f = 1$ second, $i_r$ and $v_r$ are not reset. The active bin before this swap is 108. So $-2 \leq k \leq 0$:
 
@@ -196,7 +196,7 @@ At the end of swap 3, $v_a = 4.5$.
 
 You can see that the volatility accumulator is decreasing despite high frequency of transactions, preventing people from manipulating fees by making lots of small transactions that increase/decrease prices.
 
-## DLMM Protocol Fees
+# DLMM Protocol Fees
 
 Protocol Fee is a percentage of the Dynamic Fee (total swap fee i.e. base \+ variable fee).
 

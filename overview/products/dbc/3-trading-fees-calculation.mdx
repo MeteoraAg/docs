@@ -2,10 +2,10 @@
 title: Trading Fees Calculation
 ---
 
-DBC Pools earn a swap fee from traders when they perform a swap. The fees can be collected in two ways:
+DBC Pools earn a trading fee from traders when they perform a swap. The fees can be collected in two ways:
 
-- Quote token only
-- Base + Quote
+- Quote only
+- Quote + Base
 
 <Note>DBC fees can be fee shared between the launchpad partner and the token pool creator.</Note>
 
@@ -26,7 +26,7 @@ The variable fee ($f_v$) is a function of real-time price volatility. The fee ra
 
 LPs can claim these fees whenever they are available.
 
-# Base Fee
+## Base Fee
 
 The base fee of a pool can be configured by the pool creator in the following ways:
 
@@ -36,23 +36,23 @@ The base fee of a pool can be configured by the pool creator in the following wa
 
 <Note>You can only choose one of the three options for the base fee.</Note>
 
-## Fixed Base Fee
+### Fixed Base Fee
 
 Fixed base fee is a fixed fee that is applied to the swap amount. The fee can range from 0.01% to 50%. It is specified in the config key used for the pool creation.
 
-## Fee Scheduler
+### Fee Scheduler
 
 Fee scheduler is a fee decay mechanism that decays the fee from starting fee to an ending base fee over a period of time. 
 
 The fee math calculation for the scheduler can be found [here](anti-sniper-suite/fee-scheduler/2-fee-scheduler-math).
 
-## Rate Limiter
+### Rate Limiter
 
 Rate limiter is a fee slope mechanism that starts at a fixed base fee and increases the fee depending on the buy amount
 
 The fee math calculation for the rate limiter can be found [here](/anti-sniper-suite/rate-limiter/2-rate-limiter-math).
 
-# Dynamic Fee (Variable Fee)
+## Dynamic Fee (Variable Fee)
 
 The variable fee is the core of the dynamic fee mechanism. It increases with market volatility.
 
@@ -65,7 +65,7 @@ where:
 - **Bin Step** ($s$): A parameter that defines the price granularity for measuring volatility  
 - **Variable Fee Control** ($C$): A parameter to control the magnitude of the variable fee
 
-## Volatility Accumulator
+### Volatility Accumulator
 
 The Volatility Accumulator tracks price movements. It's updated with every swap.
 
@@ -78,7 +78,7 @@ where:
 - **Volatility Reference** ($v_r$): A decayed value of the volatility accumulator
 - **Price Change** ($\Delta p$): The price change since the last reference update, measured in "bins"
 
-## Price Change
+#### Price Change
 The price change is calculated based on the change in the square root of the price.
 
 ```math
@@ -87,7 +87,7 @@ The price change is calculated based on the change in the square root of the pri
 
 where $p_c$ is current price and $p_r$ is reference price.
 
-## Volatility Decay
+#### Volatility Decay
 
 To ensure that the dynamic fee reflects recent volatility, the Volatility Reference decays over time.
 
@@ -101,7 +101,7 @@ The decay mechanism is based on the time elapsed since the last significant trad
 - If filter period ≤ elapsed time < decay period: The volatility reference is reduced.
 - If elapsed time ≥ decay period: The volatility reference is reset to 0. This happens if there are no significant trades for an extended period.
 
-## Max Dynamic Fee on DBC for Typescript Build Curve functions
+# Max Dynamic Fee on DBC for Typescript SDK Build Curve functions
 
 If you use any of the `buildCurve` helper functions in the DBC Typescript SDK, the max dynamic fee on DBC when toggled `true` is less than or equals to 20% of the Base Fee. 
 

@@ -84,31 +84,39 @@ With direct integration into Jupiter and other trading platforms, traders can tr
 The Dynamic Bonding Curve (DBC) virtual pool collects a trading fee on every trade (buy or sell).
 
 - **Protocol Fee:**  
-  A portion of each trading fee is allocated to the DBC protocol (20% of the trading fee).
+  A portion of each trading fee is allocated to the DBC protocol (Fixed 20% of the trading fee).
 
 - **Referral Fee:**  
-  Swap hosts (such as Jupiter, Photon, or trading bots) can include a referral account in the swap transaction to receive a referral fee, which is taken from the protocol fee (20% of the protocol fee).
+  Swap hosts (such as Jupiter, Photon, or trading bots) can include a referral account in the swap transaction to receive a referral fee, which is taken from the protocol fee (Fixed 20% of the protocol fee).
 
 - **Fee Sharing in the Bonding Curve:**  
-  The remaining trading fee is distributed to the launch partner (80% of the trading fee). This fee can be fee shared between the partner and the token creator.
+  The remaining trading fee is distributed to the launch partner (Fixed 80% of the trading fee). This fee can be fee shared between the partner and the token creator.
 
 - **Fee Distribution After Migration:**  
-  Once a token has graduated and migrated, the LP tokens are locked for both the partner and the token creator. The ratio of locked LP tokens is determined by the partner’s configuration. Both the partner and the token creator can claim fees from these locked LP tokens on Meteora DAMM v1 or DAMM v2.
-
-- **Surplus Distribution:**  
-  The final swap in the DBC pool may result in a surplus of the quote token. This surplus is distributed as follows:
-  - **Creator:** 40%
-  - **Partner:** 40%
-  - **Meteora (Protocol):** 20%
-
-<Note>This surplus is capped at 20% of the migration quote threshold.</Note>
+  Once a token has graduated, the LP tokens are locked for both the partner and the token creator. The ratio of locked LP tokens is determined by the partner’s configuration. Both the partner and the token creator can claim fees from these locked LP tokens on Meteora DAMM v1 or DAMM v2.
 
 # Migration
 
-**Automatic Migration**
+### Automatic Migration
 
-If the DBC pool reaches a pre-defined quote token or price threshold, the liquidity is automatically migrated to a Dynamic AMM Pool v1 or DAMM v2 Pool on Meteora.
+If the DBC pool reaches a pre-defined quote token or price threshold, the liquidity is automatically migrated to a DAMM v1 pool or DAMM v2 Pool on Meteora.
 
-**Manual Migration**
+We run 2 auto migrator keepers to migrate DBC pools. These 2 keepers have strict migration quote threshold requirements.
+
+Keeper addresses that we are running:
+1. [CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY](https://solscan.io/account/CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY)
+- `pool_config.migration_quote_threshold` requirements:
+  - 10 SOL
+  - 750 USDC
+  - 1500 JUP
+2. [DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW](https://solscan.io/account/DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW)
+- `pool_config.migration_quote_threshold` requirements:
+  - \>= 750 USD (`quote_mint` token)
+
+<Note>The Migration Keepers only runs on Mainnet.</Note>
+
+### Manual Migration
 
 We have built a [manual migration user interface](https://migrator.meteora.ag/) for launchpads building on DBC to easily test the migration process.
+
+<Note>The Manual Migrator supports both Mainnet and Devnet.</Note>
