@@ -1,3 +1,70 @@
 ---
 title: Introduction
 ---
+
+Stake2Earn is a hassle-free solution that creators can use immediately to implement an automated staking mechanism for their memecoins.
+
+# Program Address
+
+- Mainnet-beta: `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP`
+- Devnet: `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP`
+
+# Resources
+
+- [Stake2Earn Typescript SDK](https://github.com/MeteoraAg/stake-for-fee-sdk)
+- [Interface Definition Language (IDL)](https://github.com/MeteoraAg/stake-for-fee-sdk/blob/main/ts-client/src/stake-for-fee/idls/stake_for_fee.ts)
+
+# Features
+
+<CardGroup cols={1}>
+  <Card title="Staking System for Fee Distribution" icon="coins" iconType="solid">
+    Users can stake meme tokens to earn trading fees from a DAMM v1 pool. Only the top stakers (configurable number) receive fee distributions. The program maintains a top staker list and a full balance list to track all participants.
+  </Card>
+  
+  <Card title="Vault Initialization" icon="vault" iconType="solid">
+    Creates a vault associated with a specific AMM pool (Dynamic AMM) with configurable parameters:
+    - `top_list_length`: Number of top holders who receive fees (min: 10, max: 300)
+    - `seconds_to_full_unlock`: Time for locked fees to be fully distributed (min: 60s, max: 30 days)
+    - `unstake_lock_duration`: Lock period for unstaking (min: 1 hour, max: 30 days)
+    - `start_fee_distribute_timestamp`: When fee distribution begins
+  </Card>
+  
+  <Card title="Staking Operations" icon="layer-group" iconType="solid">
+    - **Stake**: Users deposit meme tokens to participate in fee sharing
+    - **Initialize Stake Escrow**: Creates an escrow account for each staker
+    - Automatic tracking of stake amounts and positions in the top holder list
+  </Card>
+  
+  <Card title="Fee Claiming Mechanism" icon="hand-holding-dollar" iconType="solid">
+    Claims fees from the associated DAMM v1 pool with:
+    - **Dual token fees**: Supports both base (meme) and quote (SOL/USDC) tokens
+    - **Auto-restaking**: Claimed meme tokens are automatically restaked
+    - **Quote token withdrawal**: Only quote tokens (SOL/USDC) are sent to users
+    - Fees distributed proportionally based on stake amount among top holders
+    - Time-locked fee release mechanism for gradual distribution
+  </Card>
+  
+  <Card title="Unstaking Process" icon="clock" iconType="solid">
+    - **Request Unstake**: Initiates unstaking with a lock period
+    - **Cancel Unstake**: Allows cancellation before the lock period ends
+    - **Withdraw**: Complete withdrawal after the lock period expires
+    - Maintains `ongoing_total_partial_unstake_amount` to track pending unstakes
+  </Card>
+  
+  <Card title="Dynamic Top Holder Management" icon="ranking-star" iconType="solid">
+    - Automatically updates the top staker list when stakes change
+    - Tracks whether a staker is in the top list (in_top_list flag)
+    - Adjusts fee distribution checkpoints when users enter/exit the top list
+  </Card>
+  
+  <Card title="Fee Distribution Algorithm" icon="calculator" iconType="solid">
+    - Uses a checkpoint system with cumulative fee per liquidity
+    - Calculates pending fees based on stake amount and time in the top list
+    - Supports gradual fee release over `seconds_to_full_unlock` period
+  </Card>
+  
+  <Card title="Permissionless" icon="users-gear" iconType="solid">
+    - **Claim Fee Crank**: Anyone can trigger fee claims from the AMM pool
+    - Helps ensure regular fee collection even if users don't claim
+  </Card>
+</CardGroup>
