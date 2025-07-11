@@ -6,12 +6,11 @@ DAMM v1 SDK supports 4 types of pools:
 
 - **Constant Product Pool (Volatile Pool)** - For non-stablecoin pairs (e.g. SOL-USDC)
 - **Stable Pool** - For stablecoin pairs (e.g. USDC-USDT)
-- **Memecoin Pool** - With fee scheduler and permanently locked initial liquidity
-- **Stake2Earn Pool** - Memecoin pool with Stake2Earn vault mechanism for top stakers
+- **Stake2Earn Pool** - DAMM v1 pool with Stake2Earn vault mechanism for top stakers
 
-Below are code examples showing how to interact with the AmmImpl Instance to create these pools and perform key Dynamic AMM actions.
+Below are code examples showing how to interact with the `AmmImpl` instance to create these pools and perform key DAMM v1 actions.
 
-**Note:** If the Dynamic AMM Pool is being launched with an Alpha Vault, SOL or USDC must be used as the quote token.
+<Note>If the DAMM v1 Pool is being launched with an Alpha Vault, SOL or USDC must be used as the quote token.</Note>
 
 ## Create Constant Product Pool (Volatile Pool)
 
@@ -46,22 +45,10 @@ const transactions = await AmmImpl.createPermissionlessConstantProductPoolWithCo
   tokenAAmount,
   tokenBAmount,
   config,
-);
-
-// Or if you need to set the activation point earlier than the default derived from the config
-const startTime = '...';
-const transactions = await AmmImpl.createPermissionlessConstantProductPoolWithConfig2(
-  provider.connection,
-  mockWallet.publicKey, // payer
-  tokenAMint,
-  tokenBMint,
-  tokenAAmount,
-  tokenBAmount,
-  config,
-  {
-    activationPoint: startTime !== 'now' ? new BN(Math.floor(new Date(startTime).getTime() / 1000)) : undefined,
-  },
-);
+  // { // if you need to set the activation point earlier than the default derived from the config
+  //   activationPoint: startTime !== 'now' ? new BN(Math.floor(new Date(startTime).getTime() / 1000)) : undefined,
+  // },
+); 
 
 for (const transaction of transactions) {
   transaction.sign(mockWallet.payer);
@@ -138,13 +125,9 @@ const tokenBMint = new PublicKey('...');
 const memecoinAmount = new BN(100_000);
 const tokenBAmount = new BN(500_000);
 
-// Get pool address
-const poolAddress = derivePoolAddressWithConfig(memecoinMint, tokenBMint, feeConfig.publicKey, programId);
-
 // Create pool
 const programId = new PublicKey(PROGRAM_ID);
 
-const isNow = true;
 const CONFIG_KEY = new PublicKey('..');
 const feeConfigurations = await AmmImpl.getFeeConfigurations(provider.connection, {
   programId,
@@ -180,31 +163,16 @@ const tokenBMint = new PublicKey('...');
 const memecoinAmount = new BN(100_000);
 const tokenBAmount = new BN(500_000);
 
-// Get pool address
-const poolAddress = derivePoolAddressWithConfig(memecoinMint, tokenBMint, feeConfig.publicKey, programId);
-
 // Create pool
 const programId = new PublicKey(PROGRAM_ID);
 
-const isNow = true;
 const CONFIG_KEY = new PublicKey('..');
 const feeConfigurations = await AmmImpl.getFeeConfigurations(provider.connection, {
   programId,
 });
 const feeConfig = feeConfigurations.find(({ publicKey }) => publicKey.equals(CONFIG_KEY));
 
-const transactions = await AmmImpl.createPermissionlessConstantProductMemecoinPoolWithConfig(
-  provider.connection,
-  mockWallet.publicKey, // payer
-  memecoinMint,
-  tokenBMint,
-  memecoinAmount,
-  tokenBAmount,
-  feeConfig.publicKey,
-  { isMinted: true },
-);
-
-// with M3M3 vault
+// with Stake2Earn vault
 const feeDurationInDays = 7;
 const numOfStakers = 1000;
 const feeClaimStartTime = roundToNearestMinutes(new Date(), {
@@ -240,7 +208,7 @@ for (const transaction of transactions) {
 }
 ```
 
-**Note:** For Alpha Vault integration, please refer to Alpha Vault Integration
+<Note>For Alpha Vault integration, please refer to [Alpha Vault Integration](/developer-guide/integrations/alpha-vault/typescript-sdk/1-getting-started).</Note>
 
 ## Common Pool Operations
 
