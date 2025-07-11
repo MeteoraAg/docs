@@ -8,7 +8,7 @@ The Dynamic Bonding Curve is a customizable bonding curve that allows you to con
 x \times y = k
 ```
 
-## Mathematical Foundation
+# Mathematical Foundation
 
 A simple constant product formula can be expressed as:
 
@@ -39,7 +39,7 @@ Therefore:
 \text{Bonding Curve Constant Product} = f(l, p_a, p_b)
 ```
 
-### Example Configuration
+## Example Configuration
 
 Consider a pool with the following configuration:
 
@@ -58,7 +58,7 @@ The bonding curve will function across 2 price ranges:
 
 <Note>These are just example values and are not real values in the actual curve. You will have to calculate the actual `sqrt_price` and `liquidity` values which will be much bigger.</Note>
 
-## Core Formulas
+# Core Formulas
 
 Below are the core formulas used in the dynamic bonding curve program. We use the following notation:
 
@@ -68,7 +68,7 @@ Below are the core formulas used in the dynamic bonding curve program. We use th
 
 ---
 
-### 1. Bonding Curve Amount
+## 1. Bonding Curve Amount
 
 The total amount of base mint tokens in the bonding curve is given by:
 
@@ -78,7 +78,7 @@ The total amount of base mint tokens in the bonding curve is given by:
 
 ---
 
-### 2. Migration Quote Threshold
+## 2. Migration Quote Threshold
 
 The migration quote threshold required for the pool to migrate is calculated as:
 
@@ -88,7 +88,7 @@ The migration quote threshold required for the pool to migrate is calculated as:
 
 ---
 
-### 3. Migration Price Calculation
+## 3. Migration Price Calculation
 
 To determine the migration price squared ($p_\text{max}^2$) during migration, use:
 
@@ -103,3 +103,132 @@ Where:
 ---
 
 These formulas allow you to compute swap amounts, migration thresholds, and price limits for any custom liquidity distribution along the bonding curve.
+
+# Fee Formulas
+
+The total swap fee ($f_s$) will have two components:
+
+1. **A base fee** ($f_b$)
+2. **A variable fee** ($f_v$)
+
+The **total swap fee** is calculated as:
+
+```math
+f_s = f_b + f_v
+```
+
+## Pool Fee Interface
+
+```
+poolFees: {
+    baseFee: {
+        cliffFeeNumerator: BN // Initial fee numerator (base fee)
+        firstFactor: number // feeScheduler: numberOfPeriod, rateLimiter: feeIncrementBps
+        secondFactor: BN // feeScheduler: periodFrequency, rateLimiter: maxLimiterDuration
+        thirdFactor: BN // feeScheduler: reductionFactor, rateLimiter: referenceAmount
+        baseFeeMode: number // 0: FeeSchedulerLinear, 1: FeeSchedulerExponential, 2: RateLimiter
+    }
+    dynamicFee: {
+        // Optional dynamic fee
+        binStep: number // u16 value representing the bin step in bps
+        binStepU128: BN // u128 value for a more accurate bin step
+        filterPeriod: number // Minimum time that must pass between fee updates
+        decayPeriod: number // Period after the volatility starts decaying (must be > filterPeriod)
+        reductionFactor: number // Controls how quickly volatility decys over time
+        variableFeeControl: number // Multiplier that determines how much volatility affects fees
+        maxVolatilityAccumulator: number // Caps the maximum volatility that can be accumulated
+    } | null
+}
+```
+
+Using the relevant parameters, you can calculate the base fee and variable fee for any given swap.
+
+- For **Fee Scheduler** you can refer to the [Fee Scheduler Formulas](/anti-sniper-suite/fee-scheduler/2-fee-scheduler-math).
+- For **Rate Limiter** you can refer to the [Rate Limiter Formulas](/anti-sniper-suite/rate-limiter/2-rate-limiter-math).
+- For **Dynamic Fees** you can refer to the [Dynamic Fee Formulas](/overview/products/dbc/3-trading-fees-calculation#dynamic-fee-variable-fee).
+
+# Migration Fee
+
+We introduced a new migration fee feature that allows users to collect a percentage of the `quote_min` from the `migration_quote_threshold` amount.
+
+```
+migrationFee: {
+    // Optional migration fee (set as 0 for feePercentage and 0 for creatorFeePercentage for no migration fee)
+    feePercentage: number // The percentage of fee taken from migration quote threshold (0-50)
+    creatorFeePercentage: number // The fee share percentage for the creator from the migration fee (0-100)
+}
+```
+
+ONLY if you are using the `buildCurveWithMarketCap` function from the DBC Typescript SDK, you will need to calculate the actual `initial_market_cap` value that you want based on the desired initial market cap.
+
+## Formula
+
+```
+let D = desiredMarketCap and M = migrationMarketCap and f = migrationFee and I = initialMarketCap
+
+requiredRatio = sqrt(D / M)
+percentageSupplyOnMigration = (requiredRatio * (1 - f) * 100) / (1 + requiredRatio * (1 - f))
+x = percentageSupplyOnMigration / ((100 - V - L) - percentageSupplyOnMigration)
+I = M * x²
+```
+
+## Example
+
+```
+let D = 10000 / SOL_PRICE
+let M = 80000 / SOL_PRICE
+let f = 0.5
+let V = 0
+let L = 1 / 1000000000 // leftover needs to be indicated to cover precision loss
+
+let requiredRatio = Math.sqrt(D / M)
+let percentageSupplyOnMigration =
+    (requiredRatio * (1 - f) * 100) / (1 + requiredRatio * (1 - f))
+let x =
+    percentageSupplyOnMigration /
+    (100 - V - L - percentageSupplyOnMigration)
+let I = M * x * x
+
+const curveConfig = buildCurveWithMarketCap({
+    totalTokenSupply: 1000000000,
+    initialMarketCap: I,
+    migrationMarketCap: M,
+    migrationOption: MigrationOption.MET_DAMM_V2,
+    tokenBaseDecimal: TokenDecimal.SIX,
+    tokenQuoteDecimal: TokenDecimal.NINE,
+    lockedVestingParam: {
+        totalLockedVestingAmount: 0,
+        numberOfVestingPeriod: 0,
+        cliffUnlockAmount: 0,
+        totalVestingDuration: 0,
+        cliffDurationFromMigrationTime: 0,
+    },
+    baseFeeParams: {
+        baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+        feeSchedulerParam: {
+            startingFeeBps: 100,
+            endingFeeBps: 100,
+            numberOfPeriod: 0,
+            totalDuration: 0,
+        },
+    },
+    dynamicFeeEnabled: false,
+    activationType: ActivationType.Slot,
+    collectFeeMode: CollectFeeMode.QuoteToken,
+    migrationFeeOption: MigrationFeeOption.FixedBps100,
+    tokenType: TokenType.SPL,
+    partnerLpPercentage: 0,
+    creatorLpPercentage: 0,
+    partnerLockedLpPercentage: 100,
+    creatorLockedLpPercentage: 0,
+    creatorTradingFeePercentage: 0,
+    leftover: 1,
+    tokenUpdateAuthority: 0,
+    migrationFee: {
+        feePercentage: 50,
+        creatorFeePercentage: 0,
+    },
+})
+```
+
+<Note>A leftover value is needed to cover precision loss when you indicate a migration fee.</Note>

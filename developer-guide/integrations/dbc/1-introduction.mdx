@@ -2,30 +2,28 @@
 title: Introduction
 ---
 
-# Dynamic Bonding Curve (DBC)
-
 Build your own fully customizable bonding curve with DBC. DBC allows you to configure everything from the curve shape to the trading fees.
 
-## Program Address
+# Program Address
 
 - Mainnet-beta: `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`
 - Devnet: `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`
 
-## Resources
+# Resources
 
 - [Dynamic Bonding Curve Program](https://github.com/MeteoraAg/dynamic-bonding-curve)
 - [Dynamic Bonding Curve Typescript SDK](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk)
 - [Interface Definition Language (IDL)](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/src/idl/dynamic-bonding-curve/idl.json)
 
-## Flow of DBC Pool -> DAMM Pool
+# Flow of DBC Pool -> DAMM v1/v2 Pool
 
-### Concepts 
-- Pre-bonding: DBC pool - where the newly minted token discovers its price. No need for an LP.
-- Post-bonding: DAMM pool - where the accumulated `quote_mint` tokens in the bonding curve + a portion of the `base_mint` tokens are migrated to form the liquidity pool of the new token
-- Partner: Launchpad
-- Creator: Token Pool Creator
+## Concepts 
+- **Pre-bonding**: DBC pool - where the newly minted token discovers its price. No need for an LP.
+- **Post-bonding**: DAMM v1/v2 pool - where the accumulated `quote_mint` tokens in the bonding curve + a portion of the `base_mint` tokens are migrated to form the liquidity pool of the new token
+- **Partner**: Launchpad
+- **Creator**: Token Pool Creator
 
-### Flow
+## Flow
 <Steps>
   <Step title="Step 1: Create DBC Config Key">
     Partner creates a DBC Config Key that consists of the curve shape, migrated pool fee, and many more.
@@ -40,16 +38,16 @@ Build your own fully customizable bonding curve with DBC. DBC allows you to conf
     Once the DBC Token Pool has accumulated enough `quote_mint` tokens (`pool_state::quote_reserve >= pool_config::migration_quote_threshold`), our migrator keeper will automatically migrate the DBC pool to a DAMM Pool.
     <Note>The `migration_quote_threshold` and a portion of the `base_mint` tokens will form the liquidity pool of the DAMM Pool.</Note>
   </Step>
-  <Step title="Step 5: Trade DAMM Pool">
-    The DAMM Pool is also tradeable on all trading terminals and trading bots (including Jupiter Pro, Axiom, Photon, GMGN, BullX etc.)
+  <Step title="Step 5: Trade on graduated DAMM v1/v2 Pool">
+    The graduated DAMM v1/v2 Pool is also tradeable on all trading terminals and trading bots (including Jupiter Pro, Axiom, Photon, GMGN, BullX etc.)
   </Step>
 </Steps>
 
-## Migration
+# Migration
 
-### DAMM Fee Config Keys
+## DAMM Fee Config Keys
 
-#### DAMM (v1):
+### DAMM (v1) Migration Fee Config Keys:
 - `migration_fee_option == 0:` 8f848CEy8eY6PhJ3VcemtBDzPPSD4Vq7aJczLZ3o8MmX
 - `migration_fee_option == 1:` HBxB8Lf14Yj8pqeJ8C4qDb5ryHL7xwpuykz31BLNYr7S
 - `migration_fee_option == 2:` 7v5vBdUQHTNeqk1HnduiXcgbvCyVEZ612HLmYkQoAkik
@@ -57,7 +55,7 @@ Build your own fully customizable bonding curve with DBC. DBC allows you to conf
 - `migration_fee_option == 4:` 9EZYAJrcqNWNQzP2trzZesP7XKMHA1jEomHzbRsdX8R2
 - `migration_fee_option == 5:` 8cdKo87jZU2R12KY1BUjjRPwyjgdNjLGqSGQyrDshhud
 
-#### DAMM v2:
+### DAMM v2 Migration Fee Config Keys:
 - `migration_fee_option == 0:` 7F6dnUcRuyM2TwR8myT1dYypFXpPSxqwKNSFNkxyNESd
 - `migration_fee_option == 1:` 2nHK1kju6XjphBLbNxpM5XRGFj7p9U8vvNzyZiha1z6k
 - `migration_fee_option == 2:` Hv8Lmzmnju6m7kcokVKvwqz7QPmdX9XfKjJsXz8RXcjp
@@ -65,7 +63,7 @@ Build your own fully customizable bonding curve with DBC. DBC allows you to conf
 - `migration_fee_option == 4:` AkmQWebAwFvWk55wBoCr5D62C6VVDTzi84NJuD9H7cFD
 - `migration_fee_option == 5:` DbCRBj8McvPYHJG1ukj8RE15h2dCNUdTAESG49XpQ44u
 
-### Migration Keeper
+## Migration Keeper
 
 We run 2 migration keepers on Mainnet to automatically migrate DBC pools to DAMM pools.
 
@@ -80,15 +78,15 @@ Our migration keepers have a `migration_quote_threshold` requirement (depending 
 
 <Note>The Migration Keeper only runs on Mainnet.</Note>
 
-### Manual Migrator
+## Manual Migrator
 
 We have created a [Manual Migrator](https://migrator.meteora.ag) user interface that allows you to manually migrate your DBC pool to a DAMM pool on both Mainnet and Devnet. 
 
 <Note>Depending on your DBC Config Key, the migration process will require you to sign more than one transaction to call each instruction.</Note>
 
-## Config Key Parameters
+# Config Key Parameters
 
-<CardGroup>
+<CardGroup cols={1}>
   <Card title="pool_fees">
     <b>Type:</b> <code>object</code> (includes <code>base_fee</code> and optional <code>dynamic_fee</code>)<br/>
     Defines the trading fee for any pool created from this configuration. Partner can add a fee scheduler or rate limiter in <code>base_fee</code> or just a fixed fee.
