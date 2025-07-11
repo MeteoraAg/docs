@@ -2,25 +2,23 @@
 title: Introduction
 ---
 
-# DAMM v2
-
 Initialize your own constant product liquidity pool with DAMM v2. DAMM v2 allows you to optimize transaction fees, an option to set single-side liquidity, the flexibility of concentrating liquidty providing etc.
 
-## Program Address
+# Program Address
 
 - Mainnet-beta: `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
 - Devnet: `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
 
-## Resources
+# Resources
 
 - [DAMM v2 Program](https://github.com/MeteoraAg/damm-v2)
 - [DAMM v2 Typescript SDK](https://github.com/MeteoraAg/damm-v2-sdk)
 - [Interface Definition Language (IDL)](https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json)
 - Pool Authority: [HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC](https://solscan.io/account/HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC)
 
-## Features
+# Features
 
-### Position NFT
+## Position NFT
 
 The position state manages `unlocked_liquidity` + `locked_liquidity` + `vested liquidity`. 
 
@@ -32,7 +30,7 @@ User can interact with the following flows in the same, single position:
 
 The Position NFT is also a transferrable NFT that can be sent to other wallets.
 
-### Farming
+## Farming
 
 For DAMM v2, there is an in-built farming mechanism within the program. This is unlike DAMM v1, where there is a separate farming program.
 
@@ -48,59 +46,29 @@ Currently, in this beta stage:
 
 So for now, projects have to reach out to the Meteora team to create a farm and add rewards. We're exploring ways to make this process permissionless at a later stage.
 
-### Fee Collection
+## Fee Collection
 
 DAMM v2 pools can collect fees in quote token or output token.
 
-#### Quote Token `collect_fee_mode`
+### Quote Token
 
 - Swap Quote Token to Base Token, then fees are taken from Quote Token before swap.
 - Swap Base Token to Quote Token, then fees are taken from Quote Token after swap.
 
-#### Output Token `collect_fee_mode`
+### Output Token
 
 - Swap Quote Token to Base Token, then fees are taken from Base Token after swap.
 - Swap Base Token to Quote Token, then fees are taken from Quote Token after swap.
 
-### Min-Max Price
+## Min-Max Price
 
 In general, you can set a min-max price range for a balanced pool as DAMM v2 is a constant product AMM that follows a balanced ratio deposit.
 
 If you need to set a min-max price range, as well as implement imbalanced deposits for the pool, you need to use [DLMM](/overview/products/dlmm/1-what-is-dlmm.mdx) instead.
 
-## Instructions
+# Config Key Parameters 
 
-Below are the main instructions and actions available in DAMM v2, grouped by user role:
-
-### Token Team (On-Chain Liquidity Mining)
-- `fund_reward`: Fund rewards for on-chain liquidity mining.
-- `withdraw_ineligible_reward`: Withdraw ineligible rewards.
-
-### Partner (Launchpad)
-- `claim_partner_fee`: Claim partner fee.
-
-### Token Deployer
-- `initialize_pool`: Create a new pool from a static config key.
-- `initialize_pool_with_dynamic_config`: Create a new pool from a dynamic config key.
-- `initialize_customizable_pool`: Create a new pool with customizable parameters. Should only be used by the token deployer, as the token can't be leaked.
-
-### Liquidity Provider
-- `create_position`: Create a new position NFT that holds liquidity to be deposited later.
-- `add_liquidity`: Add liquidity to a pool.
-- `remove_liquidity`: Remove liquidity from a pool.
-- `remove_all_liquidity`: Remove all liquidity from a pool.
-- `claim_position_fee`: Claim position fee.
-- `lock_position`: Lock position with a vesting schedule.
-- `refresh_vesting`: Refresh vesting schedule.
-- `permanent_lock_position`: Lock position permanently.
-- `claim_reward`: Claim rewards from on-chain liquidity mining.
-
-### Trading Bot / User
-- `swap`: Swap with the pool.
-
-## Config Key Parameters 
-
-<CardGroup>
+<CardGroup cols={1}>
   <Card title="vault_config_key">
     <b>Type:</b> <code>address</code><br/>
     Alpha-vault address that is able to buy from the pool before <code>activation_point</code>.
