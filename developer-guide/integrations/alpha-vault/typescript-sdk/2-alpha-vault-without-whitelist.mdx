@@ -7,7 +7,7 @@ Below we provide the steps to use the Alpha Vault Typescript SDK to create an Al
 Permissionless Alpha Vault has no whitelist or individual deposit cap. "Permissionless" in this case means anyone can deposit assets into the Alpha Vault after creation.
 
 
-## Example Timeline (Alpha Vault: Pro rata mode)
+# Example Timeline (Pro-rata Mode)
 
 ![Alpha Vault Without Whitelist](/images/developer-guide/alpha-vault/alpha-vault-without-whitelist.png)
 
@@ -15,9 +15,9 @@ Permissionless Alpha Vault has no whitelist or individual deposit cap. "Permissi
 
 ### Create Dynamic Pool With Permissionless Alpha Vault
 
-This example shows how to create a new Dynamic AMM Pool that also adds a permissionless Alpha Vault. Please contact the Meteora team if the existing pool and vault config do not meet your requirements. Currently only Dynamic AMM Pools support the addition of a permissionless Alpha Vault.
+This example shows how to create a new DAMM v1 Pool that also adds a permissionless Alpha Vault. Please contact the Meteora team if the existing pool and vault config do not meet your requirements. Currently only DAMM v1 Pools support the addition of a permissionless Alpha Vault.
 
-<Note> Currently, only SOL or USDC is accepted as the quote token when initializing a Dynamic AMM or DLMM Pool with Alpha Vault in a permissionless setup. Since the Alpha Vault can't tell what the quote token would be, the quote token is limited to SOL or USDC. </Note>
+<Note> Currently, only SOL or USDC is accepted as the quote token when initializing a DAMM v1 Pool with Alpha Vault in a permissionless setup.</Note>
 
 ```typescript
 import {
@@ -29,7 +29,7 @@ import {
   SYSVAR_CLOCK_PUBKEY,
 } from "@solana/web3.js";
 import AlphaVault, { DYNAMIC_AMM_PROGRAM_ID, PoolType, VaultMode } from "..";
-import DynamicAmm from "@mercurial-finance/dynamic-amm-sdk";
+import DynamicAmm from "@meteora-ag/dynamic-amm-sdk";
 import {
   ActivationType,
   Clock,
@@ -39,7 +39,7 @@ import {
 } from "./utils";
 import dotenv from "dotenv";
 import { BN } from "bn.js";
-import { derivePoolAddressWithConfig } from "@mercurial-finance/dynamic-amm-sdk/dist/cjs/src/amm/utils";
+import { derivePoolAddressWithConfig } from "@meteora-ag/dynamic-amm-sdk/dist/cjs/src/amm/utils";
 
 dotenv.config();
 
@@ -691,8 +691,20 @@ If you are integrating the Alpha Vault program and need to view and select the p
 
 You can use this config endpoint that has predefined timings created by Meteora.
 
-- **Pool config list:** [https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs](https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs)
-- **Vault config list:** [https://amm-v2.meteora.ag/swagger-ui/#/alpha_vault_config/get_all](https://amm-v2.meteora.ag/swagger-ui/#/alpha_vault_config/get_all)
+<CardGroup cols={2}>
+  <Card title="DAMM v1 Pool Config List" icon="list" href="https://damm-api.meteora.ag/swagger-ui/#/pools/get_all_pool_configs">
+    View all available pool configurations for DAMM v1 Pools with Alpha Vault.
+  </Card>
+  <Card title="DAMM v1 Vault Config List" icon="vault" href="https://damm-api.meteora.ag/swagger-ui/#/alpha_vault_config/get_all">
+    Browse all vault configurations for DAMM v1 Pools with Alpha Vault.
+  </Card>
+</CardGroup>
+
+<CardGroup cols={1}>
+  <Card title="Launch Pools Config List" icon="rocket" href="https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config">
+    View all available pool configurations for Launch Pools.
+  </Card>
+</CardGroup>
 
 If your preferred configs are not available in the predefined config lists above, and you want more customization, please contact the Meteora team.
 
@@ -719,78 +731,80 @@ In this example below, the claim process will start 3600 seconds (1 hour) after 
 
 ### Slot Timeline Sequence
 
-**Alpha Vault Slot Progression:**
+#### Alpha Vault Slot Progression
+
 ```math
-\text{depositing\_slot} \rightarrow \text{last\_join\_slot} \rightarrow \text{pre\_activation\_slot} \rightarrow \text{activation\_slot} \rightarrow \text{start\_vesting\_slot} \rightarrow \text{end\_vesting\_slot}
+d \rightarrow j \rightarrow p \rightarrow a \rightarrow s \rightarrow e
 ```
 
-**Current Slot Condition:**
+#### Current Slot Condition
+
 ```math
-\text{current\_slot} < \text{pre\_activation\_slot}
+\text{current\_slot} < p
 ```
 
-<Note> Alpha Vault will start to buy from the pool from `pre_activation_slot` </Note>
+<Note> Alpha Vault will start to buy from the pool from pre_activation_slot ($p$) </Note>
 
 ### Slot Constraints
 
 ```math
-\text{depositing\_slot} + 3000 \leq \text{last\_join\_slot}
+d + 3000 \leq j
 ```
 
 ```math
-\text{last\_join\_slot} > \text{current\_slot}
+j > \text{current\_slot}
 ```
 
 ```math
-\text{last\_join\_slot} + 750 = \text{pre\_activation\_slot}
+j + 750 = p
 ```
 
 ```math
-\text{pre\_activation\_slot} + 9000 = \text{activation\_slot}
+p + 9000 = a
 ```
 
 ```math
-\text{activation\_slot} < \text{start\_vesting\_slot}
+a < s
 ```
 
 ```math
-\text{end\_vesting\_slot} \geq \text{start\_vesting\_slot}
+e \geq s
 ```
 
 ### Required Program Parameters
 
-**User Submission Requirements:**
+#### User Submission Requirements
+
 ```math
-\{\text{depositing\_slot}, \text{activation\_slot}, \text{start\_vesting\_slot}, \text{end\_vesting\_slot}\}
+\{d, a, s, e\}
 ```
 
 ### Slot Calculation Guidelines
 
-**Recommended Calculation Sequence:**
+#### Recommended Calculation Sequence
 
-1. **Get Current Slot:**
+1. **Get Current Slot**
    ```math
    \text{current\_slot} = \text{getCurrentSlot()}
    ```
 
-2. **Calculate Activation Slot:**
+2. **Calculate Activation Slot**
    ```math
-   \text{activation\_slot} = \text{current\_slot} + 9000 + 750 + \text{buffer}
+   a = \text{current\_slot} + 9000 + 750 + \text{buffer}
    ```
 
-3. **Calculate Depositing Slot:**
+3. **Calculate Depositing Slot**
    ```math
-   \text{depositing\_slot} = \text{activation\_slot} - 9000 - 3000 - 750 - \text{buffer}
+   d = a - 9000 - 3000 - 750 - \text{buffer}
    ```
 
-4. **Set Vesting Slots:**
+4. **Set Vesting Slots**
    ```math
-   \text{end\_vesting\_slot} \geq \text{start\_vesting\_slot} > \text{activation\_slot}
+   e \geq s > a
    ```
 
 ### Slot-to-Timestamp Conversion
 
-**Time Equivalents:**
 ```math
 3000 = 20 minutes 
 ```
@@ -807,6 +821,16 @@ In this example below, the claim process will start 3600 seconds (1 hour) after 
 New endpoint only supports wSOL or USDC as Quote mint on mainnet.
 
 Devnet has more flexibility regarding the Quote mint; please reach out to the team.
+
+### Variable Definitions
+
+Where:
+- $d$ = depositing_slot
+- $j$ = last_join_slot  
+- $p$ = pre_activation_slot
+- $a$ = activation_slot
+- $s$ = start_vesting_slot
+- $e$ = end_vesting_slot
 
 ## Important Reminders
 
