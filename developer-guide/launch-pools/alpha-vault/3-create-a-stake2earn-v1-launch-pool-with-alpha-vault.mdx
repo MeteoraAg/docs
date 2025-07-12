@@ -2,22 +2,22 @@
 title: "Create a Stake2Earn v1 Pool with Alpha Vault"
 ---
 
-Stake2Earn Pools are Dynamic AMM Memecoin Pools that are launched with a Stake2Earn Vault. This page provides code examples to initialize and seed a Stake2Earn Pool together with an Alpha Vault.
+Stake2Earn Pools are DAMM v1 Pools that are launched with a Stake2Earn Vault. This page provides code examples to initialize and seed a Stake2Earn Pool together with an Alpha Vault.
 
 **Key Components:**
 
-- **Memecoin Pool**: A Dynamic AMM Pool created with a fee scheduler and with initial liquidity perma-locked
+- **DAMM v1 Pool**: A DAMM v1 Pool created with a fee scheduler and with initial liquidity perma-locked
 - **Stake2Earn Vault**: Stake-to-earn farming mechanism and vault where top stakers can earn a share of fees from the locked liquidity
 - **Stake2Earn Pool**: A Memecoin Pool with a Stake2Earn Vault
 - **Alpha Vault**: Anti-sniper tool that allows depositors to be the first to buy from the pool and be guaranteed a share of tokens at the same average price
 
 ## Getting Started
 
-- Dynamic AMM SDK: https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk
-- NPM: https://www.npmjs.com/package/@mercurial-finance/dynamic-amm-sdk
+- Dynamic AMM SDK: https://github.com/MeteoraAg/damm-v1-sdk
+- NPM: https://www.npmjs.com/package/@meteora-ag/dynamic-amm-sdk
 - Stake2Earn Vault SDK: https://github.com/MeteoraAg/stake-for-fee-sdk
-- Alpha Vault SDK: https://docs.meteora.ag/alpha-vault/alpha-vault-typescript-sdk
-- Alpha Vault Launch Calculation template: Copy this google sheet and adjust the numbers to help determine your preferred parameters
+- Alpha Vault SDK: https://github.com/MeteoraAg/alpha-vault-sdk
+- Alpha Vault Launch Calculation template: Copy this [google sheet](https://docs.google.com/spreadsheets/d/1IZps6htpJJ2MAp-4KMzLP7LQ5JacNznJu7EEJTK9k9Y/edit?usp=sharing.) and adjust the numbers to help determine your preferred parameters
 - Devnet: https://devnet.meteora.ag/
 
 ## API
@@ -32,10 +32,10 @@ Stake2Earn Pools are Dynamic AMM Memecoin Pools that are launched with a Stake2E
 
 ```bash
 # NPM
-npm i @meteora-ag/dynamic-amm-sdk @coral-xyz/anchor @solana/web3.js @solana/spl-token
+npm i @meteora-ag/dynamic-amm-sdk @solana/web3.js @solana/spl-token
 
 # YARN
-yarn add @meteora-ag/dynamic-amm-sdk @coral-xyz/anchor @solana/web3.js @solana/spl-token
+yarn add @meteora-ag/dynamic-amm-sdk @solana/web3.js @solana/spl-token
 ```
 
 ### Initialize AmmImpl instance
@@ -47,15 +47,11 @@ import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 
 // Connection, Wallet, and AnchorProvider to interact with the network
 const mainnetConnection = new Connection('https://api.mainnet-beta.solana.com');
-const mockWallet = new Wallet(new Keypair());
-const provider = new AnchorProvider(mainnetConnection, mockWallet, {
-  commitment: 'confirmed',
-});
-// Alternatively, to use Solana Wallet Adapter
 
 // Create single instance
 const constantProductPool = await AmmImpl.create(mainnetConnection, MAINNET_POOL.USDC_SOL);
 const stablePool = await AmmImpl.create(mainnetConnection, MAINNET_POOL.USDT_USDC);
+
 // Or with any other pool address, refer to the pool creation section below
 const pool = await AmmImpl.create(mainnetConnection, new PublicKey('...'));
 
@@ -77,9 +73,9 @@ Before creating the pool, you need to choose a suitable pool and fee config. Wha
 
 #### Public Pool Config List
 
-- **Pool config list**: https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs
-- **Devnet API**: https://devnet-amm-v2.meteora.ag/pool-configs
-- **API endpoint for fee curves**: https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs
+- **Pool config list**: https://damm-api.meteora.ag/swagger-ui/#/pools/get_all_pool_configs
+- **Devnet API**: https://damm-api.devnet.meteora.ag/swagger-ui/
+- **API endpoint for fee curves**: https://damm-api.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs
 
 #### Default Pool Config used by Meteora Frontend
 
@@ -104,7 +100,7 @@ If required, Meteora can set a custom fee curve for a single, specific pool. Thi
 
 After selecting your preferred `pool_config_key`, reference this example in the Dynamic AMM SDK:
 
-https://github.com/MeteoraAg/dynamic-amm-sdk/blob/main/ts-client/src/examples/create_pool_and_lock_liquidity.ts
+https://github.com/MeteoraAg/damm-v1-sdk/blob/main/ts-client/src/examples/create_pool_and_lock_liquidity.ts
 
 Update the example with your selected pool config and other parameters to create a Memecoin Pool.
 
@@ -112,7 +108,7 @@ Update the example with your selected pool config and other parameters to create
 
 Refer to the `allocations` section in the example:
 
-https://github.com/MeteoraAg/dynamic-amm-sdk/blob/main/ts-client/src/examples/create_pool_and_lock_liquidity.ts#L121
+https://github.com/MeteoraAg/damm-v1-sdk/blob/main/ts-client/src/examples/create_pool_and_lock_liquidity.ts#L121
 
 Find your Stake2Earn Vault public key address and allocate the percentage of fees from permanently locked liquidity that you intend to go to the Stake2Earn vault.
 

@@ -2,9 +2,9 @@
 title: "Create a Stake2Earn v1 Launch Pool"
 ---
 
-Stake2Earn Pool is a Dynamic AMM Memecoin Pool that is launched with a Stake2Earn Vault. This page provides the code examples and steps to create a Stake2Earn Pool.
+Stake2Earn Pool is a DAMM v1 Pool that is launched with a Stake2Earn Vault. This page provides the code examples and steps to create a Stake2Earn Pool.
 
-**Memecoin Pool:** A Dynamic AMM Pool created with a fee scheduler and with initial liquidity perma-locked. 
+**DAMM v1 Pool:** A DAMM v1 Pool created with a fee scheduler and with initial liquidity perma-locked. 
 
 **Stake2Earn Vault:** Stake-to-earn farming mechanism and vault where top stakers can earn a share of fees from the locked liquidity.
 
@@ -13,11 +13,11 @@ Stake2Earn Pool is a Dynamic AMM Memecoin Pool that is launched with a Stake2Ear
 ## Getting Started
 
 **For Creating a Memecoin Pool with Fee Scheduler - Using TypeScript SDK:**
-- Dynamic AMM SDK: https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk
+- DAMM v1 SDK: https://github.com/MeteoraAg/damm-v1-sdk
 - Stake2Earn Vault SDK: https://github.com/MeteoraAg/stake-for-fee-sdk
-- Dynamic AMM Program ID: `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`
+- DAMM v1 Program ID: `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`
 - Stake2Earn Vault Program ID: `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP`
-- Devnet: https://devnet.meteora.ag/
+- Devnet: https://damm-api.devnet.meteora.ag/swagger-ui/
 
 **For Creating a Stake2Earn Vault - Using Bun Scripts:**
 - Clone repo: https://github.com/MeteoraAg/meteora-pool-setup 
@@ -26,7 +26,7 @@ Stake2Earn Pool is a Dynamic AMM Memecoin Pool that is launched with a Stake2Ear
 
 ## API
 
-- **Dynamic AMM API endpoints:** https://amm-v2.meteora.ag/swagger-ui/ 
+- **DAMM v1 API endpoints:** https://damm-api.meteora.ag/swagger-ui/ 
 - **Stake2Earn Mainnet API endpoint:** https://stake-for-fee-api.meteora.ag/swagger-ui/
 - **API endpoint to get Stake2Earn vault info from pool address:** https://stake-for-fee-api.meteora.ag/swagger-ui/#/vault/filter_vaults
 - **Stake2Earn Devnet API endpoint:** https://devnet.stake-for-fee-api.meteora.ag/swagger-ui/
@@ -39,16 +39,16 @@ Install Bun: You'll also need bun to run the scripts. Install it via bun install
 
 ### 1. Install dependencies and initialize AmmImpl instance
 
-Dynamic AMM SDK: https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk
+DAMM v1 SDK: https://github.com/MeteoraAg/damm-v1-sdk
 
 #### 1.1 Install dependencies
 
 ```bash
 # NPM
-npm i @meteora-ag/dynamic-amm-sdk @coral-xyz/anchor @solana/web3.js @solana/spl-token
+npm i @meteora-ag/dynamic-amm-sdk @solana/web3.js @solana/spl-token
 
 # YARN
-yarn add @meteora-ag/dynamic-amm-sdk @coral-xyz/anchor @solana/web3.js @solana/spl-token
+yarn add @meteora-ag/dynamic-amm-sdk @solana/web3.js @solana/spl-token
 
 # Or, use any package manager of your choice.
 ```
@@ -58,15 +58,9 @@ yarn add @meteora-ag/dynamic-amm-sdk @coral-xyz/anchor @solana/web3.js @solana/s
 ```typescript
 import AmmImpl, { MAINNET_POOL } from '@meteora-ag/dynamic-amm-sdk';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 
 // Connection, Wallet, and AnchorProvider to interact with the network
 const mainnetConnection = new Connection('https://api.mainnet-beta.solana.com');
-const mockWallet = new Wallet(new Keypair());
-const provider = new AnchorProvider(mainnetConnection, mockWallet, {
-  commitment: 'confirmed',
-});
-// Alternatively, to use Solana Wallet Adapter
 
 // Create single instance
 const constantProductPool = await AmmImpl.create(mainnetConnection, MAINNET_POOL.USDC_SOL);
@@ -89,9 +83,9 @@ If none of the pool_config_key in the list meet your requirements, please reach 
 
 #### 2.1 Public Pool Config List
 
-- **Pool config list:** https://amm-v2.meteora.ag/swagger-ui/#/pools/get_all_pool_configs 
-- **Devnet API:** https://devnet-amm-v2.meteora.ag/pool-configs You can also get the list of config keys from devnet API
-- **API endpoint to return the associated fee curve for each existing config:** https://amm-v2.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs  
+- **Pool config list:** https://damm-api.meteora.ag/swagger-ui/#/pools/get_all_pool_configs 
+- **Devnet API:** https://damm-api.devnet.meteora.ag/swagger-ui/ You can also get the list of config keys from devnet API
+- **API endpoint to return the associated fee curve for each existing config:** https://damm-api.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs  
 
 Using this endpoint, integrators can input the config pubkey, and it will return an array of fee update timings for the config, if there's any. 
 
