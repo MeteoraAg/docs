@@ -13,5 +13,5 @@ npm i -g mintlify
 Run the following command at the root of Meteora's documentation (where `docs.json` is located):
 
 ```
-mintlify dev
+mint dev
 ```
