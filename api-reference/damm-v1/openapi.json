@@ -1,0 +1,1070 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "dynamic-amm-keeper",
+        "description": "",
+        "license": {
+            "name": ""
+        },
+        "version": "0.1.0"
+    },
+    "paths": {
+        "/alpha-vault": {
+            "get": {
+                "tags": [
+                    "Alpha Vault"
+                ],
+                "summary": "get_alpha_vaults",
+                "operationId": "get_vaults",
+                "parameters": [
+                    {
+                        "name": "vault_address",
+                        "in": "query",
+                        "description": "List of vault addresses to filter",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "pool_address",
+                        "in": "query",
+                        "description": "List of pool addresses to filter",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "base_mint",
+                        "in": "query",
+                        "description": "List of base mint to filter",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "nullable": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AlphaVaultResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/alpha-vault-configs": {
+            "get": {
+                "tags": [
+                    "Alpha Vault"
+                ],
+                "summary": "get_alpha_vault_configs",
+                "operationId": "get_all",
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AlphaVaultVaultConfigResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/farms": {
+            "get": {
+                "tags": [
+                    "Pools"
+                ],
+                "summary": "get_pools_with_farm",
+                "operationId": "get_pools_with_farm",
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/PoolResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/fee-config/{config_address}": {
+            "get": {
+                "tags": [
+                    "Fee Configs"
+                ],
+                "summary": "get_fee_configs",
+                "operationId": "get_config_associated_fee_configs",
+                "parameters": [
+                    {
+                        "name": "config_address",
+                        "in": "path",
+                        "description": "Config address",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/FeeConfigResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/pool-configs": {
+            "get": {
+                "tags": [
+                    "Pools"
+                ],
+                "summary": "get_all_pool_configs",
+                "operationId": "get_all_pool_configs",
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/PoolConfigResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/pools": {
+            "get": {
+                "tags": [
+                    "Pools"
+                ],
+                "summary": "get_pools",
+                "operationId": "get_pools",
+                "parameters": [
+                    {
+                        "name": "address",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    {
+                        "name": "unknown",
+                        "in": "query",
+                        "description": "Toggle unknown pools",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "pool_type",
+                        "in": "query",
+                        "description": "Filter only specific pool type",
+                        "required": false,
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/components/schemas/PoolTypeQueryParam"
+                                }
+                            ],
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "is_monitoring",
+                        "in": "query",
+                        "description": "Toggle pools that is under monitoring",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "hide_low_tvl",
+                        "in": "query",
+                        "description": "Hide pools with lower TVL than the value passed in",
+                        "required": false,
+                        "schema": {
+                            "type": "number",
+                            "format": "double",
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "hide_low_apr",
+                        "in": "query",
+                        "description": "Hide pools with low APR",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "launchpad",
+                        "in": "query",
+                        "description": "Launchpad to filter by",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "nullable": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/PoolResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/pools-metrics": {
+            "get": {
+                "tags": [
+                    "Pools"
+                ],
+                "summary": "get_pools_metrics",
+                "operationId": "get_pools_metrics",
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AggregatePoolsMetrics"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/pools/search": {
+            "get": {
+                "tags": [
+                    "Pools"
+                ],
+                "summary": "filter_and_get_pool_info",
+                "operationId": "filter_and_get_pool_info",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 0
+                        }
+                    },
+                    {
+                        "name": "filter",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "sort_key",
+                        "in": "query",
+                        "description": "Sort key. Default is Volume.",
+                        "required": false,
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/components/schemas/PoolSortKey"
+                                }
+                            ],
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "order_by",
+                        "in": "query",
+                        "description": "Sort order. Default is Descending.",
+                        "required": false,
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/components/schemas/OrderBy"
+                                }
+                            ],
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "pools_to_top",
+                        "in": "query",
+                        "description": "Pools to be sorted to top",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    {
+                        "name": "unknown",
+                        "in": "query",
+                        "description": "Common options to filter pools\nToggle unknown pools",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "pool_type",
+                        "in": "query",
+                        "description": "Filter only specific pool type",
+                        "required": false,
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/components/schemas/PoolTypeQueryParam"
+                                }
+                            ],
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "is_monitoring",
+                        "in": "query",
+                        "description": "Toggle pools that is under monitoring",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "hide_low_tvl",
+                        "in": "query",
+                        "description": "Hide pools with lower TVL than the value passed in",
+                        "required": false,
+                        "schema": {
+                            "type": "number",
+                            "format": "double",
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "hide_low_apr",
+                        "in": "query",
+                        "description": "Hide pools with low APR",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "include_token_mints",
+                        "in": "query",
+                        "description": "Only include token mints. Allow list of token mints",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "include_pool_token_pairs",
+                        "in": "query",
+                        "description": "Only include pool token pairs. Allow list of pool token mints in format EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v-So11111111111111111111111111111111111111112",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "nullable": true
+                        }
+                    },
+                    {
+                        "name": "launchpad",
+                        "in": "query",
+                        "description": "Launchpad to filter by",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "nullable": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedPoolResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/pools_by_a_vault_lp": {
+            "post": {
+                "tags": [
+                    "Pools"
+                ],
+                "summary": "get_pools_by_a_vault_lp",
+                "operationId": "get_pools_by_a_vault_lp",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PoolPostRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/PoolResponse"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AggregatePoolsMetrics": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/PoolMetrics"
+                    },
+                    {
+                        "$ref": "#/components/schemas/PoolMetrics"
+                    },
+                    {
+                        "type": "object",
+                        "required": [
+                            "dynamic_amm",
+                            "lst",
+                            "farms",
+                            "multitokens"
+                        ],
+                        "properties": {
+                            "dynamic_amm": {
+                                "$ref": "#/components/schemas/PoolMetrics"
+                            },
+                            "farms": {
+                                "$ref": "#/components/schemas/PoolMetrics"
+                            },
+                            "lst": {
+                                "$ref": "#/components/schemas/PoolMetrics"
+                            },
+                            "multitokens": {
+                                "$ref": "#/components/schemas/PoolMetrics"
+                            }
+                        }
+                    }
+                ]
+            },
+            "AlphaVaultFcfsVaultConfigModel": {
+                "type": "object",
+                "required": [
+                    "address",
+                    "max_depositing_cap",
+                    "start_vesting_duration",
+                    "end_vesting_duration",
+                    "depositing_duration_until_last_join_point",
+                    "individual_depositing_cap",
+                    "escrow_fee",
+                    "activation_type"
+                ],
+                "properties": {
+                    "activation_type": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "address": {
+                        "type": "string"
+                    },
+                    "depositing_duration_until_last_join_point": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "end_vesting_duration": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "escrow_fee": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "individual_depositing_cap": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "max_depositing_cap": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "start_vesting_duration": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                }
+            },
+            "AlphaVaultProrataVaultConfigModel": {
+                "type": "object",
+                "required": [
+                    "address",
+                    "max_buying_cap",
+                    "start_vesting_duration",
+                    "end_vesting_duration",
+                    "escrow_fee",
+                    "activation_type"
+                ],
+                "properties": {
+                    "activation_type": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "address": {
+                        "type": "string"
+                    },
+                    "end_vesting_duration": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "escrow_fee": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "max_buying_cap": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "start_vesting_duration": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                }
+            },
+            "AlphaVaultResponse": {
+                "type": "object",
+                "required": [
+                    "vault_address",
+                    "pool_address",
+                    "token_vault",
+                    "token_out_vault",
+                    "base_mint",
+                    "quote_mint",
+                    "base",
+                    "owner",
+                    "pool_type"
+                ],
+                "properties": {
+                    "base": {
+                        "type": "string"
+                    },
+                    "base_mint": {
+                        "type": "string"
+                    },
+                    "owner": {
+                        "type": "string"
+                    },
+                    "pool_address": {
+                        "type": "string"
+                    },
+                    "pool_type": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "quote_mint": {
+                        "type": "string"
+                    },
+                    "token_out_vault": {
+                        "type": "string"
+                    },
+                    "token_vault": {
+                        "type": "string"
+                    },
+                    "vault_address": {
+                        "type": "string"
+                    }
+                }
+            },
+            "AlphaVaultVaultConfigResponse": {
+                "type": "object",
+                "required": [
+                    "prorata_configs",
+                    "fcfs_configs"
+                ],
+                "properties": {
+                    "fcfs_configs": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AlphaVaultFcfsVaultConfigModel"
+                        }
+                    },
+                    "prorata_configs": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AlphaVaultProrataVaultConfigModel"
+                        }
+                    }
+                }
+            },
+            "FeeConfigResponse": {
+                "type": "object",
+                "required": [
+                    "config_address",
+                    "creator_authority",
+                    "activate_duration_after_trade_in_seconds",
+                    "fee_percentage"
+                ],
+                "properties": {
+                    "activate_duration_after_trade_in_seconds": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "config_address": {
+                        "type": "string"
+                    },
+                    "creator_authority": {
+                        "type": "string"
+                    },
+                    "fee_percentage": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Metrics": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/SwapMetrics"
+                    },
+                    {
+                        "$ref": "#/components/schemas/SwapMetrics"
+                    },
+                    {
+                        "type": "object",
+                        "required": [
+                            "yield_volume",
+                            "accumulated_trading_volume",
+                            "accumulated_fee_volume",
+                            "accumulated_yield_volume"
+                        ],
+                        "properties": {
+                            "accumulated_fee_volume": {
+                                "type": "number",
+                                "format": "double",
+                                "description": "Accumulated fee volume"
+                            },
+                            "accumulated_trading_volume": {
+                                "type": "number",
+                                "format": "double",
+                                "description": "Accumulated trading volume"
+                            },
+                            "accumulated_yield_volume": {
+                                "type": "number",
+                                "format": "double",
+                                "description": "Accumulated yield volume"
+                            },
+                            "yield_volume": {
+                                "type": "string",
+                                "description": "24H Yield generated from the vault"
+                            }
+                        }
+                    }
+                ],
+                "description": "Subfield for pool response in /pools, it contain metrics for each pool"
+            },
+            "OrderBy": {
+                "type": "string",
+                "enum": [
+                    "asc",
+                    "desc"
+                ]
+            },
+            "PaginatedPoolResponse": {
+                "type": "object",
+                "required": [
+                    "data",
+                    "page",
+                    "total_count"
+                ],
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/PoolResponse"
+                    },
+                    "page": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "total_count": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                }
+            },
+            "PoolConfigResponse": {
+                "type": "object",
+                "required": [
+                    "config_address",
+                    "trade_fee_bps",
+                    "protocol_fee_bps",
+                    "activation_duration",
+                    "vault_config_key",
+                    "pool_creator_authority",
+                    "activation_type"
+                ],
+                "properties": {
+                    "activation_duration": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "activation_type": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "config_address": {
+                        "type": "string"
+                    },
+                    "pool_creator_authority": {
+                        "type": "string"
+                    },
+                    "protocol_fee_bps": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "trade_fee_bps": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "vault_config_key": {
+                        "type": "string"
+                    }
+                }
+            },
+            "PoolMetrics": {
+                "type": "object",
+                "required": [
+                    "tvl",
+                    "daily_volume",
+                    "total_volume",
+                    "daily_fee",
+                    "total_fee"
+                ],
+                "properties": {
+                    "daily_fee": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "daily_volume": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "total_fee": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "total_volume": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "tvl": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                }
+            },
+            "PoolPostRequest": {
+                "type": "object",
+                "required": [
+                    "address"
+                ],
+                "properties": {
+                    "address": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "PoolResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Metrics"
+                    },
+                    {
+                        "type": "object",
+                        "required": [
+                            "pool_address",
+                            "pool_token_mints",
+                            "pool_token_amounts",
+                            "pool_token_usd_amounts",
+                            "lp_mint",
+                            "pool_tvl",
+                            "farm_tvl",
+                            "farming_apy",
+                            "is_monitoring",
+                            "pool_order",
+                            "farm_order",
+                            "pool_version",
+                            "pool_name",
+                            "lp_decimal",
+                            "farm_reward_duration_end",
+                            "farm_expire",
+                            "pool_lp_price_in_usd",
+                            "trade_apy",
+                            "weekly_trade_apy",
+                            "daily_base_apy",
+                            "weekly_base_apy",
+                            "farm_new",
+                            "permissioned",
+                            "unknown",
+                            "total_fee_pct",
+                            "is_lst",
+                            "is_forex",
+                            "created_at"
+                        ],
+                        "properties": {
+                            "created_at": {
+                                "type": "integer",
+                                "format": "int64"
+                            },
+                            "daily_base_apy": {
+                                "type": "string"
+                            },
+                            "farm_expire": {
+                                "type": "boolean"
+                            },
+                            "farm_new": {
+                                "type": "boolean"
+                            },
+                            "farm_order": {
+                                "type": "integer",
+                                "format": "int64"
+                            },
+                            "farm_reward_duration_end": {
+                                "type": "integer",
+                                "format": "int64",
+                                "minimum": 0
+                            },
+                            "farm_tvl": {
+                                "type": "string"
+                            },
+                            "farming_apy": {
+                                "type": "string"
+                            },
+                            "farming_pool": {
+                                "type": "string",
+                                "nullable": true
+                            },
+                            "is_forex": {
+                                "type": "boolean"
+                            },
+                            "is_lst": {
+                                "type": "boolean"
+                            },
+                            "is_monitoring": {
+                                "type": "boolean"
+                            },
+                            "lp_decimal": {
+                                "type": "integer",
+                                "format": "int64"
+                            },
+                            "lp_mint": {
+                                "type": "string"
+                            },
+                            "permissioned": {
+                                "type": "boolean"
+                            },
+                            "pool_address": {
+                                "type": "string"
+                            },
+                            "pool_lp_price_in_usd": {
+                                "type": "string"
+                            },
+                            "pool_name": {
+                                "type": "string"
+                            },
+                            "pool_order": {
+                                "type": "integer",
+                                "format": "int64"
+                            },
+                            "pool_token_amounts": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "pool_token_mints": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "pool_token_usd_amounts": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
+                            "pool_tvl": {
+                                "type": "string"
+                            },
+                            "pool_version": {
+                                "type": "integer",
+                                "format": "int32"
+                            },
+                            "total_fee_pct": {
+                                "type": "string"
+                            },
+                            "trade_apy": {
+                                "type": "string"
+                            },
+                            "unknown": {
+                                "type": "boolean"
+                            },
+                            "weekly_base_apy": {
+                                "type": "string"
+                            },
+                            "weekly_trade_apy": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "description": "Response for /pools"
+            },
+            "PoolSortKey": {
+                "type": "string",
+                "enum": [
+                    "tvl",
+                    "volume",
+                    "fee_tvl_ratio",
+                    "l_m"
+                ]
+            },
+            "PoolTypeQueryParam": {
+                "type": "string",
+                "enum": [
+                    "dynamic",
+                    "multitoken",
+                    "lst",
+                    "farms"
+                ]
+            },
+            "SwapMetrics": {
+                "type": "object",
+                "required": [
+                    "trading_volume",
+                    "fee_volume"
+                ],
+                "properties": {
+                    "fee_volume": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "trading_volume": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                }
+            }
+        }
+    }
+}
