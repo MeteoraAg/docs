@@ -1,0 +1,332 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "stake_for_fee_keeper",
+        "description": "",
+        "license": {
+            "name": ""
+        },
+        "version": "0.1.1"
+    },
+    "servers": [
+        {
+            "url": "https://stake-for-fee-api.meteora.ag",
+            "description": "Stake2Earn Mainnet API"
+        },
+        {
+            "url": "https://devnet.stake-for-fee-api.meteora.ag",
+            "description": "Stake2Earn Devnet API"
+        }
+    ],
+    "paths": {
+        "/analytics/all": {
+            "get": {
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "get_all_analytics",
+                "operationId": "get_all_analytics",
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AggregateAnalyticInfo"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/vault/all": {
+            "get": {
+                "tags": [
+                    "Vaults"
+                ],
+                "summary": "get_all_vaults",
+                "operationId": "get_all_vaults",
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/VaultsResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/vault/filter": {
+            "get": {
+                "tags": [
+                    "Vaults"
+                ],
+                "summary": "filter_vaults",
+                "operationId": "filter_vaults",
+                "parameters": [
+                    {
+                        "name": "pool_address",
+                        "in": "query",
+                        "description": "The list of pool address. Maxium of 100 pool addresses",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "nullable": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/VaultsResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/vault/{vault_address}": {
+            "get": {
+                "tags": [
+                    "Vaults"
+                ],
+                "summary": "get_one_vault",
+                "operationId": "get_one_vault",
+                "parameters": [
+                    {
+                        "name": "vault_address",
+                        "in": "path",
+                        "description": "Fee vault address",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/VaultDetailWithLeaderboard"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AggregateAnalyticInfo": {
+                "type": "object",
+                "required": [
+                    "total_fee_vaults",
+                    "total_staked_amount_usd"
+                ],
+                "properties": {
+                    "total_fee_vaults": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "total_staked_amount_usd": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                }
+            },
+            "Vault": {
+                "type": "object",
+                "required": [
+                    "vault_address",
+                    "pool_address",
+                    "token_a_mint",
+                    "token_b_mint",
+                    "stake_mint",
+                    "token_a_symbol",
+                    "token_b_symbol",
+                    "total_staked_amount",
+                    "total_staked_amount_usd",
+                    "current_reward_token_a_usd",
+                    "current_reward_token_b_usd",
+                    "current_reward_usd",
+                    "daily_reward_usd",
+                    "created_at_slot",
+                    "created_at_slot_timestamp",
+                    "created_at_tx_sig",
+                    "seconds_to_full_unlock",
+                    "start_fee_distribute_timestamp",
+                    "marketcap",
+                    "flags"
+                ],
+                "properties": {
+                    "created_at_slot": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "created_at_slot_timestamp": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "created_at_tx_sig": {
+                        "type": "string"
+                    },
+                    "current_reward_token_a_usd": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Vault total reward in usd value for token a"
+                    },
+                    "current_reward_token_b_usd": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Vault total reward in usd value for token b"
+                    },
+                    "current_reward_usd": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Vault total reward in usd value"
+                    },
+                    "daily_reward_usd": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Vault estimated daily reward base on the current reward usd"
+                    },
+                    "flags": {
+                        "$ref": "#/components/schemas/VaultFlags"
+                    },
+                    "marketcap": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "pool_address": {
+                        "type": "string"
+                    },
+                    "seconds_to_full_unlock": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "stake_mint": {
+                        "type": "string"
+                    },
+                    "start_fee_distribute_timestamp": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "token_a_mint": {
+                        "type": "string"
+                    },
+                    "token_a_symbol": {
+                        "type": "string"
+                    },
+                    "token_b_mint": {
+                        "type": "string"
+                    },
+                    "token_b_symbol": {
+                        "type": "string"
+                    },
+                    "total_staked_amount": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "total_staked_amount_usd": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "vault_address": {
+                        "type": "string"
+                    }
+                }
+            },
+            "VaultFlags": {
+                "type": "object",
+                "required": [
+                    "tvl_usd_threshold_reached",
+                    "tvl_usd_threshold"
+                ],
+                "properties": {
+                    "tvl_usd_threshold": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "tvl_usd_threshold_reached": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "VaultTopListHolder": {
+                "type": "object",
+                "required": [
+                    "owner",
+                    "staked_amount",
+                    "token_a_accumulated_reward",
+                    "token_b_accumulated_reward",
+                    "token_a_accumulated_reward_usd",
+                    "token_b_accumulated_reward_usd",
+                    "daily_reward_usd"
+                ],
+                "properties": {
+                    "daily_reward_usd": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "owner": {
+                        "type": "string"
+                    },
+                    "staked_amount": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "token_a_accumulated_reward": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "token_a_accumulated_reward_usd": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "token_b_accumulated_reward": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "token_b_accumulated_reward_usd": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                }
+            },
+            "VaultsResponse": {
+                "type": "object",
+                "required": [
+                    "total",
+                    "data"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Vault"
+                        }
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                }
+            }
+        }
+    }
+}
