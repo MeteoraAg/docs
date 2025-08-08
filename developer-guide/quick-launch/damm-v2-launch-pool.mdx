@@ -1,0 +1,248 @@
+---
+title: DAMM v2 Launch Pool
+description: Configure and Launch a DAMM v2 Pool on Meteora using nothing but a configuration file and a few CLI commands
+---
+
+In this guide, we will walk you through the steps to create a DAMM v2 launch pool on Meteora. Whether you’re a seasoned developer or just starting out, this guide has got you covered to deploy liquidity and launch your project on Meteora.
+
+# What You'll Achieve
+
+By the end of this quicklaunch, you’ll have built a liquidity pool on Meteora by:
+- Configuring your liquidity pool settings
+- Interacting with our DAMM v2 program
+- See your liquidity pool in action on Meteora
+
+<Tip>
+**Why Meteora?**
+
+Meteora is a hyper optimized liquidity layer that ensures that your project's provided liquidity is secure, sustainable and composable for anyone to trade on. By following this guide, you'll be able to launch a balanced / concentrated / one-sided liquidity pool with dynamic fees on Meteora in just a few quick and easy steps.
+</Tip>
+
+# Prerequisites
+
+- Node.js >= 18.0.0
+- pnpm >= 10.0.0
+
+*If you don't have pnpm installed, you can install it by running the following command.*
+
+```bash Terminal
+npm install -g pnpm
+```
+
+# Setup -> Configure -> Launch DAMM v2 Pool
+
+<Steps>
+  <Step title="Clone and Setup Meteora Invent">
+  Meteora Invent is a toolkit consisting of everything you need to invent innovative token launches on Meteora. Run the following command in your terminal to get started.
+
+  ```bash Terminal
+  git clone https://github.com/MeteoraAg/metera-invent.git
+  ```
+
+  Once you've cloned the repository, you'll have a new project directory with a meteora-invent folder. Run the following to install pnpm and the project dependencies. 
+
+  ```bash Terminal
+  pnpm install
+  ```
+
+  <Frame>
+   <img src="/images/developer-guide/quick-launch/pnpm-install.png" />
+  </Frame>
+
+  </Step>
+  <Step title="Setup Environment Variables">
+  We provide an easy way to setup environment variables when getting started. Run the following command in your code editor terminal to get started.
+
+  ```bash Terminal
+  cp studio/.env.example studio/.env
+  ```
+
+  This will copy the example environment variables file to your `.env` file. Configure the following variables:
+
+  - `PRIVATE_KEY` - Your private key for the wallet you will be using to deploy the pool.
+
+  Therafter, you will need to run this command to generate a keypair from your wallet private key.
+
+  ```bash Terminal
+  pnpm studio generate-keypair
+  ```
+
+  This will generate a `keypair.json` file in the `studio` directory which will be used for all actions in this guide.
+
+  <Frame>
+   <img src="/images/developer-guide/quick-launch/keypair.png" />
+  </Frame>
+
+  </Step>
+  <Step title="Optional: Start a Local Test Validator">
+  In Meteora Invent we provide an optional command for you to run a local validator to test your pool before deploying it to devnet or mainnet. Run the following command in your code editor terminal to get started.
+
+  ```bash Terminal
+  pnpm studio start-test-validator
+  ```
+
+  This will start a local validator on your machine which will be hosted on `http://localhost:8899`.
+ 
+  <Frame>
+   <img src="/images/developer-guide/quick-launch/start-test-validator.png" />
+  </Frame>
+
+  </Step>
+  <Step title="Configure your DAMM v2 Pool">
+  Navigate to the `studio/config/damm_v2_config.jsonc` file and configure your DAMM v2 pool settings. <br /> <br />
+
+  <Accordion title="Set your DAMM v2 configuration">
+  Your can configure everything DAMM v2 pool related in this file.
+
+  <Note>The comments in the file are to help you understand the different settings you can configure. Please ensure that you read through the comments while configuring your pool.</Note>
+
+   ```jsonc damm_v2_config.jsonc
+    {
+        /* rpcUrl is required. You can switch between mainnet, devnet and localnet or use your own RPC URL. */
+        "rpcUrl": "https://api.devnet.solana.com", // mainnet: https://api.mainnet-beta.solana.com | devnet: https://api.devnet.solana.com | localnet: http://localhost:8899
+
+        /* dryRun is required. If true, transactions will be simulated and not executed. If false, transactions will be executed. */
+        "dryRun": false,
+
+        /* keypairFilePath is required and will be the payer + signer for all transactions */
+        "keypairFilePath": "./keypair.json",
+
+        /* computeUnitPriceMicroLamports is required and can be adjusted to fit your needs */
+        "computeUnitPriceMicroLamports": 100000,
+
+        /* quoteMint is required for the following actions:
+        * 1. damm-v2-create-balanced-pool
+        * 2. damm-v2-create-one-sided-pool
+        * SOL: So11111111111111111111111111111111111111112 | USDC: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v | any other token address
+        */
+        "quoteMint": "So11111111111111111111111111111111111111112",
+
+        /* Either use baseMint or createBaseToken, but not both.
+        * baseMint is required for the following actions:
+        * 1. damm-v2-create-balanced-pool
+        * 2. damm-v2-create-one-sided-pool
+        */
+        // "baseMint": "YOUR_BASE_MINT_ADDRESS",
+        "createBaseToken": {
+            "mintBaseTokenAmount": 1000000000, // total amount of base token to be minted
+            "baseDecimals": 6 // decimals of the base token
+        },
+
+        /* dammV2Config is only used in the following actions:
+        * 1. damm-v2-create-balanced-pool
+        * 2. damm-v2-create-one-sided-pool
+        */
+        "dammV2Config": {
+            "creator": "YOUR_WALLET_ADDRESS", // creator address
+            "baseAmount": 10000000, // base token amount
+            "quoteAmount": null, // quote token amount
+            "initPrice": 0.0001, // initial price (in terms of quote/base price)
+            "maxPrice": null, // max price (in terms of quote/base price)
+            "poolFees": {
+            "maxBaseFeeBps": 400, // max base fee (in basis points)
+            "minBaseFeeBps": 400, // min base fee (in basis points)
+            "numberOfPeriod": 0, // number of period
+            "totalDuration": 0, // total duration (If activationType is 0 (slots), totalDuration = duration / 0.4 | If activationType is 1 (timestamp), totalDuration = duration)
+            "feeSchedulerMode": 0, // 0 - Fee Scheduler: Linear | 1 - Fee Scheduler: Exponential
+            "useDynamicFee": true, // use dynamic fee
+
+            /* Optional Configuration.
+            * Only used if useDynamicFee is true and if you want to configure dynamic fee.
+            * If you don't want to configure dynamic fee, and useDynamicFee is true, the default fee will be 20% of minBaseFeeBps.
+            * Formula: dynamicFee = (variableFeeControl * (volatilityAccumulator * binStep)^2 + 99_999_999_999) / 100_000_000_000
+            */
+            "dynamicFeeConfig": {
+                "filterPeriod": 10, // Time period (in slots/seconds) over which volatility is measured and smoothed
+                "decayPeriod": 120, // Time period (in slots/seconds) over which volatility accumulator decays back to zero
+                "reductionFactor": 5000, // Volatility decay rate in basis points (5000 = 50% reduction per decay period)
+                "variableFeeControl": 14460000, // Scaling factor that controls how much volatility affects dynamic fees
+                "maxVolatilityAccumulator": 239 // Maximum allowed volatility accumulator value (caps dynamic fee calculation)
+            }
+            },
+            "collectFeeMode": 1, // 0 - Both Token | 1 - Token B Only
+            "activationType": 1, // 0 - Slot | 1 - Timestamp
+            "activationPoint": null, // Activation time of the pool depending on activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+            "hasAlphaVault": false // If true, the alpha vault will be created after the pool is created
+        },
+
+        /* alphaVault is only used in the following actions:
+        * 1. damm-v2-create-balanced-pool
+        * 2. damm-v2-create-one-sided-pool
+        * There are 2 types of alpha vault: First Come First Serve (FCFS) and Prorata.
+        */
+        "alphaVault": {
+            "poolType": "damm2", // DLMM = dlmm | DAMM v1 = dynamic | DAMM v2 = damm2
+            "alphaVaultType": "fcfs", // FCFS = fcfs | Prorata = prorata
+
+            /* Only use the following parameters for alphaVaultType: fcfs
+            * 1. maxDepositCap
+            * 2. individualDepositingCap
+            */
+            "maxDepositCap": 10000, // Maximum total amount (in quote token) that can be deposited across all users in the vault
+            "individualDepositingCap": 1, // Maximum amount (in quote token) that each individual user can deposit
+
+            /* Only use the following parameters for alphaVaultType: prorata
+            * 1. maxBuyingCap
+            */
+            // "maxBuyingCap": 10000, // Maximum total amount (in quote token) that can be bought across all users in the vault
+
+            "depositingPoint": 1733626299, // When users can start depositing depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+            "startVestingPoint": 1746808201, // When token vesting begins and users can start claiming their vested tokens depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+            "endVestingPoint": 1746808201, // When token vesting ends and all tokens become fully claimable depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+            "escrowFee": 0, // Fee amount (in quote token) charged when creating a stake escrow account
+            "whitelistMode": "permissionless" // Whitelist mode: permissionless | permission_with_merkle_proof | permission_with_authority
+
+            /* Optional Configuration: whitelistFilePath
+            * Only use when whitelistMode is permission_with_merkle_proof or permission_with_authority
+            */
+            // "whitelistFilepath": "./data/whitelist_wallet.csv", // Optional path to CSV file containing whitelisted wallet addresses and their deposit caps (format: wallet,deposit_cap)
+
+            /* Optional Configuration: merkleProofBaseUrl, chunkSize, kvProofFilepath, cloudflareKvProofUpload
+            * Only use when whitelistMode is permission_with_merkle_proof
+            */
+            // "merkleProofBaseUrl": "https://example.workers.dev/", // Base URL endpoint where merkle proofs are stored and can be retrieved for whitelisted wallet verification
+            // "chunkSize": 1000, // Optional batch size for processing large whitelist files or merkle tree operations to avoid memory/performance issues
+            // "kvProofFilepath": "./data/kv_proof.json", // Optional path to key-value file storing pre-computed merkle proofs for whitelisted addresses
+            // "cloudflareKvProofUpload": {
+            //   "kvNamespaceId": "YOUR_KV_NAMESPACE_ID",
+            //   "accountId": "YOUR_ACCOUNT_ID",
+            //   "apiKey": "YOUR_API_KEY"
+            // }
+        }
+    }
+  ```
+  </Accordion>
+
+    <Tip>
+        The toolkit contains logic to make it easier for you to create the DAMM v2 pool such as:
+
+        - Minting a new `baseMint` token or parsing in an existing `baseMint` token.
+        - Launching the DAMM v2 pool immediately or at a certain `activationPoint` (in slots or timestamp depending on the `activationType`).
+        - Fully customizable pool fees (including fee scheduler and dynamic fee settings).
+        - Optional creation of an Alpha Vault with your DAMM v2 launch pool.
+    </Tip>
+  </Step>
+  <Step title="Create your DAMM v2 Pool">
+  After configuring your DAMM v2 pool settings in `damm_v2_config.jsonc`, you can now create your pool by running the following command. These commands will create your pool and <br /> <br />
+
+  *If you want to create a balanced pool, you can run the following command.*
+
+  ```bash Terminal
+  pnpm studio damm-v2-create-balanced-pool --config ./studio/config/damm_v2_config.jsonc
+  ```
+
+  <Note>Creating a balanced pool will require the `quoteAmount` to be set in the `damm_v2_config.jsonc` file.</Note>
+
+  ---
+
+  *If you want to create a one-sided pool, you can run the following command.*
+
+  ```bash Terminal
+  pnpm studio damm-v2-create-one-sided-pool --config ./studio/config/damm_v2_config.jsonc
+  ```
+
+  This will create your pool with liqudity depsoited from your `keypair.json` and print the pool address and other relevant information to the console.
+  </Step>
+</Steps>
+
+Voilà! You've successfully created your DAMM v2 pool on Meteora. You can now see your pool in action on Meteora either on Meteora's [mainnet](https://app.meteora.ag) or [devnet](https://devnet.meteora.ag) app.
