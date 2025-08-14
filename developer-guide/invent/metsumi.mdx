@@ -6,18 +6,125 @@ description: Your personal launch assistant 👉🏼😚👈🏼
   <img src="/images/developer-guide/invent/metsumi-banner.png" />
 </Frame>
 
-Metsumi is your personal launch assistant engineered to help you launch anything and do any action on Meteora in just a few configurations and CLI commands. Powered by Meteora Invent, Metsumi can help you to:
+Metsumi is your personal launch assistant engineered to help you launch anything and do any action on Meteora in just a few configurations and CLI commands. 
 
-# Dynamic Bonding Curve (DBC)
+# Setup -> Configure
+
+<Steps>
+  <Step title="Setup Environment Variables">
+    Copy the `.env.example` file to `.env` and configure the environment variables.
+
+    ```bash Terminal
+    cp studio/.env.example studio/.env
+    ```
+
+    Configure the following variables:
+
+    - `PRIVATE_KEY` - Your private key for the wallet you will be using to deploy the pool.
+  </Step>
+
+  <Step title="Optional: Start a Local Test Validator">
+    You can also run the studio scripts on localnet - http://localhost:8899 with the following command
+
+    ```bash Terminal
+    pnpm studio start-test-validator
+    ```
+
+    This will start a local validator on your machine which will be hosted on `http://localhost:8899`.
+  </Step>
+
+  <Step title="Generate Keypair">
+    Generate a keypair from your private key:
+
+    ```bash Terminal
+    # For devnet (airdrops 5 SOL)
+    pnpm studio generate-keypair --network devnet
+
+    # For localnet (airdrops 5 SOL)
+    # Ensure that you have already started the local validator with pnpm start-test-validator
+    pnpm studio generate-keypair --network localnet
+    ```
+
+    This will generate a `keypair.json` file in the `studio` directory which will be used for all actions.
+  </Step>
+
+  <Step title="Configure Pool Settings">
+    Configure the config files in the `studio/config` directory.
+
+    - Configure [DLMM](./studio/config/dlmm_config.jsonc)
+    - Configure [DAMM v2](./studio/config/damm_v2_config.jsonc)
+    - Configure [DAMM v1](./studio/config/damm_v1_config.jsonc)
+    - Configure [DBC](./studio/config/dbc_config.jsonc)
+    - Configure [Alpha Vault](./studio/config/alpha_vault_config.jsonc)
+  </Step>
+</Steps>
+
+Powered by [Meteora Invent](https://github.com/MeteoraAg/meteora-invent), **Metsumi** can help you to:
+
+# DLMM
 
 <CardGroup>
-  <Card title="Launch a DBC token pool" icon="bolt-lightning" iconType="solid" href="/developer-guide/quick-launch/dbc-token-launch-pool">
-    Launch a DBC token pool
+  <Card title="Launch a DLMM pool" icon="bolt-lightning" iconType="solid" href="/developer-guide/quick-launch/dlmm-launch-pool">
+    Launch a DLMM customizable launch pool
   </Card>
-  <Card title="Launch a DLMM customizable pool" icon="bolt-lightning" iconType="solid" href="/developer-guide/quick-launch/dlmm-launch-pool">
-    Launch a DLMM customizable pool
+  <Card title="Seed Liquidity" icon="seedling" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#dlmm-scripts">
+    Seed Liquidity with your preferred curve
   </Card>
-  <Card title="Launch a DAMM v1 constant product pool" icon="bolt-lightning" iconType="solid" href="/developer-guide/quick-launch/damm-v1-launch-pool">
-    Launch a DAMM v1 constant product pool
+  <Card title="Seed Liquidity Single Bin" icon="trash" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#dlmm-scripts">
+    Seed Liquidity in a single bin
+  </Card>
+  <Card title="Set Pool Status" icon="signal-bars" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#dlmm-scripts">
+    Set your DLMM Pool Status
+  </Card>
+</CardGroup>
+
+# DAMM v2
+
+<CardGroup>
+  <Card title="Launch a DAMM v2 balanced pool" icon="scale-balanced" iconType="solid" href="/developer-guide/quick-launch/damm-v2-launch-pool">
+    Launch a DAMM v2 balanced pool
+  </Card>
+  <Card title="Launch a DAMM v2 one-sided pool" icon="scale-unbalanced" iconType="solid" href="/developer-guide/quick-launch/damm-v2-launch-pool">
+    Launch a DAMM v2 one-sided pool
+  </Card>
+</CardGroup>
+
+# DAMM v1
+
+<CardGroup>
+  <Card title="Launch a DAMM v1 pool" icon="rocket" iconType="solid" href="/developer-guide/quick-launch/damm-v1-launch-pool">
+    Launch a DAMM v1 constant product launch pool
+  </Card>
+  <Card title="Lock Liquidity" icon="lock" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#damm-v1-scripts">
+    Lock liquidity for a DAMM v1 pool
+  </Card>
+  <Card title="Create a Stake2Earn Farm" icon="farm" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#damm-v1-scripts">
+    Create a Stake2Earn Farm for a DAMM v1 pool
+  </Card>
+  <Card title="Lock Liquidity for Stake2Earn Farm Pool" icon="lock-a" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#damm-v1-scripts">
+    Lock liquidity for a Stake2Earn Farm pool
+  </Card>
+</CardGroup>
+
+# DBC
+
+<CardGroup>
+  <Card title="Launch a DBC token pool" icon="chart-simple" iconType="solid" href="/developer-guide/quick-launch/dbc-token-launch-pool">
+    Launch a Dynamic Bonding Curve token pool
+  </Card>
+  <Card title="Create a DBC Config" icon="gear" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#dbc-scripts">
+    Create a Dynamic Bonding Curve config containing the settings for pre-graduation and post-graduation pools
+  </Card>
+  <Card title="Claim Trading Fees" icon="money-bill" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#dbc-scripts">
+    Claim partner and/or creator trading fees for a DBC pool
+  </Card>
+  <Card title="Migrate to DAMM v1" icon="house" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#dbc-scripts">
+    Migrate your DBC pool to a DAMM v1 pool
+  </Card>
+  <Card title="Migrate to DAMM v2" icon="house-heart" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#dbc-scripts">
+    Migrate your DBC pool to a DAMM v2 pool
+  </Card>
+  <Card title="Swap (Buy/Sell)" icon="arrows-split-up-and-left" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#dbc-scripts">
+    Swap (Buy/Sell) tokens on a DBC pool
   </Card>
 </CardGroup>
