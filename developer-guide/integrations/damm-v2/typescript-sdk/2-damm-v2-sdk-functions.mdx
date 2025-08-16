@@ -61,7 +61,7 @@ const createPoolTx = await cpAmm.createPool({
   activationPoint: null,
   tokenAAmount: consumedInputAmount,
   tokenBAmount: outputAmount,
-  initSqrtPrice: getSqrtPriceFromPrice(initPrice, tokenADecimal, tokenBDecimal);,
+  initSqrtPrice: getSqrtPriceFromPrice(initPrice, tokenADecimal, tokenBDecimal),
   liquidityDelta: liquidityDelta,
   tokenAProgram,
   tokenBProgram
@@ -274,8 +274,8 @@ const poolFees: PoolFeesParams = {
   };
 
 const { tx, pool, position } = await cpAmm.createCustomPoolWithDynamicConfig({
-  payer
-  creator,
+  payer: wallet.publicKey,
+  creator: wallet.publicKey,
   config: dynamicConfigAddress,
   poolCreatorAuthority: poolCreatorAuth.publicKey,
   positionNft: positionNftMint,
@@ -550,6 +550,83 @@ console.log(`Expected token B: ${withdrawQuote.outAmountB.toString()}`);
 - Use this to estimate the tokens you'll receive when removing liquidity
 - The function handles Token2022 transfer fees if token info is provided
 - The calculation accounts for the current price relative to the position's price range
+
+---
+### getQuoteExactOut
+
+Calculates the expected input amount for a swap based on an exact output amount, including fees and slippage protection.
+
+**Function**
+```typescript
+async getQuoteExactOut(params: GetQuoteExactOutParams): Promise<QuoteExactOutResult>
+```
+
+**Parameters**
+```typescript
+interface GetQuoteExactOutParams {
+  outAmount: BN; // The amount of output token to swap from
+  outputTokenMint: PublicKey; // The mint of the output token
+  slippage: number; // Slippage tolerance in percentage (e.g., 0.5 for 0.5%)
+  poolState: PoolState; // The state of the pool
+  currentTime: number; // Current timestamp (for time-based fees)
+  currentSlot: number; // Current slot (for slot-based fees)
+  inputTokenInfo?: {
+    mint: Mint;
+    currentEpoch: number;
+  }; // Token info for Token2022 transfer fee calculations
+  outputTokenInfo?: {
+    mint: Mint;
+    currentEpoch: number;
+  }; // Token info for Token2022 transfer fee calculations
+  tokenADecimal: number; // Token decimal number Eg. 9 for SOL
+  tokenBDecimal: number; // Token decimal number Eg. 6 for USDC
+}
+```
+
+**Returns**
+An object containing:
+- `inputAmount`: The required input amount
+- `maxInputAmount`: The maximum input amount with slippage tolerance
+- `swapResult`: Object containing the swap calculation results
+- `priceImpact`: The price impact of the swap as a percentage
+
+**Example**
+```typescript
+const poolState = await cpAmm.fetchPoolState(poolAddress);
+const currentSlot = await connection.getSlot();
+const blockTime = await connection.getBlockTime(currentSlot);
+const CONFIG = {
+    keypairPath: "./id.json",
+    rpcUrl: clusterApiUrl("mainnet-beta"),
+    poolAddress: new PublicKey("8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie"),
+  };
+
+const poolState = await cpAmm.fetchPoolState(CONFIG.poolAddress);
+const currentSlot = await connection.getSlot();
+const blockTime = await connection.getBlockTime(currentSlot);
+
+const quote = await cpAmm.getQuoteExactOut({
+  outAmount: new BN(100_000_000),
+  outputTokenMint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+  slippage: 0.5, // 0.5% slippage
+  poolState,
+  currentTime: blockTime,
+  currentSlot,
+  tokenADecimal: 9, 
+  tokenBDecimal: 6,
+});
+
+console.log(`Required input: ${quote.inputAmount.toString()}`);
+console.log(`Max input with slippage: ${quote.maxInputAmount.toString()}`);
+console.log(`Price impact: ${quote.priceImpact.toFixed(2)}%`);
+console.log(`Output amount: ${quote.swapResult.outputAmount.toString()}`);
+```
+
+**Notes**
+- Always check the price impact before executing a swap
+- The `slippage` parameter protects users from price movements
+- Use the `maxInputAmount` as the `amountIn` parameter for `swap`
+- For Token2022 tokens with transfer fees, provide the token info parameters
 
 ---
 
@@ -893,6 +970,90 @@ const tx = await cpAmm.removeAllLiquidityAndClosePosition({
 - If there are vesting schedules, they must be refreshed before closing the position
 
 ---
+### splitPosition
+
+Splits a position into two positions.
+
+**Function**
+```typescript
+async splitPosition(params: SplitPositionParams): TxBuilder
+```
+
+**Parameters**
+```typescript
+interface SplitPositionParams {
+  firstPositionOwner: PublicKey; // The owner of the first position
+  secondPositionOwner: PublicKey; // The owner of the second position
+  pool: PublicKey; // The pool address
+  firstPosition: PublicKey; // The first position address
+  firstPositionNftAccount: PublicKey; // The first position NFT account
+  secondPosition: PublicKey; // The second position address
+  secondPositionNftAccount: PublicKey; // The second position NFT account
+  unlockedLiquidityPercentage: number; // The percentage of unlocked liquidity to split
+  permanentLockedLiquidityPercentage: number; // The percentage of permanent locked liquidity to split
+  feeAPercentage: number; // The percentage of fee A to split
+  feeBPercentage: number; // The percentage of fee B to split
+  reward0Percentage: number; // The percentage of reward 0 to split
+  reward1Percentage: number; // The percentage of reward 1 to split
+}
+```
+
+**Returns**
+A transaction builder (`TxBuilder`) that can be used to build, sign, and send the transaction to split one position into multiple positions.
+
+**Example**
+```typescript
+const firstPosition = await client.getUserPositionByPool(
+  poolAddress,
+  firstUser.publicKey
+);
+
+const secondPositionKP = Keypair.generate();
+
+const createSecondPositionTx = await client.createPosition({
+  owner: secondUser.publicKey,
+  payer: secondUser.publicKey,
+  pool: poolAddress,
+  positionNft: secondPositionKP.publicKey,
+});
+
+const createSignature = await sendAndConfirmTransaction(
+  connection,
+  createSecondPositionTx,
+  [secondUser, secondPositionKP],
+  {
+    commitment: "confirmed",
+    skipPreflight: true,
+  }
+);
+console.log("Second position created:", createSignature);
+
+const secondPosition = await client.getUserPositionByPool(
+  poolAddress,
+  secondUser.publicKey
+);
+
+const splitPositionTx = await client.splitPosition({
+  firstPositionOwner: firstUser.publicKey,
+  secondPositionOwner: secondUser.publicKey,
+  pool: poolAddress,
+  firstPosition: firstPosition[0].position,
+  firstPositionNftAccount: firstPosition[0].positionNftAccount,
+  secondPosition: secondPosition[0].position,
+  secondPositionNftAccount: secondPosition[0].positionNftAccount,
+  unlockedLiquidityPercentage: 50,
+  permanentLockedLiquidityPercentage: 0,
+  feeAPercentage: 50,
+  feeBPercentage: 50,
+  reward0Percentage: 50,
+  reward1Percentage: 50,
+});
+```
+
+**Notes**
+- The first position must already exist for that pool
+- The second position can be a new empty position for that same pool
+---
 
 ### mergePosition
 
@@ -949,7 +1110,8 @@ const tx = await cpAmm.mergePosition({
   tokenAAmountAddLiquidityThreshold: new BN(U64_MAX),
   tokenBAmountAddLiquidityThreshold: new BN(u64_MAX),
   tokenAAmountRemoveLiquidityThreshold: new BN(0),
-  tokenBAmountRemoveLiquidityThreshold: new BN(0)
+  tokenBAmountRemoveLiquidityThreshold: new BN(0),
+  currentPoint: new BN(Date.now())
 });
 ```
 
@@ -1182,7 +1344,7 @@ async claimPositionFee2(params: ClaimPositionFeeParams2): TxBuilder
 
 **Parameters**
 ```typescript
-interface ClaimPositionFeeParams {
+interface ClaimPositionFeeParams2 {
   owner: PublicKey;               // The owner of the position
   pool: PublicKey;                // The pool address
   position: PublicKey;            // The position address
@@ -2125,3 +2287,5 @@ Calculates the parameters needed for dynamic fee.
 - Configures volatility-based fee parameters
 - Sets maximum price change thresholds
 - Calculates variable fee control parameters
+
+---
