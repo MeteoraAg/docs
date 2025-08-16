@@ -1,0 +1,63 @@
+---
+title: "What's DLMM?"
+description: Meteora's Dynamic Liquidity Market Maker (DLMM) gives liquidity providers access to dynamic fees and precise liquidity concentration all in real-time.
+---
+
+DLMM is designed with features that provide more flexibility for liquidity providers (LPs) and help LPs earn as much fees as possible with their capital. 
+
+DLMM was inspired by Trader Joe's Liquidity Book and in our implementation, we organize the liquidity of an asset pair into discrete price bins. Token reserves deposited in a liquidity bin are made available for exchange at the price defined for that particular bin. Swaps that happen within the price bin itself would not suffer from slippage. The market for the asset pair is established by aggregating all the discrete liquidity bins.
+
+DLMM LPs earn fees for liquidity provision, dynamic fees during market volatility, and Liquidity Mining (LM) rewards where available.
+
+DLMM is also the fundamental system behind the **DLMM Launch Pool**. DLMM Launch Pool is a pool type designed for new token launches. It comes fundamentally equipped with a feature set that makes it optimal for bootstrapping liquidity for new tokens and making the tokens accessible on Jupiter and other trading integrations.
+
+# Features
+
+<CardGroup>
+  <Card title="High Capital Efficiency" icon="chart-line" iconType="solid">
+    Higher capital efficiency and fees for LPs. DLMM can support high volume trading with low liquidity requirements through the concentrating of tokens at or around the current market value. Higher trading volume and fees due to zero slippage within each active bin that greatly reduces price impact.
+  </Card>
+  <Card title="Flexible Volatility Strategy" icon="sliders" iconType="solid">
+    Greater flexibility and control for LPs when it comes to efficient liquidity distribution. LPs can build flexible liquidity distributions according to their volatility strategies.
+  </Card>
+  <Card title="Capture Higher Fees" icon="coin" iconType="solid">
+    Unlocks more opportunities to capture higher fees based on market conditions and LP objectives / risk profile. LPs can also provide single-sided liquidity with only one token, unlike typical AMMs.  
+  </Card>
+  <Card title="Dynamic Fees" icon="bolt" iconType="solid">
+    Fees that increase or decrease depending on how volatile the market is, which in turn help offset losses that LPs may experience in volatile markets and enhance LP profitability.
+  </Card>
+</CardGroup>
+
+# How does it work?
+
+Users can select token pairs that they wish to provide liquidity for. For each token pair, they can choose a liquidity shape that best suits their strategies. 
+
+## Liquidity Shapes
+
+<CardGroup>
+  <Card title="Spot" icon="chart-column" iconType="solid">
+    Provides a uniform distribution that is versatile and risk adjusted, suitable for any type of market and conditions.
+  </Card>
+  <Card title="Curve" icon="chart-scatter-bubble" iconType="solid">
+    Ideal for a concentrated approach that aims to maximise efficiency while minimizing impact of volatility.
+  </Card>
+  <Card title="Bid-ask" icon="chart-waterfall" iconType="solid">
+    An inverse Curve distribution, typically deployed single sided for a DCA in or out strategy. It can be used to capture volatility in a stable or pegged pair.
+  </Card>
+</CardGroup>
+
+Take note that it is **important for LPs to closely monitor their positions** and adjust accordingly to market conditions to manage the risk of impermanent loss.
+
+<Note>Unlike our Dynamic AMM pools, the DLMM is not connected to our Dynamic Vaults for lending yield.  All liquidity is solely used for trading.</Note>
+
+# Dynamic Fees
+
+Dynamic Fees acts as a form of surge pricing based on market fluctuations and volatility.
+
+## How do Dynamic Fees work?
+
+Since demand for tokens and price volatility are often the highest at launch, Dynamic Fee would also be high. This both mitigates against aggressive sniper bot purchases while capturing more fees for the token creator and LPs in the pool.
+
+The total swap fee consists of two components: a base fee and a variable fee. The base fee is configured by the pool creator and determined by the base factor and bin step. The variable fee is calculated based on real-time price volatility and is affected by swap frequencies and the number of bins crossed during a swap. These fees are calculated and distributed on a per-bin basis, ensuring fair distribution to LPs in each bin that is crossed. LPs can claim these fees whenever they are available.
+
+<Note>All DLMM Launch Pools have Dynamic Fees enabled by default. </Note>

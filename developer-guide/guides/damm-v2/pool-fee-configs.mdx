@@ -1,0 +1,1046 @@
+---
+title: Pool Fee Configs
+---
+
+Each DAMM v2 pool is a PDA of token mints + config. There are 2 types of config: 
+
+1. Public config - can be used by anyone to create a pool.
+2. Private config - can only be used by the `pool_creator_authority` to create a pool.
+
+# Public Config
+
+In a public config, anyone can use one of the public config keys to create a pool. Currently, we have 72 config keys created for devnet and mainnet. Integrators can consider using a public config if tokens cannot be bought (leaked) before the token launch time. But launchpads typically use a private config.
+
+To fetch all public config key addresses, you can use the `getAllConfigs` function in the [Typescript SDK ](https://github.com/MeteoraAg/damm-v2-sdk/blob/cdd71c0282e3555989fc255c5fba335ade5a443b/src/CpAmm.ts#L712).
+
+<Note>Integrators cannot change the fee schedule for that particular public config key.</Note>
+
+<AccordionGroup>
+  <Accordion title="View all public config key addresses (JSON)">
+    ```json
+    [
+        {
+            "index": 0,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 2500000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "8CNy9goNQNLM4wtgRw528tUQGMKD3vSuFRZY2gLGLLvF"
+        },
+        {
+            "index": 1,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 2500000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "82p7sVzQWZfCrmStPhsG8BYKwheQkUiXSs2wiqdhwNxr"
+        },
+        {
+            "index": 2,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 2500000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "FzvMYBQ29z2J21QPsABpJYYxQBEKGsxA6w6J2HYceFj8"
+        },
+        {
+            "index": 3,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 2500000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "EQbqYxecZuJsVt6g5QbKTWpNWa3QyWQE5NWz5AZBAiNv"
+        },
+        {
+            "index": 4,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 3000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "9RuAyDH81GB9dhks6MzHva2objQJxHvqRRfyKKdfmkxk"
+        },
+        {
+            "index": 5,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 3000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "GqRo1PG5KZc4QqZn1RCcnEGC8E7yRscHaW1fQp9St9Lz"
+        },
+        {
+            "index": 6,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 3000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "3KLdspUofc75aaEAJdBo1o6D6cyzXJVtGB8PgpWJEiaR"
+        },
+        {
+            "index": 7,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 3000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "9xKsCsiv8eeBohobb8Z1snLZzVKKATGqmY69vJHyCzvu"
+        },
+        {
+            "index": 8,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 10000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "EVRn9bAekgZsVVAHt25AUjA7qpKh4ac7uUMpoSGqgS5U"
+        },
+        {
+            "index": 9,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 10000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "7BJfgt3ahTtCfXkPMRbS6YneR92JuwsU1dyayhmNBL11"
+        },
+        {
+            "index": 10,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 10000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "GXZLjqmebpsy74vqTD6DqSTugTKVwoTi8fZwLAXBsMNN"
+        },
+        {
+            "index": 11,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 10000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "AeLtDKgw3XnXbr3Kgfbcb7KiZULVCQ5mXaFDiG9n7EgW"
+        },
+        {
+            "index": 12,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 20000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "G8pJy5Hsxeko5srUxDUF6cpuPJ3r53MbMucbpLhNC8NU"
+        },
+        {
+            "index": 13,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 20000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "BcgnWGkrvEQm4hChY6R4wDuwshsvmnnh1Hmzvrm7M8FQ"
+        },
+        {
+            "index": 14,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 20000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "HdqGCsprdhmgqaCXjJzGnKib2SGQvmT9XKYmR7ZjMqmi"
+        },
+        {
+            "index": 15,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 20000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "HQ6vW45Kug23h2A4LkyUqB4UFfGx4LqY1uZLLfQemEjU"
+        },
+        {
+            "index": 16,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 40000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "Gjsr13rp68pMXrpwekfygphynT1hjRzbLLQLHTeQNfQq"
+        },
+        {
+            "index": 17,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 40000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "BjJKkSVvDiMt6qM9vc5MAtFHTxpaYTbgrD6KuwUQhj7u"
+        },
+        {
+            "index": 18,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 40000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "FivzJShpkDj7tdLv6hYSyLcZEAF2FsqNfw8W8mPc8op2"
+        },
+        {
+            "index": 19,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 40000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "DT1PBa3RRvd2GDjKuMJHrcyrus7cM5oqL3eY6tR63uUk"
+        },
+        {
+            "index": 20,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 60000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "5UMffQ4jEJgjS2rFoyTWNyh3Xf3ek3LFPyr89RfYQRbu"
+        },
+        {
+            "index": 21,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 60000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "7y8Y3kuKphxBoyesTaKV2WQLtu884zhVCDtxqrCP4HWv"
+        },
+        {
+            "index": 22,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 60000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "9YmoetVvZx1vrfJ9fD8X5YG3FQXREK6ZiPzRghP33Wbf"
+        },
+        {
+            "index": 23,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 60000000,
+            "numberOfPeriod": 0,
+            "reductionFactor": 0,
+            "periodFrequency": 0,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "Ha2bAcxbLrFr5RiugBgeJVLx1JE7gq16rzAuqUED1v3f"
+        },
+        {
+            "index": 24,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3454861,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "GtDtC9gJEAyMje1AW1McMoAFpGqcfYPwnGMBJ3VLS54Q"
+        },
+        {
+            "index": 25,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3454861,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "4A95FoEsswvuCEDSFnd8uXBgdkQPqzrjJv2roev8c9mm"
+        },
+        {
+            "index": 26,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3454861,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "CsPBLWzLWTJ3p8PG28zQ31Eq3dPpw1wV55JxpRYzdVxg"
+        },
+        {
+            "index": 27,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3454861,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "G9EUpuBrDZHQAeaifkx5xbiajAGbB6HHJ4xcVmZyd3eQ"
+        },
+        {
+            "index": 28,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 432,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "7f8zQkCTmEE2yPjKoEGpWxcTaw6VYcjB1P3DxnpfFNCc"
+        },
+        {
+            "index": 29,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 432,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "G6Sukhgcmaf32PucWqCTMHn4jtWjE2TZTk59eQPSVKsy"
+        },
+        {
+            "index": 30,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 432,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "CLL5Wi7pi9SwHiSwtMyz1xbX6HDq3defpotWUFxwu4oj"
+        },
+        {
+            "index": 31,
+            "baseFeeValue": 2500000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 432,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "9jma77W3ZsJXPude5tnmC51EhMjKHzwsHCz1gFmbfJBc"
+        },
+        {
+            "index": 32,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3451389,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "EQadgQ6mGX7fHWxWbLiq7LCsKs6RLyoD3gDCKWzAB3qi"
+        },
+        {
+            "index": 33,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3451389,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "F28LTGGMKxKmicskcBpVd5BD2Dj73bhcvVbBiCBpg7fQ"
+        },
+        {
+            "index": 34,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3451389,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "3DpKWH6VXcJewqMQcVXQfuSfb95qrbq847wCTTDzviWt"
+        },
+        {
+            "index": 35,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3451389,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "2gnXvkRvYZ3iosu4d8G7KmZR6Ki9GXPMoxbx5NR4e8bz"
+        },
+        {
+            "index": 36,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 417,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "BdYG3xCpAYPYPnksHGhVfEMHk3gqt1Y7uqdWUsSUzf4y"
+        },
+        {
+            "index": 37,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 417,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "uPhetWqk4hhf9swL8xdbABfmGh4GyQ9nVAeYpvnC6pb"
+        },
+        {
+            "index": 38,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 417,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "TBuzuEMMQizTjpZhRLaUPavALhZmD8U1hwiw1pWSCSq"
+        },
+        {
+            "index": 39,
+            "baseFeeValue": 3000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 417,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "3z9HHXyWEXc7L3EPEQ5mN8cPoq9wBZr8y2bRiEwUu9u2"
+        },
+        {
+            "index": 40,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3402778,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "ABWG34FJMHaWSwP2uJrX2S6dKXDmz93MCVSBk9BKZHrs"
+        },
+        {
+            "index": 41,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3402778,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "HrBAyo6rf8i6dF8S8kh6QsjTmesmFhDoHvwSrsUHKdbX"
+        },
+        {
+            "index": 42,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3402778,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "DXoY3hDAuvQudWTjpepSJ1bn1yd6jovuvPweHwc1e83P"
+        },
+        {
+            "index": 43,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3402778,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "69CwWBvDBGvZ9P6bB9UnMwnDcQ136UFuDn2UEZ7Rb5We"
+        },
+        {
+            "index": 44,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 321,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "BDAbqqPRRg44tsDUEUPFjVaReX1mavngTc9H9SFPDo6F"
+        },
+        {
+            "index": 45,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 321,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "EZDtwCGcoe3f7BWFxaMrYDTq2WZMrcBZbUktoBKYvYiM"
+        },
+        {
+            "index": 46,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 321,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "341nQvGfd3b6HXMEaMafZwk5DkHmrZDh7Q2j4BbTCHyk"
+        },
+        {
+            "index": 47,
+            "baseFeeValue": 10000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 321,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "6Vt8pYzHmtMr4H5v1qp8gR9uot11xVfbjTHmbm9SXMGB"
+        },
+        {
+            "index": 48,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3333333,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "F7xJjVwqvVBoAkYV3TdZesu4ckwzzVQEebaPiZVqT4Ly"
+        },
+        {
+            "index": 49,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3333333,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "84tnQ4tQ4N8QGwoEEXcCdWfjSeuL8SfNjsdZWLZ9UiY4"
+        },
+        {
+            "index": 50,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3333333,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "HKqzgVzaKkX7NPXyVNWuVegtgujkiJ2ZLvpszR1iZjhd"
+        },
+        {
+            "index": 51,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3333333,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "5LWDYbiD3LwEhAd3eeHpjJscACKo4XdTDzycdHFSBCvE"
+        },
+        {
+            "index": 52,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 265,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "H6hnWjg6LtpHPK1wN89ieb7Eex9wV2UJkw7pPH2DHSNd"
+        },
+        {
+            "index": 53,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 265,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "FjPMSBmrawY7b5We2jv7asshi6ZWnMrfYSPUn5ZDzqmA"
+        },
+        {
+            "index": 54,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 265,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "DgXZtoBcBumq96AtGkG1X4xh9fvHnWwyYuXqaenjeKoe"
+        },
+        {
+            "index": 55,
+            "baseFeeValue": 20000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 265,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "2rGPJyTHFvHH44hVfcotPXjXNGHCsiLFUaRfVkXXVCYB"
+        },
+        {
+            "index": 56,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3194444,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "EcfqEkLSeGzDtZrTJWcbDxptfR2nWfX6cjJLFkgttwY6"
+        },
+        {
+            "index": 57,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3194444,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "GkC7zppTNPjBeoZfKCR9ExbNSycpwi5VphvktqpyPdx3"
+        },
+        {
+            "index": 58,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3194444,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "7tcR7XawzXCSAtAavjVYU2Rx5RK8mE9rsyrErfYRpkw4"
+        },
+        {
+            "index": 59,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3194444,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "A4JGKvpXKGfpkSgBSLmR7obESYhqqaeVEve71nWmS4zU"
+        },
+        {
+            "index": 60,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 208,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "GGD1oNYU62ux15XXpSMeoKcfznHTtu85qLeKrhY7MMMZ"
+        },
+        {
+            "index": 61,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 208,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "4hKGzanVuqCaVHbXm9rXnYJeJvzWcq5HDogKcrVYh4gP"
+        },
+        {
+            "index": 62,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 208,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "G4Y8SphEjVCESkodbFU7sjgaPZRykD55dabccDa8Lv7M"
+        },
+        {
+            "index": 63,
+            "baseFeeValue": 40000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 208,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "GnERyyZgr9JdZ5dCFC46APkcPNZdUQgrJmRqoeBX55dg"
+        },
+        {
+            "index": 64,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3055556,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "C11DxNAH4NBGNHGzTCq9ZUcJrVJ9dEG5CLwSmis3Y6HJ"
+        },
+        {
+            "index": 65,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3055556,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "2rbDaKQjxiFgMsYoQxLRaPvtXuLFUUQmypN5bYmJqPjY"
+        },
+        {
+            "index": 66,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3055556,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "7gE2roG5cBM5hpqDQvQ2J7ZsQE4CqM6eE8sKQ6NTaqRS"
+        },
+        {
+            "index": 67,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 144,
+            "reductionFactor": 3055556,
+            "periodFrequency": 600,
+            "feeSchedulerMode": 0
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "6Fs8KLaRA1T1aecBVca4VPpJi27oAPLDZUPbrUocEN12"
+        },
+        {
+            "index": 68,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 175,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": true,
+            "configAccount": "7SDjNZxM4rGNdYF3MyAkDetZ2TNFUxdDUGGE1C3kCeAd"
+        },
+        {
+            "index": 69,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 175,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": true,
+            "configAccount": "2yAJha5NVgq5mEitTUvdWSUKrcYvxAAc2H6rPDbEQqSu"
+        },
+        {
+            "index": 70,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 175,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 1,
+            "dynamicFee": false,
+            "configAccount": "E4VmzCAgMN2GGAhiRipGfJhaP411Ap7YFy8WmnnV2CKs"
+        },
+        {
+            "index": 71,
+            "baseFeeValue": 60000000,
+            "baseFee": {
+            "cliffFeeNumerator": 500000000,
+            "numberOfPeriod": 120,
+            "reductionFactor": 175,
+            "periodFrequency": 60,
+            "feeSchedulerMode": 1
+            },
+            "collectFeeMode": 0,
+            "dynamicFee": false,
+            "configAccount": "DJN8YHxQKZnF7bL2GwuKNB2UcfhKCqRspfLe7YYEN3rr"
+        }
+    ]
+    ```
+  </Accordion>
+</AccordionGroup>
+
+
+# Private Config
+
+In a private config, only a specified address (configured in the `pool_creator_authority` field) can create a pool with that config. If you are a launchpad, this helps you prevent front-running of the token launch pool.
+
+- Integrators such as launchpads or other partners may need to use their own unique pool config key (with a custom fee schedule), if they want custom `pool_creator_authority` to prevent front-running of the token launch pool. New dedicated config keys can only be created by Meteora, so please reach out to the team if this is required.
+
+- If you're an integrator that's keen to create your own unique custom pool config key with a custom fee schedule and `pool_fees`, please reach out to the team.
+
+- The `pool_creator_authority` doesn't work with program address. It's not a program whitelist, it needs to be a PDA (program derived address) or normal account.
+
+<Note>Integrators can reach out to Meteora to request to create or change their fee schedule.</Note>

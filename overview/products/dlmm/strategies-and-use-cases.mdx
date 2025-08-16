@@ -1,0 +1,143 @@
+---
+title: "Strategies and Use Cases"
+---
+
+Through allocating different amounts of tokens at diverse price points, we are able to build a desired liquidity shape (volatility strategy) with the DLMM that best fits our LP goals. 
+
+<CardGroup>
+  <Card title="Spot" icon="chart-column" iconType="solid">
+    Provides a uniform distribution of liquidity that is flexible and suitable for any type of market and conditions. It is the most straightforward volatility strategy to deploy for new LPs who want to rebalance their position less frequently. This is similar to setting a CLMM price range.
+  </Card>
+  <Card title="Curve" icon="chart-scatter-bubble" iconType="solid">
+    Ideal for a concentrated approach that aims to maximize capital efficiency by allocating capital mostly in the middle of your price range. This is great for stables or pairs where the price does not change very often.
+  </Card>
+  <Card title="Bid-Ask" icon="chart-waterfall" iconType="solid">
+    Bid-Ask is an inverse Curve distribution, where most of your capital is allocated towards both ends of the range. This strategy can be used to capture bigger volatility swings away from the current price. Bid-Ask is more complex than Spot and may require more frequent rebalancing to be effective, but has a high potential for fee capture during situations where prices fluctuate wildly around the current price. Bid-Ask can also be deployed single sided for a DCA in or out strategy.
+  </Card>
+</CardGroup>
+
+# Basic Strategies
+
+<div className="overflow-x-auto">
+  <table className="min-w-full border border-gray-200 rounded-lg">
+    <thead>
+      <tr className="bg-gray-50">
+        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 border-b">Strategy</th>
+        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 border-b">Advantages</th>
+        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 border-b">Disadvantages</th>
+        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 border-b">Considerations</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr className="hover:bg-gray-50 transition-colors duration-200">
+
+        <td className="px-4 py-3 text-sm text-gray-900 border-b">
+        <b>Curve</b> <br/>
+        <div align="center">
+          <img src="/images/overview/products/dlmm/curve.png" alt="Curve" style={{maxWidth: '200px', height: 'auto'}} />
+        </div>
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">
+          • Capital-efficient deployment of liquidity<br/><br/>
+          • Ideal for calm markets
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">Increased risk of impermanent loss</td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">To achieve optimal effectiveness, it's necessary to consistently rebalance based on the current price.</td>
+      </tr>
+      <tr className="hover:bg-gray-50 transition-colors duration-200">
+        <td className="px-4 py-3 text-sm text-gray-900 border-b">
+        <b>Bid-Ask</b> <br/>
+        <div align="center">
+          <img src="/images/overview/products/dlmm/bid-ask.png" alt="Bid-Ask" style={{maxWidth: '200px', height: 'auto'}} />
+        </div>
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">
+          • Captures market volatility<br/><br/>
+          • Great for DCA in/out of positions
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">Riskier than other positions</td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">Requires rebalancing to remain efficient</td>
+      </tr>
+      <tr className="hover:bg-gray-50 transition-colors duration-200">
+        <td className="px-4 py-3 text-sm text-gray-900 border-b">
+        <b>Spot-Concentrated</b> <br/>
+        Liquidity equally deposited between 1-3 bins <br/>
+        <div align="center">
+          <img src="/images/overview/products/dlmm/spot-concentrated.png" alt="Spot-Concentrated" style={{maxWidth: '200px', height: 'auto'}} />
+        </div>
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">
+          • Ideal for Stablecoin pairs<br/><br/>
+          • Maximises assets efficiency
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">Highest risk of Impermanent Loss when price leaves the bin range</td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">If used in volatile pairs for capturing greatest amount of fees, make sure to monitor very closely as this strategy has highest risk of Impermanent Loss.</td>
+      </tr>
+      <tr className="hover:bg-gray-50 transition-colors duration-200">
+        <td className="px-4 py-3 text-sm text-gray-900 border-b">
+        <b>Spot-Spread</b> <br/>
+        Liquidity equally deposited between 20-30 bins <br/>
+        <div align="center">
+          <img src="/images/overview/products/dlmm/spot-spread.png" alt="Spot-Spread" style={{maxWidth: '200px', height: 'auto'}} />
+        </div>
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">
+          • Very capital-efficient strategy<br/><br/>
+          • Expect to stay in range for small intra-day volatility
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">High risk of Impermanent loss</td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">Make sure to monitor position at least on a daily basis.</td>
+      </tr>
+      <tr className="hover:bg-gray-50 transition-colors duration-200">
+        <td className="px-4 py-3 text-sm text-gray-900 border-b">
+        <b>Spot-Wide</b> <br/>
+        Liquidity equally deposited between 50 bins <br/>
+        <div align="center">
+          <img src="/images/overview/products/dlmm/spot-wide.png" alt="Spot-Wide" style={{maxWidth: '200px', height: 'auto'}} />
+        </div>
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">
+          • Lower risk of impermanent loss<br/><br/>
+          • Ideal for LPs who do not wish to regularly monitor price action
+        </td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">Reduced capital efficiency since capital is spread over a larger range</td>
+        <td className="px-4 py-3 text-sm text-gray-700 border-b">Although capital-efficiency is lower than the other shapes above, in general, it is still better than x*y=k exchanges</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+# Advanced Strategies
+
+- Ranged Limit Orders
+
+- DCA while earning
+
+- Sell/Buy Walls
+
+- Gradual Ladder Orders
+
+- De-peg Bets
+
+# What is Bin Step?
+
+Each bin represents a single price point, and the difference between 2 consecutive bins is the bin step. Bin steps are calculated based on the basis points set by the pool creator. Bin step is similar to tick size and a higher size means a larger jump from one price to the next.
+
+For example, if the current price for SOL/USDC is $20 per SOL and the bin step is 25 basis points (0.25%), then the consecutive bins would be 20 x 1.0025 = 20.05, 20.05 * 1.0025 = 20.10 and so on.
+
+<CardGroup>
+  <Card title="Smaller Bin Step" icon="arrow-down" iconType="solid">
+    Allows you to capture more volume, but your max price range per position is smaller. A general rule of thumb is smaller steps for stable pairs and larger steps for more volatile pairs.
+  </Card>
+  <Card title="Larger Bin Step" icon="arrow-up" iconType="solid">
+    Allows you to set a wider price range per position, but at the cost of less volume, since there's a less continuous price range (harder for liquidity to be picked up for swaps). Important for highly volatile pairs where price swings can be huge. For highly volatile pairs, larger bin steps could also mean less errors, since with smaller bin steps a trade may jump between different binArrays frequently. Note: Currently the max # of bins per position is 69, so a larger bin step can be used if you need to widen your range for a single position.
+  </Card>
+</CardGroup>
+
+# How is Bin Step related to Base Fee?
+
+Base Fee is the minimum fee charged per swap. 
+
+- Lower fee gets more volume but higher fee earns more per volume. 
+- Generally if you want a higher base fee, the higher the bin step. 
+- But a lower base fee than other DEXes might give more flexibility for dynamic fees to optimize for volume or fees given the market volatility.

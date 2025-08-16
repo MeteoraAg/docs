@@ -1,0 +1,672 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Vault Keeper API",
+        "description": "API for Vault Keeper - A DeFi vault management system that monitors and optimizes vault strategies across multiple protocols",
+        "version": "0.6.0",
+        "contact": {
+            "name": "Vault Keeper API Support"
+        }
+    },
+    "servers": [
+        {
+            "url": "https://merv2-api.meteora.ag",
+            "description": "Mercuria Mainnet API"
+        }
+    ],
+    "paths": {
+        "/vault_info": {
+            "get": {
+                "summary": "get_vault_info",
+                "description": "Returns detailed information about all monitored vaults including their states, strategies, and performance metrics",
+                "operationId": "getVaultInfo",
+                "tags": [
+                    "Vaults"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of vault states",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/VaultState"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string",
+                                    "example": "Error: cannot decode vault info"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/vault_addresses": {
+            "get": {
+                "summary": "get_vault_addresses",
+                "description": "Returns a list of vault addresses with their associated information",
+                "operationId": "getVaultAddresses",
+                "tags": [
+                    "Vaults"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of vault addresses",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/VaultAddress"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string",
+                                    "example": "Error: cannot decode vault addresses"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/vault_state/{token_mint}": {
+            "get": {
+                "summary": "get_vault_state",
+                "description": "Returns the current state of a specific vault identified by its token mint address",
+                "operationId": "getVaultState",
+                "tags": [
+                    "Vaults"
+                ],
+                "parameters": [
+                    {
+                        "name": "token_mint",
+                        "in": "path",
+                        "required": true,
+                        "description": "The token mint address (Solana public key)",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$",
+                            "example": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Vault state information",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/VaultState"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid token mint or cannot get vault state",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string",
+                                    "example": "Error: cannot decode token mint"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/apy_state/{token_mint}": {
+            "get": {
+                "summary": "get_apy_state",
+                "description": "Returns APY (Annual Percentage Yield) information for strategies associated with a specific token mint",
+                "operationId": "getApyState",
+                "tags": [
+                    "APY"
+                ],
+                "parameters": [
+                    {
+                        "name": "token_mint",
+                        "in": "path",
+                        "required": true,
+                        "description": "The token mint address (Solana public key)",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$",
+                            "example": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "APY state information",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApyState"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid token mint or cannot encode APY state",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string",
+                                    "example": "Error: cannot decode token mint"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/apy_filter/{token_mint}/{start_timestamp}/{end_timestamp}": {
+            "get": {
+                "summary": "get_apy_by_time_range",
+                "description": "Returns APY information for a specific token mint within a given time range",
+                "operationId": "getFilterApyByTimeRange",
+                "tags": [
+                    "APY"
+                ],
+                "parameters": [
+                    {
+                        "name": "token_mint",
+                        "in": "path",
+                        "required": true,
+                        "description": "The token mint address (Solana public key)",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$",
+                            "example": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+                        }
+                    },
+                    {
+                        "name": "start_timestamp",
+                        "in": "path",
+                        "required": true,
+                        "description": "Start timestamp (Unix timestamp in seconds)",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9]+$",
+                            "example": "1640995200"
+                        }
+                    },
+                    {
+                        "name": "end_timestamp",
+                        "in": "path",
+                        "required": true,
+                        "description": "End timestamp (Unix timestamp in seconds). Must be greater than start_timestamp",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[0-9]+$",
+                            "example": "1641081600"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Filtered APY state information",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApyState"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid parameters or start timestamp >= end timestamp",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string",
+                                    "example": "Error: start timestamp cannot be smaller than end timestamp"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/virtual_price/{token_mint}/{strategy}": {
+            "get": {
+                "summary": "get_virtual_price",
+                "description": "Returns virtual price information for a specific strategy within a vault",
+                "operationId": "getVirtualPrice",
+                "tags": [
+                    "Virtual Price"
+                ],
+                "parameters": [
+                    {
+                        "name": "token_mint",
+                        "in": "path",
+                        "required": true,
+                        "description": "The token mint address (Solana public key)",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$",
+                            "example": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+                        }
+                    },
+                    {
+                        "name": "strategy",
+                        "in": "path",
+                        "required": true,
+                        "description": "The strategy address (Solana public key)",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$",
+                            "example": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Virtual price information",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/VirtualPrice"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid token mint or strategy address",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string",
+                                    "example": "Error: cannot decode token mint"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "VaultState": {
+                "type": "object",
+                "description": "Complete state information for a vault",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Token symbol (e.g., USDC, SOL)",
+                        "example": "USDC"
+                    },
+                    "token_address": {
+                        "type": "string",
+                        "description": "Token mint address",
+                        "example": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+                    },
+                    "pubkey": {
+                        "type": "string",
+                        "description": "Vault public key address",
+                        "example": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+                    },
+                    "is_monitoring": {
+                        "type": "boolean",
+                        "description": "Whether the vault is currently being monitored",
+                        "example": true
+                    },
+                    "vault_order": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Display order of the vault",
+                        "example": 1
+                    },
+                    "usd_rate": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Current USD exchange rate for the token",
+                        "example": 1.0
+                    },
+                    "closest_apy": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Most recent APY calculation",
+                        "example": 0.05
+                    },
+                    "average_apy": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Moving average APY",
+                        "example": 0.048
+                    },
+                    "long_apy": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Long-term APY calculation",
+                        "example": 0.052
+                    },
+                    "earned_amount": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "Total amount earned by the vault",
+                        "example": 1000000
+                    },
+                    "virtual_price": {
+                        "type": "string",
+                        "description": "Current virtual price as decimal string",
+                        "example": "1.05234"
+                    },
+                    "enabled": {
+                        "type": "integer",
+                        "format": "uint8",
+                        "description": "Whether the vault is enabled (1) or disabled (0)",
+                        "example": 1
+                    },
+                    "lp_mint": {
+                        "type": "string",
+                        "description": "LP token mint address",
+                        "example": "7dHbWXmci3dT6jZtZwrzqQzrmSjmKhc2EEcr6rKhTgvD"
+                    },
+                    "fee_pubkey": {
+                        "type": "string",
+                        "description": "Fee collection account public key",
+                        "example": "HKy7a5FnL8Qg2HUE6YRkG6xfv8FvVcFqPXvR6T7bGpQ2"
+                    },
+                    "total_amount": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "Total amount deposited in the vault",
+                        "example": 50000000
+                    },
+                    "total_amount_with_profit": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "Total amount including accumulated profits",
+                        "example": 52500000
+                    },
+                    "token_amount": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "Current token amount in the vault",
+                        "example": 51000000
+                    },
+                    "fee_amount": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "Accumulated fee amount",
+                        "example": 250000
+                    },
+                    "lp_supply": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "Total LP token supply",
+                        "example": 48500000
+                    },
+                    "earned_usd_amount": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Earned amount in USD",
+                        "example": 1000.0
+                    },
+                    "strategies": {
+                        "type": "array",
+                        "description": "List of strategies used by this vault",
+                        "items": {
+                            "$ref": "#/components/schemas/StrategyInfo"
+                        }
+                    },
+                    "timestamp": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "Last update timestamp",
+                        "example": 1640995200
+                    }
+                },
+                "required": [
+                    "symbol",
+                    "token_address",
+                    "pubkey",
+                    "is_monitoring",
+                    "vault_order",
+                    "usd_rate",
+                    "closest_apy",
+                    "average_apy",
+                    "long_apy",
+                    "earned_amount",
+                    "virtual_price",
+                    "enabled",
+                    "lp_mint",
+                    "fee_pubkey",
+                    "total_amount",
+                    "total_amount_with_profit",
+                    "token_amount",
+                    "fee_amount",
+                    "lp_supply",
+                    "earned_usd_amount",
+                    "strategies",
+                    "timestamp"
+                ]
+            },
+            "StrategyInfo": {
+                "type": "object",
+                "description": "Information about a vault strategy",
+                "properties": {
+                    "pubkey": {
+                        "type": "string",
+                        "description": "Strategy public key address",
+                        "example": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+                    },
+                    "reserve": {
+                        "type": "string",
+                        "description": "Reserve address associated with the strategy",
+                        "example": "8UJgxaiQx5nTrdDgph5FiahMmzduuLTLf5WmsPegYA6W"
+                    },
+                    "strategy_type": {
+                        "type": "string",
+                        "description": "Type of strategy (e.g., Solend, Kamino, MarginFi)",
+                        "enum": [
+                            "Solend",
+                            "Kamino",
+                            "MarginFi",
+                            "Unknown"
+                        ],
+                        "example": "Solend"
+                    },
+                    "strategy_name": {
+                        "type": "string",
+                        "description": "Human-readable strategy name",
+                        "example": "Solend USDC Main Pool"
+                    },
+                    "liquidity": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "Current liquidity in this strategy",
+                        "example": 10000000
+                    },
+                    "max_allocation": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Maximum allocation percentage for this strategy",
+                        "example": 50.0
+                    },
+                    "isolated": {
+                        "type": "boolean",
+                        "description": "Whether this strategy is isolated from optimization",
+                        "example": false
+                    },
+                    "disabled": {
+                        "type": "boolean",
+                        "description": "Whether this strategy is currently disabled",
+                        "example": false
+                    },
+                    "safe_utilization_threshold": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Safe utilization threshold percentage",
+                        "example": 80.0
+                    }
+                },
+                "required": [
+                    "pubkey",
+                    "reserve",
+                    "strategy_type",
+                    "strategy_name",
+                    "liquidity",
+                    "max_allocation",
+                    "isolated",
+                    "disabled",
+                    "safe_utilization_threshold"
+                ]
+            },
+            "VaultAddress": {
+                "type": "object",
+                "description": "Vault address information (legacy API)",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Token symbol",
+                        "example": "USDC"
+                    },
+                    "vault_address": {
+                        "type": "string",
+                        "description": "Vault public key address",
+                        "example": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+                    },
+                    "lp_mint_address": {
+                        "type": "string",
+                        "description": "LP token mint address",
+                        "example": "7dHbWXmci3dT6jZtZwrzqQzrmSjmKhc2EEcr6rKhTgvD"
+                    },
+                    "fee_address": {
+                        "type": "string",
+                        "description": "Fee collection address",
+                        "example": "HKy7a5FnL8Qg2HUE6YRkG6xfv8FvVcFqPXvR6T7bGpQ2"
+                    }
+                },
+                "required": [
+                    "symbol",
+                    "vault_address",
+                    "lp_mint_address",
+                    "fee_address"
+                ]
+            },
+            "ApyState": {
+                "type": "object",
+                "description": "APY state information for different time periods",
+                "properties": {
+                    "closest_apy": {
+                        "type": "array",
+                        "description": "Most recent APY calculations for each strategy",
+                        "items": {
+                            "$ref": "#/components/schemas/ProtocolApy"
+                        }
+                    },
+                    "average_apy": {
+                        "type": "array",
+                        "description": "Moving average APY calculations for each strategy",
+                        "items": {
+                            "$ref": "#/components/schemas/ProtocolApy"
+                        }
+                    },
+                    "long_apy": {
+                        "type": "array",
+                        "description": "Long-term APY calculations for each strategy",
+                        "items": {
+                            "$ref": "#/components/schemas/ProtocolApy"
+                        }
+                    }
+                },
+                "required": [
+                    "closest_apy",
+                    "average_apy",
+                    "long_apy"
+                ]
+            },
+            "ProtocolApy": {
+                "type": "object",
+                "description": "APY information for a specific protocol strategy",
+                "properties": {
+                    "strategy_name": {
+                        "type": "string",
+                        "description": "Human-readable strategy name",
+                        "example": "Solend USDC Main Pool"
+                    },
+                    "strategy": {
+                        "type": "string",
+                        "description": "Strategy address",
+                        "example": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+                    },
+                    "apy": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "APY percentage (e.g., 5.0 for 5%)",
+                        "example": 5.0
+                    }
+                },
+                "required": [
+                    "strategy_name",
+                    "strategy",
+                    "apy"
+                ]
+            },
+            "VirtualPrice": {
+                "type": "object",
+                "description": "Virtual price data point",
+                "properties": {
+                    "price": {
+                        "type": "string",
+                        "description": "Virtual price as decimal string",
+                        "example": "1.05234"
+                    },
+                    "timestamp": {
+                        "type": "integer",
+                        "format": "uint64",
+                        "description": "Timestamp when this price was recorded",
+                        "example": 1640995200
+                    }
+                },
+                "required": [
+                    "price",
+                    "timestamp"
+                ]
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "System",
+            "description": "System information and health endpoints"
+        },
+        {
+            "name": "Vaults",
+            "description": "Vault state and information endpoints"
+        },
+        {
+            "name": "APY",
+            "description": "Annual Percentage Yield calculations and historical data"
+        },
+        {
+            "name": "Virtual Price",
+            "description": "Virtual price tracking for vault strategies"
+        }
+    ]
+}

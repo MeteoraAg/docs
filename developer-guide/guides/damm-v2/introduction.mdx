@@ -1,0 +1,100 @@
+---
+title: Introduction
+---
+
+Initialize your own constant product liquidity pool with DAMM v2. DAMM v2 allows you to optimize transaction fees, an option to set single-side liquidity, the flexibility of concentrating liquidty providing etc.
+
+# Program Address
+
+- Mainnet-beta: `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
+- Devnet: `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
+
+# Resources
+
+- [DAMM v2 Program](https://github.com/MeteoraAg/damm-v2)
+- [DAMM v2 Typescript SDK](https://github.com/MeteoraAg/damm-v2-sdk)
+- [Interface Definition Language (IDL)](https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json)
+- Pool Authority: [HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC](https://solscan.io/account/HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC)
+
+# Features
+
+## Position NFT
+
+The position state manages `unlocked_liquidity` + `locked_liquidity` + `vested liquidity`. 
+
+User can interact with the following flows in the same, single position:
+
+- Permanently lock part of the liquidity
+- Create multiple vesting schedules
+- Add more liquidity (unlocked liquidity)
+
+The Position NFT is also a transferrable NFT that can be sent to other wallets.
+
+## Farming
+
+For DAMM v2, there is an in-built farming mechanism within the program. This is unlike DAMM v1, where there is a separate farming program.
+
+Each specific pool in DAMM v2 can create farming rewards and the pool has its own unique reward vault. Each reward vault can have a maximum of 2 types of reward tokens. 
+
+When the `initialize_reward` program endpoint is used, a `reward_vault` for the specific pool is created, and the initiator can specify the reward token (max 2 types) for the `reward_vault` 
+
+Rewards will be shared with all liquidity providers over the farming duration.
+
+Currently, in this beta stage:
+1. The `initialize_reward` program endpoint can only be initialized by Meteora's admin
+2. Only a whitelisted funder address can fund rewards into this `reward_vault` 
+
+So for now, projects have to reach out to the Meteora team to create a farm and add rewards. We're exploring ways to make this process permissionless at a later stage.
+
+## Fee Collection
+
+DAMM v2 pools can collect fees in quote token or output token.
+
+### Quote Token
+
+- Swap Quote Token to Base Token, then fees are taken from Quote Token before swap.
+- Swap Base Token to Quote Token, then fees are taken from Quote Token after swap.
+
+### Output Token
+
+- Swap Quote Token to Base Token, then fees are taken from Base Token after swap.
+- Swap Base Token to Quote Token, then fees are taken from Quote Token after swap.
+
+## Min-Max Price
+
+In general, you can set a min-max price range for a balanced pool as DAMM v2 is a constant product AMM that follows a balanced ratio deposit.
+
+If you need to set a min-max price range, as well as implement imbalanced deposits for the pool, you need to use [DLMM](/overview/products/dlmm/1-what-is-dlmm.mdx) instead.
+
+# Config Key Parameters 
+
+<CardGroup cols={1}>
+  <Card title="vault_config_key">
+    <b>Type:</b> <code>address</code><br/>
+    Alpha-vault address that is able to buy from the pool before <code>activation_point</code>.
+  </Card>
+  <Card title="pool_creator_authority">
+    <b>Type:</b> <code>address</code><br/>
+    If this address is non-default, then only this address can create a pool with that config key (useful for launchpad scenarios).
+  </Card>
+  <Card title="pool_fees">
+    <b>Type:</b> <code>object</code><br/>
+    Includes base fee scheduler, dynamic fee, protocol fee percent, partner fee percent, and referral fee percent configuration.
+  </Card>
+  <Card title="activation_type">
+    <b>Type:</b> <code>0 | 1</code><br/>
+    Determines whether pools are run in <b>slot</b> (<code>0</code>) or <b>timestamp</b> (<code>1</code>).
+  </Card>
+  <Card title="collect_fee_mode">
+    <b>Type:</b> <code>0 | 1</code><br/>
+    Determines whether the pool should collect fees in both tokens (<code>1</code>) or only one token (<code>0</code>).
+  </Card>
+  <Card title="sqrt_min_price">
+    <b>Type:</b> <code>number</code><br/>
+    Square root of the minimum price for pools.
+  </Card>
+  <Card title="sqrt_max_price">
+    <b>Type:</b> <code>number</code><br/>
+    Square root of the maximum price for pools.
+  </Card>
+</CardGroup>

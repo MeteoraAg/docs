@@ -1,0 +1,250 @@
+---
+title: DAMM v1 Launch Pool
+description: Configure and Launch a DAMM v1 Pool on Meteora using nothing but a configuration file and a few CLI commands
+---
+
+In this guide, Metsumi will walk you through the steps to create a DAMM v1 launch pool on Meteora. Whether you’re a seasoned developer or just starting out, this guide has got you covered to deploy liquidity and launch your project on Meteora.
+
+<Frame>
+  <img src="/images/developer-guide/quick-launch/metsumi-3.png" />
+</Frame>
+
+
+# What You'll Achieve
+
+By the end of this quicklaunch, you’ll have built a liquidity pool on Meteora by:
+- Configuring your liquidity pool settings
+- Interacting with our DAMM v1 program
+- See your liquidity pool in action on Meteora
+
+<Tip>
+**Why Meteora?**
+
+Meteora is a hyper optimized liquidity layer that ensures that your project's provided liquidity is secure, sustainable and composable for anyone to trade on. By following this guide, you'll be able to launch a balanced constant product liquidity pool with auto yield accuaral on Meteora in just a few quick and easy steps.
+</Tip>
+
+# Prerequisites
+
+- Node.js >= 18.0.0
+- pnpm >= 10.0.0
+
+*If you don't have pnpm installed, you can install it by running the following command.*
+
+```bash Terminal
+npm install -g pnpm
+```
+
+# Setup -> Configure -> Launch DAMM v1 Pool
+
+<Steps>
+  <Step title="Clone and Setup Meteora Invent">
+  Meteora Invent is a toolkit consisting of everything you need to invent innovative token launches on Meteora. Run the following command in your terminal to get started.
+
+  ```bash Terminal
+  git clone https://github.com/MeteoraAg/metera-invent.git
+  ```
+
+  Once you've cloned the repository, you'll have a new project directory with a meteora-invent folder. Run the following to install pnpm and the project dependencies. 
+
+  ```bash Terminal
+  pnpm install
+  ```
+
+  <Frame>
+   <img src="/images/developer-guide/quick-launch/pnpm-install.png" />
+  </Frame>
+
+  </Step>
+  <Step title="Optional: Start a Local Test Validator">
+    In Meteora Invent we provide an optional command for you to run a local validator to test your pool before deploying it to devnet or mainnet. Run the following command in your code editor terminal to get started.
+
+    ```bash Terminal
+    pnpm studio start-test-validator
+    ```
+
+    This will start a local validator on your machine which will be hosted on `http://localhost:8899`. <br /> <br />
+    
+    <Frame>
+    <img src="/images/developer-guide/quick-launch/start-test-validator.png" />
+    </Frame>
+
+    </Step>
+  <Step title="Setup Environment Variables">
+  We provide an easy way to setup environment variables when getting started. Run the following command in your code editor terminal to get started.
+
+  ```bash Terminal
+  cp studio/.env.example studio/.env
+  ```
+
+  This will copy the example environment variables file to your `.env` file. Configure the following variables:
+
+  - `PRIVATE_KEY` - Your private key for the wallet you will be using to deploy the pool.
+
+  Therafter, you will need to run this command to generate a keypair from your wallet private key.
+
+  ```bash Terminal
+    # For devnet (airdrops 5 SOL)
+    pnpm studio generate-keypair --network devnet
+
+    # For localnet (airdrops 5 SOL)
+    # Ensure that you have already started the local validator with pnpm start-test-validator
+    pnpm studio generate-keypair --network localnet
+    ```
+
+  This will generate a `keypair.json` file in the `studio` directory which will be used for all actions in this guide. <br /> <br />
+
+  <Frame>
+   <img src="/images/developer-guide/quick-launch/keypair.png" />
+  </Frame>
+
+  </Step>
+  <Step title="Configure your DAMM v1 Pool">
+  Navigate to the `studio/config/damm_v1_config.jsonc` file and configure your DAMM v1 pool settings. <br /> <br />
+
+  <Accordion title="Set your DAMM v1 configuration">
+  Your can configure everything DAMM v1 pool related in this file.
+
+  <Note>The comments in the file are to help you understand the different settings you can configure. Please ensure that you read through the comments while configuring your pool.</Note>
+
+   ```jsonc damm_v1_config.jsonc
+    {
+        /* rpcUrl is required. You can switch between mainnet, devnet and localnet or use your own RPC URL. */
+        "rpcUrl": "https://api.devnet.solana.com", // mainnet: https://api.mainnet-beta.solana.com | devnet: https://api.devnet.solana.com | localnet: http://localhost:8899
+
+        /* dryRun is required. If true, transactions will be simulated and not executed. If false, transactions will be executed. */
+        "dryRun": false,
+
+        /* keypairFilePath is required and will be the payer + signer for all transactions */
+        "keypairFilePath": "./keypair.json",
+
+        /* computeUnitPriceMicroLamports is required and can be adjusted to fit your needs */
+        "computeUnitPriceMicroLamports": 100000,
+
+        /* quoteMint is required for the following actions:
+        * 1. damm-v1-create-pool
+        * 2. damm-v1-lock-liquidity
+        * SOL: So11111111111111111111111111111111111111112 | USDC: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v | any other token address
+        */
+        "quoteMint": "So11111111111111111111111111111111111111112",
+
+        /* Either use baseMint or createBaseToken, but not both.
+        * baseMint is required for the following actions:
+        * 1. damm-v1-create-pool
+        * 2. damm-v1-lock-liquidity
+        */
+        "baseMint": "YOUR_BASE_MINT_ADDRESS",
+        // "createBaseToken": {
+        //     "mintBaseTokenAmount": 1000000000, // total amount of base token to be minted
+        //     "baseDecimals": 6 // decimals of the base token
+        // },
+
+        /* dammV1Config is only used in the following actions:
+        * 1. damm-v1-create-pool
+        */
+        "dammV1Config": {
+            "baseAmount": 100, // base token amount
+            "quoteAmount": 0.001, // quote token amount
+            "tradeFeeNumerator": 2500, // pool fee in bps
+            "activationType": 1, // 0 - Slot | 1 - Timestamp
+            "activationPoint": null, // Activation time of the pool depending on activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+            "hasAlphaVault": false // If true, the alpha vault will be created after the pool is created
+        },
+
+        /* dammV1LockLiquidity is only used in the following actions:
+        * 1. damm-v1-lock-liquidity
+        * 2. damm-v1-lock-liquidity-stake2earn
+        */
+        "dammV1LockLiquidity": {
+            "allocations": [
+            {
+                "percentage": 80, // percentage of the LP tokens that will be allocated to address 1
+                "address": "YOUR_ADDRESS_1" // address 1
+            },
+            {
+                "percentage": 20, // percentage of the LP tokens that will be allocated to address 2
+                "address": "YOUR_ADDRESS_2" // address 2
+            }
+            ]
+        },
+
+        /* stake2EarnFarm is only used in the following actions:
+        * 1. damm-v1-create-stake2earn-farm
+        */
+        "stake2EarnFarm": {
+            "topListLength": 100, // Maximum number of top stakers eligible for fee rewards (minimum 50, maximum 1000)
+            "unstakeLockDurationSecs": 25200, // 7-hour cooldown period before unstaked tokens can be withdrawn
+            "secondsToFullUnlock": 86400, // 24-hour period for locked fees to fully drip/release to stakers
+            "startFeeDistributeTimestamp": 1753441790 // Start date for fee distribution (Jan 24, 2025 17:49:50 UTC)
+        },
+
+        /* alphaVault is only used in the following actions:
+        * 1. damm-v1-create-pool
+        * There are 2 types of alpha vault: First Come First Serve (FCFS) and Prorata.
+        */
+        "alphaVault": {
+            "poolType": "dynamic", // DLMM = dlmm | DAMM v1 = dynamic | DAMM v2 = damm2
+            "alphaVaultType": "fcfs", // FCFS = fcfs | Prorata = prorata
+
+            /* Only use the following parameters for alphaVaultType: fcfs
+            * 1. maxDepositCap
+            * 2. individualDepositingCap
+            */
+            "maxDepositCap": 10000, // Maximum total amount (in quote token) that can be deposited across all users in the vault
+            "individualDepositingCap": 1, // Maximum amount (in quote token) that each individual user can deposit
+
+            /* Only use the following parameters for alphaVaultType: prorata
+            * 1. maxBuyingCap
+            */
+            // "maxBuyingCap": 10000, // Maximum total amount (in quote token) that can be bought across all users in the vault
+
+            "depositingPoint": 1733626299, // When users can start depositing depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+            "startVestingPoint": 1746808201, // When token vesting begins and users can start claiming their vested tokens depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+            "endVestingPoint": 1746808201, // When token vesting ends and all tokens become fully claimable depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+            "escrowFee": 0, // Fee amount (in quote token) charged when creating a stake escrow account
+            "whitelistMode": "permissionless" // Whitelist mode: permissionless | permission_with_merkle_proof | permission_with_authority
+
+            /* Optional Configuration: whitelistFilePath
+            * Only use when whitelistMode is permission_with_merkle_proof or permission_with_authority
+            */
+            // "whitelistFilepath": "./data/whitelist_wallet.csv", // Optional path to CSV file containing whitelisted wallet addresses and their deposit caps (format: wallet,deposit_cap)
+
+            /* Optional Configuration: merkleProofBaseUrl, chunkSize, kvProofFilepath, cloudflareKvProofUpload
+            * Only use when whitelistMode is permission_with_merkle_proof
+            */
+            // "merkleProofBaseUrl": "https://example.workers.dev/", // Base URL endpoint where merkle proofs are stored and can be retrieved for whitelisted wallet verification
+            // "chunkSize": 1000, // Optional batch size for processing large whitelist files or merkle tree operations to avoid memory/performance issues
+            // "kvProofFilepath": "./data/kv_proof.json", // Optional path to key-value file storing pre-computed merkle proofs for whitelisted addresses
+            // "cloudflareKvProofUpload": {
+            //   "kvNamespaceId": "YOUR_KV_NAMESPACE_ID",
+            //   "accountId": "YOUR_ACCOUNT_ID",
+            //   "apiKey": "YOUR_API_KEY"
+            // }
+        }
+    }
+  ```
+  </Accordion>
+
+    <Tip>
+        The toolkit contains logic to make it easier for you to create the DAMM v1 pool such as:
+
+        - Minting a new `baseMint` token or parsing in an existing `baseMint` token.
+        - Launching the DAMM v1 pool immediately or at a certain `activationPoint` (in slots or timestamp depending on the `activationType`).
+        - Optional creation of an Alpha Vault with your DAMM v1 launch pool.
+    </Tip>
+  </Step>
+  <Step title="Create your DAMM v1 Pool">
+  After configuring your DAMM v1 pool settings in `damm_v1_config.jsonc`, you can now create your pool by running the following command. These commands will create your pool and <br /> <br />
+
+  ```bash Terminal
+  pnpm studio damm-v1-create-pool --config ./studio/config/damm_v1_config.jsonc
+  ```
+
+  This will create your pool with liquidity deposited from your `keypair.json` and print the pool address and other relevant information to the console. <br /> <br />
+
+  <Frame>
+   <img src="/images/developer-guide/quick-launch/damm-v1-create-pool.png" />
+  </Frame>
+  </Step>
+</Steps>
+
+Voilà! You've successfully created your DAMM v1 pool on Meteora. You can now see your pool in action on Meteora either on Meteora's [mainnet](https://app.meteora.ag) or [devnet](https://devnet.meteora.ag) app.

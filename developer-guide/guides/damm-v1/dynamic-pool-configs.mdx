@@ -1,0 +1,58 @@
+---
+title: Dynamic Pool Configs
+---
+
+DAMM v1 Pool can be set up to start trading at a specific activation slot on the blockchain, or at a specific time based on sysvar clock.
+
+# Activation Fields
+
+There are 2 fields involved:
+
+- `pool.activation_type`
+- `pool.activation_point`
+
+Pool creator has the option to choose between using slot or time for activation.
+
+- If `Pool.activation_type == 0`, Pool starts trading when `current_slot >= pool.activation_point`
+- If `Pool.activation_type == 1`, Pool starts trading when `current_time >= pool.activation_point`
+
+# Pool Activation by Slot
+
+Pool starts trading when `current_slot >= pool.activation_slot`
+
+# Pool Activation by Time (Clock)
+
+You can create a pool with timestamp (clock or slot) by using this endpoint:
+
+```
+initialize_permissionless_constant_product_pool_with_config2
+```
+
+In the new endpoint, pool creator is able to specify an `activation_point` for a pool, that allows token team to set a precise launch time for the pool.
+
+In the config account, there will be a max duration. This max duration (to be determined by Meteora) determines the furthest point in time after pool creation where the `pool.activation_point` can be adjusted to.
+
+For example, if the max duration is 7 days, `Pool.activation_point` must be &lt;= 7 days from pool creation.
+
+<Note>For time, we are using sysvar clock.</Note>
+
+# Important Reminders
+
+## Claim start time should NOT be earlier than Pool activation time
+
+For a new token launch, the project should ensure that token claiming from the Alpha Vault is NOT possible before the launch pool trading activation or before the token starts trading anywhere, whether on a Dynamic AMM or DLMM Pool. If users are able to claim tokens before the launch pool/token starts trading, they may create a separate market with a price that deviates from the project's preferred launch price. Read how to configure Alpha Vault timings here.
+
+## For Memecoins that want to permanently lock liquidity, lock it before Pool activation time
+
+If the project wants to permanently lock liquidity in the DAMM v1 Pool, they should ideally lock the liquidity BEFORE the pool starts trading, so that swap fees from locked liquidity are captured the second trading starts.
+
+In a scenario where:
+
+1. **The pool started trading** - t0
+2. **Liquidity gets deposited to the pool by the project, but not locked** - t1
+3. **Subsequently, that liquidity is permanently locked by the project** - t2
+
+The project will not be able to claim swap fees earned from t1 to t2, since fees from t1 to t2 are assigned to the LP token before the LP token gets permanently locked. When the LP token gets locked, the earlier fees are locked along with it.
+
+The project will only be able to claim swap fees from locked liquidity starting from t2.
+

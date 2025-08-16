@@ -1,0 +1,99 @@
+---
+title: "DLMM Farming Rewards"
+---
+
+DLMM farming rewards work differently from farms for Dynamic Pools. There are no LP tokens to stake into a farm. You start earning DLMM farming rewards once you deposit liquidity in a price range that covers the active bin.
+
+# How are rewards distributed?
+
+Rewards are distributed to the liquidity position in the active bin. But if swaps cause the price to move to a different active bin, rewards are distributed equally between bins crossed. For example, during a swap, active price moves from A -> C, but B is also within the range of active liquidity for the LP. Rewards will be equally distributed to the bins crossed for price points A, B, C.
+
+Your share of rewards: The proportion of rewards you get as an LP is based on your share of the liquidity position in the active bin and the bins crossed during swaps. The greater your share, the more rewards you get.
+
+Basically, only your liquidity that earns fees will earn farming rewards, so you won't get any rewards if your position is out of range and not active. No rewards will be distributed to the bin if it has 0 liquidity.
+
+# Is the rate of reward distribution linear?
+
+Yes, rewards are distributed at a fixed rate per second. For example, if there are 50,000 USDC in total farm rewards over 4 weeks (~28 days), rewards are distributed at 0.020667 USDC per second. This is distributed to positions in the active bin and in bins crossed when the active bin changes.
+
+# What happens if there is no active liquidity?
+
+If there's no liquidity in the active bin, rewards will accumulate and not be distributed. Using the same example above (50,000 USDC in total rewards at 0.020667 USDC per second), if there's no active liquidity for 10 days, total undistributed farming rewards will be ~17,856.288 USDC.
+
+# How are rewards paid out?
+
+You'd have to claim farming rewards manually.
+
+# Do the rewards compound?
+
+No, rewards are not compounded.
+
+## Example
+
+Let's walk through a step-by-step example of how DLMM farming rewards are distributed.
+
+**Total Rewards:** 50,000 USDC over 4 weeks (~28 days)  
+**Daily Rewards:** 1,785.71 USDC per day  
+**Reward Rate:** 0.020667 USDC per second  
+**Starting Active Bin:** 0
+
+---
+
+### **Timeline**
+
+<div align="center">
+
+| Time      | Event                                                                                  | Bin 0 Supply | Bin 1 Supply | Notes                                       |
+|-----------|----------------------------------------------------------------------------------------|--------------|--------------|---------------------------------------------|
+| 00:00     | **Position A** deposits **70** in bin 0                                                | 70           | 0            |                                             |
+| 00:05     | **Position B** deposits **30** in bin 0<br/>**Position C** deposits **100** in bin 1   | 100          | 100          |                                             |
+| 00:10     | **Swap:** Active bin moves to bin 1                                                    | 100          | 100          | Rewards are split <br/> between bins 0 and 1      |
+
+</div>
+
+---
+
+### **Reward Calculations**
+
+#### **From 00:00 to 00:05 (5 seconds)**
+- **Accumulated Reward:**  
+  `0.020667 USDC/sec * 5 sec = 0.103335 USDC`
+- **Who earns?**  
+  Only **Position A** (bin 0)
+- **Distribution:**  
+  - Position A: **0.103335 USDC**
+
+#### **From 00:05 to 00:10 (5 seconds)**
+- **Accumulated Reward:**  
+  `0.020667 USDC/sec * 5 sec = 0.103335 USDC`
+- **Who earns?**  
+  Rewards are split equally between bins 0 and 1 (since the active bin moves during a swap)
+- **Reward per bin:**  
+  `0.103335 USDC / 2 = 0.0516675 USDC` per bin
+
+- **Bin 0 (Positions A & B):**
+  - Position A: `0.0516675 * 70 / 100 = 0.03616725 USDC`
+  - Position B: `0.0516675 * 30 / 100 = 0.01550025 USDC`
+- **Bin 1 (Position C):**
+  - Position C: `0.0516675 * 100 / 100 = 0.0516675 USDC`
+
+---
+
+### **Summary**
+
+<div align="center">
+
+| Position   | 00:00 → 00:05         | 00:05 → 00:10         | **Total Reward**         |
+|------------|:----------------------:|:----------------------:|:------------------------:|
+| **A**      | 0.103335              | 0.03616725            | 0.13950225               |
+| **B**      | —                     | 0.01550025            | 0.01550025               |
+| **C**      | —                     | 0.0516675             | 0.0516675                |
+
+</div>
+
+---
+
+**Key Points:**
+- Only active liquidity earns rewards.
+- When the active bin changes, rewards are split equally among all bins crossed, and then distributed proportionally to liquidity in each bin.
+- If a bin has no liquidity, it receives no rewards.

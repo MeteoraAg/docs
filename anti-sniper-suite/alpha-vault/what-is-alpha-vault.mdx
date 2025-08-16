@@ -1,0 +1,88 @@
+---
+title: What's Alpha Vault?
+---
+
+<Info>Available on **DAMM v1**, **DLMM** and **DAMM v2**</Info>
+
+The Alpha Vault is a complementary anti-bot mechanism used together with a Launch Pool that provides early access for genuine supporters to deposit and purchase tokens before the pool starts trading, thereby getting tokens at the earliest price and helping to safeguard the token launch against sniper bots.
+
+Projects who use the Alpha Vault have the flexibility to tailor vault parameters to suit their specific token launch requirements, such as setting maximum purchase limits and defining the lock-up and vesting periods for users.
+
+# Key Features and Benefits
+
+<CardGroup>
+  <Card title="First-to-Purchase Ability" icon="circle-1" iconType="solid">
+    The Alpha Vault is whitelisted to buy tokens from the liquidity pool before the launch activation slot, enabling users to purchase tokens at the earliest (and likely lowest) price before sniper bots can access the pool.
+  </Card>
+  <Card title="Fair Distribution" icon="circle-2" iconType="solid">
+    All vault users receive tokens at the same average price, with the amount of tokens distributed proportionally to their share of the total SOL or USDC deposited in the vault.
+  </Card>
+  <Card title="Configurable Launch Parameters" icon="circle-3" iconType="solid">
+    Projects can configure vault parameters such as lock-up periods (1+ days) and vesting schedules (several days) to encourage purchases by genuine project supporters.
+  </Card>
+</CardGroup>
+
+# How does it work?
+
+The Alpha Vault for the Launch Pool is first created together with the Launch Pool, using the project’s preferred configurations for the Alpha Vault and pool, including:
+
+- Alpha Vault mode: Pro rata or FCFS
+- To accept SOL or USDC deposits
+- Alpha Vault Max Buy Cap
+- Pool activation slot/time
+- Token lock-up period
+- Vesting Period for token claims
+- To whitelist addresses for deposits or not 
+- Individual address purchase cap
+
+## Deposit Period
+
+The Alpha Vault doesn’t hold any tokens at the start. During the deposit period, the Alpha Vault will accept either SOL or USDC from depositors. 
+
+There needs to be a buffer period of at least roughly ~1 hour 5 min between the end of the Alpha Vault deposit period and the pool activation time.
+
+## Buying Period
+
+The Alpha Vault is whitelisted to buy tokens from the pool BEFORE the pool is activated to start trading. After the deposit period ends (and before the pool starts trading), the SOL or USDC collected in the Alpha Vault is used to purchase tokens from the pool. 
+
+This is essentially a token swap, which means SOL or USDC from the Alpha Vault goes into the pool, while tokens purchased from the pool go into the Alpha Vault. The token pool price would increase from the initial price, based on the token amount purchased by the Alpha Vault.
+
+If the Alpha Vault is using the Pro rata mode (which accepts unlimited deposits), depositors are able to withdraw any unused SOL or USDC that exceeded the Alpha Vault max buy cap.
+
+## Token Claiming
+
+When the token unlocks for claiming, the Alpha Vault then distributes the tokens to depositors. Depositors get tokens at the same price, and the amount of tokens received is based on their share of the total deposits.
+
+Creators can configure the Alpha Vault to their preference; whether token claiming is unlocked immediately when the pool starts trading or at a later time/date, and whether there is a vesting period for token claims.
+
+This vesting solution has the dual benefit of mitigating against sniper bots as well as encouraging purchase from the strongest and most genuine supporters of the project, since they would be more willing to hold their tokens for a longer period. This helps ensure greater alignment between projects and token holders.
+
+## Example Flow of Pro Rata Mode
+
+<Frame>
+  <img src="/images/anti-sniper-suite/alpha-vault-pro-rata.png" />
+</Frame>
+
+# Alpha Vault with Whitelist
+
+For some launches, the project may want to restrict which wallet addresses are allowed to deposit funds into the Alpha Vault, so in the config file used in the script to create the Alpha Vault, the `whitelistMode` needs to be specified.
+
+1. `permissionless`: No whitelist, anyone can deposit into the Alpha Vault
+
+2. `permission_with_authority`: In this mode, only the Alpha Vault creator can create escrow account with max_cap. This allows the creator to use a permissioned (with whitelist) setup without having to use the merkle tree. 
+    - Creator needs to pay SOL rent for each escrow account for the whitelisted wallets, so this Alpha Vault whitelist mode is suitable for scenarios where there are very few whitelisted addresses (e.g. ≤ 100). 
+    - If they need to support a lot more whitelisted addresses, they should still use the merkle tree (PermissionWithMerkleProof whitelist mode).
+
+3. `permission_with_merkle_proof`: In this mode, only wallets that are whitelisted can deposit into the Alpha Vault. 
+    - [CSV file](https://github.com/MeteoraAg/meteora-pool-setup/blob/main/config/whitelist_wallet.csv) containing the list of whitelisted wallets needs to be provided by the project to Meteora, for the Merkle proof to be hosted by Meteora and shown on the UI. 
+    - Alpha Vault deposits should not open until the Merkle proof is hosted by Meteora.
+
+# Past Alpha Vault Launches
+
+Projects that have used Alpha Vault for their token launches include **UpRock** (UPT), **Sanctum** (CLOUD), **dVin Labs** (VIN), **deBridge** (DBR), **Streamflow** (STREAM), **SonicVM** (SONIC), and **Sendcoin** (SEND).
+
+Read the CLOUD Launch Case Study [here](https://meteoraag.medium.com/dlmm-case-study-the-cloud-launch-08eaa5ab3b9c). 
+
+# Which Launch Pools support Alpha Vault?
+
+Available on DLMM, DAMM v1, and DAMM v2.

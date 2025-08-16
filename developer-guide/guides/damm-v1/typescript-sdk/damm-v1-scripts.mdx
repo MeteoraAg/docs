@@ -1,0 +1,501 @@
+---
+title: DAMM v1 Scripts
+---
+
+DAMM v1 SDK supports 4 types of pools:
+
+- **Constant Product Pool (Volatile Pool)** - For non-stablecoin pairs (e.g. SOL-USDC)
+- **Stable Pool** - For stablecoin pairs (e.g. USDC-USDT)
+- **Stake2Earn Pool** - DAMM v1 pool with Stake2Earn vault mechanism for top stakers
+
+Below are code examples showing how to interact with the `AmmImpl` instance to create these pools and perform key DAMM v1 actions.
+
+<Note>If the DAMM v1 Pool is being launched with an Alpha Vault, SOL or USDC must be used as the quote token.</Note>
+
+## Create Constant Product Pool (Volatile Pool)
+
+This script creates a Volatile Pool, which is a Dynamic AMM Pool where one or both tokens are non-stablecoins (e.g. SOL-USDC).
+
+```typescript
+import AmmImpl, { PROGRAM_ID } from '@meteora-ag/dynamic-amm-sdk';
+import { derivePoolAddressWithConfig } from '@meteora-ag/dynamic-amm-sdk/dist/cjs/src/amm/utils';
+import { BN } from 'bn.js';
+
+// Token A/B address of the pool.
+const tokenAMint = new PublicKey('...');
+const tokenBMint = new PublicKey('...');
+
+// Configuration address for the pool. It will decide the fees of the pool.
+const config = new PublicKey('...');
+
+// Amount of token A and B to be deposited to the pool.
+const tokenAAmount = new BN(100_000);
+const tokenBAmount = new BN(500_000);
+
+// Get pool address
+const programId = new PublicKey(PROGRAM_ID);
+const poolPubkey = derivePoolAddressWithConfig(tokenAMint, tokenBMint, config, programId);
+
+// Create pool
+const transactions = await AmmImpl.createPermissionlessConstantProductPoolWithConfig(
+  provider.connection,
+  mockWallet.publicKey, // payer
+  tokenAMint,
+  tokenBMint,
+  tokenAAmount,
+  tokenBAmount,
+  config,
+  // { // if you need to set the activation point earlier than the default derived from the config
+  //   activationPoint: startTime !== 'now' ? new BN(Math.floor(new Date(startTime).getTime() / 1000)) : undefined,
+  // },
+); 
+
+for (const transaction of transactions) {
+  transaction.sign(mockWallet.payer);
+  const txHash = await provider.connection.sendRawTransaction(transaction.serialize());
+  await provider.connection.confirmTransaction(txHash, 'finalized');
+  console.log('transaction %s', txHash);
+}
+```
+
+## Create Stable Pool
+
+This script creates a Stable Pool, which is a Dynamic AMM Pool where both tokens are stablecoins (e.g. USDC-USDT).
+
+**Note:** When using `createPermissionlessPool` to create a permissionless stable pool, it requires the pool to be seeded with a 1:1 token amount (e.g. 1 USDC, 1 USDT).
+
+```typescript
+import AmmImpl, { derivePoolAddress } from '@meteora-ag/dynamic-amm-sdk';
+import { BN } from 'bn.js';
+
+// Token A/B address of the pool.
+const tokenAMint = new PublicKey('...');
+const tokenBMint = new PublicKey('...');
+
+const tokenADecimal = 6;
+const tokenBDecimal = 6;
+
+const feeBps = new BN(1); // 0.01%
+
+// Get pool address
+const poolPubkey = derivePoolAddress(
+  provider.connection,
+  tokenAMint,
+  tokenBMint,
+  tokenADecimal,
+  tokenBDecimal,
+  true, // stable
+  feeBps,
+);
+
+// Create pool
+const transactions = await AmmImpl.createPermissionlessPool(
+  provider.connection,
+  mockWallet.publicKey, // payer
+  tokenAMint,
+  tokenBMint,
+  tokenAAmount,
+  tokenBAmount,
+  true, // stable,
+  feeBps,
+);
+
+for (const transaction of transactions) {
+  transaction.sign(mockWallet.payer);
+  const txHash = await provider.connection.sendRawTransaction(transaction.serialize());
+  await provider.connection.confirmTransaction(txHash, 'finalized');
+  console.log('transaction %s', txHash);
+}
+```
+
+## Create Memecoin Pool
+
+This script creates a Memecoin Pool, which is a Dynamic AMM Pool with a fee scheduler and initial liquidity permanently locked at creation.
+
+```typescript
+import AmmImpl, { PROGRAM_ID } from '@meteora-ag/dynamic-amm-sdk';
+import { derivePoolAddressWithConfig } from '@meteora-ag/dynamic-amm-sdk/dist/cjs/src/amm/utils';
+import { BN } from 'bn.js';
+import { roundToNearestMinutes } from 'date-fns';
+
+// Token A/B address of the pool.
+const memecoinMint = new PublicKey('...');
+const tokenBMint = new PublicKey('...');
+
+const memecoinAmount = new BN(100_000);
+const tokenBAmount = new BN(500_000);
+
+// Create pool
+const programId = new PublicKey(PROGRAM_ID);
+
+const CONFIG_KEY = new PublicKey('..');
+const feeConfigurations = await AmmImpl.getFeeConfigurations(provider.connection, {
+  programId,
+});
+const feeConfig = feeConfigurations.find(({ publicKey }) => publicKey.equals(CONFIG_KEY));
+
+const transactions = await AmmImpl.createPermissionlessConstantProductMemecoinPoolWithConfig(
+  provider.connection,
+  mockWallet.publicKey, // payer
+  memecoinMint,
+  tokenBMint,
+  memecoinAmount,
+  tokenBAmount,
+  feeConfig.publicKey,
+  { isMinted: true },
+);
+```
+
+## Create Stake2Earn Pool
+
+This script creates a Stake2Earn Pool, which is a Memecoin Pool with a Stake2Earn Vault mechanism, where top stakers earn fees from the locked liquidity in the Stake2Earn Vault.
+
+```typescript
+import AmmImpl, { PROGRAM_ID } from '@meteora-ag/dynamic-amm-sdk';
+import { derivePoolAddressWithConfig } from '@meteora-ag/dynamic-amm-sdk/dist/cjs/src/amm/utils';
+import { BN } from 'bn.js';
+import { roundToNearestMinutes } from 'date-fns';
+
+// Token A/B address of the pool.
+const memecoinMint = new PublicKey('...');
+const tokenBMint = new PublicKey('...');
+
+const memecoinAmount = new BN(100_000);
+const tokenBAmount = new BN(500_000);
+
+// Create pool
+const programId = new PublicKey(PROGRAM_ID);
+
+const CONFIG_KEY = new PublicKey('..');
+const feeConfigurations = await AmmImpl.getFeeConfigurations(provider.connection, {
+  programId,
+});
+const feeConfig = feeConfigurations.find(({ publicKey }) => publicKey.equals(CONFIG_KEY));
+
+// with Stake2Earn vault
+const feeDurationInDays = 7;
+const numOfStakers = 1000;
+const feeClaimStartTime = roundToNearestMinutes(new Date(), {
+  nearestTo: 30,
+});
+const cooldownDurationInHours = 6;
+
+const transactions = await AmmImpl.createPermissionlessConstantProductMemecoinPoolWithConfig(
+  provider.connection,
+  mockWallet.publicKey, // payer
+  memecoinMint,
+  tokenBMint,
+  memecoinAmount,
+  tokenBAmount,
+  feeConfig.publicKey,
+  { isMinted: true },
+  {
+    feeVault: {
+      secondsToFullUnlock: feeDurationInDays ? new BN(feeDurationInDays * 86400) : new BN(0),
+      topListLength: numOfStakers || 0,
+      startFeeDistributeTimestamp: feeClaimStartTime ? new BN(feeClaimStartTime.getTime() / 1000) : null,
+      unstakeLockDuration: cooldownDurationInHours ? new BN(cooldownDurationInHours * 3600) : new BN(0),
+    },
+    // other options
+  },
+);
+
+for (const transaction of transactions) {
+  transaction.sign(mockWallet.payer);
+  const txHash = await provider.connection.sendRawTransaction(transaction.serialize());
+  await provider.connection.confirmTransaction(txHash, 'finalized');
+  console.log('transaction %s', txHash);
+}
+```
+
+<Note>For Alpha Vault integration, please refer to [Alpha Vault Integration](/developer-guide/integrations/alpha-vault/typescript-sdk/1-getting-started).</Note>
+
+## Common Pool Operations
+
+These operations are common across all pool types.
+
+### Get the pool's LP token supply
+
+```typescript
+// To refetch the pool's latest supply
+// Alternatively, use `AmmImpl.poolState.lpSupply`
+const lpSupply = await pool.getLpSupply();
+```
+
+### Check user's LP balance in the pool
+
+```typescript
+// Get the user's ATA LP balance
+const userLpBalance = await pool.getUserBalance(mockWallet.publicKey);
+```
+
+### Update pool state
+
+```typescript
+// It's recommended to update the deposit before perform any quotation
+await pool.updateState();
+```
+
+## Constant Product Pool Operations
+
+Operations specific to Constant Product (Volatile) pools.
+
+### Deposit
+
+```typescript
+const balance = true;
+const slippage = 0.1; // Max to 2 decimal place
+const inAmountALamport = new BN(1 * 10 ** constantProductPool.tokenAMint.decimals);
+
+// Get deposit quote
+const { poolTokenAmountOut, tokenAInAmount, tokenBInAmount } = constantProductPool.getDepositQuote(
+  inAmountALamport,
+  new BN(0),
+  balance,
+  slippage,
+);
+
+const depositTx = await constantProductPool.deposit(
+  mockWallet.publicKey,
+  tokenAInAmount,
+  tokenBInAmount,
+  poolTokenAmountOut,
+); // Web3 Transaction Object
+const depositResult = await provider.sendAndConfirm(depositTx); // Transaction hash
+```
+
+### Withdraw
+
+```typescript
+const slippage = 0.1; // Max to 2 decimal place
+const outTokenAmountLamport = new BN(0.1 * 10 ** constantProductPool.decimals);
+
+const { poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount } = constantProductPool.getWithdrawQuote(
+  outTokenAmountLamport,
+  slippage,
+); // use lp balance for full withdrawal
+const withdrawTx = await constantProductPool.withdraw(
+  mockWallet.publicKey,
+  poolTokenAmountIn,
+  tokenAOutAmount,
+  tokenBOutAmount,
+); // Web3 Transaction Object
+const withdrawResult = await provider.sendAndConfirm(withdrawTx); // Transaction hash
+```
+
+### Swap
+
+```typescript
+const slippage = 0.1; // Max to 2 decimal place
+const inAmountLamport = new BN(0.1 * 10 ** constantProductPool.tokenB.decimals);
+
+const { minSwapOutAmount } = constantProductPool.getSwapQuote(
+  new PublicKey(constantProductPool.tokenB.address),
+  inAmountLamport,
+  slippage,
+);
+
+const swapTx = await constantProductPool.swap(
+  mockWallet.publicKey,
+  new PublicKey(constantProductPool.tokenB.address),
+  inAmountLamport,
+  minSwapOutAmount,
+);
+const swapResult = await provider.sendAndConfirm(swapTx);
+```
+
+## Stable Pool Operations
+
+Operations specific to Stable pools.
+
+### Balance deposit to stable pool
+
+```typescript
+const slippage = 0.1; // Max to 2 decimal place
+const balance = true;
+const inAmountALamport = new BN(0.1 * 10 ** stablePool.tokenA.decimals);
+
+const { poolTokenAmountOut, tokenAInAmount, tokenBInAmount } = stablePool.getDepositQuote(
+  inAmountALamport,
+  new BN(0),
+  balance,
+  slippage,
+);
+
+const depositTx = await stablePool.deposit(mockWallet.publicKey, tokenAInAmount, tokenBInAmount, poolTokenAmountOut); // Web3 Transaction Object
+const depositResult = await provider.sendAndConfirm(depositTx); // Transaction hash
+```
+
+### Double-sided imbalance deposit to stable pool
+
+```typescript
+const slippage = 0.1; // Max to 2 decimal place
+const balance = false;
+const inAmountALamport = new BN(0.1 * 10 ** stablePool.tokenA.decimals);
+const inAmountBLamport = new BN(0.1 * 10 ** stablePool.tokenB.decimals);
+
+const { poolTokenAmountOut, tokenAInAmount, tokenBInAmount } = stablePool.getDepositQuote(
+  inAmountALamport,
+  inAmountBLamport,
+  balance,
+  slippage,
+); // Web3 Transaction Object
+const depositTx = await stablePool.deposit(mockWallet.publicKey, tokenAInAmount, tokenBInAmount, poolTokenAmountOut);
+const depositResult = await provider.sendAndConfirm(depositTx); // Transaction hash
+```
+
+### Single-sided imbalance deposit to stable pool
+
+```typescript
+const slippage = 0.1; // Max to 2 decimal place
+const balance = false;
+const inAmountALamport = new BN(0.1 * 10 ** stablePool.tokenA.decimals);
+
+const { poolTokenAmountOut, tokenAInAmount, tokenBInAmount } = stablePool.getDepositQuote(
+  inAmountALamport,
+  new BN(0),
+  balance,
+  slippage,
+); // Web3 Transaction Object
+const depositTx = await stablePool.deposit(mockWallet.publicKey, tokenAInAmount, tokenBInAmount, poolTokenAmountOut);
+const depositResult = await provider.sendAndConfirm(depositTx); // Transaction hash
+```
+
+### Balance withdraw from stable pool
+
+```typescript
+const slippage = 0.1; // Max to 2 decimal place
+const outTokenAmountLamport = new BN(0.1 * 10 ** stablePool.decimals);
+
+const { poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount } = stablePool.getWithdrawQuote(
+  outTokenAmountLamport,
+  slippage,
+); // use lp balance for full withdrawal
+const withdrawTx = await stablePool.withdraw(mockWallet.publicKey, poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount); // Web3 Transaction Object
+const withdrawResult = await provider.sendAndConfirm(withdrawTx);
+```
+
+### Imbalance withdraw from stable pool
+
+```typescript
+const slippage = 0.1; // Max to 2 decimal place
+const outTokenAmountLamport = new BN(0.1 * 10 ** stablePool.decimals);
+
+const { poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount } = stablePool.getWithdrawQuote(
+  outTokenAmountLamport,
+  slippage,
+  new PublicKey(stablePool.tokenA.address), // Pass in token A/B mint to perform imbalanced withdraw
+);
+const withdrawTx = await stablePool.withdraw(mockWallet.publicKey, poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount); // Web3 Transaction Object
+const withdrawResult = await provider.sendAndConfirm(withdrawTx);
+```
+
+### Swap
+
+```typescript
+const slippage = 0.1; // Max to 2 decimal place
+const inAmountLamport = new BN(0.1 * 10 ** stablePool.tokenB.decimals);
+
+const { minSwapOutAmount } = stablePool.getSwapQuote(
+  new PublicKey(stablePool.tokenB.address),
+  inAmountLamport,
+  slippage,
+);
+
+const swapTx = await stablePool.swap(
+  mockWallet.publicKey,
+  new PublicKey(stablePool.tokenB.address),
+  inAmountLamport,
+  minSwapOutAmount,
+);
+const swapResult = await provider.sendAndConfirm(swapTx);
+```
+
+## Memecoin Pool Operations
+
+Operations specific to Memecoin pools.
+
+### Deposit
+
+```typescript
+const balance = true;
+const slippage = 0.1; // Max to 2 decimal place
+const inAmountALamport = new BN(1 * 10 ** memecoinPool.tokenA.decimals);
+
+// Get deposit quote for constant product
+const { poolTokenAmountOut, tokenAInAmount, tokenBInAmount } = memecoinPool.getDepositQuote(
+  inAmountALamport,
+  new BN(0),
+  balance,
+  slippage,
+);
+
+const depositTx = await memecoinPool.deposit(mockWallet.publicKey, tokenAInAmount, tokenBInAmount, poolTokenAmountOut); // Web3 Transaction Object
+const depositResult = await provider.sendAndConfirm(depositTx); // Transaction hash
+```
+
+### Withdraw
+
+```typescript
+const slippage = 0.1; // Max to 2 decimal place
+const outTokenAmountLamport = new BN(0.1 * 10 ** memecoinPool.decimals);
+
+const { poolTokenAmountIn, tokenAOutAmount, tokenBOutAmount } = memecoinPool.getWithdrawQuote(
+  outTokenAmountLamport,
+  slippage,
+); // use lp balance for full withdrawal
+const withdrawTx = await memecoinPool.withdraw(
+  mockWallet.publicKey,
+  poolTokenAmountIn,
+  tokenAOutAmount,
+  tokenBOutAmount,
+); // Web3 Transaction Object
+const withdrawResult = await provider.sendAndConfirm(withdrawTx); // Transaction hash
+```
+
+### Swap
+
+```typescript
+const slippage = 0.1; // Max to 2 decimal place
+const inAmountLamport = new BN(0.1 * 10 ** memecoinPool.tokenB.decimals);
+
+const { minSwapOutAmount } = memecoinPool.getSwapQuote(
+  new PublicKey(memecoinPool.tokenB.address),
+  inAmountLamport,
+  slippage,
+);
+
+const swapTx = await memecoinPool.swap(
+  mockWallet.publicKey,
+  new PublicKey(memecoinPool.tokenB.address),
+  inAmountLamport,
+  minSwapOutAmount,
+);
+const swapResult = await provider.sendAndConfirm(swapTx);
+```
+
+## Integration Considerations
+
+### Any constraints on the quote token?
+
+No constraint on the quote token for a Dynamic AMM Pool. However, if the Dynamic AMM Pool is being launched with an Alpha Vault, SOL or USDC must be used as the quote token.
+
+### On DAMM v1, can you create two pools with the same token pair and configuration?
+
+**Using TypeScript SDK**
+
+Referencing index.ts in the SDK, there are various endpoints available. For example:
+
+- `CreatePermissionlessConstantProductPoolWithConfig2`: Creates a pool using a unique config; This endpoint allows the shortening of pool activation time.
+- `CreatePermissionlessConstantProductPoolWithConfig`: Creates a pool using a unique config; This endpoint does not allow the shortening of pool activation time.
+- `CreatePermissionlessConstantProductMemecoinPoolwithConfig`: Creates a DAMM v1 Memecoin-type Pool with a fee scheduler and liquidity locked at creation.
+- `CreateCustomizablePermissionlessConstantProductPool`: Creates a pool with customization, including fixed fee tier. Useful for token launches and launchpads.
+- `CreatePermissionlessPool`: Creates a pool using a set of default fixed fee tiers. This is mainly used to create a stable pool.
+
+<Note>
+Technically, when using the TypeScript SDK, one pool can be created using one endpoint, and another pool (with the same fee configuration) can be created with a different endpoint.
+
+But when using the same endpoint, only one pool with the specific fee configuration can be created. In other words, when using the same endpoint, it is not possible to create two pools with the same token pair and fee configuration.
+
+If two pools with the same token pair and fee configuration are created (using different endpoints), they should both still be displayed on the Meteora website UI.
+</Note>

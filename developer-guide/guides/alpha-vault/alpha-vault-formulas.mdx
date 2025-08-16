@@ -1,0 +1,86 @@
+---
+title: Alpha Vault Formulas
+---
+
+Alpha Vault implements a sophisticated vesting and token distribution mechanism with support for both pro-rata and first-come-first-served (FCFS) allocation modes.
+
+# Linear Vesting Formula
+
+The core vesting mechanism follows a linear time-based release schedule:
+
+```math
+\text{claimable\_tokens} = \frac{\text{elapsed\_time} \times \text{total\_bought\_tokens}}{\text{total\_vesting\_duration}}
+```
+
+**Where:**
+- `elapsed_time` = time since vesting start
+- `total_bought_tokens` = total tokens purchased by all users
+- `total_vesting_duration` = total duration of vesting period
+
+---
+
+# Individual Token Claim Formula
+
+```math
+\text{user\_claimable} = \frac{\text{total\_claimable} \times \text{user\_deposit}}{\text{total\_vault\_deposit}} - \text{already\_claimed}
+```
+
+**Where:**
+- `total_claimable` = total tokens available for claiming at current time
+- `user_deposit` = individual user's deposit amount
+- `total_vault_deposit` = sum of all user deposits in the vault
+- `already_claimed` = tokens already claimed by the user
+
+---
+
+# Refund Calculation Formulas
+
+## Base Refund Calculation
+
+```math
+\text{refund} = \frac{\text{unswapped\_amount} \times \text{user\_deposit}}{\text{total\_deposit}}
+```
+
+## Deposit Overflow Refund (Pro-rata Vaults)
+
+```math
+\text{overflow\_refund} = \frac{\text{excess\_deposit} \times \text{user\_deposit}}{\text{total\_deposit}}
+```
+
+**Where:**
+- `excess_deposit` = total deposits exceeding the maximum buying cap
+- `unswapped_amount` = tokens that weren't successfully swapped
+
+---
+
+# Swappable Amount Calculation
+
+## Pro-rata Mode
+```math
+\text{max\_swappable} = \min(\text{total\_deposit}, \text{max\_buying\_cap})
+```
+
+## FCFS Mode
+```math
+\text{max\_swappable} = \text{total\_deposit}
+```
+
+**Where:**
+- `max_buying_cap` = maximum tokens that can be purchased (for pro-rata mode only)
+- `total_deposit` = sum of all user deposits
+
+---
+
+# Vault Mode Specifications
+
+## Pro-rata Mode
+- No maximum buying cap restriction
+- Distributes tokens proportionally among all participants
+- Provides refunds for excess deposits
+- Suitable for unlimited token sales
+
+## FCFS Mode
+- Enforces maximum buying cap
+- Tokens distributed on first-come-first-served basis
+- No overflow refunds (all deposits are valid)
+- Suitable for fair distribution with limited token supply

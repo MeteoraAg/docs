@@ -1,0 +1,165 @@
+---
+title: "What's DBC?"
+description: "Dynamic Bonding Curve (DBC) is a universal virtual curve that allows you to create tokens with unique price dynamics."
+---
+
+Dynamic Bonding Curve (DBC) program is a permissionless launch pool protocol that allows any partners to spin up a launchpad that enables their users to launch tokens with customizable virtual curves directly on their platform.
+
+With direct integration into Jupiter and other trading platforms, traders can trade these tokens immediately across all trading terminals. 
+
+<Frame>
+  <img src="/images/overview/products/dbc/dbc-total-token-supply.png" />
+</Frame>
+
+# What's a Dynamic Bonding Curve?
+
+A Dynamic Bonding Curve is a **Universal Curve** — an up to 16-point customizable curve system that revolutionizes how liquidity providers can design their strategies. This curve is fully customizable for any launchpad to craft their own unique bonding curve. 
+
+<Note>Each curve point in the Dynamic Bonding Curve is a constant product curve that can be configured to control the token's price action.</Note>
+
+<Frame>
+  <img src="/images/overview/products/dbc/dbc-universal-curve.png" />
+</Frame>
+
+## The Problem with Traditional AMMs
+
+Traditional AMMs have been constrained by rigid curve designs:
+
+- **Capital Inefficiency**: Uniswap V2's constant product spreads liquidity equally across all prices, leaving most capital unused
+- **One-Size-Fits-All**: Current AMMs force all LPs in a pool to follow the same curve design
+- **Limited Flexibility**: Even concentrated liquidity solutions force LPs into predefined ranges
+
+## How Universal Curve Solves This
+
+Universal Curve enables unprecedented flexibility through:
+
+<CardGroup>
+  <Card title="16-Point Customization" icon="chart-line" iconType="solid">
+    LPs can define up to 16 points along their desired curve, with constant product formula providing smooth transitions between points.
+  </Card>
+  <Card title="Infinite Range Capability" icon="infinity" iconType="solid">
+    Unlike range-based solutions, Universal Curve allows LPs to provide liquidity from 0 to infinity while concentrating capital exactly where needed.
+  </Card>
+  <Card title="Multiple Strategies in One Pool" icon="layer-group" iconType="solid">
+    Different LPs can use different curve strategies within the same pool — StableSwap efficiency, constant product flexibility, or custom combinations.
+  </Card>
+  <Card title="Recreate Any AMM Design" icon="clone" iconType="solid">
+    Universal Curve can replicate Uniswap V2, Curve StableSwap, or create entirely custom strategies tailored to specific needs.
+  </Card>
+</CardGroup>
+
+This innovation allows every LP to optimize their individual strategy while contributing to shared pool efficiency — marking the end of the one-size-fits-all AMM era.
+
+# How does it work?
+
+<Steps>
+  <Step title="Partner creates a unique config key">
+    Partners (launchpads) create a unique configuration key that includes all settings that covers from the Dynamic Bonding Curve creation to the migration of the liquidity to the actual DAMM pool.
+  </Step>
+  <Step title="Creators create DBC token pools">
+    Creators (token pool creators) can create a Dynamic Bonding Curve token pool using the partner's config key. This will mint a new token.
+    <Note>You cannot create a DBC token pool with an existing token.</Note>
+  </Step>
+  <Step title="Trading platforms can swap">
+    Trading platforms and trading bots (e.g., Jupiter, Axiom, Photon, etc.) can **immediately** swap with the Dynamic Bonding Curve pool.
+  </Step>
+  <Step title="DBC reaches minimum quote threshold">
+    When the DBC pool reaches a pre-defined minimum quote threshold (specified in the config key), no one can swap with that pool anymore and that pool is prepared for migration.
+  </Step>
+  <Step title="Meteora auto migrator service creates a DAMM pool">
+    Meteora's auto migrator keeper service then migrates the DBC pool by sending a crank to create a new Meteora Dynamic AMM v1 or v2 pool
+  </Step>
+  <Step title="LP tokens or NFTs are locked or claimed by partner or creator">
+    Upon migration, depending on the pool's config key, LP tokens or NFTs are either locked or claimable by the partner or creator. This is specified in the `creator_lp_percentage`, `partner_lp_percentage`, `creator_locked_lp_percentage` and `partner_locked_lp_percentage` fields.
+  </Step>
+</Steps>
+
+# Key Benefits
+
+<CardGroup>
+  <Card title="Customizable Launch Pools" icon="sliders" iconType="solid">
+    Launch partners can configure their launch pools with customizable quote tokens (e.g., SOL, USDC, JUP), unique bonding curves for token graduation, flexible fee structures, and more.
+  </Card>
+  <Card title="Seamless Token Creation" icon="coins" iconType="solid">
+    Users can easily create tokens and launch pools using partner-defined configurations directly from the partner's UI.
+  </Card>
+  <Card title="Instant Trading Integration" icon="bolt" iconType="solid">
+    Trading platforms and bots can immediately access and trade these tokens through our direct integrations with Jupiter and other platforms.
+  </Card>
+  <Card title="Graduation to AMMs & Fee Claiming" icon="arrow-up-right-dots" iconType="solid">
+    Tokens can graduate to supported AMMs (currently Meteora DAMM v1 and v2) based on partner settings. Launchers can claim fees from locked LP tokens.
+  </Card>
+  <Card title="Full End-to-End API Support" icon="code" iconType="solid">
+    Comprehensive Charting, Trading and Transactions API support enables easy integration for launch partners, trading platforms, and bots.
+  </Card>
+</CardGroup>
+
+# Anti-Sniper Features
+
+<CardGroup>
+  <Card title="Fee Scheduler" icon="clock" iconType="solid">
+    Timestamp-based fees, such as high fees at launch that decrease over time, help deter snipers and protect the pool during the most volatile periods.
+  </Card>
+  <Card title="Rate Limiter" icon="traffic-light" iconType="solid">
+    Amount-based fees that increases with a higher amount per swap, to deter snipers from sniping large amounts of tokens, while protecting smaller retail traders.
+  </Card>
+</CardGroup>
+
+# Other Features
+
+<CardGroup>
+  <Card title="Multiple Quote Token Support" icon="coins" iconType="solid">
+    Supports SOL, USDC, JUP, and other quote tokens for maximum flexibility.
+  </Card>
+  <Card title="SPL Token & Token2022 Support" icon="shield-check" iconType="solid">
+    Compatible with both SPL Token and Token2022 standards for broad token compatibility.
+  </Card>
+  <Card title="Flexible Fee Collection Modes" icon="wallet" iconType="solid">
+    Choose to collect fees only in the quote token or keep a percentage of all fees generated on the Dynamic Bonding Curve.
+  </Card>
+  <Card title="Customizable Liquidity Distribution" icon="chart-bar" iconType="solid">
+    Configure up to 16 price ranges with different liquidity curves for advanced pool customization.
+  </Card>
+</CardGroup>
+
+# Customizable Fees
+
+The Dynamic Bonding Curve (DBC) virtual pool collects a trading fee on every trade (buy or sell).
+
+- **Protocol Fee:**  
+  A portion of each trading fee is allocated to the DBC protocol (Fixed 20% of the trading fee).
+
+- **Referral Fee:**  
+  Swap hosts (such as Jupiter, Photon, or trading bots) can include a referral account in the swap transaction to receive a referral fee, which is taken from the protocol fee (Fixed 20% of the protocol fee).
+
+- **Fee Sharing in the Bonding Curve:**  
+  The remaining trading fee is distributed to the launch partner (Fixed 80% of the trading fee). This fee can be fee shared between the partner and the token creator.
+
+- **Fee Distribution After Migration:**  
+  Once a token has graduated, the LP tokens are locked for both the partner and the token creator. The ratio of locked LP tokens is determined by the partner’s configuration. Both the partner and the token creator can claim fees from these locked LP tokens on Meteora DAMM v1 or DAMM v2.
+
+# Migration
+
+### Automatic Migration
+
+If the DBC pool reaches a pre-defined quote token or price threshold, the liquidity is automatically migrated to a DAMM v1 pool or DAMM v2 Pool on Meteora.
+
+We run 2 auto migrator keepers to migrate DBC pools. These 2 keepers have strict migration quote threshold requirements.
+
+Keeper addresses that we are running:
+1. [CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY](https://solscan.io/account/CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY)
+- `pool_config.migration_quote_threshold` requirements:
+  - 10 SOL
+  - 750 USDC
+  - 1500 JUP
+2. [DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW](https://solscan.io/account/DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW)
+- `pool_config.migration_quote_threshold` requirements:
+  - \>= 750 USD (`quote_mint` token)
+
+<Note>The Migration Keepers only runs on Mainnet.</Note>
+
+### Manual Migration
+
+We have built a [manual migration user interface](https://migrator.meteora.ag/) for launchpads building on DBC to easily test the migration process.
+
+<Note>The Manual Migrator supports both Mainnet and Devnet.</Note>

@@ -1,0 +1,62 @@
+---
+title: What's Rate Limiter?
+---
+
+<Info>Available on **DBC**</Info>
+
+Rate Limiter is a configurable fee slope designed to deter sniper bots by increasing the fee depending on the trade size.
+
+For example, if a user swaps 100 SOL, then the first SOL will be charged as 1%, the next SOL will be charged as 5%... until it fulfils the full input amount.
+
+Similar to how tax brackets work in the real world, the fee slope increases when the trade size increases.
+
+<Frame>
+  <img src="/images/anti-sniper-suite/rate-limiter.png" />
+</Frame>
+
+# How does it work?
+
+Rate Limiter requires the following parameters to be configured:
+
+- **Cliff Fee Numerator**: The base fee of the rate limiter.
+- **Reference Amount**: The amount of tokens that will be charged at the base fee.
+- **Fee Increment Bps**: The amount of basis points to increase the fee by.
+- **Max Limiter Duration**: The maximum duration of the rate limiter.
+
+With these parameters, the fee slope will increase by the **Fee Increment Bps** for each increment of **Reference Amount** of tokens swapped. This rate limiter will last for the duration of **Max Limiter Duration**. Any swap amount below the **Reference Amount** will be charged the **Cliff Fee Numerator**.
+
+# Requirements for Rate Limiter 
+
+<CardGroup>
+  <Card title="Quote Token Only" icon="circle-1" iconType="solid">
+    The rate limiter mode is only available if collect fee mode is in quote token only, and when the user buys the token (not sell).
+  </Card>
+  <Card title="Single Swap Per Transaction" icon="circle-2" iconType="solid">
+    Rate limiter doesn't allow user to send multiple swap instructions (or CPI) to the same pool in 1 transaction.
+  </Card>
+  <Card title="Mutually Exclusive with Fee Scheduler" icon="circle-3" iconType="solid">
+    Developers have to choose between using Fee Scheduler or Rate Limiter for their pool.
+  </Card>
+    <Card title="Max Limiter Duration ≤ 12 Hours" icon="circle-4" iconType="solid">
+    Max limiter duration must be less than or equal to 12 hours.
+  </Card>
+</CardGroup>
+
+Example:
+
+If you have:
+
+- `reference_amount` = 1 SOL
+- `cliff_fee_numerator` = 1% (100 bps)
+- `fee_increment_bps` = 100 bps (1%)
+
+Then:
+
+- Trading 1 SOL: 1% fee
+- Trading 2 SOL: 1.5% average fee
+- Trading 3 SOL: 2% average fee
+- And so on...
+
+# Which Launch Pools support Rate Limiter?
+
+Rate Limiter is available as an option for Dynamic Bonding Curve (DBC). Rate Limiter for DAMM v2 is coming soon.
