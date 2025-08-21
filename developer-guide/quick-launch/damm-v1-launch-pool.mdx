@@ -6,7 +6,7 @@ description: Configure and Launch a DAMM v1 Pool on Meteora using nothing but a 
 In this guide, Metsumi will walk you through the steps to create a DAMM v1 launch pool on Meteora. Whether you’re a seasoned developer or just starting out, this guide has got you covered to deploy liquidity and launch your project on Meteora.
 
 <Frame>
-  <img src="/images/developer-guide/metsumi-3.png" />
+  <img src="/images/metsumi/metsumi-3.webp" />
 </Frame>
 
 
@@ -109,118 +109,118 @@ npm install -g pnpm
 
    ```jsonc damm_v1_config.jsonc
     {
-        /* rpcUrl is required. You can switch between mainnet, devnet and localnet or use your own RPC URL. */
-        "rpcUrl": "https://api.devnet.solana.com", // mainnet: https://api.mainnet-beta.solana.com | devnet: https://api.devnet.solana.com | localnet: http://localhost:8899
+      /* rpcUrl is required. You can switch between mainnet, devnet and localnet or use your own RPC URL. */
+      "rpcUrl": "https://api.devnet.solana.com", // mainnet: https://api.mainnet-beta.solana.com | devnet: https://api.devnet.solana.com | localnet: http://localhost:8899
 
-        /* dryRun is required. If true, transactions will be simulated and not executed. If false, transactions will be executed. */
-        "dryRun": false,
+      /* dryRun is required. If true, transactions will be simulated and not executed. If false, transactions will be executed. */
+      "dryRun": false,
 
-        /* keypairFilePath is required and will be the payer + signer for all transactions */
-        "keypairFilePath": "./keypair.json",
+      /* keypairFilePath is required and will be the payer + signer for all transactions */
+      "keypairFilePath": "./keypair.json",
 
-        /* computeUnitPriceMicroLamports is required and can be adjusted to fit your needs */
-        "computeUnitPriceMicroLamports": 100000,
+      /* computeUnitPriceMicroLamports is required and can be adjusted to fit your needs */
+      "computeUnitPriceMicroLamports": 100000,
 
-        /* quoteMint is required for the following actions:
-        * 1. damm-v1-create-pool
-        * 2. damm-v1-lock-liquidity
-        * SOL: So11111111111111111111111111111111111111112 | USDC: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v | any other token address
+      /* quoteMint is required for the following actions:
+      * 1. damm-v1-create-pool
+      * 2. damm-v1-lock-liquidity
+      * SOL: So11111111111111111111111111111111111111112 | USDC: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v | any other token address
+      */
+      "quoteMint": "So11111111111111111111111111111111111111112",
+
+      /* Either use baseMint or createBaseToken, but not both.
+      * baseMint is required for the following actions:
+      * 1. damm-v1-create-pool
+      * 2. damm-v1-lock-liquidity
+      */
+      "baseMint": "YOUR_BASE_MINT_ADDRESS",
+      // "createBaseToken": {
+      //     "mintBaseTokenAmount": 1000000000, // total amount of base token to be minted
+      //     "baseDecimals": 6 // decimals of the base token
+      // },
+
+      /* dammV1Config is only used in the following actions:
+      * 1. damm-v1-create-pool
+      */
+      "dammV1Config": {
+        "baseAmount": 100, // base token amount
+        "quoteAmount": 0.001, // quote token amount
+        "tradeFeeNumerator": 2500, // pool fee in bps
+        "activationType": 1, // 0 - Slot | 1 - Timestamp
+        "activationPoint": null, // Activation time of the pool depending on activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+        "hasAlphaVault": false // If true, the alpha vault will be created after the pool is created
+      },
+
+      /* dammV1LockLiquidity is only used in the following actions:
+      * 1. damm-v1-lock-liquidity
+      * 2. damm-v1-lock-liquidity-stake2earn
+      */
+      "dammV1LockLiquidity": {
+        "allocations": [
+          {
+            "percentage": 80, // percentage of the LP tokens that will be allocated to address 1
+            "address": "YOUR_ADDRESS_1" // address 1
+          },
+          {
+            "percentage": 20, // percentage of the LP tokens that will be allocated to address 2
+            "address": "YOUR_ADDRESS_2" // address 2
+          }
+        ]
+      },
+
+      /* stake2EarnFarm is only used in the following actions:
+      * 1. damm-v1-create-stake2earn-farm
+      */
+      "stake2EarnFarm": {
+        "topListLength": 100, // Maximum number of top stakers eligible for fee rewards (minimum 50, maximum 1000)
+        "unstakeLockDurationSecs": 25200, // 7-hour cooldown period before unstaked tokens can be withdrawn
+        "secondsToFullUnlock": 86400, // 24-hour period for locked fees to fully drip/release to stakers
+        "startFeeDistributeTimestamp": 1753441790 // Start date for fee distribution (Jan 24, 2025 17:49:50 UTC)
+      },
+
+      /* alphaVault is only used in the following actions:
+      * 1. damm-v1-create-pool
+      * There are 2 types of alpha vault: First Come First Serve (FCFS) and Prorata.
+      */
+      "alphaVault": {
+        "poolType": "dynamic", // DLMM = dlmm | DAMM v1 = dynamic | DAMM v2 = damm2
+        "alphaVaultType": "fcfs", // FCFS = fcfs | Prorata = prorata
+
+        /* Only use the following parameters for alphaVaultType: fcfs
+        * 1. maxDepositCap
+        * 2. individualDepositingCap
         */
-        "quoteMint": "So11111111111111111111111111111111111111112",
+        "maxDepositCap": 10000, // Maximum total amount (in quote token) that can be deposited across all users in the vault
+        "individualDepositingCap": 1, // Maximum amount (in quote token) that each individual user can deposit
 
-        /* Either use baseMint or createBaseToken, but not both.
-        * baseMint is required for the following actions:
-        * 1. damm-v1-create-pool
-        * 2. damm-v1-lock-liquidity
+        /* Only use the following parameters for alphaVaultType: prorata
+        * 1. maxBuyingCap
         */
-        "baseMint": "YOUR_BASE_MINT_ADDRESS",
-        // "createBaseToken": {
-        //     "mintBaseTokenAmount": 1000000000, // total amount of base token to be minted
-        //     "baseDecimals": 6 // decimals of the base token
-        // },
+        // "maxBuyingCap": 10000, // Maximum total amount (in quote token) that can be bought across all users in the vault
 
-        /* dammV1Config is only used in the following actions:
-        * 1. damm-v1-create-pool
+        "depositingPoint": 1733626299, // When users can start depositing depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+        "startVestingPoint": 1746808201, // When token vesting begins and users can start claiming their vested tokens depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+        "endVestingPoint": 1746808201, // When token vesting ends and all tokens become fully claimable depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
+        "escrowFee": 0, // Fee amount (in quote token) charged when creating a stake escrow account
+        "whitelistMode": "permissionless" // Whitelist mode: permissionless | permissioned_with_merkle_proof | permissioned_with_authority
+
+        /* Optional Configuration: whitelistFilePath
+        * Only use when whitelistMode is permissioned_with_merkle_proof or permissioned_with_authority
         */
-        "dammV1Config": {
-            "baseAmount": 100, // base token amount
-            "quoteAmount": 0.001, // quote token amount
-            "tradeFeeNumerator": 2500, // pool fee in bps
-            "activationType": 1, // 0 - Slot | 1 - Timestamp
-            "activationPoint": null, // Activation time of the pool depending on activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
-            "hasAlphaVault": false // If true, the alpha vault will be created after the pool is created
-        },
+        // "whitelistFilepath": "./data/whitelist_wallet.csv", // Optional path to CSV file containing whitelisted wallet addresses and their deposit caps (format: wallet,deposit_cap)
 
-        /* dammV1LockLiquidity is only used in the following actions:
-        * 1. damm-v1-lock-liquidity
-        * 2. damm-v1-lock-liquidity-stake2earn
+        /* Optional Configuration: merkleProofBaseUrl, chunkSize, kvProofFilepath, cloudflareKvProofUpload
+        * Only use when whitelistMode is permissioned_with_merkle_proof
         */
-        "dammV1LockLiquidity": {
-            "allocations": [
-            {
-                "percentage": 80, // percentage of the LP tokens that will be allocated to address 1
-                "address": "YOUR_ADDRESS_1" // address 1
-            },
-            {
-                "percentage": 20, // percentage of the LP tokens that will be allocated to address 2
-                "address": "YOUR_ADDRESS_2" // address 2
-            }
-            ]
-        },
-
-        /* stake2EarnFarm is only used in the following actions:
-        * 1. damm-v1-create-stake2earn-farm
-        */
-        "stake2EarnFarm": {
-            "topListLength": 100, // Maximum number of top stakers eligible for fee rewards (minimum 50, maximum 1000)
-            "unstakeLockDurationSecs": 25200, // 7-hour cooldown period before unstaked tokens can be withdrawn
-            "secondsToFullUnlock": 86400, // 24-hour period for locked fees to fully drip/release to stakers
-            "startFeeDistributeTimestamp": 1753441790 // Start date for fee distribution (Jan 24, 2025 17:49:50 UTC)
-        },
-
-        /* alphaVault is only used in the following actions:
-        * 1. damm-v1-create-pool
-        * There are 2 types of alpha vault: First Come First Serve (FCFS) and Prorata.
-        */
-        "alphaVault": {
-            "poolType": "dynamic", // DLMM = dlmm | DAMM v1 = dynamic | DAMM v2 = damm2
-            "alphaVaultType": "fcfs", // FCFS = fcfs | Prorata = prorata
-
-            /* Only use the following parameters for alphaVaultType: fcfs
-            * 1. maxDepositCap
-            * 2. individualDepositingCap
-            */
-            "maxDepositCap": 10000, // Maximum total amount (in quote token) that can be deposited across all users in the vault
-            "individualDepositingCap": 1, // Maximum amount (in quote token) that each individual user can deposit
-
-            /* Only use the following parameters for alphaVaultType: prorata
-            * 1. maxBuyingCap
-            */
-            // "maxBuyingCap": 10000, // Maximum total amount (in quote token) that can be bought across all users in the vault
-
-            "depositingPoint": 1733626299, // When users can start depositing depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
-            "startVestingPoint": 1746808201, // When token vesting begins and users can start claiming their vested tokens depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
-            "endVestingPoint": 1746808201, // When token vesting ends and all tokens become fully claimable depending on pool's activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
-            "escrowFee": 0, // Fee amount (in quote token) charged when creating a stake escrow account
-            "whitelistMode": "permissionless" // Whitelist mode: permissionless | permission_with_merkle_proof | permission_with_authority
-
-            /* Optional Configuration: whitelistFilePath
-            * Only use when whitelistMode is permission_with_merkle_proof or permission_with_authority
-            */
-            // "whitelistFilepath": "./data/whitelist_wallet.csv", // Optional path to CSV file containing whitelisted wallet addresses and their deposit caps (format: wallet,deposit_cap)
-
-            /* Optional Configuration: merkleProofBaseUrl, chunkSize, kvProofFilepath, cloudflareKvProofUpload
-            * Only use when whitelistMode is permission_with_merkle_proof
-            */
-            // "merkleProofBaseUrl": "https://example.workers.dev/", // Base URL endpoint where merkle proofs are stored and can be retrieved for whitelisted wallet verification
-            // "chunkSize": 1000, // Optional batch size for processing large whitelist files or merkle tree operations to avoid memory/performance issues
-            // "kvProofFilepath": "./data/kv_proof.json", // Optional path to key-value file storing pre-computed merkle proofs for whitelisted addresses
-            // "cloudflareKvProofUpload": {
-            //   "kvNamespaceId": "YOUR_KV_NAMESPACE_ID",
-            //   "accountId": "YOUR_ACCOUNT_ID",
-            //   "apiKey": "YOUR_API_KEY"
-            // }
-        }
+        // "merkleProofBaseUrl": "https://example.workers.dev/", // Base URL endpoint where merkle proofs are stored and can be retrieved for whitelisted wallet verification
+        // "chunkSize": 1000, // Optional batch size for processing large whitelist files or merkle tree operations to avoid memory/performance issues
+        // "kvProofFilepath": "./data/kv_proofs", // Optional path to key-value file storing pre-computed merkle proofs for whitelisted addresses
+        // "cloudflareKvProofUpload": {
+        //   "kvNamespaceId": "YOUR_KV_NAMESPACE_ID",
+        //   "accountId": "YOUR_ACCOUNT_ID",
+        //   "apiKey": "YOUR_API_KEY"
+        // }
+      }
     }
   ```
   </Accordion>
