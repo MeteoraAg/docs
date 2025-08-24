@@ -2,18 +2,20 @@
 title: Pool Fee Configs
 ---
 
-Each DAMM v2 pool is a PDA of `tokenAMint` + `tokenBMint` + `config`. Configs are basically where you configure the fees of the pool, the collect fee mode, and the dynamic fee. There are 2 types of config: 
+<Note>Every DAMM v2 pool must be created using a config key that defines the pool's parameters. Each DAMM v2 pool is a PDA of `tokenAMint` + `tokenBMint` + `config`.</Note>
+
+Configs are basically where you configure the fees of the pool, the collect fee mode, and the dynamic fee. There are 2 types of config: 
 
 1. Public config - can be used by anyone to create a pool.
 2. Private config - can only be used by the `pool_creator_authority` to create a pool.
 
-# Public Config
+# Public Configs
 
 In a public config, anyone can use one of the public config keys to create a pool. Currently, we have 72 config keys created for devnet and mainnet. Integrators can consider using a public config if tokens cannot be bought (leaked) before the token launch time. But launchpads typically use a private config.
 
 To fetch all public config key addresses, you can use the `getAllConfigs` function in the [Typescript SDK ](https://github.com/MeteoraAg/damm-v2-sdk/blob/cdd71c0282e3555989fc255c5fba335ade5a443b/src/CpAmm.ts#L712).
 
-<Note>Integrators cannot change the fee schedule for that particular public config key.</Note>
+<Note>Integrators cannot change the configuration for that particular public config key.</Note>
 
 <AccordionGroup>
   <Accordion title="View all public config key addresses (Mainnet)">
@@ -1033,7 +1035,7 @@ To fetch all public config key addresses, you can use the `getAllConfigs` functi
   </Accordion>
 </AccordionGroup>
 
-# Private Config
+# Private Configs
 
 In a private config, only a specified address (configured in the `pool_creator_authority` field) can create a pool with that config. If you are a launchpad or integrator, this helps you prevent front-running of the token launch pool.
 
