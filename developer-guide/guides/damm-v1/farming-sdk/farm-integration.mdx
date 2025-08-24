@@ -1,5 +1,6 @@
 ---
 title: Farm Integration
+description: DAMM v1 with Farm
 ---
 
 This guide provides instructions on how to integrate DAMM v1 pools with farms.
@@ -8,40 +9,6 @@ Before you begin, here are some important resources:
 
 - **Program ID (Mainnet & Devnet):** `FarmuwXPWXvefWUeqFAa5w6rifLkq5X6E8bimYvrhCB1`
 - **TypeScript SDK Repository:** [@meteora-ag/farming-sdk](https://github.com/MeteoraAg/reward-pool)
-
-# Install Dependencies
-
-```bash
-npm install @meteora-ag/farming-sdk @solana/web3.js
-# or
-pnpm install @meteora-ag/farming-sdk @solana/web3.js
-# or
-yarn add @meteora-ag/farming-sdk @solana/web3.js
-```
-
-# Initialize PoolFarmImpl Instance
-
-```typescript
-import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
-import { Connection, PublicKey, Keypair } from "@solana/web3.js";
-
-// Connection, Wallet, and AnchorProvider to interact with the network
-const mainnetConnection = new Connection("https://api.mainnet-beta.solana.com");
-
-const USDC_acUSDC_POOL = new PublicKey(
-  "6ZLKLjMd2KzH7PPHCXUPgbMAtdTT37VgTtdeXWLoJppr"
-); // Pool Address can get from https://docs.meteora.ag/dynamic-pools-integration/dynamic-pool-api/pool-info
-
-const farmingPools = await PoolFarmImpl.getFarmAddressesByPoolAddress(
-  USDC_acUSDC_POOL
-);
-// farmingPools is an array (A pool can have multiple farms)
-const farmingPool = farmingPools[0];
-const farm = await PoolFarmImpl.create(
-  mainnetConnection,
-  farmingPool.farmAddress
-);
-```
 
 # Code Examples
 
