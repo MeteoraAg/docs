@@ -7,37 +7,102 @@ The `dynamic-bonding-curve-sdk` provides a convenient way to interact with the D
 
 Before you begin, here are some important resources:
 
--   **Program ID (Mainnet & Devnet):** `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`
--   **Rust SDK:** [Dynamic Bonding Curve](https://github.com/MeteoraAg/dynamic-bonding-curve/tree/main/dynamic-bonding-curve-sdk)
+<CardGroup cols={1}>
+  <Card title="Rust SDK" icon="rust" iconType="solid" href="https://github.com/MeteoraAg/dynamic-bonding-curve/tree/main/dynamic-bonding-curve-sdk">
+    Meteora DBC Rust SDK
+  </Card>
+</CardGroup>
 
 # `quote_exact_in`
 
-This function calculates the result of a swap for a given amount of an exact input token. It's useful for estimating the outcome of a trade before executing it on-chain.
+This function calculates the result of a swap for a given amount of an exact input token.
 
-## Function Signature
+**Function**
 
 ```rust
 pub fn quote_exact_in(
-    virtual_pool: &VirtualPool,
+    pool: &VirtualPool,
     config: &PoolConfig,
     swap_base_for_quote: bool,
     current_timestamp: u64,
     current_slot: u64,
-    transfer_fee_excluded_amount_in: u64,
+    in_amount: u64,
     has_referral: bool,
-) -> Result<SwapResult>
+) -> Result<SwapResult2>
 ```
 
-## Parameters
+**Parameters**
 
--   `virtual_pool`: A reference to the `VirtualPool` state.
+-   `pool`: A reference to the `VirtualPool` state.
 -   `config`: A reference to the `PoolConfig` for the pool.
 -   `swap_base_for_quote`: A boolean indicating the direction of the trade. `true` for swapping base token for quote token, `false` otherwise.
 -   `current_timestamp`: The current Solana cluster timestamp.
 -   `current_slot`: The current Solana cluster slot.
--   `transfer_fee_excluded_amount_in`: The amount of input tokens for the swap, excluding any transfer fees.
+-   `in_amount`: The amount of input tokens for the swap, excluding any transfer fees.
 -   `has_referral`: A boolean indicating if a referral fee should be considered.
 
-## Returns
+**Returns**
 
-It returns a `Result<SwapResult>`, where `SwapResult` contains detailed information about the outcome of the swap, such as the amount out, fees, and the new state of the pool.
+It returns a `Result<SwapResult2>`, where `SwapResult2` contains detailed information about the outcome of the swap, such as the amount in, fees, and the next sqrt price of the token.
+
+# `quote_exact_out`
+
+This function calculates the result of a swap for a given amount of an exact output token.
+
+**Function**
+
+```rust
+pub fn quote_exact_out(
+    pool: &VirtualPool,
+    config: &PoolConfig,
+    swap_base_for_quote: bool,
+    current_timestamp: u64,
+    current_slot: u64,
+    out_amount: u64,
+) -> Result<SwapResult2>
+```
+
+**Parameters**
+
+-   `pool`: A reference to the `VirtualPool` state.
+-   `config`: A reference to the `PoolConfig` for the pool.
+-   `swap_base_for_quote`: A boolean indicating the direction of the trade. `true` for swapping base token for quote token, `false` otherwise.
+-   `current_timestamp`: The current Solana cluster timestamp.
+-   `current_slot`: The current Solana cluster slot.
+-   `out_amount`: The amount of output tokens for the swap, excluding any transfer fees.
+
+**Returns**
+
+It returns a `Result<SwapResult2>`, where `SwapResult2` contains detailed information about the outcome of the swap, such as the amount in, fees, and the next sqrt price of the token.
+
+# `quote_partial_fill`
+
+This function calculates the result of a swap for a given amount of a partial input token. This is useful for trading terminals to not be hurt by the last swap overpaying.
+
+**Function**
+
+```rust
+pub fn quote_partial_fill(
+    pool: &VirtualPool,
+    config: &PoolConfig,
+    swap_base_for_quote: bool,
+    current_timestamp: u64,
+    current_slot: u64,
+    in_amount: u64,
+    has_referral: bool,
+) -> Result<SwapResult2>
+```
+
+**Parameters**
+
+-   `pool`: A reference to the `VirtualPool` state.
+-   `config`: A reference to the `PoolConfig` for the pool.
+-   `swap_base_for_quote`: A boolean indicating the direction of the trade. `true` for swapping base token for quote token, `false` otherwise.
+-   `current_timestamp`: The current Solana cluster timestamp.
+-   `current_slot`: The current Solana cluster slot.
+-   `in_amount`: The amount of input tokens for the swap, excluding any transfer fees.
+-   `has_referral`: A boolean indicating if a referral fee should be considered.
+
+**Returns**
+
+It returns a `Result<SwapResult2>`, where `SwapResult2` contains detailed information about the outcome of the swap, such as the amount in, fees, and the next sqrt price of the token.

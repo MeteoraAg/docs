@@ -1,5 +1,6 @@
 ---
-title: DBC Scripts
+title: Example Scripts
+description: DBC
 ---
 
 # Create DBC Config Key
@@ -7,10 +8,10 @@ title: DBC Scripts
 This script creates a DBC Config Key using the `buildCurveWithMarketCap` function (this function helps to abstract the math complexity of creating a DBC Config Key).
 
 You can also use the `buildCurve`, `buildCurveWithTwoSegments`, and `buildCurveWithLiquidityWeights` functions to create a DBC Config Key.
-- [buildCurve](/developer-guide/integrations/dbc/typescript-sdk/2-dbc-sdk-functions#buildcurve) is a function that primarily uses `migrationQuoteThreshold` and `percentageSupplyOnMigration` to build the curve config. This function is useful when you want to create a curve config with a specific migration quote threshold and percentage of supply on migration.
-- [buildCurveWithMarketCap](/developer-guide/integrations/dbc/typescript-sdk/2-dbc-sdk-functions#buildcurvewithmarketcap) is a function that primarily uses `initialMarketCap` and `migrationMarketCap` to build the curve config. This function is useful when you want to create a curve config that has a specific starting token price and an ending migration token price.
-- [buildCurveWithTwoSegments](/developer-guide/integrations/dbc/typescript-sdk/2-dbc-sdk-functions#buildcurvewithtwosegments) is a function that uses `initialMarketCap`, `migrationMarketCap` and `percentageSupplyOnMigration` to build the curve config. This function is useful when you want to create a 2 constant product curve structure with a specific initial market cap, migration market cap and percentage of supply on migration.
-- [buildCurveWithLiquidityWeights](/developer-guide/integrations/dbc/typescript-sdk/2-dbc-sdk-functions#buildcurvewithliquidityweights) is a function that uses `initialMarketCap`, `migrationMarketCap` and `liquidityWeights` to build the curve config. This function is useful when you want to create a curve config with a unique price action (flat, exponential, etc.) with a specific initial market cap, migration market cap and liquidity weights.
+- [buildCurve](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurve) is a function that primarily uses `migrationQuoteThreshold` and `percentageSupplyOnMigration` to build the curve config. This function is useful when you want to create a curve config with a specific migration quote threshold and percentage of supply on migration.
+- [buildCurveWithMarketCap](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithmarketcap) is a function that primarily uses `initialMarketCap` and `migrationMarketCap` to build the curve config. This function is useful when you want to create a curve config that has a specific starting token price and an ending migration token price.
+- [buildCurveWithTwoSegments](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithtwosegments) is a function that uses `initialMarketCap`, `migrationMarketCap` and `percentageSupplyOnMigration` to build the curve config. This function is useful when you want to create a 2 constant product curve structure with a specific initial market cap, migration market cap and percentage of supply on migration.
+- [buildCurveWithLiquidityWeights](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithliquidityweights) is a function that uses `initialMarketCap`, `migrationMarketCap` and `liquidityWeights` to build the curve config. This function is useful when you want to create a curve config with a unique price action (flat, exponential, etc.) with a specific initial market cap, migration market cap and liquidity weights.
 
 ```typescript
 import {
@@ -395,10 +396,11 @@ The migration process follows these steps:
 1. Create Migration Metadata (skip if metadata exists)
 2. Create Locker (checks if baseMint token has Locked Vesting, and if lockEscrow has been created)
 3. Migrate to DAMM V1 (if isMigrated = 0)
-4.1. Lock Partner LP (if partnerLockedLpPercentage > 0)
-4.2. Lock Creator LP (if creatorLockedLpPercentage > 0)
-4.3. Claim Partner LP (if partnerLpPercentage > 0)
-4.4. Claim Creator LP (if creatorLpPercentage > 0)
+4. Lock or Claim Partner Or Creator LP
+    - Lock Partner LP (if partnerLockedLpPercentage > 0)
+    - Lock Creator LP (if creatorLockedLpPercentage > 0)
+    - Claim Partner LP (if partnerLpPercentage > 0)
+    - Claim Creator LP (if creatorLpPercentage > 0)
 
 ```typescript
 import {
