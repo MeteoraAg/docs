@@ -3,48 +3,79 @@ title: Farm Integration
 description: DAMM v1 with Farm
 ---
 
-This guide provides instructions on how to integrate DAMM v1 pools with farms.
-
-Before you begin, here are some important resources:
-
-- **Program ID (Mainnet & Devnet):** `FarmuwXPWXvefWUeqFAa5w6rifLkq5X6E8bimYvrhCB1`
-- **TypeScript SDK Repository:** [@meteora-ag/farming-sdk](https://github.com/MeteoraAg/reward-pool)
+<Warning>DAMM v1 Pools with Farms are permissioned. Refer to the guide [here](/overview/products/damm-v1/pools-with-farms) on how to get a farming pool created.</Warning>
 
 # Code Examples
+
+The following code provides detailed examples on how to integrate DAMM v1 pools with farms using the Farming TypeScript SDK.
 
 ## Stake
 
 ```typescript
-// https://station.jup.ag/blog/jupiter-token-list-api#endpoints
-const tokenList = await fetch('https://token.jup.ag/all').then(res => res.json());
-const USDC = tokenList.find(token => token.address === <USDC_ADDRESS>);
-const USDT = tokenList.find(token => token.address === <USDT_ADDRESS>);
+import AmmImpl, { MAINNET_POOL } from "@meteora-ag/dynamic-amm-sdk";
+import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
+import { Connection } from "@solana/web3.js";
 
-// Get pool lp balance from `@meteora-ag/dynamic-amm-sdk` package
-const pool = await AmmImpl.create(connection, MAINNET_POOL.USDC_USDT, USDC, USDT);
-const lpBalance = await pool.getUserBalance(mockWallet.publicKey);
+const connection = new Connection("https://api.mainnet-beta.solana.com");
 
-const stakeTx = await farm.deposit(mockWallet.publicKey, lpBalance); // Web3 Transaction Object
-const stakeResult = await provider.sendAndConfirm(stakeTx); // Transaction hash
+const pool = await AmmImpl.create(connection, MAINNET_POOL.USDC_USDT);
+const lpBalance = await pool.getUserBalance(wallet.publicKey);
+
+const farm = await PoolFarmImpl.create(
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
+);
+
+const stakeTx = await farm.deposit(wallet.publicKey, lpBalance);
 ```
 
 ## Claim
 
 ```typescript
-const claimTx = await farm.claim(mockWallet.publicKey);
-const claimResult = await provider.sendAndConfirm(claimTx); // Transaction hash
+import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+const farm = await PoolFarmImpl.create(
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
+);
+
+const claimTx = await farm.claim(wallet.publicKey);
 ```
 
 ## Unstake
 
 ```typescript
-const unStakeTx = await farm.withdraw(mockWallet.publicKey, farmBalance); // Web3 Transaction Object
-const unstakeResult = await provider.sendAndConfirm(unStakeTx); // Transaction hash
+import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+const farm = await PoolFarmImpl.create(
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
+);
+
+const farmBalance = await farm.getUserBalance(wallet.publicKey);
+
+const unStakeTx = await farm.withdraw(wallet.publicKey, farmBalance);
 ```
 
 
 ## Check Stake Balance
 
 ```typescript
-const farmBalance = await farm.getUserBalance(mockWallet.publicKey);
+import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+const farm = await PoolFarmImpl.create(
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
+);
+
+const farmBalance = await farm.getUserBalance(wallet.publicKey);
 ```
