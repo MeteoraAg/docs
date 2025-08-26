@@ -1,144 +1,15 @@
 ---
-title: Stake2Earn Integration
+title: Example Scripts
+description: Stake2Earn
 ---
 
-This guide provides instructions on how to integrate DAMM v1 pools with Stake2Earn.
+# Create a Stake2Earn Vault
 
-# Prerequisites
-
-Before you begin, here are some important resources:
-
-- **Program ID (Mainnet & Devnet):** `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP`
-- **TypeScript SDK Repository:** [@meteora-ag/m3m3](https://github.com/MeteoraAg/stake-for-fee-sdk)
-
-
-# Install Dependencies
-
-```bash
-npm i @meteora-ag/m3m3 @coral-xyz/anchor @solana/web3.js @solana/spl-token @solana/spl-token-registry
-```
-
-# Initialize StakeForFee Instance
-
-```typescript
-import StakeForFee from "@meteora-ag/m3m3";
-import { PublicKey } from "@solana/web3.js";
-import { Wallet, AnchorProvider } from "@project-serum/anchor";
-
-// Connection, Wallet, and AnchorProvider to interact with the network
-const mainnetConnection = new Connection("https://api.mainnet-beta.solana.com");
-const mockWallet = new Wallet(new Keypair());
-const provider = new AnchorProvider(mainnetConnection, mockWallet, {
-  commitment: "confirmed",
-});
-// Alternatively, to use Solana Wallet Adapter
-
-const poolAddress = new PublicKey(
-  "G2MRSjNjCbFUmMf32Z1aXYhy6pc1ihLyYg6orKedyjJG"
-);
-const m3m3 = await StakeForFee.create(connection, poolAddress);
-```
-
-# Code Examples to Interact with StakeForFee
-
-In the following code, feeFarm refers to the Stake2Earn Vault.
-
-## Stake
-
-```typescript
-const stakeAmount = new BN(
-  1_000 * 10 ** feeFarm.accountStates.tokenAMint.decimals
-); // 1,000 stake token (make sure you have enough balance in your wallet)
-const stakeTx = await feeFarm.stake(stakeAmount, mockWallet.publicKey);
-const stakeTxHash = await provider.sendAndConfirm(stakeTx); // Transaction hash
-```
-
-## Get Stake Balance and Claimable Balance
-
-```typescript
-await feeFarm.refreshStates(); // make sure to refresh states to get the latest data
-const userEscrow = await feeFarm.getUserStakeAndClaimBalance(
-  mockWallet.publicKey
-);
-const stakeBalance =
-  userStakeEscrow.stakeEscrow.stakeAmount.toNumber() /
-  10 ** feeFarm.accountStates.tokenAMint.decimals;
-const claimableFeeA = fromLamports(
-  userStakeEscrow.unclaimFee.feeA || 0,
-  feeFarm.accountStates.tokenAMint.decimals
-);
-const claimableFeeB = fromLamports(
-  userStakeEscrow.unclaimFee.feeB || 0,
-  feeFarm.accountStates.tokenBMint.decimals
-);
-```
-
-## Claim Fee
-
-```typescript
-const claimFeeTx = await feeVault.claimFee(
-  mockWallet.publicKey,
-  new BN(U64_MAX)
-); // second param is max amount, so usually we just put max number BN.js can support
-const claimfeeTxHash = await provider.sendAndConfirm(claimFeeTx); // Transaction hash
-```
-
-## Unstake
-
-```typescript
-const unstakeKeyPair = new Keypair();
-const unstakeTx = await feeVault.unstake(
-  userEscrow.stakeEscrow.stakeAmount,
-  unstakeKeyPair.publicKey,
-  mockWallet.publicKey
-);
-unstakeTx.partialSign(unstakeKeyPair); // Make sure to partial sign unstakeKeypair
-const unstakeTxHash = await provider.sendAndConfirm(unstakeTx); // Transaction hash
-```
-
-## Get Unstake Period (Seconds)
-
-```typescript
-const unstakePeriodInSeconds =
-  feeFarm.accountStates.feeVault.configuration.unstakeLockDuration.toNumber();
-```
-
-## Cancel Unstake
-
-```typescript
-const cancelUnstakeTx = await feeFarm.cancelUnstake(
-  unstakeKeyPair.publicKey,
-  mockWallet.publicKey
-);
-const cancelUnstakeTxHash = await provider.sendAndConfirm(cancelUnstakeTx);
-```
-
-## Withdraw
-
-```typescript
-const withdrawTx = await feeFarm.withdraw(
-  unstakeKeyPair.publicKey,
-  mockWallet.publicKey
-);
-const withdrawTxHash = await provider.sendAndConfirm(withdrawTx);
-```
-
-# How to Create a DAMM v1 with Stake2Earn Vault
-
-<Note>
-You are recommended to configure your Stake2Earn staking rewards distribution start time (fee claim start time) to be approximately 48 hours after launch. This allows more time for total fee rewards to accumulate from trading activity in the memecoin pool. A bigger total fee reward would help make your Stake2Earn Vault look more appealing to potential stakers.
-</Note>
-
-# TypeScript Code Example
-
-Use this example to create a DAMM v1 with Stake2Earn Vault: https://github.com/MeteoraAg/stake-for-fee-sdk/blob/main/ts-client/src/examples/index.ts
-
-This code example includes the steps to:
-
-- Mint a token
-- Create dynamic vault and pool
-- Create Stake2Earn Vault
-- Lock user's LP to Stake2Earn Vault
+This script contains the following steps:
+1. Mint a token
+2. Create DAMM v1 Pool
+3. Create Stake2Earn Vault
+4. Lock user's LP tokens to Stake2Earn Vault
 
 ```typescript
 import AmmImpl from "@meteora-ag/dynamic-amm-sdk";
@@ -308,81 +179,106 @@ createPoolAndInteractWithFeeVaultExample()
   .catch(console.error);
 ```
 
-# CPI Example to Initialize a Stake2Earn Vault
+# Stake Tokens into Stake2Earn Vault
 
-Initialize a Stake2Earn Vault: https://github.com/MeteoraAg/cpi-examples
-
-### Script to Deploy a Stake2Earn Vault
-
-Alternatively, we also provide a convenient script to deploy a new Stake2Earn vault.
-
-<Note>
-The following script is only for deploying a new Stake2Earn vault only. To deploy a DAMM v1 with permanently locked liquidity, please refer to DAMM v1 Integration.
-</Note>
-
-## Getting Started
-
-- **Repository:** https://github.com/MeteoraAg/meteora-pool-setup
-- **Pool config list:** https://github.com/MeteoraAg/meteora-pool-setup/tree/main/config
-
-## Dependencies
-
-```bash
-bun install
+```typescript
+const stakeAmount = new BN(
+  1_000 * 10 ** feeFarm.accountStates.tokenAMint.decimals
+); // 1,000 stake token (make sure you have enough balance in your wallet)
+const stakeTx = await feeFarm.stake(stakeAmount, mockWallet.publicKey);
+const stakeTxHash = await provider.sendAndConfirm(stakeTx); // Transaction hash
 ```
 
-## Code Example
+# Unstake Tokens from Stake2Earn Vault
 
-```json
-{
-  "rpcUrl": "https://api.mainnet-beta.solana.com",
-  "dryRun": false,
-  "keypairFilePath": "keypair.json",
-  "computeUnitPriceMicroLamports": 100000,
-  "baseMint": "FvxPZWBViVsmzS11MGi3ybNGjTKChwdfXU3UWopBujTn",
-  "quoteSymbol": "SOL",
-  "m3m3": {
-    "topListLength": 100,
-    "unstakeLockDurationSecs": 25200,
-    "secondsToFullUnlock": 86400,
-    "startFeeDistributeTimestamp": 1737590400
-  },
-  "lockLiquidity": {
-    "allocations": [
-      {
-        "percentage": 100,
-        "address": "D2Yt1jtjjk6cPiwYKs6krtbjfjjYiQmYWbFtTrgL2WR2"
-      }
-    ]
-  }
-}
+```typescript
+const unstakeKeyPair = new Keypair();
+const unstakeTx = await feeVault.unstake(
+  userEscrow.stakeEscrow.stakeAmount,
+  unstakeKeyPair.publicKey,
+  mockWallet.publicKey
+);
+unstakeTx.partialSign(unstakeKeyPair); // Make sure to partial sign unstakeKeypair
+const unstakeTxHash = await provider.sendAndConfirm(unstakeTx); // Transaction hash
 ```
 
-<Note>
-You can deploy a DAMM v1 pool with a Stake2Earn Vault and Alpha Vault if required.
-</Note>
+# Get Stake and Claimable Balance
+
+```typescript
+await feeFarm.refreshStates(); // make sure to refresh states to get the latest data
+const userEscrow = await feeFarm.getUserStakeAndClaimBalance(
+  mockWallet.publicKey
+);
+const stakeBalance =
+  userStakeEscrow.stakeEscrow.stakeAmount.toNumber() /
+  10 ** feeFarm.accountStates.tokenAMint.decimals;
+const claimableFeeA = fromLamports(
+  userStakeEscrow.unclaimFee.feeA || 0,
+  feeFarm.accountStates.tokenAMint.decimals
+);
+const claimableFeeB = fromLamports(
+  userStakeEscrow.unclaimFee.feeB || 0,
+  feeFarm.accountStates.tokenBMint.decimals
+);
+```
+
+# Claim Fee
+
+```typescript
+const claimFeeTx = await feeVault.claimFee(
+  mockWallet.publicKey,
+  new BN(U64_MAX)
+); // second param is max amount, so usually we just put max number BN.js can support
+const claimfeeTxHash = await provider.sendAndConfirm(claimFeeTx); // Transaction hash
+```
+
+# Get Unstake Period (Seconds)
+
+```typescript
+const unstakePeriodInSeconds =
+  feeFarm.accountStates.feeVault.configuration.unstakeLockDuration.toNumber();
+```
+
+# Cancel Unstake
+
+```typescript
+const cancelUnstakeTx = await feeFarm.cancelUnstake(
+  unstakeKeyPair.publicKey,
+  mockWallet.publicKey
+);
+const cancelUnstakeTxHash = await provider.sendAndConfirm(cancelUnstakeTx);
+```
+
+# Withdraw Unstaked Tokens from Stake2Earn Vault
+
+```typescript
+const withdrawUnstake = await feeFarm.withdraw(
+  unstakeKeyPair.publicKey,
+  mockWallet.publicKey
+);
+```
 
 # Important Considerations
 
-## Stake2Earn Staking Rewards Distribution Start Time
+### Stake2Earn Staking Rewards Distribution Start Time
 
 You are recommended to configure your Stake2Earn staking rewards distribution start time (fee claim start time) to be approximately 48 hours after launch. This allows more time for total fee rewards to accumulate from trading activity in the memecoin pool. A bigger total fee reward would help make your Stake2Earn Vault look more appealing to potential stakers.
 
-## Difference Between Locking Liquidity via Stake2Earn vs Directly Locking Liquidity in the Memecoin Pool
+###Difference Between Locking Liquidity via Stake2Earn vs Directly Locking Liquidity in the Memecoin Pool
 
-User lock and Stake2Earn lock use the same lock mechanism on a Dynamic AMM / Memecoin Pool. But users and Stake2Earn vaults have their own personal lock escrow account for the pool.
+User lock and Stake2Earn lock use the same lock mechanism on a DAMM v1 Pool. But users and Stake2Earn vaults have their own personal lock escrow account for the pool.
 
 When a user permanently locks liquidity directly on the Memecoin Pool page, the user is locking the LP token to their own personal escrow account for the pool. Fees from this locked liquidity go to the user's wallet.
 
 However, when a user locks via the Stake2Earn creation process, the user is locking the LP to their unique Stake2Earn Vault stake escrow account. Therefore, fees from this locked liquidity go to the Stake2Earn Vault, which then distributes fees to the top stakers.
 
-## How to Find the Stake2Earn Vault Address and a User Wallet's Unique Personal Stake Escrow Address?
+### How to Find the Stake2Earn Vault Address and a User Wallet's Unique Personal Stake Escrow Address?
 
 Use a wallet simulator (e.g. Sherlock extension) and paste the user's wallet address. Try to stake or unstake tokens in a Stake2Earn Vault.
 
 Click "Open explorer" and on the explorer page search for Vault and/or Stake Escrow fields to find the respective addresses.
 
-## Other Considerations
+### Other Considerations
 
 - If you plan to use a multisig on the Meteora website, please make sure it is the SquadsX multisig, as that is the only type supported on Meteora website. Otherwise, you can't manage liquidity through the website.
 - There can only be one Stake2Earn Vault attached to each Memecoin Pool.
