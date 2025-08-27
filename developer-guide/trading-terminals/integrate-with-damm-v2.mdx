@@ -3,66 +3,7 @@ title: Integrate with DAMM v2
 description: Everything you need to know to integrate with Meteora's DAMM v2 Program
 ---
 
-# Math Calculation
-
-## Bonding Curve Progress
-
-### Core Formula
-
-```
-bondingCurveProgress = poolState.quoteReserve / poolConfigState.migration_quote_threshold
-```
-
-There are 2 ways you can get the quote reserve:
-
-1. From the `poolState.quoteReserve` state in a DBC pool.
-2. From the `nextSqrtPrice` in the swap CPI logs.
-
-### 1. Get Quote Reserve from Pool State
-
-```typescript
-const client = new DynamicBondingCurveClient(connection, "confirmed");
-const poolState = await client.state.getPool(poolAddress);
-const quoteReserve = poolState.quoteReserve;
-```
-
-### 2. Get Quote Reserve from Next Sqrt Price
-
-#### Using the `get_quote_token_from_sqrt_price` function
-
-```rust
-pub fn get_quote_token_from_sqrt_price(next_sqrt_price: u128, config: &PoolConfig) -> Result<U256> {
-    let mut total_amount = U256::ZERO;
-    for i in 0..MAX_CURVE_POINT {
-        let lower_sqrt_price = if i == 0 {
-            config.sqrt_start_price
-        } else {
-            config.curve[i - 1].sqrt_price
-        };
-        if next_sqrt_price > lower_sqrt_price {
-            let upper_sqrt_price = if next_sqrt_price < config.curve[i + 1].sqrt_price {
-                next_sqrt_price
-            } else {
-                config.curve[i + 1].sqrt_price
-            };
-            let max_amount_in = get_delta_amount_quote_unsigned_256(
-                lower_sqrt_price,
-                upper_sqrt_price,
-                config.curve[i].liquidity,
-                Rounding::Up,
-            )?;
-
-            total_amount = total_amount.safe_add(max_amount_in)?;
-        }
-    }
-
-    Ok(total_amount)
-}
-```
-
-#### Using the `getQuoteReserveFromNextSqrtPrice` function in the DBC TypeScript SDK
-
-[getQuoteReserveFromNextSqrtPrice](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/docs.md#getQuoteReserveFromNextSqrtPrice)
+Trading Terminals can easily integrate with Meteora DAMM v2 by following this guide that explains in detail how to get the necessary data from indexing the DAMM v2 program. 
 
 ## Total Fees
 
@@ -74,42 +15,53 @@ totalFees = baseFees + dynamicFees
 
 Base Fees includes either a Flat Fee or a Fee Scheduler or Rate Limiter. 
 
-<Note>`BaseFeeMode` can only be enums 0, 1, or 2.</Note>
+<Note>
+    `BaseFeeMode` can only be enums 0 or 1.
+    0 = Linear Fee Scheduler
+    1 = Exponential Fee Scheduler
+</Note>
 
 #### Flat Fee
+
+You can fetch the flat fee directly from the `cliffFeeNumerator` in the `baseFee` object if `numberOfPeriod`, `periodFrequency`, and `reductionFactor` are all 0.
 
 ```typescript
 // Example
 baseFee: {
   cliffFeeNumerator: <BN: 10000000>, // 1% flat fee
-  firstFactor: 0, 
-  secondFactor: <BN: 0>, 
-  thirdFactor: <BN: 0>, 
-  baseFeeMode: 0
+  numberOfPeriod: 0, 
+  periodFrequency: <BN: 0>, 
+  reductionFactor: <BN: 0>, 
+  feeSchedulerMode: 0
 }
 ```
+
+<Warning>
+The Fee Scheduler depends on the `poolState.activationType`. 
+
+- If the `poolState.activationType == 0`, then `numberOfPeriod` and `periodFrequency` is calculated in `SLOT == 400ms`
+- If the `poolState.activationType == 1`, then `numberOfPeriod` and `periodFrequency` is calculated in `SECONDS == 1000ms`
+</Warning>
 
 #### Fee Scheduler
 
+- `feeSchedulerMode` can only be 0 or 1.
+
 ```typescript
-type base_fee = {
-    cliff_fee_numerator: BN
-    first_factor: number // numberOfPeriod
-    second_factor: BN // periodFrequency
-    third_factor: BN // reductionFactor
-    base_fee_mode: BaseFeeMode // 0 or 1
+interface BaseFee = {
+    cliffFeeNumerator: BN
+    numberOfPeriod: number 
+    periodFrequency: BN 
+    reductionFactor: BN
+    feeSchedulerMode: BaseFeeMode // 0 or 1
 }
 ```
 
-```
-when in Linear (0) baseFeeMode: 
-fee = cliff_fee_numerator - (period * reduction_factor)
+<Note>You can refer to the math formula for the Fee Scheduler [here](/anti-sniper-suite/fee-scheduler/fee-scheduler-math)</Note>
 
-when in Exponential (1) baseFeeMode:
-fee = cliff_fee_numerator * (1 - reduction_factor/10_000)^period
-```
+Here are some examples of how the Fee Scheduler works:
 
-```jsx
+```typescript
 // Fee Scheduler: 50% reduce to 1% in 10 minutes linearly
 baseFee: {
   cliffFeeNumerator: <BN: 500000000>,
@@ -120,7 +72,7 @@ baseFee: {
 },
 ```
 
-```jsx
+```typescript
 // Fee Scheduler: 50% reduce to 1% in 10 minutes exponentially
 baseFee: {
   cliffFeeNumerator: <BN: 500000000>,
@@ -131,152 +83,36 @@ baseFee: {
 },
 ```
 
-#### Rate Limiter
-
-```typescript
-type base_fee = {
-    cliff_fee_numerator: BN
-    first_factor: number //feeIncrementBps
-    second_factor: BN // maxLimiterDuration
-    third_factor: BN // referenceAmount
-    base_fee_mode: BaseFeeMode // 2
-}
-```
-
-```
-when in RateLimiter (2) baseFeeMode:
-
-For input_amount ≤ reference_amount:
-fee = input_amount * cliff_fee_numerator
-
-For input_amount > reference_amount:
-
--> Let x0 = reference_amount
--> Let c = cliff_fee_numerator
--> Let i = fee_increment
--> Let a = (input_amount - reference_amount) / reference_amount
--> Let b = (input_amount - reference_amount) % reference_amount
-
-If a < max_index:
-fee = x0 * (c + c*a + i*a*(a+1)/2) + b * (c + i*(a+1))
-
-If a ≥ max_index:
-fee = x0 * (c + c*max_index + i*max_index*(max_index+1)/2) + (d*x0 + b) * MAX_FEE
-
-where:
--> d = a - max_index
--> MAX_FEE is the maximum allowed fee (99%)
-```
-
-**Note:** The Fee Scheduler and Rate Limiter depends on the `poolState.activationType`. 
-
-- If the `poolState.activationType == 0`, then `numberOfPeriod` and `periodFrequency` is calculated in `SLOT == 400ms`
-- If the `poolState.activationType == 1`, then `numberOfPeriod` and `periodFrequency` is calculated in `SECONDS == 1000ms`
-
-```jsx
-// Rate Limiter: Starts at 1% fee -> Exponential increase in fee for 10 slots based on trade size
-// 0.5 SOL trade
-// fee = 0.5 SOL * 0.1% = 0.0005 SOL
-// 1.5 SOL trade
-// fee = 1 SOL * 0.1% + 0.5 SOL * 0.2% = 0.002 SOL
-// 3 SOL trade
-// fee = 1 SOL * 0.1% + 1 SOL * 0.2% + 1 SOL * 0.3% = 0.006 SOL
-baseFee: {
-   cliffFeeNumerator: new BN(10_000_000), 
-   firstFactor: 10, // feeIncrementBps
-   secondFactor: new BN(10), // maxLimiterDuration
-   thirdFactor: new BN(1000000000), // referenceAmount
-   baseFeeMode: 2, // rate limiter mode
-}
-```
-
 ### Dynamic Fees (Variable Fee)
 
-You can refer to the Dynamic Fee calculation [here](/overview/products/dbc/trading-fees-calculation#dynamic-fee-variable-fee)
+You can refer to the Dynamic Fee calculation [here](/overview/products/damm-v2/pool-fees-calculation#dynamic-fee-variable-fee)
 
-## Liquidity
+## Plotting Charts
 
-```
-liquidity = poolState.quoteReserve * quoteTokenPrice
-```
+<Danger>Using Transfer logs from Swap transactions is not the correct way of getting the token price as we have Anti-Sniper Suite features that can cause huge fee deductions from `TokenAmountIn` OR `TokenAmountOut`. Plotting the token chart price from these will lead to a very ugly chart.</Danger>
 
-## FDV
+The correct way is to fetch the `EvtSwap` CPI logs from the Swap transaction. 
 
-```
-fdv = poolConfigState.postMigrationTokenSupply * baseTokenPrice
-```
+Because of the Anti-Sniper Suite features, you will have to apply the following checks to get the correct token price either before/after the fee deduction.
 
-## Market Cap
-
-Using Transfer logs from Swap transactions is not the correct way of getting the token price as we have Anti-Sniper Suite features that can cause huge fee deductions from `TokenAmountIn` OR `TokenAmountOut`.
-
-The correct way is to fetch the Swap CPI logs from the Swap transaction.
-
-### Formula
+<Note>You will need to fetch the DAMM v2 pool state to get the `collectFeeMode`.</Note>
 
 ```
-marketCap = tokenPrice * circulatingTokenSupply
-```
+If poolState.collectFeeMode is 0, then:
 
-#### With DBC Pool Config State
+- Quote to Base (TradeDirection[1]) 
+-> use [outputAmount + lpFee + protocolFee + referralFee + partnerFee] (swap happens before fee deduction)
 
-```typescript
-// For poolConfig.feeCollectMode == 0 [QuoteToken] && tradeDirection == 1 [Quote to Base]
-// quoteMint -> fee deducted from quoteMint
-amountIn = actualAmountIn / tokenQuoteDecimal
+- Base to Quote (TradeDirection[0]) 
+-> use [outputAmount + lpFee + protocolFee + referralFee + partnerFee] (swap happens before fee deduction)
 
-// baseMint
-amountOut = outputAmount / tokenBaseDecimal
+If poolState.collectFeeMode is 1, then:
 
-tokenPrice = (amountIn * quoteMintPrice) / amountOut
-```
+- Quote to Base (TradeDirection[1]) 
+-> use [actualAmountIn] (swap happens after fee deduction)
 
-```typescript
-// For poolConfig.feeCollectMode == 0 [QuoteToken] && tradeDirection == 0 [Base to Quote]
-// baseMint
-amountIn = actualAmountIn / tokenBaseDecimal
-
-// quoteMint -> fee deducted from quoteMint
-amountOut = (outputAmount + tradingFee + protocolFee + referralFee) / tokenQuoteDecimal
-
-tokenPrice = (amountOut * quoteMintPrice) / amountIn
-```
-
-```typescript
-// For poolConfig.feeCollectMode == 1 [OutputToken] && tradeDirection == 1 [Quote to Base]
-// quoteMint
-amountIn = actualAmountIn / tokenQuoteDecimal
-
-// baseMint -> fee deducted from baseMint
-amountOut = (outputAmount + tradingFee + protocolFee + referralFee) / tokenBaseDecimal
-
-tokenPrice = (amountIn * quoteMintPrice) / amountOut
-```
-
-```typescript
-// For poolConfig.feeCollectMode == 1 [OutputToken] && tradeDirection == 0 [Base to Quote]
-// baseMint
-amountIn = actualAmountIn / tokenBaseDecimal
-
-// quoteMint -> fee deducted from quoteMint
-amountOut = (outputAmount + tradingFee + protocolFee + referralFee) / tokenQuoteDecimal
-
-tokenPrice = (amountOut * quoteMintPrice) / amountIn
-```
-
-#### With CPI Logs
-
-Alternatively, if you don't fetch poolConfig in your current code and are unable to get `collectFeeMode`, you can base it all on the CPI logs:
-
-```
-1. if actualInputAmount === amountIn: then amountIn <> outputAmount + tradingFee + protocolFee + referralFee
-2. if actualInputAmount !== amountIn: then actualAmountIn <> outputAmount
-```
-
-## Locked Vesting
-
-```
-total_vesting_amount = cliff_unlock_amount + (amount_per_period * number_of_period)
+- Base to Quote (TradeDirection[0]) 
+-> use [outputAmount + lpFee + protocolFee + referralFee + partnerFee] (swap happens before fee deduction)
 ```
 
 ## Trading Volume
@@ -285,39 +121,33 @@ Track from Swap CPI logs:
 
 ```
 // Depending on Trade Direction:
-trading_volume += amount_in * token_price
+trading_volume += actualAmountIn * token_price
 ```
 
-## Migration
+## Liquidity
 
-### Migration Process
+In the DAMM v2 pool, the liquidity is fetched from the `tokenAVault` and `tokenBVault` of the DAMM v2 pool.
 
-Once `getPoolCurveProgress == 100%`, then check `migrationProgress` and `isMigrated` status form the [DBC pool state](https://github.com/MeteoraAg/dynamic-bonding-curve/blob/main/programs/dynamic-bonding-curve/src/state/virtual_pool.rs).
-
-```rust
-IsMigrated::NotMigrated  // 0
-IsMigrated::Migrated // 1
+```
+liquidity = tokenAVault * tokenAPrice + tokenBVault * tokenBPrice
 ```
 
-```rust
-MigrationProgress::PreBondingCurve  // 0
-MigrationProgress::PostBondingCurve // 1
-MigrationProgress::LockedVesting    // 2
-MigrationProgress::CreatedPool      // 3
-```
+## Locked or Vested Liquidity
 
-### Current Auto Migrators Running
+In DAMM v2, there are 3 different modes for liquidity:
+1. `lockedLiquidity` - which means that the liquidity is permanently locked
+2. `vestedLiquidity` - which means that the liqudiity is vestedLiquidity
+3. `unlockedLiquidity` - which means that the liquidity is unlocked and claimable
 
-You can refer to the [DBC Auto Migrator](/developer-guide/guides/dbc/overview#migration-keeper) for the current auto migrators running.
+You can use our DAMM v2 API [endpoint](/api-reference/pools/get_pool_vesting_list) that tracks pool positions and show accurately whether the liqudiity is locked or not on your trading terminal.
 
-### How to Identify Launchpads Using DBC
+### How to Identify Launchpads Using DAMM v2
 
-We will provide a list of all DBC integrators.
+You can ping us on Discord to get a list of all launchpads configuration who are launching on DAMM v2 directly so that you can index them on your trading terminal.
 
-<Note>You can ping us on Discord if you want to get access to the list.</Note>
+<Note>Open a ticket on [discord](https://discord.gg/meteora) to get access to the list.</Note>
 
 ## Referral Account
 
-### DBC
-
-For referral fees, simply add your [referral token account](https://github.com/MeteoraAg/dynamic-bonding-curve/blob/main/programs/dynamic-bonding-curve/src/instructions/ix_swap.rs#L30) within the swap instruction & you will receive 20% of the protocol fees for all trades.
+- For trading terminals, we have a feature that enables trading terminals to earn referral fees from all swaps that happens on our Meteora DBC program as long as they were swapped through your trading terminal.
+- For referral fees, simply add your [referral token account](https://github.com/MeteoraAg/dynamic-bonding-curve/blob/main/programs/dynamic-bonding-curve/src/instructions/ix_swap.rs#L30) within the swap instruction & you will receive 20% of the protocol fees for all swaps.
