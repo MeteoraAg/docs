@@ -1,0 +1,350 @@
+---
+title: Bonding Curve Configs
+---
+
+<Note>Every DBC pool must be created using a config key that defines the pool's parameters. Each DBC pool is a PDA of `baseMint` + `quoteMint` + `config`.</Note>
+
+Configs are basically where you configure the pre-grduation pool fees, post-graduation pool fees, the collect fee mode, the dynamic fee, the bonding curve shape, token vesting and more.
+
+This guide will cover what each field in the configuration means and how you can configure your ideal bonding curve settings.
+
+# Context
+
+- **Partner** -> Launchpad (identified via the `feeClaimer` field in the DBC curve config)
+- **Creator** -> Token Pool Creator (identified via the `creator` field in the DBC pool state)
+
+# Example of a DBC Curve Config
+
+A typical DBC curve config will look like this when you parse it into the `create_config` instruction on the DBC program:
+
+<AccordionGroup>
+  <Accordion title="Example of a DBC Curve Config Parameter">
+    ```json
+    {
+        poolFees: {
+            baseFee: {
+                cliffFeeNumerator: new BN(10000000),
+                firstFactor: 0,
+                secondFactor: new BN(0),
+                thirdFactor: new BN(0),
+                baseFeeMode: 0
+            },
+            dynamicFee: {
+                binStep: 1,
+                binStepU128: new BN(1844674407370955),
+                filterPeriod: 10,
+                decayPeriod: 120,
+                reductionFactor: 5000,
+                maxVolatilityAccumulator: 14460000,
+                variableFeeControl: 956
+            }
+        },
+        activationType: 1,
+        collectFeeMode: 0,
+        migrationOption: 1,
+        tokenType: 1,
+        tokenDecimal: 6,
+        migrationQuoteThreshold: new BN(85000000000),
+        partnerLpPercentage: 0,
+        creatorLpPercentage: 0,
+        partnerLockedLpPercentage: 50,
+        creatorLockedLpPercentage: 50,
+        sqrtStartPrice: new BN(95072344172433750),
+        lockedVesting: {
+            amountPerPeriod: new BN(0),
+            cliffDurationFromMigrationTime: new BN(0),
+            frequency: new BN(0),
+            numberOfPeriod: new BN(0),
+            cliffUnlockAmount: new BN(0)
+        },
+        migrationFeeOption: 2,
+        tokenSupply: {
+            preMigrationTokenSupply: new BN(1000000000000000),
+            postMigrationTokenSupply: new BN(1000000000000000)
+        },
+        creatorTradingFeePercentage: 0,
+        tokenUpdateAuthority: 1,
+        migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
+        migratedPoolFee: { collectFeeMode: 0, dynamicFee: 0, poolFeeBps: 0 },
+        padding: [],
+        curve: [
+            {
+            sqrtPrice: new BN(380289371323205464),
+            liquidity: new BN(101410499496546307411360885487802)
+            },
+            {
+            sqrtPrice: new BN(79226673521066979257578248091),
+            liquidity:new BN(3434578513360188981331421)
+            }
+        ]
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+# Curve Config Parameters
+
+There are 3 ways you can go about to create your DBC curve config key onchain. You can either:
+1. Head to [launch.meteora.ag](https://launch.meteora.ag) and use the UI to create your DBC curve config key.
+2. Use the build curve functions in the [DBC Typescript SDK](/developer-guide/guides/dbc/typescript-sdk/getting-started) to create your DBC curve config key. These build curve functions abstracts the math complexity of the bonding curve while still allowing you to have full control over the curve structure.
+3. Doing the math and creating the curve config key manually and parsing it into the `create_config` instruction.
+
+## Tokenomics Configuration
+
+### `tokenType`
+
+- 0: SPL Token
+- 1: Token2022 Token
+
+<Warning>Currently DBC does not support any Token2022 extensions.</Warning>
+
+### `tokenDecimal`
+
+- The number of token decimals of the `baseMint` token.
+
+### `tokenSupply`
+
+- The total token supply of the token can be set as `fixed` or `dynamic`
+- If the token supply is set to `fixed`, you need to set the `preMigrationTokenSupply` and `postMigrationTokenSupply` fields.
+```
+tokenSupply: {
+    preMigrationTokenSupply: new BN(1000000000000000),
+    postMigrationTokenSupply: new BN(1000000000000000)
+}
+```
+- If the token supply is set to `dynamic`, you can set `tokenSupply` as null.
+```
+{
+    "tokenSupply": null
+}
+```
+
+### `tokenUpdateAuthority`
+
+- The token authority of the `baseMint` token that can be configured based on the launchpad's preference.
+- The token authority can be set to:
+    - 0: `CreatorUpdateAuthority` would give the `creator` the authority to update the token metadata.
+    - 1: `Immutable` would make the token metadata immutable and mint authority to be revoked.
+    - 2: `PartnerUpdateAuthority` would give the `partner` the authority to update the token metadata.
+    - 3: `CreatorUpdateAndMintAuthority` would give the `creator` the authority to update the token metadata and mint authority.
+    - 4: `PartnerUpdateAndMintAuthority` would give the `partner` the authority to update the token metadata and mint authority.
+
+### `lockedVesting`
+
+- The vesting of `baseMint` tokens that can be configured based on the launchpad's preference.
+- This `lockedVesting` only starts after the pool has migrated.
+- The tokens are locked in a `lockEscrow` powered by our [Meteora Lock](/overview/other-products/meteora-lock/what-is-meteora-lock) program.
+- The `lockedVesting` is a struct that contains the following fields:
+    - `amountPerPeriod` - The amount of tokens that will be unlocked per period (in lamports).
+    - `cliffDurationFromMigrationTime` - The duration of the cliff period from the migration time.
+    - `frequency` - The frequency of the vesting (in seconds).
+    - `numberOfPeriod` - The number of periods of the vesting.
+    - `cliffUnlockAmount` - The amount of tokens that will be unlocked at the cliff period (in lamports).
+
+## Pre-Graduation DBC Configuration
+
+### `sqrtStartPrice`
+
+- The starting price of the token in the bonding curve pool in the sqrt price format.
+- You can calculate the `sqrtPrice` from the `price` by using the following formula:
+    - `price = (sqrtPrice >> 64)^2 * 10^(tokenADecimal - tokenBDecimal)`
+
+### `poolFees`
+
+<Note>The pool fees **only** apply to the pre-graduation DBC pool.</Note>
+
+- The pool fees comprises of the `baseFee` and `dynamicFee`
+
+#### `baseFee`
+
+- The base fee is a struct the contains the following fields:
+    - `cliffFeeNumerator` - The initial numerator of the pool fee.
+    - `firstFactor` - Depending on the `baseFeeMode`, this field will be either `numberOfPeriod` or `feeIncrementBps`.
+        - If the `baseFeeMode` is set to 0 or 1 (Fee Scheduler), this field will be `numberOfPeriod`. 
+        - If the `baseFeeMode` is set to 2 (Rate Limiter), this field will be `feeIncrementBps`.
+    - `secondFactor` - Depending on the `baseFeeMode`, this field will be either `periodFrequency` or `maxLimiterDuration`.
+        - If the `baseFeeMode` is set to 0 or 1 (Fee Scheduler), this field will be `periodFrequency`. 
+        - If the `baseFeeMode` is set to 2 (Rate Limiter), this field will be `maxLimiterDuration`.
+    - `thirdFactor` - Depending on the `baseFeeMode`, this field will be either `reductionFactor` or `referenceAmount`.
+        - If the `baseFeeMode` is set to 0 or 1 (Fee Scheduler), this field will be `reductionFactor`. 
+        - If the `baseFeeMode` is set to 2 (Rate Limiter), this field will be `referenceAmount`.
+    - `baseFeeMode` - The mode of the base fee.
+        - 0: Linear Fee Scheduler
+        - 1: Exponential Fee Scheduler
+        - 2: Rate Limiter
+
+#### `dynamicFee`
+
+- The dynamic fee is an optional struct that contains the following fields:
+    - `binStep` - u16 value representing the bin step in bps
+    - `binStepU128` - u128 value for a more accurate bin step
+    - `filterPeriod` - Minimum time that must pass between fee updates
+    - `decayPeriod` - Period after the volatility starts decaying (must be > filterPeriod)
+    - `reductionFactor` - Controls how quickly volatility decys over time
+    - `maxVolatilityAccumulator` - Multiplier that determines how much volatility affects fees
+    - `variableFeeControl` - Caps the maximum volatility that can be accumulated
+
+Example:
+```
+dynamicFee: {
+    binStep: 1,
+    binStepU128: new BN(1844674407370955),
+    filterPeriod: 10,
+    decayPeriod: 120,
+    reductionFactor: 5000,
+    maxVolatilityAccumulator: 14460000,
+    variableFeeControl: 956
+}
+```
+- The dynamic fee can be set to `null` if you don't want to enable the dynamic fee.
+
+Example: 
+```
+dynamicFee: null
+```
+
+### `creatorTradingFeePercentage`
+
+- By default, if the `creatorTradingFeePercentage` === 0, the creator will not receive any trading fees from the pre-graduation DBC pool, and all the fees will go to the `feeClaimer` which belongs to the `partner` launchpad.
+- The `creatorTradingFeePercentage` is a u16 value representing the trading fee in percentage.
+
+### `activationType`
+
+- The `activationType` is a u8 value representing the activation type of the DBC pool.
+    - 0: `Slot` -> Calculated in terms of slots (0.4 seconds = 400ms).
+    - 1: `Timestamp` -> Calculated in terms of seconds. (1 second = 1000ms)
+
+### `collectFeeMode`
+
+- The `collectFeeMode` is a u8 value representing the collect fee mode of the DBC pool.
+    - 0: `Quote Token` -> The trading fees collected in the pre-graduation DBC pool is collected in the quote token.
+    - 1: `Output Token` -> The trading fees collected in the pre-graduation DBC pool is collected in the output token.
+
+### `migrationQuoteThreshold`
+
+- The `migrationQuoteThreshold` is a u128 value representing the amount of quote token that will be needed to be collected in the pre-graduation DBC pool to qualify for the pool to be ready for migration.
+- In order for the token to graduate from pre-graduation to post-graduation, the `poolState.quoteReserve` must be greater than or equal to the `poolConfig.migrationQuoteThreshold`.
+- If you want your pool to automatically migrate when the `poolState.quoteReserve` is greater than or equal to the `poolConfig.migrationQuoteThreshold`, you would need to set the `migrationQuoteThreshold` to have a minimum value of 750 USD. You can read more about our migration keepers [here](/developer-guide/guides/dbc/overview#migration-keeper)
+
+### `migrationFee`
+
+- The `migrationFee` is the amount of quote token that you want to collect as fee when the token pool migrates from pre-graduation to post-graduation.
+- This `migrationFee` will be collected from the `migrationQuoteThreshold` amount of quote token.
+- The `migrationFee` is a struct that contains the following fields:
+    - `feePercentage` - The fee percentage of the migration fee. The value must be between 0% and 50%.
+    - `creatorFeePercentage` - The fee percentage of the creator fee. The value must be between 0% and 100%.
+- For example, if you want to collect 10% fee of the `migrationQuoteThreshold` amount of quote token, you would need to set the `migrationFee` to:
+```
+migrationFee: {
+    feePercentage: 10,
+    creatorFeePercentage: 0
+}
+```
+- Additionally, if you want to fee split 50% of this 10% fee between the `partner` and `creator`, you can set the `creatorFeePercentage` to 50.
+```
+migrationFee: {
+    feePercentage: 10,
+    creatorFeePercentage: 50
+}
+```
+- So essentially, if your `migrationQuoteThreshold` is 100 SOL, a 10% migrationFee would mean that 90 SOL will be migrated to the post-graduation pool's LP, and the remaining 10 SOL will be collected as fee.
+
+
+### `curve`
+
+- The `curve` is an array of objects that contains the following fields:
+    - `sqrtPrice` - The sqrt price of the curve segment.
+    - `liquidity` - The liquidity of the curve segment.
+- When configuring the curve segments, you would need to adhere to the [math formulas of the bonding curve](/overview/products/dbc/bonding-curve-formulas) to ensure that the curve is valid.
+
+
+
+## Post-Graduation DAMM Pool Configuration
+
+### `migrationOption`
+
+- The `migrationOption` is a u8 value representing the type of the post-graduation pool after the bonding curve has completed.
+    - 0: `DAMM v1` -> The pool will be migrated to a DAMM v1 pool.
+    - 1: `DAMM v2` -> The pool will be migrated to a DAMM v2 pool.
+
+### `migrationFeeOption`
+
+- The `migrationFeeOption` are fee configs that have been pre-defined for the DBC Pool Authority to use.
+- You can find the list of the pre-defined fee configs [here](/developer-guide/guides/dbc/overview#damm-fee-config-keys).
+<Note>**For DAMM v1**, the `collectFeeMode` of the post-graduation pool is set to `Output Token`.</Note>
+<Note>**For DAMM v2**, the `collectFeeMode` of the post-graduation pool is set to `Quote Token`. Additionally, because dynamic fee is enabled in the DAMM v2 fee config, there will be an additional 20% of the chosen base fee added to the total fee.</Note>
+- The `migrationFeeOption` is a u8 value representing the pool fee of the post-graduation pool.
+    - 0: `FixedBps25` -> The pool fee of the post-graduation pool will be 25 bps.
+    - 1: `FixedBps30` -> The pool fee of the post-graduation pool will be 30 bps.
+    - 2: `FixedBps100` -> The pool fee of the post-graduation pool will be 100 bps.
+    - 3: `FixedBps200` -> The pool fee of the post-graduation pool will be 200 bps.
+    - 4: `FixedBps400` -> The pool fee of the post-graduation pool will be 400 bps.
+    - 5: `FixedBps600` -> The pool fee of the post-graduation pool will be 600 bps.
+    - 6: `Cuztomizable` -> Only if your `migrationOption` is set to `DAMM v2`. You can set the pool fees of the post-graduation pool in the `migratedPoolFee` struct.
+
+### `migratedPoolFee`
+
+- The `migratedPoolFee` is only available if your `migrationOption` is set to `DAMM v2` and `migrationFeeOption` is set to `Cuztomizable` [6].
+- The `migratedPoolFee` is a struct that contains the following fields:
+    - `collectFeeMode` - The collect fee mode of the post-graduation pool.
+    - `dynamicFee` - The dynamic fee of the post-graduation pool.
+    - `poolFeeBps` - The pool fee of the post-graduation pool.
+
+### `lpPercentage`
+
+- There are 4 types of LP Percentage parameters that you can configure.
+- These 4 LP Percentage parameters must add up to 100%.
+    - `partnerLpPercentage` - The percentage of the LP that will be allocated to the partner in the graduated pool (0-100)
+    - `creatorLpPercentage` - The percentage of the LP that will be allocated to the creator in the graduated pool (0-100)
+    - `partnerLockedLpPercentage` - The percentage of the locked LP that will be allocated to the partner in the graduated pool (0-100)
+    - `creatorLockedLpPercentage` - The percentage of the locked LP that will be allocated to the creator in the graduated pool (0-100)
+
+Example:
+```
+// All the LP are locked forever in the post-graduation pool
+lpPercentage: {
+    partnerLpPercentage: 0,
+    creatorLpPercentage: 0,
+    partnerLockedLpPercentage: 50,
+    creatorLockedLpPercentage: 50
+}
+```
+
+# Creating the Curve Config
+
+When creating the DBC Curve Config, you need to call the `create_config` instruction on the DBC program with the following parameters:
+
+1. `config` - The DBC curve config account public key. This will be the address that stores the curve config settings.
+2. `quoteMint` - The quote mint public key that will be paired with the base mint. All pools created with this DBC curve config address will be paired with this quote mint.
+3. `feeClaimer` - The fee claimer public key is a wallet signer address that will belong to the launchpad to claim the partner fees.
+4. `leftoverReceiver` - The leftover receiver public key is a wallet that will receive the leftover tokens in the bonding curve after the pool has migrated.
+5. `payer` - The payer public key is a wallet signer that will pay for the creation of the DBC curve config account.
+
+# Build Curve Helper functions
+
+Creating a curve config key is a highly complex process that involves understanding how the math of the bonding curve works. To make this process easier, we have created a set of helper functions in the [DBC Typescript SDK](/developer-guide/guides/dbc/typescript-sdk/getting-started) that will help you create the curve config key.
+
+### [buildCurve](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurve)
+
+- This function is useful when you want to create a curve config with a specific `migrationQuoteThreshold` and `percentageSupplyOnMigration`.
+- The `percentageSupplyOnMigration` is the percentage of the total token supply that you want to be migrated into the post-graduation pool's LP.
+
+### [buildCurveWithMarketCap](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithmarketcap)
+
+- This function is useful when you want to create a curve config that has a specific starting token price and an ending migration token price.
+- The `initialMarketCap` is the initial market cap of the token when the pre-graduation pool is first created.
+- The `migrationMarketCap` is the market cap of the token when the pre-graduation pool is ready to migrate to the post-graduation pool.
+
+### [buildCurveWithTwoSegments](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithtwosegments)
+
+- This function is useful when you want to create a 2 constant product curve structure with a specific `initialMarketCap`, `migrationMarketCap` and `percentageSupplyOnMigration`.
+- The `percentageSupplyOnMigration` is the percentage of the total token supply that you want to be migrated into the post-graduation pool's LP.
+- The `initialMarketCap` is the initial market cap of the token when the pre-graduation pool is first created.
+- The `migrationMarketCap` is the market cap of the token when the pre-graduation pool is ready to migrate to the post-graduation pool.
+
+### [buildCurveWithLiquidityWeights](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithliquidityweights)
+
+- This function is useful when you want to create a curve config with a unique price action (flat, exponential, etc.) with a specific initial market cap, migration market cap and liquidity weights.
+- The `liquidityWeights` is an array of values that you want to be the exponent of the liquidity of the curve segments. Using these liquidity weights, you can control how thick or thin each curve segment's liquidity is to control the price action of the curve.
+- The `initialMarketCap` is the initial market cap of the token when the pre-graduation pool is first created.
+- The `migrationMarketCap` is the market cap of the token when the pre-graduation pool is ready to migrate to the post-graduation pool.

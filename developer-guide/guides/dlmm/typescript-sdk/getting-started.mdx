@@ -3,28 +3,44 @@ title: Getting Started
 description: DLMM
 ---
 
-This guide provides instructions on how to get started with the DLMM TypeScript SDK.
+This guide provides instructions on how to get started with building on Meteora's DLMM program using the DLMM TypeScript SDK.
 
 Before you begin, here are some important resources:
 
--   **Program ID (Mainnet & Devnet):** `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`
--   **TypeScript SDK Repository:** [@meteora-ag/dlmm](https://github.com/MeteoraAg/dlmm-sdk)
+<CardGroup cols={2}>
+  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/dlmm-sdk/tree/main/ts-client">
+    Meteora DLMM Typescript SDK
+  </Card>
+  <Card title="DLMM NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/dlmm">
+    Meteora DLMM NPM Package
+  </Card>
+</CardGroup>
 
 # Installation
 
 To use the SDK in your project, install it using your preferred package manager:
 
-```bash
-npm install @meteora-ag/dlmm @solana/web3.js
-# or
-pnpm install @meteora-ag/dlmm @solana/web3.js
-# or
-yarn add @meteora-ag/dlmm @solana/web3.js
-```
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install @meteora-ag/dlmm @solana/web3.js
+    ```
+  </Tab>
+  <Tab title="pnpm">
+    ```bash
+    pnpm install @meteora-ag/dlmm @solana/web3.js
+    ```
+  </Tab>
+  <Tab title="yarn">
+    ```bash
+    yarn add @meteora-ag/dlmm @solana/web3.js
+    ```
+  </Tab>
+</Tabs>
 
 # Initialization
 
-Once installed, you can initialize the SDK in your TypeScript/JavaScript project like this:
+Once installed, you can initialize the DLMM client in your `Node.js` project like this:
 
 ```typescript
 import DLMM from '@meteora-ag/dlmm'
@@ -36,11 +52,11 @@ const mainnetConnection = new Connection('https://api.mainnet-beta.solana.com');
 
 // e.g. creating a DLMM pool
 // You can get your desired pool address from the API https://dlmm-api.meteora.ag/pair/all
-const USDC_USDT_POOL = new PublicKey('ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq')
-const dlmmPool = await DLMM.create(connection, USDC_USDT_POOL);
+const USDC_USDT_POOL_ADDRESS = new PublicKey('ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq')
+const dlmmPool = await DLMM.create(connection, USDC_USDT_POOL_ADDRESS);
 
 // e.g. creating multiple pools
-const dlmmPool = await DLMM.createMultiple(connection, [USDC_USDT_POOL, ...]);
+const dlmmMultiplePools = await DLMM.createMultiple(connection, [USDC_USDT_POOL_ADDRESS, ...otherPoolAddresses]);
 ```
 
 # Testing the SDK (for contributors)

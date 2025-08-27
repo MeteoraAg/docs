@@ -1,0 +1,81 @@
+---
+title: Farm Integration
+description: DAMM v1 with Farm
+---
+
+<Warning>DAMM v1 Pools with Farms are permissioned. Refer to the guide [here](/overview/products/damm-v1/pools-with-farms) on how to get a farming pool created.</Warning>
+
+# Code Examples
+
+The following code provides detailed examples on how to integrate DAMM v1 pools with farms using the Farming TypeScript SDK.
+
+## Stake
+
+```typescript
+import AmmImpl, { MAINNET_POOL } from "@meteora-ag/dynamic-amm-sdk";
+import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+const pool = await AmmImpl.create(connection, MAINNET_POOL.USDC_USDT);
+const lpBalance = await pool.getUserBalance(wallet.publicKey);
+
+const farm = await PoolFarmImpl.create(
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
+);
+
+const stakeTx = await farm.deposit(wallet.publicKey, lpBalance);
+```
+
+## Claim
+
+```typescript
+import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+const farm = await PoolFarmImpl.create(
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
+);
+
+const claimTx = await farm.claim(wallet.publicKey);
+```
+
+## Unstake
+
+```typescript
+import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+const farm = await PoolFarmImpl.create(
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
+);
+
+const farmBalance = await farm.getUserBalance(wallet.publicKey);
+
+const unStakeTx = await farm.withdraw(wallet.publicKey, farmBalance);
+```
+
+
+## Check Stake Balance
+
+```typescript
+import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
+import { Connection } from "@solana/web3.js";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+const farm = await PoolFarmImpl.create(
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
+);
+
+const farmBalance = await farm.getUserBalance(wallet.publicKey);
+```

@@ -2,105 +2,1091 @@
 title: Pool Fee Configs
 ---
 
-# How to Choose a Suitable Pool Config
+<Note>
+DAMM v1 pool addresses are derived differently depending on the pool type. Only some pools require a config key - others use just the token mints and curve information.
+- **Permissionless pools w/o config**: `curveType` + `tokenAMint` + `tokenBMint`
+- **Permissionless pools w/ config**: `tokenAMint` + `tokenBMint` + `config`
+- **Permissioned pools**: Use arbitrary addresses (not PDAs)
+- **Customizable pools**: `"pool"` + `tokenAMint` + `tokenBMint`
+</Note>
 
-What fee parameters to choose depends on your project's needs. You will need to look at the pool [config list](https://damm-api.meteora.ag/swagger-ui/#/pools/get_all_pool_configs) and choose a suitable `pool_config_key` with your preferred fee parameters.
+Configs are basically where you configure the fees of the pool and the time the pool starts trading. 
 
-If you want to create an Alpha Vault along with your new pool, you also need to find a `pool_config_key` that is mapped to a `vault_config_key` that meets your requirements. You can find the list of alpha vault configs [here](https://damm-api.meteora.ag/swagger-ui/#/alpha_vault_config/get_all).
+In a config, if the `pool_creator_authority` is `11111111111111111111111111111111`, that means that it is a public config and anyone can use the config to create their DAMM v1 pool.
 
-# Public Pool Config List
+<Note>If you would like a private config, such that the `pool_creator_authority` is your specific public address, you can reach out to the team on [discord](https://discord.gg/meteora) to create a private config.</Note>
+
+<AccordionGroup>
+  <Accordion title="List of config keys (Mainnet)">
+    ```json
+    [
+      {
+        config_address: "FiENCCbPi3rFh5pW2AJ59HC53yM32eLaCjMKxRqanKFJ",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 0,
+      },
+      {
+        config_address: "7cADCeqcUsNvYdGFGcPbvghFUwcELovYmHNSauhu2PSh",
+        trade_fee_bps: 9900,
+        protocol_fee_bps: 2000,
+        activation_duration: 2678400,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "24bvHXAxxVT2HxuoBptyG9guhE4vUKUTzFWPVBmHRCzw",
+        activation_type: 1,
+      },
+      {
+        config_address: "8aPHoLN8ke6PhWeYA7ELi19fppptVYUCQvqKWR5yP1sn",
+        trade_fee_bps: 150,
+        protocol_fee_bps: 2000,
+        activation_duration: 1512000,
+        vault_config_key: "7ixojP8Zuu4csfTycHi8ywQymHm9zxAhu1TjnFuJaq2R",
+        pool_creator_authority: "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+        activation_type: 0,
+      },
+      {
+        config_address: "6GEE5m3fYnYD9TgwmPAoeNr3mNaDAhwYjUg2tgmttJYa",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 2592000,
+        vault_config_key: "G9xwsDRa3KUW3JJr9Z38szTVschFCbrCq8NySVXxRGL1",
+        pool_creator_authority: "anovRrVgxBMyFBZkfcQqVi1AaaJTZEmJ2hVY5V3yCdu",
+        activation_type: 0,
+      },
+      {
+        config_address: "8NWep2us5HrSPXvf2VGJSHJG9pVr1J3UehVBhE2q9mHU",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 1512000,
+        vault_config_key: "HHVfAboWxsCsWtdHbyL3BNCvxfAdAcV3QPe8s8NtZxRX",
+        pool_creator_authority: "ChSAh3XXTxpp5n2EmgSCm6vVvVPoD1L9VrK3mcQkYz7m",
+        activation_type: 0,
+      },
+      {
+        config_address: "DHuQ3sg5WactGD27KFPebFMUj8B8RZt8KG9NNoCchaKD",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 1512000,
+        vault_config_key: "DEpRg7voUQcKZapijVKiGPJN2iTGxjQswDoooanrmSHT",
+        pool_creator_authority: "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+        activation_type: 0,
+      },
+      {
+        config_address: "3Uc2fi7sKEDP1aKUYqc2xGvyD5uNcfoLyMDXa1tBamNt",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 1512000,
+        vault_config_key: "DEpRg7voUQcKZapijVKiGPJN2iTGxjQswDoooanrmSHT",
+        pool_creator_authority: "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+        activation_type: 0,
+      },
+      {
+        config_address: "38cy1kpruGc3Xbni4fUF2W1dyh4EbJ4LzccdpnPZxhJk",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FXBXnxEEfwZJA1xnyJzKEhhJXmussKXKRdq5cAh19dbC",
+        activation_type: 0,
+      },
+      {
+        config_address: "485RajDpU3b39KsQBn4cjnHbkvuodyK6XPpyeTAHnsRC",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 604800,
+        vault_config_key: "E8WUpiScTWhsdgMaBBGJ8rdUoQuq9P6c7PBcWtrzm6U6",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "4v3NV94mEL4Y3DMVHziPxUe78gmvp74Ez6dLXNQQBwa5",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 604800,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "3ewpimT1McmuHM7CZkehEi3ZHVYg1QiASVxR91GK7Z1L",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 604800,
+        vault_config_key: "5R3JS7mfW8BCRiQvv4532qaicSc92Hk8JrfBArF4t6Ax",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "BdfD7rrTZEWmf8UbEBPVpvM3wUqyrR8swjAy5SNT8gJ2",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 1512000,
+        vault_config_key: "2sxe5NvHunqQo485dC7akSKfs2cgq7vaeBe1mRehewP3",
+        pool_creator_authority: "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+        activation_type: 0,
+      },
+      {
+        config_address: "DxzwNxJTS9VVizrZTnPZe7UAHHkMiN4tbShVitjt3euG",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 1512000,
+        vault_config_key: "Hhf8R5ebqy4iGPutXmgkJEoioYRy4HJ2mWBhj8tR9KV5",
+        pool_creator_authority: "anojxBnCMwxvfTrinN6LHbfgYc6yCAdHuvBsFi2Fdjq",
+        activation_type: 0,
+      },
+      {
+        config_address: "A2md47Zy7pMZuDgSZ7X5HVxrJ32zGrTojdx1WMHjuCuB",
+        trade_fee_bps: 700,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "45HL2k1QSWczLoqkuAqGfaj5tdHhNDqXL2qeSesN5Gif",
+        activation_type: 1,
+      },
+      {
+        config_address: "35ZKxwm4K2RTGYoxR3hm3AaL9LFC7zjvxQLyeYBHwrcR",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 16216,
+        vault_config_key: "DtMkmYxhLCe2mUtkAJjhmBBwGgkdr3e8DuPfWzs5WDf",
+        pool_creator_authority: "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+        activation_type: 0,
+      },
+      {
+        config_address: "69dxLrPXj1avncD31xiadpHba5b7NEw1ghL8rHCUro76",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 192855,
+        vault_config_key: "6ocT1Ar8rrsR5MDov9wkmRnv57MYQz4QXnGu1Tn49Pbi",
+        pool_creator_authority: "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+        activation_type: 0,
+      },
+      {
+        config_address: "4D813BWmm5xSPv7Dda3GNXj14m3cup1crZbZVAZ4iCG6",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "Bd7gSYbgi1sxBZi6rjHs18vnk5zBP71miHgK2Y5w5k1",
+        activation_type: 0,
+      },
+      {
+        config_address: "GBpFbo2mggDxLW4WzEpus5XEP6DCUBcRXvnA1DVwApP6",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 32653,
+        vault_config_key: "83ado8rmkVtEvPuwkchDGS3JzhQqRbKqc6bKY2k8ZC7r",
+        pool_creator_authority: "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+        activation_type: 0,
+      },
+      {
+        config_address: "Du4XRRCirGLBgEotrVbAZnZ3eLdo7gUPwC9ce4zzDgFi",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 2592000,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+        activation_type: 1,
+      },
+      {
+        config_address: "AC1hTVdvqiaDtnE3fX2Pf5DmVXLhikgEYBYxjWqY3iZh",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 2678400,
+        vault_config_key: "6Awx9h9cvvPQyu6Eiov6F3Z4j3q9M3Gr2Fz1CaLsgdiv",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "GnfMQ8oPzq84oK4PxTjhC1aUEMrLLasDfF9LsmW46U7j",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "Fp6CXYfHwJQtrLt2iUbj8TPBAfC82sKGwsjfuWGoMKyR",
+        trade_fee_bps: 1000,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "DNUT6Fzn9Q9Fyatjtrigazn2N8eoKzFkjWvNvrxHN7bX",
+        activation_type: 0,
+      },
+      {
+        config_address: "ABfKwZb2jtM64MmATmuevT9xXV6AqshfGLumAjH2gikG",
+        trade_fee_bps: 400,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "FunNTdfawkoBfjJbdsQwo8ZBSKTRHFkpoFUiJQqMepef",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 2592000,
+        vault_config_key: "EGY9HAUcYvbkQcKUARyKXt8qSRayG8Y8694kcUcyKQo4",
+        pool_creator_authority: "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+        activation_type: 1,
+      },
+      {
+        config_address: "4wvNjCvuoqUEomJqvvoSH7oCDsUqcbeV8DUUs3S3cXms",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 2592000,
+        vault_config_key: "48ZoRd8WFe3bKJeYHnamkkCEXY6kUSqydNg4vYa9Vjmh",
+        pool_creator_authority: "anoushVdsZq6xLX2pBZ3LWEDPNaHEEY42tKb16xZb9q",
+        activation_type: 1,
+      },
+      {
+        config_address: "DL1F76GaYj7z6sPHnwQj6dyHtDTHE3CyxG8pVUHynS52",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 2592000,
+        vault_config_key: "34vg8kLiGUQrhUckmKdrirYRmsurcs9m9dtM63JvwSEe",
+        pool_creator_authority: "anosuzWaGV7Fi1452Cf27MnodcUbszjbYPwDEmDVse7",
+        activation_type: 1,
+      },
+      {
+        config_address: "5Yv9kVumEY3NAX1tjmPvjfTb8Sb2voopyxdAf2UFeWf",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "5voS8cf3KSumjN23VBnu1N3hCj9Hbyo8aSpSQVQiEQt3",
+        activation_type: 0,
+      },
+      {
+        config_address: "QdCFZZbjsKN2wp6kbGCov5r9CjAB9chWHLwq8nSHfY3",
+        trade_fee_bps: 1000,
+        protocol_fee_bps: 2000,
+        activation_duration: 2592000,
+        vault_config_key: "5833XAhnaeQ8pStDVA31m8ZgkzxY7RvgnAPRWwtn68b3",
+        pool_creator_authority: "trcjA29PVgBUM8BbxSVK2mbSc7igZyDQKfQut3W8mWZ",
+        activation_type: 1,
+      },
+      {
+        config_address: "F75cbaYrHRThofUQLEqHWNpADu9fJNuLrLLDaDSsCvFR",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "HhFWLvAbLs4GZU7v5iGEi1FQKSYmqCqZ3ApBBrhvh6uE",
+        activation_type: 0,
+      },
+      {
+        config_address: "EgHWiMBpy4mpdTbyaUQ399frFh8iBCsGk8uYnRnPPDdk",
+        trade_fee_bps: 700,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "GugKgxKf8Y8RYzxsHBwJKcAEWmDiCaQ1wiZF3gmq62sU",
+        activation_type: 1,
+      },
+      {
+        config_address: "87umT3FP4ezojp6p1e5ALXGSJWmn3h7pusmuk6t3o3Jg",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "HT4XxpmNukMsLtjJFbmN4WQKSx4UxmvqboKZtPw5rkXF",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 1512000,
+        vault_config_key: "9hi8rMnE5QA2KsQSvUNgsc5kqznPRL43JsNHhFgZvRDA",
+        pool_creator_authority: "DHLXnJdACTY83yKwnUkeoDjqi4QBbsYGa1v8tJL76ViX",
+        activation_type: 0,
+      },
+      {
+        config_address: "3LyWzCpB29o4Gi5to4AE8jQEXqnm1av3QhKo5gbSHJWm",
+        trade_fee_bps: 400,
+        protocol_fee_bps: 2000,
+        activation_duration: 2678400,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "7kXYNBXZ4wQH87Da4NLqneoEq4oCopLgSqGQZCy1s28w",
+        trade_fee_bps: 30,
+        protocol_fee_bps: 2000,
+        activation_duration: 2678400,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "DzE3A8Yjuqk61Z4gQ71f2Jx8MgcX7RpxwWzYU3mKCvyh",
+        trade_fee_bps: 30,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "2XVW9ZzocjYoahYJj4nQb6cCNu42mAFKtEuufnEJjCM3",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "4ZK7qyjRs6KLKFG8m49fLqmLUruunCo4uNLXguFiP1F7",
+        activation_type: 0,
+      },
+      {
+        config_address: "3H1DdJxJppT8vq9Cv8xva354gkFAfB6x1t71B9KGrfzt",
+        trade_fee_bps: 250,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "DzG1zpeUVFoEXSq2WHtvx6pAX4DjqnXnUi8AYK6TRLXr",
+        activation_type: 1,
+      },
+      {
+        config_address: "9NshK22ZKzZHBZtNbvTh1TGV9PZSgdpnKudoGrNzjum2",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "79q4DhyeFTGPxY4vbxaHz8D6cCCwCLH99t3wtiHb8icC",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "85t6rsA3Dm8kTW1rSVjVPNJs4DQtZv7uCMjpaRTH9hQA",
+        trade_fee_bps: 200,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "2rk6ph7H23zMMtoPJw2v6nqq3sGETewvFSiDMt2pB2Sp",
+        trade_fee_bps: 200,
+        protocol_fee_bps: 2000,
+        activation_duration: 2592000,
+        vault_config_key: "36oTYeP9K1qEpF3UVRokvjJYrcbA5PZeinYMnd1TgRz1",
+        pool_creator_authority: "LaiYARKctGpkYLhUxCBsnhxnwwP9swpu4Wcfzvs4bzo",
+        activation_type: 1,
+      },
+      {
+        config_address: "GQRTZNmE5w1ViwfS72anN2kQejtYRp5fqcXRUsUoXEVt",
+        trade_fee_bps: 200,
+        protocol_fee_bps: 2000,
+        activation_duration: 2592000,
+        vault_config_key: "GKuKzmj3bHqd3MVag37rrtVGxP37PzM7pJYF6AYk7Vwq",
+        pool_creator_authority: "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+        activation_type: 1,
+      },
+      {
+        config_address: "AdopETzHcuDbXR2YqtX8UFGesRJ53wumDyfvrbSrvGcV",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "3nwnr3PqGpU7XNaqbyHm7HfrEESkFZaoYu2if8z3kvGr",
+        trade_fee_bps: 600,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "E144z18vbrojT8w9qv6TVatBMnH8SxTk3PX8JpSLsXGk",
+        trade_fee_bps: 200,
+        protocol_fee_bps: 2000,
+        activation_duration: 2592000,
+        vault_config_key: "GKuKzmj3bHqd3MVag37rrtVGxP37PzM7pJYF6AYk7Vwq",
+        pool_creator_authority: "LaiYARKctGpkYLhUxCBsnhxnwwP9swpu4Wcfzvs4bzo",
+        activation_type: 1,
+      },
+      {
+        config_address: "BXBjS1um9TA5s2eYt7bsPmJsxpEEMjmudAUgkPnz5D2n",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 2678400,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "5hB9XMUWdMwA3sDhW7msjPiu3UeFbHyEAurmJC2XrQ93",
+        trade_fee_bps: 200,
+        protocol_fee_bps: 2000,
+        activation_duration: 2678400,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "4Q1wpjoQqm9wiwUBinWD1QJjBAqBWXv9PRctRGV6SyMi",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 2678400,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "2kw9BzuMa3S7ETeDUwQ4ihCi8z5EA1Y55kTQLK42UUs1",
+        trade_fee_bps: 600,
+        protocol_fee_bps: 2000,
+        activation_duration: 2678400,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "GJeDrVC2gt4rZtYsEws6i97nwqmEYSPsKxPu7HqQNJc",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "xcombpd6QNcPgGDox13Gzs6AThBkpBynRAPwoGv5qEh",
+        activation_type: 1,
+      },
+      {
+        config_address: "FjpxYsPxRdoATF196DaQSRb678HZse9vDUHGPgmNvQhz",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "vpayTUGQn1tfgz3pRXsiHyLED7REYtdxN5ZJmVwu6dx",
+        activation_type: 1,
+      },
+      {
+        config_address: "3bc9EutYtZtiaBknKYS3kNMLE6zQ2GsyxrmEZWMwsmvU",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "4bHoVqLH2cK9t5Mz6ENuULXdv6N7CP33kqSVfVCFArhw",
+        activation_type: 1,
+      },
+      {
+        config_address: "Ax8R8UL4ZKFm5f4MxUUnFd43ZJiuNuxDCj3siBXPvu4i",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 2678400,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "CtgkceNT71em6gztgda2PoTpewTubY6WiVpZA5SZrbna",
+        activation_type: 1,
+      },
+      {
+        config_address: "G8SbKnvHwmrnYTKrL9f5fzzTodzrJuWC8BSabMZX6ggL",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 2678400,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "8SXKreuYDfwNzxrK5ETALMHTMohZYvzCRWyhVEJpoxmS",
+        activation_type: 1,
+      },
+      {
+        config_address: "B6FT4AHhQJ7BttrC1i223km5bYRUA2nVwBR7k5TVwLtx",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "67zLsVD39roVXCtoqs9W1Fzh9Bnz6iCwmF7sY1GEvic6",
+        activation_type: 1,
+      },
+      {
+        config_address: "Cqq1zjgSj78BZv5e3HGYkspnVuFgCzuuykckonmT3wmp",
+        trade_fee_bps: 500,
+        protocol_fee_bps: 2000,
+        activation_duration: 2678400,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "CtgkceNT71em6gztgda2PoTpewTubY6WiVpZA5SZrbna",
+        activation_type: 1,
+      },
+      {
+        config_address: "AwByp1HCpy1EWhBVJFy8SXWHNPTmRcYxuRGXKBNZN22P",
+        trade_fee_bps: 50,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "D97BFQdyppBEPxE9pc4t1ojRzE7ya5ktqUYQeBdr7fhm",
+        activation_type: 0,
+      },
+      {
+        config_address: "EhNrnrrZsLZ1Q3nFX6BWgBa6AztjrQkUJjrQEM5KJoua",
+        trade_fee_bps: 50,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "2wqYZThKrjdzyDCwuSKa9QYxYfukT1UFfYJd5Tt4NiKz",
+        activation_type: 0,
+      },
+      {
+        config_address: "DqqQ2kta9GAkCHzGrNAwJGDn4XDZp9SDYUBFz4z7rKRN",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "EvZRp56QkDXxBE25DitmEBnRBtgzRc5oQohv6eYHUSyP",
+        activation_type: 1,
+      },
+      {
+        config_address: "9NvCMmU23J6jajinr7snjuYAv5hWbsBXoBTTLAunNL5j",
+        trade_fee_bps: 50,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "KaHqWi9jE5bC9TNWfcESW3BPs3sqZkPys2HacJ4Schu",
+        activation_type: 1,
+      },
+      {
+        config_address: "MxnhNaNkt4kS5byYRPU7SbFbN2pixk1XePEEdTLE98s",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "11111111111111111111111111111111",
+        activation_type: 1,
+      },
+      {
+        config_address: "F7RtuspF6svK3q11gwumdYDfVz7GDvXEs86RMegkCS5c",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "2dWpb3GMTKsExWiEaLdthx8eTZyEmsbENsbrGadd3obA",
+        activation_type: 1,
+      },
+      {
+        config_address: "AmHTt1YgaVAMo3Ztb87RrwFXWrak7ACNM51fSrCxNPsA",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "2jFFmkuS7xDgCZezogc1nhL491KT6ivvyL1CKnyuLNgj",
+        activation_type: 1,
+      },
+      {
+        config_address: "6wcDesYCyem9PS1JkrHS8sRk1CvXhFt3MkPYZyK2g34A",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "CmikaQRrP82CsQxyoQmgC1sZxWbG89FDaio2L4t4RYJH",
+        activation_type: 1,
+      },
+      {
+        config_address: "4eaVQQpBJn1xkiTnJsdLKtcmRhbLmevA4fza5wU9Y3pY",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FkhLsJc5BvwdnZvGzRCyYPUffaFqMQ58z8cbJxa45Cbn",
+        activation_type: 1,
+      },
+      {
+        config_address: "F3xuaKzaQja4CKSqhjvQyQiNa9YfixS9QYLTeEQMWivP",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "6J3fiYDbNd2SfqFdc5JUf1Jsrt6ckKF4XkiSBVCEQuJ8",
+        activation_type: 1,
+      },
+      {
+        config_address: "9gYBdabTKGtd8mQxJ4UgaRFR71f7SnB5e8MrvPCwRgVz",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "5VnZiCLgzvb83uAYGEnKuyV4AiPMKJR8TidentThDWLa",
+        activation_type: 1,
+      },
+      {
+        config_address: "33r7QuiGoRsvxuM3TTzPhuAiXiK3CJSahFz8o1cqX4Sj",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "PawsUuwP1YGsSgJGepigiDCRpPJtfJFMqjNGSueSqhf",
+        activation_type: 1,
+      },
+      {
+        config_address: "BG9eoMRXUCYZqLB2xyQxDqErXMcqc3JzaEVTJGKpiNH9",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FDWrKWnAmrmJTGjaS5ztxNT6STuFYaYhgRUZd3MewQeY",
+        activation_type: 0,
+      },
+      {
+        config_address: "EtwbXRxV8b46Vkho5EhMshi9qEU7xv6sMQnPHK3fX8WR",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FDWrKWnAmrmJTGjaS5ztxNT6STuFYaYhgRUZd3MewQeY",
+        activation_type: 0,
+      },
+      {
+        config_address: "VEtZapzJXreco3cbzUT8ZszawsRvRRQzGN5GBaCMwWh",
+        trade_fee_bps: 30,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FDWrKWnAmrmJTGjaS5ztxNT6STuFYaYhgRUZd3MewQeY",
+        activation_type: 0,
+      },
+      {
+        config_address: "8z2tYtwiAkby1tMSdf1hG2Ni8MFBk43o9tYey5zegNDh",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FDWrKWnAmrmJTGjaS5ztxNT6STuFYaYhgRUZd3MewQeY",
+        activation_type: 0,
+      },
+      {
+        config_address: "3BuQgW3g75azhKeE3yzaqeWkmwezuDGwF6FT5py3mFrt",
+        trade_fee_bps: 200,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FDWrKWnAmrmJTGjaS5ztxNT6STuFYaYhgRUZd3MewQeY",
+        activation_type: 0,
+      },
+      {
+        config_address: "EkvP7d5yKxovj884d2DwmBQbrHUWRLGK6bympzrkXGja",
+        trade_fee_bps: 200,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM",
+        activation_type: 0,
+      },
+      {
+        config_address: "E4H8USswQ8h8vg2V4TESSefCjKbHSJW3eo4DtPQYfPfP",
+        trade_fee_bps: 200,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "BC1KA2Rvrea8NqjXBggFga2YnFikWfqtqoTfkjaAN2QH",
+        activation_type: 1,
+      },
+      {
+        config_address: "6Vhwg9wY65rbMep2wLJatigaF3KXyJUiYgCDynudwK8p",
+        trade_fee_bps: 500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "HeXJcGfU4qrqGpKAf8bxdYynBgFgTeCphV7YPx9rTMig",
+        activation_type: 1,
+      },
+      {
+        config_address: "7v5vBdUQHTNeqk1HnduiXcgbvCyVEZ612HLmYkQoAkik",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM",
+        activation_type: 0,
+      },
+      {
+        config_address: "8f848CEy8eY6PhJ3VcemtBDzPPSD4Vq7aJczLZ3o8MmX",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM",
+        activation_type: 0,
+      },
+      {
+        config_address: "HBxB8Lf14Yj8pqeJ8C4qDb5ryHL7xwpuykz31BLNYr7S",
+        trade_fee_bps: 30,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM",
+        activation_type: 0,
+      },
+      {
+        config_address: "9EZYAJrcqNWNQzP2trzZesP7XKMHA1jEomHzbRsdX8R2",
+        trade_fee_bps: 400,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM",
+        activation_type: 0,
+      },
+      {
+        config_address: "8cdKo87jZU2R12KY1BUjjRPwyjgdNjLGqSGQyrDshhud",
+        trade_fee_bps: 600,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM",
+        activation_type: 0,
+      },
+      {
+        config_address: "DHLo9myvBGbdAL4wn2hkVwphUvFndtzU6zxDqA11m8x6",
+        trade_fee_bps: 9900,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "GL6VhXKBV9Had23RqU4zm3XDoguuiixN8foqaXSLskDt",
+        activation_type: 1,
+      },
+      {
+        config_address: "4ZJdHvduu88ZUiJ5ryqUbTDP3dLZjYT5Cfeb8MPqJh9G",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "HeXJcGfU4qrqGpKAf8bxdYynBgFgTeCphV7YPx9rTMig",
+        activation_type: 1,
+      },
+      {
+        config_address: "9hPtZgNhanLvReByrwyqr9uxhW8TMUg9S4My32nZLGDo",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "HeXJcGfU4qrqGpKAf8bxdYynBgFgTeCphV7YPx9rTMig",
+        activation_type: 1,
+      },
+      {
+        config_address: "7WrjmZfwqLLfPxBXKM6EJ3fQcYe6x5rwQuPe1BuupBYF",
+        trade_fee_bps: 100,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "DzG1zpeUVFoEXSq2WHtvx6pAX4DjqnXnUi8AYK6TRLXr",
+        activation_type: 1,
+      },
+      {
+        config_address: "HFXUgLuJ9hY6tSeqvGUT9J4dJHyZkuP3rogiZR2NgXaT",
+        trade_fee_bps: 30,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "DzG1zpeUVFoEXSq2WHtvx6pAX4DjqnXnUi8AYK6TRLXr",
+        activation_type: 1,
+      },
+      {
+        config_address: "2puU1kzQVM5ATDsxCRGixQM9dadmVGd7sTqNJQFBvnKg",
+        trade_fee_bps: 500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "H4tyRJRzBeppnYCXKpPWsanqf2147QhriJdG4yaBmigr",
+        activation_type: 1,
+      },
+      {
+        config_address: "Cau4rq22bZEEscAe9TL7CEKnAJjss8csRtKXqjQHmfuj",
+        trade_fee_bps: 25,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "H4tyRJRzBeppnYCXKpPWsanqf2147QhriJdG4yaBmigr",
+        activation_type: 1,
+      },
+      {
+        config_address: "5vd4r737pWhmuvrq6E5vea66PYD2WfqGTwsyrV2YEodG",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "H4tyRJRzBeppnYCXKpPWsanqf2147QhriJdG4yaBmigr",
+        activation_type: 1,
+      },
+      {
+        config_address: "21PjsfQVgrn56jSypUT5qXwwSjwKWvuoBCKbVZrgTLz4",
+        trade_fee_bps: 1500,
+        protocol_fee_bps: 2000,
+        activation_duration: 0,
+        vault_config_key: "11111111111111111111111111111111",
+        pool_creator_authority: "CGsqR7CTqTwbmAUTPnfg9Bj9GLJgkrUD9rhjh3vHEYvh",
+        activation_type: 0,
+      },
+    ]
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>The list of config key addresses on devnet can be found [here](/api-reference/pools/get_all_pool_configs).</Note>
+
+If you want to create an Alpha Vault along with your DAMM v1 pool, you will need to find a `pool_config_key` that is mapped to a `vault_config_key` that meets your requirements.
+
+<AccordionGroup>
+  <Accordion title="List of vault config keys (Mainnet)">
+    ```json
+    {
+      "prorata_configs": [
+        {
+          "address": "5R3JS7mfW8BCRiQvv4532qaicSc92Hk8JrfBArF4t6Ax",
+          "max_buying_cap": 1000,
+          "start_vesting_duration": 3600,
+          "end_vesting_duration": 7200,
+          "escrow_fee": 0,
+          "activation_type": 1
+        },
+        {
+          "address": "DxFmi5KH9eqykWAeQ4E7Xughf2TT3nuSpS3zbFYZGGbW",
+          "max_buying_cap": 10,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 36000,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "DtMkmYxhLCe2mUtkAJjhmBBwGgkdr3e8DuPfWzs5WDf",
+          "max_buying_cap": 10000,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 18000,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "6ocT1Ar8rrsR5MDov9wkmRnv57MYQz4QXnGu1Tn49Pbi",
+          "max_buying_cap": 10000,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 192857,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "83ado8rmkVtEvPuwkchDGS3JzhQqRbKqc6bKY2k8ZC7r",
+          "max_buying_cap": 1000000,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 32653,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "6Awx9h9cvvPQyu6Eiov6F3Z4j3q9M3Gr2Fz1CaLsgdiv",
+          "max_buying_cap": 18446744073,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 1,
+          "escrow_fee": 0,
+          "activation_type": 1
+        },
+        {
+          "address": "G9xwsDRa3KUW3JJr9Z38szTVschFCbrCq8NySVXxRGL1",
+          "max_buying_cap": 350,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 1365237,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "GKuKzmj3bHqd3MVag37rrtVGxP37PzM7pJYF6AYk7Vwq",
+          "max_buying_cap": 200,
+          "start_vesting_duration": 86400,
+          "end_vesting_duration": 259200,
+          "escrow_fee": 0,
+          "activation_type": 1
+        },
+        {
+          "address": "36oTYeP9K1qEpF3UVRokvjJYrcbA5PZeinYMnd1TgRz1",
+          "max_buying_cap": 200,
+          "start_vesting_duration": 86400,
+          "end_vesting_duration": 259200,
+          "escrow_fee": 0,
+          "activation_type": 1
+        }
+      ],
+      "fcfs_configs": [
+        {
+          "address": "HHVfAboWxsCsWtdHbyL3BNCvxfAdAcV3QPe8s8NtZxRX",
+          "max_depositing_cap": 1177,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 36853081,
+          "depositing_duration_until_last_join_point": 9000,
+          "individual_depositing_cap": 1000000,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "DEpRg7voUQcKZapijVKiGPJN2iTGxjQswDoooanrmSHT",
+          "max_depositing_cap": 1177,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 36940618,
+          "depositing_duration_until_last_join_point": 8551,
+          "individual_depositing_cap": 1,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "FgWCWqAwUpYpwLa22F6emXN5c9gQMvDkyfYfKzffzuoX",
+          "max_depositing_cap": 1,
+          "start_vesting_duration": 4500,
+          "end_vesting_duration": 31500,
+          "depositing_duration_until_last_join_point": 36000,
+          "individual_depositing_cap": 1,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "2sxe5NvHunqQo485dC7akSKfs2cgq7vaeBe1mRehewP3",
+          "max_depositing_cap": 125,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 1,
+          "depositing_duration_until_last_join_point": 41959,
+          "individual_depositing_cap": 1,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "7ixojP8Zuu4csfTycHi8ywQymHm9zxAhu1TjnFuJaq2R",
+          "max_depositing_cap": 10,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 24107,
+          "depositing_duration_until_last_join_point": 24107,
+          "individual_depositing_cap": 1,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "Hhf8R5ebqy4iGPutXmgkJEoioYRy4HJ2mWBhj8tR9KV5",
+          "max_depositing_cap": 125,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 1,
+          "depositing_duration_until_last_join_point": 33098,
+          "individual_depositing_cap": 1,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "9hi8rMnE5QA2KsQSvUNgsc5kqznPRL43JsNHhFgZvRDA",
+          "max_depositing_cap": 10,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 24713,
+          "depositing_duration_until_last_join_point": 33103,
+          "individual_depositing_cap": 1,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "3QmGDNGSnwwBYNAgokmVkcT6dM7PZGJLziV7VfC4f5er",
+          "max_depositing_cap": 1,
+          "start_vesting_duration": 57142,
+          "end_vesting_duration": 73469,
+          "depositing_duration_until_last_join_point": 57142,
+          "individual_depositing_cap": 1,
+          "escrow_fee": 0,
+          "activation_type": 0
+        },
+        {
+          "address": "E8WUpiScTWhsdgMaBBGJ8rdUoQuq9P6c7PBcWtrzm6U6",
+          "max_depositing_cap": 1000,
+          "start_vesting_duration": 9000,
+          "end_vesting_duration": 18000,
+          "depositing_duration_until_last_join_point": 9000,
+          "individual_depositing_cap": 100,
+          "escrow_fee": 0,
+          "activation_type": 1
+        },
+        {
+          "address": "EGY9HAUcYvbkQcKUARyKXt8qSRayG8Y8694kcUcyKQo4",
+          "max_depositing_cap": 50,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 1,
+          "depositing_duration_until_last_join_point": 7200,
+          "individual_depositing_cap": 50,
+          "escrow_fee": 0,
+          "activation_type": 1
+        },
+        {
+          "address": "48ZoRd8WFe3bKJeYHnamkkCEXY6kUSqydNg4vYa9Vjmh",
+          "max_depositing_cap": 50,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 1,
+          "depositing_duration_until_last_join_point": 14100,
+          "individual_depositing_cap": 50,
+          "escrow_fee": 0,
+          "activation_type": 1
+        },
+        {
+          "address": "34vg8kLiGUQrhUckmKdrirYRmsurcs9m9dtM63JvwSEe",
+          "max_depositing_cap": 143,
+          "start_vesting_duration": 86400,
+          "end_vesting_duration": 86400,
+          "depositing_duration_until_last_join_point": 7200,
+          "individual_depositing_cap": 143,
+          "escrow_fee": 0,
+          "activation_type": 1
+        },
+        {
+          "address": "5833XAhnaeQ8pStDVA31m8ZgkzxY7RvgnAPRWwtn68b3",
+          "max_depositing_cap": 135,
+          "start_vesting_duration": 1,
+          "end_vesting_duration": 1,
+          "depositing_duration_until_last_join_point": 10500,
+          "individual_depositing_cap": 135,
+          "escrow_fee": 0,
+          "activation_type": 1
+        }
+      ]
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>The list of vault config keys on devnet can be found [here](/api-reference/alpha-vault/get_alpha_vault_configs).</Note>
+
+<Note>If there is no existing config in the list that fits your project's requirement, you can reach out to the team on [discord](https://discord.gg/meteora) to create a new config.</Note>
+
+# Adding a Fee Scheduler to a Config
+
+For DAMM v1, the anti-snipe Fee Scheduler is applied offchain. Our team at Meteora can assist in applying a custom fee scheduler for your pools where we will create a dedicated config key for your team with `pool_creator_authority` linked to your signer wallet for pool creation. 
+
+<Warning>Because the fee scheduler is applied offchain, Meteora would need to customize the fee curve/schedule for you. You can't do it on your own.</Warning>
+
+You can use the following API endpoint to check the associated fee scheduler configuration of a config key.
 
 <CardGroup cols={1}>
-  <Card title="Mainnet Pool Config List API" href="https://damm-api.meteora.ag/swagger-ui/#/pools/get_all_pool_configs" icon="link" iconType="solid">
-    Access the complete list of pool configurations available on Mainnet for DAMM v1 pools.
-  </Card>
-  <Card title="Devnet Pool Config List API" href="https://damm-api.devnet.meteora.ag/swagger-ui/#/pools/get_all_pool_configs" icon="link" iconType="solid">
-    Access the complete list of pool configurations available on Devnet for testing and development.
+  <Card title="Fee Scheduler Configuration API" href="/api-reference/fee-configs/get_fee_configs" icon="link" iconType="solid">
+    Get the associated fee scheduler configurations for each existing pool config.
   </Card>
 </CardGroup>
-
-- Using these endpoint, pool creators can input the config pubkey, and it will return an array of fee update timings for the config.
-
-- Pool creators may choose a `pool_config_key` with a fee curve that suits your integration.
-
-If there is no existing config in the list that fits your project's requirement, a new config needs to be created.
-
-<Note>Only the Meteora team can create a new config to add it to the preset pool config list.</Note>
-
-# Default Pool Config Used by Meteora Frontend
-
-By default, Meteora's frontend is currently using this pool config key for Memecoin Pool creation: 
-
-```
-FiENCCbPi3rFh5pW2AJ59HC53yM32eLaCjMKxRqanKFJ
-```
-
-For the `FiENCCbPi3rFh5pW2AJ59HC53yM32eLaCjMKxRqanKFJ` pool config, it doesn't allow creation of any Alpha Vault, therefore its field `vault_config_key` is `1111111...`
-
-# New Custom Pool Config and Fee Curve for Pool Creators
-
-## Custom Pool Config Key
-
-Pool creators may need to use their own unique custom pool config key, if they want custom `pool_creator_authority` to prevent front-running of the token launch pool.
-
-<Note>New dedicated config keys can only be created by Meteora. Please reach out to us if this is required.</Note>
-
-<Warning>The `pool_creator_authority` doesn't work with program address. It's not a program whitelist, it needs to be a PDA (program derived address) or normal account.</Warning>
-
-
-## Custom Fee Curve
-
-Meteora can also apply a custom fee curve/schedule for your pools, but we will need to create a dedicated config key for your team, where `pool_creator_authority` is linked to your signer wallet for pool creation. 
-
-<Note>You would need to send us your **signer wallet** that would be using to deploy the pools.</Note>
-
-<Warning>Even with a dedicated config key for your team, Meteora would need to customize the fee curve/schedule for you. You can't do it on your own.</Warning>
-
-# Custom Fee Curve for a Specific Pool
-
-If required, Meteora can set a custom fee curve for a single, specific pool which would override the fee curve used by the pool's config key regardless of which config key is used.
-
-# API to Track Associated Fee Curve for Each Config
-
-<CardGroup cols={1}>
-  <Card title="Fee Curve Configuration API" href="https://damm-api.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs" icon="link" iconType="solid">
-    Get the associated fee curve configurations for each existing pool config.
-  </Card>
-</CardGroup>
-
-Using this endpoint, pool creators can input the config pubkey, and it will return an array of fee update timings for the config. Pool creators may then choose a config with a fee curve that suits their integration.
-
-## Steps to Check Fee Curves
-
-<Steps>
-  <Step title="View All Pool Configs">
-    Navigate to [Swagger UI](https://damm-api.meteora.ag/swagger-ui/#/pools/get_all_pool_configs)
-  </Step>
-
-  <Step title="Select Config">
-    Press **"Execute"** and find and select the config you want to view
-  </Step>
-
-  <Step title="Check Dynamic Fee Curve">
-    [Check](https://damm-api.meteora.ag/swagger-ui/#/fee_config/get_config_associated_fee_configs) for any Dynamic Fee curve for that specific config
-  </Step>
-</Steps>
 
 # Understanding Pool Config Fields
 
 | Field | Description |
 |-------|-------------|
-| `config_address` | The pool config key |
+| `config_address` | Config key address |
 | `trade_fee_bps` | Pool trading fee |
-| `protocol_fee_bps` | Protocol fee charged from pool trading fee |
+| `protocol_fee_bps` | Protocol fee charged from pool trading fee (fixed) |
 | `activation_duration` | Used to determine when exactly the pool will start trading |
-| `vault_config_key` | Alpha vault config key. If it is `11111111111111111111111111111111`, means no alpha vault. If not, the pool can create an alpha vault. **Note:** This is NOT the same as the vault address. |
+| `vault_config_key` | Alpha vault config key. Address of the vault config key. If it is `11111111111111111111111111111111`, means no alpha vault. |
 | `pool_creator_authority` | Address which can use the pool config key to create a pool. If it is `11111111111111111111111111111111`, it's public and available for everyone to use |
 | `activation_type` | Pool activation type. `0` = slot, `1` = time |
 
-**Start trade time calculation**
-- `current_time + activation_duration` OR
-- `current_slot + activation_duration` (depends on the `activation_type`)
+**Pool Activation Time Calculation (depending on the `activation_type`)**
+- `current_time + activation_duration`
+- `current_slot + activation_duration`
 
 # Pool Config Example
 
@@ -136,9 +1122,9 @@ Let's say a user wants to create the pool ABC/SOL with an Alpha Vault, the user 
 
 All the settings are already predefined by `pool_config` + its mapped `vault_config_key`.
 
-<Note>The permutations for pool config + Alpha Vault are created by Meteora.</Note>
+<Note>The permutations for pool config + Alpha Vault are created by Meteora. Please reach out to us on [discord](https://discord.gg/meteora) if you need a specific configuration.</Note>
 
-## Pool Config Example
+### Pool Config Example
 
 ```json
 {

@@ -1,0 +1,292 @@
+---
+title: Integrate with DBC
+description: Everything you need to know to integrate with Meteora's DBC Program
+---
+
+Trading Terminals can easily integrate with Meteora DBC by following this guide that explains in detail how to get the necessary data from indexing the DBC program.
+
+## Bonding Curve Progress
+
+### Core Formula
+
+```
+bondingCurveProgress = poolState.quoteReserve / poolConfigState.migration_quote_threshold
+```
+
+There are 2 ways you can get the quote reserve:
+
+1. From the `poolState.quoteReserve` state in a DBC pool.
+2. From the `nextSqrtPrice` in the swap CPI logs.
+3. Directly from `EvtSwap2` swap CPI logs.
+
+#### 1. Get Quote Reserve from Pool State
+
+```typescript
+const client = new DynamicBondingCurveClient(connection, "confirmed");
+const poolState = await client.state.getPool(poolAddress);
+const quoteReserve = poolState.quoteReserve;
+```
+
+#### 2. Get Quote Reserve from Next Sqrt Price
+
+Using the `get_quote_token_from_sqrt_price` function
+
+```rust
+pub fn get_quote_token_from_sqrt_price(next_sqrt_price: u128, config: &PoolConfig) -> Result<U256> {
+    let mut total_amount = U256::ZERO;
+    for i in 0..MAX_CURVE_POINT {
+        let lower_sqrt_price = if i == 0 {
+            config.sqrt_start_price
+        } else {
+            config.curve[i - 1].sqrt_price
+        };
+        if next_sqrt_price > lower_sqrt_price {
+            let upper_sqrt_price = if next_sqrt_price < config.curve[i + 1].sqrt_price {
+                next_sqrt_price
+            } else {
+                config.curve[i + 1].sqrt_price
+            };
+            let max_amount_in = get_delta_amount_quote_unsigned_256(
+                lower_sqrt_price,
+                upper_sqrt_price,
+                config.curve[i].liquidity,
+                Rounding::Up,
+            )?;
+
+            total_amount = total_amount.safe_add(max_amount_in)?;
+        }
+    }
+
+    Ok(total_amount)
+}
+```
+
+Alternatively, you can use the `getQuoteReserveFromNextSqrtPrice` function in the [DBC TypeScript SDK](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/docs.md#getQuoteReserveFromNextSqrtPrice) as it is the typescript version of the above function.
+
+#### 3. Directly from `EvtSwap2` swap CPI logs
+
+Example of an `EvtSwap2` swap CPI logs:
+
+```json
+{
+  "pool": "51mjM3ne2AiMHfeox78yjwwks7tF6sYokuuMkibAkSpn",
+  "config": "H4r8wEqix3mN6WDv7qZKaAdQj3GYg7xBMbFND4Cx9Bwt",
+  "tradeDirection": 0,
+  "hasReferral": false,
+  "swapParameters": {
+    "amount0": "797867598488800000",
+    "amount1": "4900009949",
+    "swapMode": 0
+  },
+  "swapResult": {
+    "includedFeeInputAmount": "797867598488800000",
+    "excludedFeeInputAmount": "797867598488800000",
+    "amountLeft": "0",
+    "outputAmount": "4900499999",
+    "nextSqrtPrice": "748125024131879",
+    "tradingFee": "39600000",
+    "protocolFee": "9900000",
+    "referralFee": "0"
+  },
+  "quoteReserveAmount": "1",
+  "migrationThreshold": "5000000000",
+  "currentTimestamp": "1756275517"
+}
+```
+
+## Total Fees
+
+```
+totalFees = baseFees + dynamicFees
+```
+
+### Base Fees
+
+Base Fees includes either a Flat Fee or a Fee Scheduler or Rate Limiter. 
+
+<Note>
+    `BaseFeeMode` can only be enums 0, 1, or 2.
+    0 = Linear Fee Scheduler
+    1 = Exponential Fee Scheduler
+    2 = Rate Limiter
+</Note>
+
+#### Flat Fee
+
+You can fetch the flat fee directly from the `cliffFeeNumerator` in the `baseFee` object if `firstFactor`, `secondFactor`, and `thirdFactor` are all 0.
+
+```typescript
+// Example
+baseFee: {
+  cliffFeeNumerator: <BN: 10000000>, // 1% flat fee
+  firstFactor: 0, 
+  secondFactor: <BN: 0>, 
+  thirdFactor: <BN: 0>, 
+  baseFeeMode: 0
+}
+```
+
+<Warning>
+The Fee Scheduler and Rate Limiter depends on the `poolState.activationType`. 
+
+- If the `poolState.activationType == 0`, then `numberOfPeriod` and `periodFrequency` is calculated in `SLOT == 400ms`
+- If the `poolState.activationType == 1`, then `numberOfPeriod` and `periodFrequency` is calculated in `SECONDS == 1000ms`
+</Warning>
+
+#### Fee Scheduler
+
+- For Fee Scheduler, it contains `numberOfPeriod`, `periodFrequency`, and `reductionFactor` which are paired with the `firstFactor`, `secondFactor`, and `thirdFactor` respectively.
+
+- `baseFeeMode` can only be 0 or 1.
+
+```typescript
+interface BaseFee = {
+    cliffFeeNumerator: BN
+    firstFactor: number // numberOfPeriod
+    secondFactor: BN // periodFrequency
+    thirdFactor: BN // reductionFactor
+    baseFeeMode: BaseFeeMode // 0 or 1
+}
+```
+
+<Note>You can refer to the math formula for the Fee Scheduler [here](/anti-sniper-suite/fee-scheduler/fee-scheduler-math)</Note>
+
+Here are some examples of how the Fee Scheduler works:
+
+```typescript
+// Fee Scheduler: 50% reduce to 1% in 10 minutes linearly
+baseFee: {
+  cliffFeeNumerator: <BN: 500000000>,
+  firstFactor: 60, // numberOfPeriods
+  secondFactor: <BN: 8166666>, // periodFrequency 
+  thirdFactor: <BN: 10>, // reduction factor
+  baseFeeMode: 0
+},
+```
+
+```typescript
+// Fee Scheduler: 50% reduce to 1% in 10 minutes exponentially
+baseFee: {
+  cliffFeeNumerator: <BN: 500000000>,
+  firstFactor: 60, // numberOfPeriods
+  secondFactor: <BN: 631>, // periodFrequency 
+  thirdFactor: <BN: 10>, // reduction factor
+  baseFeeMode: 1
+},
+```
+
+#### Rate Limiter
+
+- For Rate Limiter, it contains `feeIncrementBps`, `maxLimiterDuration`, and `referenceAmount` which are paired with the `firstFactor`, `secondFactor`, and `thirdFactor` respectively.
+
+- `baseFeeMode` can only be 2.
+
+```typescript
+interface BaseFee = {
+    cliff_fee_numerator: BN
+    first_factor: number //feeIncrementBps
+    secondFactor: BN // maxLimiterDuration
+    thirdFactor: BN // referenceAmount
+    baseFeeMode: BaseFeeMode // 2
+}
+```
+
+<Note>You can refer to the math formula for the Rate Limiter [here](/anti-sniper-suite/rate-limiter/rate-limiter-math)</Note>
+
+Here are some examples of how the Rate Limiter works:
+
+```typescript
+// Rate Limiter: Starts at 1% fee -> Exponential increase in fee for 10 slots based on trade size
+// 0.5 SOL trade
+// fee = 0.5 SOL * 0.1% = 0.0005 SOL
+// 1.5 SOL trade
+// fee = 1 SOL * 0.1% + 0.5 SOL * 0.2% = 0.002 SOL
+// 3 SOL trade
+// fee = 1 SOL * 0.1% + 1 SOL * 0.2% + 1 SOL * 0.3% = 0.006 SOL
+baseFee: {
+   cliffFeeNumerator: new BN(10_000_000), 
+   firstFactor: 10, // feeIncrementBps
+   secondFactor: new BN(10), // maxLimiterDuration
+   thirdFactor: new BN(1000000000), // referenceAmount
+   baseFeeMode: 2, // rate limiter mode
+}
+```
+
+### Dynamic Fees (Variable Fee)
+
+You can refer to the Dynamic Fee calculation [here](/overview/products/dbc/trading-fees-calculation#dynamic-fee-variable-fee)
+
+## Plotting Charts
+
+<Danger>Using Transfer logs from Swap transactions is not the correct way of getting the token price as we have Anti-Sniper Suite features that can cause huge fee deductions from `TokenAmountIn` OR `TokenAmountOut`. Plotting the token chart price from these will lead to a very ugly chart.</Danger>
+
+The correct way is to fetch the `EvtSwap2` CPI logs from the Swap transaction. 
+
+<Note>`EvtSwap` is an older version of the swap CPI logs and might be deprecated in the future. Use `EvtSwap2` instead.</Note>
+
+Because of the Anti-Sniper Suite features, you will have to apply the following checks to get the correct token price either before/after the fee deduction.
+
+```
+if excludedFeeInputAmount != includedFeeInputAmount then:
+-> excludedFeeInputAmount <> outputAmount
+
+if excludedFeeInputAmount == includedFeeInputAmount then:
+-> excludedFeeInputAmount <> outputAmount + tradingFee + protocolFee + referralFee
+```
+
+## Trading Volume
+
+Track from Swap CPI logs:
+
+```
+// Depending on Trade Direction:
+trading_volume += excludedFeeInputAmount * token_price
+```
+
+## Liquidity
+
+In the bonding curve, the liquidity is fetched from the virtual quote reserve of the bonding curve pool.
+
+```
+liquidity = poolState.quoteReserve * quoteTokenPrice
+```
+
+## Locked Vesting
+
+```
+total_vesting_amount = cliff_unlock_amount + (amount_per_period * number_of_period)
+```
+
+## Migration
+
+- You can check whether the DBC pool has migrated via the `isMigrated` flag from the [DBC pool state](https://github.com/MeteoraAg/dynamic-bonding-curve/blob/main/programs/dynamic-bonding-curve/src/state/virtual_pool.rs).
+- You can also check the MigrationProgress from the [DBC pool state](https://github.com/MeteoraAg/dynamic-bonding-curve/blob/main/programs/dynamic-bonding-curve/src/state/virtual_pool.rs) via the `MigrationProgress` parameter.
+
+```rust
+IsMigrated::NotMigrated  // 0
+IsMigrated::Migrated // 1
+```
+
+```rust
+MigrationProgress::PreBondingCurve  // 0
+MigrationProgress::PostBondingCurve // 1
+MigrationProgress::LockedVesting    // 2
+MigrationProgress::CreatedPool      // 3
+```
+
+### Meteora's DBC Migration Keepers
+
+- We run a total of 2 DBC Migration Keepers to migrate the DBC pools. These migration keepers each have their individual threshold requirements of >= 750 USD worth of `quoteReserve` to migrate the pool provided `quoteReserve >= migrationQuoteThreshold`.
+- You can check out the migration keepers [here](/developer-guide/guides/dbc/overview#migration-keeper).
+- If you would like to clear our tokens that are stuck (such that their `quoteReserve` is less than 750 USD worth of `quoteToken`), you can use the [Manual Migrator](https://migrator.meteora.ag/) to manually migrate the pool.
+
+### How to Identify Launchpads Using DBC
+
+You can ping us on Discord to get a list of all launchpads configuration so that you can index them on your trading terminal.
+
+<Note>Open a ticket on [discord](https://discord.gg/meteora) to get access to the list.</Note>
+
+## Referral Account
+
+- For trading terminals, we have a feature that enables trading terminals to earn referral fees from all swaps that happens on our Meteora DBC program as long as they were swapped through your trading terminal.
+- For referral fees, simply add your [referral token account](https://github.com/MeteoraAg/dynamic-bonding-curve/blob/main/programs/dynamic-bonding-curve/src/instructions/ix_swap.rs#L30) within the swap instruction & you will receive 20% of the protocol fees for all swaps.

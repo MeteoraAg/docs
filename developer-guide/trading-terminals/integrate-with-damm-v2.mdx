@@ -1,0 +1,153 @@
+---
+title: Integrate with DAMM v2
+description: Everything you need to know to integrate with Meteora's DAMM v2 Program
+---
+
+Trading Terminals can easily integrate with Meteora DAMM v2 by following this guide that explains in detail how to get the necessary data from indexing the DAMM v2 program. 
+
+## Total Fees
+
+```
+totalFees = baseFees + dynamicFees
+```
+
+### Base Fees
+
+Base Fees includes either a Flat Fee or a Fee Scheduler or Rate Limiter. 
+
+<Note>
+    `BaseFeeMode` can only be enums 0 or 1.
+    0 = Linear Fee Scheduler
+    1 = Exponential Fee Scheduler
+</Note>
+
+#### Flat Fee
+
+You can fetch the flat fee directly from the `cliffFeeNumerator` in the `baseFee` object if `numberOfPeriod`, `periodFrequency`, and `reductionFactor` are all 0.
+
+```typescript
+// Example
+baseFee: {
+  cliffFeeNumerator: <BN: 10000000>, // 1% flat fee
+  numberOfPeriod: 0, 
+  periodFrequency: <BN: 0>, 
+  reductionFactor: <BN: 0>, 
+  feeSchedulerMode: 0
+}
+```
+
+<Warning>
+The Fee Scheduler depends on the `poolState.activationType`. 
+
+- If the `poolState.activationType == 0`, then `numberOfPeriod` and `periodFrequency` is calculated in `SLOT == 400ms`
+- If the `poolState.activationType == 1`, then `numberOfPeriod` and `periodFrequency` is calculated in `SECONDS == 1000ms`
+</Warning>
+
+#### Fee Scheduler
+
+- `feeSchedulerMode` can only be 0 or 1.
+
+```typescript
+interface BaseFee = {
+    cliffFeeNumerator: BN
+    numberOfPeriod: number 
+    periodFrequency: BN 
+    reductionFactor: BN
+    feeSchedulerMode: BaseFeeMode // 0 or 1
+}
+```
+
+<Note>You can refer to the math formula for the Fee Scheduler [here](/anti-sniper-suite/fee-scheduler/fee-scheduler-math)</Note>
+
+Here are some examples of how the Fee Scheduler works:
+
+```typescript
+// Fee Scheduler: 50% reduce to 1% in 10 minutes linearly
+baseFee: {
+  cliffFeeNumerator: <BN: 500000000>,
+  firstFactor: 60, // numberOfPeriods
+  secondFactor: <BN: 8166666>, // periodFrequency 
+  thirdFactor: <BN: 10>, // reduction factor
+  baseFeeMode: 0
+},
+```
+
+```typescript
+// Fee Scheduler: 50% reduce to 1% in 10 minutes exponentially
+baseFee: {
+  cliffFeeNumerator: <BN: 500000000>,
+  firstFactor: 60, // numberOfPeriods
+  secondFactor: <BN: 631>, // periodFrequency 
+  thirdFactor: <BN: 10>, // reduction factor
+  baseFeeMode: 1
+},
+```
+
+### Dynamic Fees (Variable Fee)
+
+You can refer to the Dynamic Fee calculation [here](/overview/products/damm-v2/pool-fees-calculation#dynamic-fee-variable-fee)
+
+## Plotting Charts
+
+<Danger>Using Transfer logs from Swap transactions is not the correct way of getting the token price as we have Anti-Sniper Suite features that can cause huge fee deductions from `TokenAmountIn` OR `TokenAmountOut`. Plotting the token chart price from these will lead to a very ugly chart.</Danger>
+
+The correct way is to fetch the `EvtSwap` CPI logs from the Swap transaction. 
+
+Because of the Anti-Sniper Suite features, you will have to apply the following checks to get the correct token price either before/after the fee deduction.
+
+<Note>You will need to fetch the DAMM v2 pool state to get the `collectFeeMode`.</Note>
+
+```
+If poolState.collectFeeMode is 0, then:
+
+- Quote to Base (TradeDirection[1]) 
+-> use [outputAmount + lpFee + protocolFee + referralFee + partnerFee] (swap happens before fee deduction)
+
+- Base to Quote (TradeDirection[0]) 
+-> use [outputAmount + lpFee + protocolFee + referralFee + partnerFee] (swap happens before fee deduction)
+
+If poolState.collectFeeMode is 1, then:
+
+- Quote to Base (TradeDirection[1]) 
+-> use [actualAmountIn] (swap happens after fee deduction)
+
+- Base to Quote (TradeDirection[0]) 
+-> use [outputAmount + lpFee + protocolFee + referralFee + partnerFee] (swap happens before fee deduction)
+```
+
+## Trading Volume
+
+Track from Swap CPI logs:
+
+```
+// Depending on Trade Direction:
+trading_volume += actualAmountIn * token_price
+```
+
+## Liquidity
+
+In the DAMM v2 pool, the liquidity is fetched from the `tokenAVault` and `tokenBVault` of the DAMM v2 pool.
+
+```
+liquidity = tokenAVault * tokenAPrice + tokenBVault * tokenBPrice
+```
+
+## Locked or Vested Liquidity
+
+In DAMM v2, there are 3 different modes for liquidity:
+1. `lockedLiquidity` - which means that the liquidity is permanently locked
+2. `vestedLiquidity` - which means that the liqudiity is vestedLiquidity
+3. `unlockedLiquidity` - which means that the liquidity is unlocked and claimable
+
+You can use our DAMM v2 API [endpoint](/api-reference/pools/get_pool_vesting_list) that tracks pool positions and show accurately whether the liqudiity is locked or not on your trading terminal.
+
+### How to Identify Launchpads Using DAMM v2
+
+You can ping us on Discord to get a list of all launchpads configuration who are launching on DAMM v2 directly so that you can index them on your trading terminal.
+
+<Note>Open a ticket on [discord](https://discord.gg/meteora) to get access to the list.</Note>
+
+## Referral Account
+
+- For trading terminals, we have a feature that enables trading terminals to earn referral fees from all swaps that happens on our Meteora DBC program as long as they were swapped through your trading terminal.
+- For referral fees, simply add your [referral token account](https://github.com/MeteoraAg/dynamic-bonding-curve/blob/main/programs/dynamic-bonding-curve/src/instructions/ix_swap.rs#L30) within the swap instruction & you will receive 20% of the protocol fees for all swaps.

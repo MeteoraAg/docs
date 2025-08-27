@@ -1,0 +1,761 @@
+---
+title: SDK Functions
+description: Dynamic Vault
+---
+
+## Core Functions
+
+### createPermissionlessVaultInstruction
+
+Creates an instruction to initialize a new permissionless vault.
+
+**Function**
+```typescript
+static async createPermissionlessVaultInstruction(
+  connection: Connection,
+  payer: PublicKey,
+  tokenMint: PublicKey,
+  opt?: {
+    cluster?: Cluster;
+    programId?: string;
+  }
+): Promise<TransactionInstruction>
+```
+
+**Parameters**
+```typescript
+interface CreatePermissionlessVaultParams {
+  connection: Connection;       // Solana connection instance
+  payer: PublicKey;            // The wallet paying for the transaction
+  tokenMint: PublicKey;        // The mint address of the token for the vault
+  opt?: {
+    cluster?: Cluster;         // Network cluster (mainnet-beta, devnet, testnet)
+    programId?: string;        // Custom program ID (optional)
+  };
+}
+```
+
+**Returns**
+A transaction instruction that can be used to initialize the vault.
+
+**Example**
+```typescript
+const instruction = await VaultImpl.createPermissionlessVaultInstruction(
+  connection,
+  wallet.publicKey,
+  usdcMint,
+  {
+    cluster: 'mainnet-beta',
+    programId: CUSTOM_PROGRAM_ID // optional
+  }
+);
+
+const transaction = new Transaction().add(instruction);
+const signature = await wallet.sendTransaction(transaction, connection);
+```
+
+**Notes**
+- Creates all necessary PDAs for the vault including vault account, token vault, and LP mint
+- The vault will be permissionless, allowing anyone to deposit and withdraw
+- Payer will cover the rent costs for the new accounts
+
+---
+
+### fetchMultipleUserBalance
+
+Fetches LP token balances for multiple vaults for a specific user.
+
+**Function**
+```typescript
+static async fetchMultipleUserBalance(
+  connection: Connection,
+  lpMintList: Array<PublicKey>,
+  owner: PublicKey
+): Promise<Array<BN>>
+```
+
+**Parameters**
+```typescript
+interface FetchMultipleUserBalanceParams {
+  connection: Connection;       // Solana connection instance
+  lpMintList: Array<PublicKey>; // Array of LP mint addresses
+  owner: PublicKey;            // The user's wallet address
+}
+```
+
+**Returns**
+An array of BN values representing the user's LP token balance for each vault.
+
+**Example**
+```typescript
+const lpMints = [vault1LpMint, vault2LpMint, vault3LpMint];
+const balances = await VaultImpl.fetchMultipleUserBalance(
+  connection,
+  lpMints,
+  wallet.publicKey
+);
+
+balances.forEach((balance, index) => {
+  console.log(`Vault ${index} LP balance: ${balance.toString()}`);
+});
+```
+
+**Notes**
+- Returns 0 for vaults where the user has no LP tokens
+- Efficiently fetches multiple balances in a single call
+- Useful for portfolio overview displays
+
+---
+
+### createMultiple
+
+Creates multiple vault instances from token mint addresses.
+
+**Function**
+```typescript
+static async createMultiple(
+  connection: Connection,
+  tokenMints: Array<PublicKey>,
+  opt?: {
+    seedBaseKey?: PublicKey;
+    allowOwnerOffCurve?: boolean;
+    cluster?: Cluster;
+    programId?: string;
+    affiliateId?: PublicKey;
+    affiliateProgramId?: string;
+  }
+): Promise<Array<VaultImpl>>
+```
+
+**Parameters**
+```typescript
+interface CreateMultipleParams {
+  connection: Connection;           // Solana connection instance
+  tokenMints: Array<PublicKey>;     // Array of token mint addresses
+  opt?: {
+    seedBaseKey?: PublicKey;        // Optional seed for deterministic PDAs
+    allowOwnerOffCurve?: boolean;   // Allow off-curve owner accounts
+    cluster?: Cluster;              // Network cluster
+    programId?: string;             // Custom vault program ID
+    affiliateId?: PublicKey;        // Affiliate partner ID
+    affiliateProgramId?: string;    // Affiliate program ID
+  };
+}
+```
+
+**Returns**
+An array of `VaultImpl` instances for the specified token mints.
+
+**Example**
+```typescript
+const tokenMints = [usdcMint, solMint, btcMint];
+const vaults = await VaultImpl.createMultiple(connection, tokenMints, {
+  cluster: 'mainnet-beta',
+  affiliateId: partnerPublicKey
+});
+
+vaults.forEach((vault, index) => {
+  console.log(`Vault ${index}: ${vault.vaultPda.toString()}`);
+});
+```
+
+**Notes**
+- Efficiently creates multiple vault instances in parallel
+- All vaults must already exist on-chain
+- Useful for initializing a portfolio of vaults
+
+---
+
+### createMultipleWithPda
+
+Creates multiple vault instances from vault PDA addresses.
+
+**Function**
+```typescript
+static async createMultipleWithPda(
+  connection: Connection,
+  vaultsPda: Array<PublicKey>,
+  opt?: {
+    seedBaseKey?: PublicKey;
+    allowOwnerOffCurve?: boolean;
+    cluster?: Cluster;
+    programId?: string;
+    affiliateId?: PublicKey;
+    affiliateProgramId?: string;
+  }
+): Promise<Array<VaultImpl>>
+```
+
+**Parameters**
+```typescript
+interface CreateMultipleWithPdaParams {
+  connection: Connection;           // Solana connection instance
+  vaultsPda: Array<PublicKey>;      // Array of vault PDA addresses
+  opt?: {
+    seedBaseKey?: PublicKey;        // Optional seed for deterministic PDAs
+    allowOwnerOffCurve?: boolean;   // Allow off-curve owner accounts
+    cluster?: Cluster;              // Network cluster
+    programId?: string;             // Custom vault program ID
+    affiliateId?: PublicKey;        // Affiliate partner ID
+    affiliateProgramId?: string;    // Affiliate program ID
+  };
+}
+```
+
+**Returns**
+An array of `VaultImpl` instances for the specified vault PDAs.
+
+**Example**
+```typescript
+const vaultPdas = [vault1Pda, vault2Pda, vault3Pda];
+const vaults = await VaultImpl.createMultipleWithPda(connection, vaultPdas, {
+  affiliateId: partnerPublicKey,
+  affiliateProgramId: CUSTOM_AFFILIATE_PROGRAM_ID
+});
+
+console.log(`Created ${vaults.length} vault instances`);
+```
+
+**Notes**
+- Use this when you already have the vault PDA addresses
+- More direct than `createMultiple` when PDAs are known
+- Supports affiliate integration for revenue sharing
+
+---
+
+### create
+
+Creates a single vault instance from a token mint address.
+
+**Function**
+```typescript
+static async create(
+  connection: Connection,
+  tokenAddress: PublicKey,
+  opt?: {
+    seedBaseKey?: PublicKey;
+    allowOwnerOffCurve?: boolean;
+    cluster?: Cluster;
+    programId?: string;
+    affiliateId?: PublicKey;
+    affiliateProgramId?: string;
+  }
+): Promise<VaultImpl>
+```
+
+**Parameters**
+```typescript
+interface CreateParams {
+  connection: Connection;           // Solana connection instance
+  tokenAddress: PublicKey;          // Token mint address
+  opt?: {
+    seedBaseKey?: PublicKey;        // Optional seed for deterministic PDAs
+    allowOwnerOffCurve?: boolean;   // Allow off-curve owner accounts
+    cluster?: Cluster;              // Network cluster
+    programId?: string;             // Custom vault program ID
+    affiliateId?: PublicKey;        // Affiliate partner ID
+    affiliateProgramId?: string;    // Affiliate program ID
+  };
+}
+```
+
+**Returns**
+A `VaultImpl` instance for the specified token.
+
+**Example**
+```typescript
+const vault = await VaultImpl.create(connection, usdcMint, {
+  cluster: 'mainnet-beta',
+  affiliateId: partnerPublicKey
+});
+
+console.log(`Vault PDA: ${vault.vaultPda.toString()}`);
+console.log(`Token Mint: ${vault.tokenMint.address.toString()}`);
+console.log(`LP Supply: ${vault.tokenLpMint.supply.toString()}`);
+```
+
+**Notes**
+- Use this for creating a single vault instance
+- The vault must already exist on-chain
+- Automatically fetches and caches vault state information
+
+---
+
+### getUserBalance
+
+Gets the user's LP token balance for this vault.
+
+**Function**
+```typescript
+async getUserBalance(owner: PublicKey): Promise<BN>
+```
+
+**Parameters**
+```typescript
+interface GetUserBalanceParams {
+  owner: PublicKey;    // The user's wallet address
+}
+```
+
+**Returns**
+A BN representing the user's LP token balance.
+
+**Example**
+```typescript
+const vault = await VaultImpl.create(connection, usdcMint);
+const userBalance = await vault.getUserBalance(wallet.publicKey);
+
+console.log(`User LP balance: ${userBalance.toString()}`);
+
+// Convert to human readable format
+const balanceInTokens = userBalance.div(new BN(10).pow(new BN(vault.tokenLpMint.decimals)));
+console.log(`User balance: ${balanceInTokens.toString()} LP tokens`);
+```
+
+**Notes**
+- Returns 0 if the user has no LP tokens
+- Handles both direct deposits and affiliate deposits
+- Balance represents share of the vault's total assets
+
+---
+
+### getVaultSupply
+
+Gets the total LP token supply for the vault.
+
+**Function**
+```typescript
+async getVaultSupply(): Promise<BN>
+```
+
+**Returns**
+A BN representing the total LP token supply.
+
+**Example**
+```typescript
+const vault = await VaultImpl.create(connection, usdcMint);
+const totalSupply = await vault.getVaultSupply();
+
+console.log(`Total LP supply: ${totalSupply.toString()}`);
+
+// Calculate user's share percentage
+const userBalance = await vault.getUserBalance(wallet.publicKey);
+const userSharePercentage = userBalance.mul(new BN(100)).div(totalSupply);
+console.log(`User owns ${userSharePercentage.toString()}% of the vault`);
+```
+
+**Notes**
+- Refetches the latest LP mint supply from the blockchain
+- Updates the cached `tokenLpMint` property
+- Use the cached `vault.tokenLpMint.supply` for performance if recent data is sufficient
+
+---
+
+### getWithdrawableAmount
+
+Gets the amount of assets that can be immediately withdrawn from the vault.
+
+**Function**
+```typescript
+async getWithdrawableAmount(): Promise<BN>
+```
+
+**Returns**
+A BN representing the withdrawable amount in base token units.
+
+**Example**
+```typescript
+const vault = await VaultImpl.create(connection, usdcMint);
+const withdrawableAmount = await vault.getWithdrawableAmount();
+
+console.log(`Withdrawable amount: ${withdrawableAmount.toString()}`);
+
+// Convert to human readable format (assuming USDC with 6 decimals)
+const withdrawableUsdc = withdrawableAmount.div(new BN(1_000_000));
+console.log(`Withdrawable: ${withdrawableUsdc.toString()} USDC`);
+```
+
+**Notes**
+- Amount may be less than total vault assets due to strategy allocations
+- Uses current on-chain time for calculations
+- Does not account for user's specific LP token balance
+
+---
+
+### refreshVaultState
+
+Refreshes the cached vault state and token mint information.
+
+**Function**
+```typescript
+async refreshVaultState(): Promise<void>
+```
+
+**Returns**
+Void. Updates the instance's `vaultState` and `tokenMint` properties.
+
+**Example**
+```typescript
+const vault = await VaultImpl.create(connection, usdcMint);
+
+// Check current state
+console.log(`Current liquidity: ${vault.vaultState.totalLiquidity.toString()}`);
+
+// Refresh state to get latest data
+await vault.refreshVaultState();
+
+// Check updated state
+console.log(`Updated liquidity: ${vault.vaultState.totalLiquidity.toString()}`);
+```
+
+**Notes**
+- Call this before deposit/withdraw operations to ensure latest state
+- Updates both vault state and token mint data
+- Essential for accurate calculations in dynamic environments
+
+---
+
+### deposit
+
+Deposits tokens into the vault and receives LP tokens in return.
+
+**Function**
+```typescript
+async deposit(owner: PublicKey, baseTokenAmount: BN): Promise<Transaction>
+```
+
+**Parameters**
+```typescript
+interface DepositParams {
+  owner: PublicKey;           // The depositor's wallet address
+  baseTokenAmount: BN;        // Amount of base tokens to deposit
+}
+```
+
+**Returns**
+A `Transaction` ready to be signed and sent.
+
+**Example**
+```typescript
+const vault = await VaultImpl.create(connection, usdcMint, {
+  affiliateId: partnerPublicKey
+});
+
+// Deposit 1,000 USDC (with 6 decimals)
+const depositAmount = new BN(1_000_000_000);
+const depositTx = await vault.deposit(wallet.publicKey, depositAmount);
+
+// Sign and send transaction
+const signature = await wallet.sendTransaction(depositTx, connection);
+console.log(`Deposit transaction: ${signature}`);
+```
+
+**Notes**
+- Automatically handles SOL wrapping for native SOL vaults
+- Creates necessary token accounts if they don't exist
+- Supports affiliate revenue sharing if configured
+- The transaction includes all necessary pre-instructions
+- LP tokens are minted proportional to the deposit amount
+
+---
+
+### withdraw
+
+Withdraws tokens from the vault by burning LP tokens.
+
+**Function**
+```typescript
+async withdraw(owner: PublicKey, baseTokenAmount: BN): Promise<Transaction>
+```
+
+**Parameters**
+```typescript
+interface WithdrawParams {
+  owner: PublicKey;           // The withdrawer's wallet address
+  baseTokenAmount: BN;        // Amount of LP tokens to burn for withdrawal
+}
+```
+
+**Returns**
+A `Transaction` ready to be signed and sent.
+
+**Example**
+```typescript
+const vault = await VaultImpl.create(connection, usdcMint);
+
+// Get user's LP token balance
+const userBalance = await vault.getUserBalance(wallet.publicKey);
+
+// Withdraw half of user's position
+const withdrawAmount = userBalance.div(new BN(2));
+const withdrawTx = await vault.withdraw(wallet.publicKey, withdrawAmount);
+
+// Sign and send transaction
+const signature = await wallet.sendTransaction(withdrawTx, connection);
+console.log(`Withdraw transaction: ${signature}`);
+```
+
+**Notes**
+- Automatically handles SOL unwrapping for native SOL vaults
+- May withdraw from vault reserves or underlying strategies
+- Supports affiliate revenue sharing if configured
+- The `baseTokenAmount` parameter refers to LP tokens to burn, not underlying tokens to receive
+- Automatically selects the optimal withdrawal strategy based on liquidity availability
+
+---
+
+### getStrategiesState
+
+Gets the state of all strategies associated with the vault.
+
+**Function**
+```typescript
+async getStrategiesState(): Promise<Array<StrategyState>>
+```
+
+**Returns**
+An array of `StrategyState` objects representing the vault's strategies.
+
+**Example**
+```typescript
+const vault = await VaultImpl.create(connection, usdcMint);
+const strategies = await vault.getStrategiesState();
+
+strategies.forEach((strategy, index) => {
+  console.log(`Strategy ${index}:`);
+  console.log(`  Current Liquidity: ${strategy.currentLiquidity.toString()}`);
+  console.log(`  Performance Fee: ${strategy.performanceFee.toString()}`);
+});
+
+console.log(`Total strategies: ${strategies.length}`);
+```
+
+**Notes**
+- Excludes the vault's internal strategy (VAULT_STRATEGY_ADDRESS)
+- Useful for understanding vault composition and performance
+- Each strategy represents a different yield farming or liquidity provision approach
+
+---
+
+### getAffiliateInfo
+
+Gets affiliate partnership information for the vault.
+
+**Function**
+```typescript
+async getAffiliateInfo(): Promise<AffiliateInfo>
+```
+
+**Returns**
+An `AffiliateInfo` object containing partnership details.
+
+**Example**
+```typescript
+const vault = await VaultImpl.create(connection, usdcMint, {
+  affiliateId: partnerPublicKey
+});
+
+try {
+  const affiliateInfo = await vault.getAffiliateInfo();
+  console.log(`Partner fee rate: ${affiliateInfo.feeRate}%`);
+  console.log(`Total fees earned: ${affiliateInfo.totalFeesEarned.toString()}`);
+} catch (error) {
+  console.log('No affiliate information found');
+}
+```
+
+**Notes**
+- Only available when vault is created with an `affiliateId`
+- Throws an error if no affiliate program is configured
+- Contains fee rates, total fees earned, and partnership terms
+
+---
+
+## State Functions
+
+### getAllVaultState
+
+Fetches state information for multiple vaults by token mint addresses.
+
+**Function**
+```typescript
+async getAllVaultState(
+  tokensAddress: Array<PublicKey>,
+  program: VaultProgram,
+  seedBaseKey?: PublicKey
+): Promise<Array<VaultStateAndLp>>
+```
+
+**Parameters**
+- `tokensAddress`: Array of token mint addresses
+- `program`: The vault program instance
+- `seedBaseKey`: Optional seed for deterministic PDAs
+
+**Returns**
+Array of vault state information including PDA, state, and mint data.
+
+**Example**
+```typescript
+const provider = new AnchorProvider(connection, wallet, {});
+const program = new Program(IDL, PROGRAM_ID, provider);
+
+const tokenMints = [usdcMint, solMint];
+const vaultsInfo = await getAllVaultState(tokenMints, program);
+
+vaultsInfo.forEach((vaultInfo, index) => {
+  console.log(`Vault ${index}: ${vaultInfo.vaultPda.toString()}`);
+  console.log(`Total Liquidity: ${vaultInfo.vaultState.totalLiquidity.toString()}`);
+});
+```
+
+---
+
+### getAllVaultStateByPda
+
+Fetches state information for multiple vaults by their PDA addresses.
+
+**Function**
+```typescript
+async getAllVaultStateByPda(
+  vaultsPda: Array<PublicKey>,
+  program: VaultProgram
+): Promise<Array<VaultStateAndLp>>
+```
+
+**Parameters**
+- `vaultsPda`: Array of vault PDA addresses
+- `program`: The vault program instance
+
+**Returns**
+Array of vault state information including PDA, state, and mint data.
+
+**Example**
+```typescript
+const vaultPdas = [vault1Pda, vault2Pda];
+const vaultsInfo = await getAllVaultStateByPda(vaultPdas, program);
+
+console.log(`Fetched ${vaultsInfo.length} vault states`);
+```
+
+---
+
+### getVaultState
+
+Fetches state information for a single vault by token mint address.
+
+**Function**
+```typescript
+async getVaultState(
+  tokenAddress: PublicKey,
+  program: VaultProgram,
+  seedBaseKey?: PublicKey
+): Promise<VaultStateAndLp>
+```
+
+**Parameters**
+- `tokenAddress`: Token mint address
+- `program`: The vault program instance
+- `seedBaseKey`: Optional seed for deterministic PDAs
+
+**Returns**
+Vault state information including PDA, state, and mint data.
+
+**Example**
+```typescript
+const vaultInfo = await getVaultState(usdcMint, program);
+console.log(`Vault PDA: ${vaultInfo.vaultPda.toString()}`);
+console.log(`LP Mint: ${vaultInfo.vaultState.lpMint.toString()}`);
+```
+
+---
+
+### getVaultStateByPda
+
+Fetches state information for a single vault by its PDA address.
+
+**Function**
+```typescript
+async getVaultStateByPda(
+  vaultPda: PublicKey,
+  program: VaultProgram
+): Promise<VaultStateAndLp>
+```
+
+**Parameters**
+- `vaultPda`: Vault PDA address
+- `program`: The vault program instance
+
+**Returns**
+Vault state information including PDA, state, and mint data.
+
+**Example**
+```typescript
+const vaultInfo = await getVaultStateByPda(vaultPda, program);
+console.log(`Token Mint: ${vaultInfo.vaultState.tokenMint.toString()}`);
+console.log(`Total Supply: ${vaultInfo.vaultLpMint.supply.toString()}`);
+```
+
+---
+
+### getVaultLiquidity
+
+Gets the current liquidity amount in the vault's token account.
+
+**Function**
+```typescript
+async getVaultLiquidity(
+  connection: Connection,
+  tokenVaultPda: PublicKey
+): Promise<string | null>
+```
+
+**Parameters**
+- `connection`: Solana connection instance
+- `tokenVaultPda`: The vault's token account PDA
+
+**Returns**
+The liquidity amount as a string, or null if the account doesn't exist.
+
+**Example**
+```typescript
+const liquidity = await getVaultLiquidity(connection, vault.tokenVaultPda);
+if (liquidity) {
+  console.log(`Vault liquidity: ${liquidity} tokens`);
+} else {
+  console.log('Vault account not found');
+}
+```
+
+---
+
+## Helper Functions
+
+### calculateWithdrawableAmount
+
+Calculates the amount that can be withdrawn based on current time and vault state.
+
+**Function**
+```typescript
+function calculateWithdrawableAmount(currentTime: BN, vaultState: VaultState): BN
+```
+
+**Parameters**
+- `currentTime`: Current blockchain timestamp
+- `vaultState`: The vault's current state
+
+**Returns**
+The withdrawable amount as a BN.
+
+**Example**
+```typescript
+import { getOnchainTime } from './utils';
+
+const currentTime = await getOnchainTime(connection);
+const withdrawable = calculateWithdrawableAmount(currentTime, vault.vaultState);
+console.log(`Withdrawable: ${withdrawable.toString()}`);
+```
+
+**Notes**
+- Accounts for time-based withdrawal restrictions
+- Used internally by the `getWithdrawableAmount` method
+- Essential for implementing withdrawal limits and unlock schedules
