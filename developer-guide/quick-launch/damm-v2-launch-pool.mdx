@@ -85,13 +85,15 @@ npm install -g pnpm
   Therafter, you will need to run this command to generate a keypair from your wallet private key.
 
   ```bash Terminal
-    # For devnet (airdrops 5 SOL)
-    pnpm studio generate-keypair --network devnet
+  pnpm studio generate-keypair
 
-    # For localnet (airdrops 5 SOL)
-    # Ensure that you have already started the local validator with pnpm start-test-validator
-    pnpm studio generate-keypair --network localnet
-    ```
+  # For devnet (airdrops 5 SOL)
+  pnpm studio generate-keypair --network devnet --airdrop
+
+  # For localnet (airdrops 5 SOL)
+  # Ensure that you have already started the local validator with pnpm start-test-validator
+  pnpm studio generate-keypair --network localnet --airdrop
+  ```
 
   This will generate a `keypair.json` file in the `studio` directory which will be used for all actions in this guide. <br /> <br />
 
@@ -129,15 +131,39 @@ npm install -g pnpm
       */
       "quoteMint": "So11111111111111111111111111111111111111112",
 
-      /* Either use baseMint or createBaseToken, but not both.
-      * baseMint is required for the following actions:
-      * 1. damm-v2-create-balanced-pool
-      * 2. damm-v2-create-one-sided-pool
+      /* If you have a baseMint already created, you can specify it in the cli command via --baseMint flag. If you don't have a baseMint, you can create a new one using createBaseToken.
+      * Either use --baseMint flag or createBaseToken, but not both.
       */
-      // "baseMint": "YOUR_BASE_MINT_ADDRESS",
       "createBaseToken": {
-        "mintBaseTokenAmount": 1000000000, // total amount of base token to be minted
-        "baseDecimals": 6 // decimals of the base token
+        "supply": 1000000000, // total amount of base token to be minted
+        "decimals": 6, // decimals of the base token
+        // "tokenMintKeypairFilePath": "./mint-keypair.json", // path to token mint keypair if you have a specific keypair for the token mint. If not provided, a new keypair will be generated.
+        "name": "YOUR_TOKEN_NAME", // token name
+        "symbol": "YOUR_TOKEN_SYMBOL", // token symbol
+        "authorities": {
+          "mint": "YOUR_MINT_AUTHORITY_ADDRESS", // token mint authority address. <PublicKey | null>
+          "freeze": "YOUR_FREEZE_AUTHORITY_ADDRESS", // token freeze authority address. <PublicKey | null>
+          "update": "YOUR_UPDATE_AUTHORITY_ADDRESS" // token update authority address. <PublicKey | null>
+        },
+        /* Optional Metaplex Token Metadata Properties
+        * Read more about the properties here: https://developers.metaplex.com/token-metadata
+        */
+        "sellerFeeBasisPoints": 0, // Royalty fee in basis points (0-10000)
+        "creators": null, // Array of creator objects of the token (optional)
+        "collection": null, // Collection info (optional)
+        "uses": null, // Usage restrictions (optional)
+        "metadata": {
+          // "uri": "https://gateway.irys.xyz/123456789", // if you already have a metadata URI created, you can specify it here
+
+          /* Only use the following parameters for createBaseToken if you don't have an existing metadata uri
+          * This will create an image uri and a new metadata uri and upload everything to Irys
+          */
+          "image": "./data/image/test-token.jpg", // this can be a URL of the image address (e.g. https://example.com/token-image.png) or the image file path (e.g. ./data/image/test-token.jpg)
+          "description": "YOUR_TOKEN_DESCRIPTION", // token description
+          "website": "https://example.com", // project website
+          "twitter": "https://x.com/yourproject", // twitter URL
+          "telegram": "https://t.me/yourproject" // telegram URL
+        }
       },
 
       /* dammV2Config is only used in the following actions:
@@ -145,36 +171,56 @@ npm install -g pnpm
       * 2. damm-v2-create-one-sided-pool
       */
       "dammV2Config": {
-        "creator": "YOUR_WALLET_ADDRESS", // creator address
-        "baseAmount": 10000000, // base token amount
+        "creator": "YOUR_CREATOR_ADDRESS", // creator address
+        "baseAmount": 100000000, // base token amount
         "quoteAmount": null, // quote token amount
-        "initPrice": 0.0001, // initial price (in terms of quote/base price)
+        "initPrice": 0.001, // initial price (in terms of quote/base   price) 1 SOL / 1000000000 = initialPrice
         "maxPrice": null, // max price (in terms of quote/base price)
         "poolFees": {
-          "maxBaseFeeBps": 400, // max base fee (in basis points)
-          "minBaseFeeBps": 400, // min base fee (in basis points)
+          "maxBaseFeeBps": 120, // max base fee (in basis points)
+          "minBaseFeeBps": 120, // min base fee (in basis points)
           "numberOfPeriod": 0, // number of period
           "totalDuration": 0, // total duration (If activationType is 0 (slots), totalDuration = duration / 0.4 | If activationType is 1 (timestamp), totalDuration = duration)
           "feeSchedulerMode": 0, // 0 - Fee Scheduler: Linear | 1 - Fee Scheduler: Exponential
-          "useDynamicFee": true, // use dynamic fee
+          "useDynamicFee": true // if useDynamicFee is true, the default dynamic fee configuration will be 20% of minBaseFeeBps
 
           /* Optional Configuration.
-          * Only used if useDynamicFee is true and if you want to configure dynamic fee.
-          * If you don't want to configure dynamic fee, and useDynamicFee is true, the default fee will be 20% of minBaseFeeBps.
+          * Only used if you want to configure dynamic fee and not use the default dynamic fee configuration
           * Formula: dynamicFee = (variableFeeControl * (volatilityAccumulator * binStep)^2 + 99_999_999_999) / 100_000_000_000
           */
-          "dynamicFeeConfig": {
-            "filterPeriod": 10, // Time period (in slots/seconds) over which volatility is measured and smoothed
-            "decayPeriod": 120, // Time period (in slots/seconds) over which volatility accumulator decays back to zero
-            "reductionFactor": 5000, // Volatility decay rate in basis points (5000 = 50% reduction per decay period)
-            "variableFeeControl": 14460000, // Scaling factor that controls how much volatility affects dynamic fees
-            "maxVolatilityAccumulator": 239 // Maximum allowed volatility accumulator value (caps dynamic fee calculation)
-          }
+          // "dynamicFeeConfig": {
+          //   "filterPeriod": 10, // Time period (in slots/seconds) over which volatility is measured and smoothed
+          //   "decayPeriod": 120, // Time period (in slots/seconds) over which volatility accumulator decays back to zero
+          //   "reductionFactor": 5000, // Volatility decay rate in basis points (5000 = 50% reduction per decay period)
+          //   "variableFeeControl": 14460000, // Scaling factor that controls how much volatility affects dynamic fees
+          //   "maxVolatilityAccumulator": 239 // Maximum allowed volatility accumulator value (caps dynamic fee calculation)
+          // }
         },
         "collectFeeMode": 1, // 0 - Both Token | 1 - Token B Only
         "activationType": 1, // 0 - Slot | 1 - Timestamp
         "activationPoint": null, // Activation time of the pool depending on activationType (Calculate in slots if activationType is 0 (slots) | Calculate in seconds if activationType is 1 (timestamp))
         "hasAlphaVault": false // If true, the alpha vault will be created after the pool is created
+      },
+
+      /* addLiquidity is only used in the following actions:
+      * 1. damm-v2-add-liquidity
+      */
+      "addLiquidity": {
+        "amountIn": 5, // this is the amount of token A or token B that will be added to the pool (in terms of the token amount)
+        "isTokenA": false // if your amountIn is in terms of token A, set isTokenA to true, if your amountIn is in terms of token B, set isTokenA to false
+      },
+
+      /* splitPosition is only used in the following actions:
+      * 1. damm-v2-split-position
+      */
+      "splitPosition": {
+        "newPositionOwner": "YOUR_NEW_POSITION_OWNER_ADDRESS", // this is the address that will receive the new DAMM v2 NFT position
+        "unlockedLiquidityPercentage": 50, // this is the percentage of unlocked liquidity that will be split and transferred to the newPositionOwner's position
+        "permanentLockedLiquidityPercentage": 50, // this is the percentage of permanent locked liquidity that will be split and transferred to the newPositionOwner's position
+        "feeAPercentage": 50, // this is the percentage of unclaimed fee that will be transferred to the newPositionOwner's position
+        "feeBPercentage": 50, // this is the percentage of unclaimed fee that will be transferred to the newPositionOwner's position
+        "reward0Percentage": 50, // this is the percentage of unclaimed reward that will be transferred to the newPositionOwner's position
+        "reward1Percentage": 50 // this is the percentage of unclaimed reward that will be transferred to the newPositionOwner's position
       },
 
       /* alphaVault is only used in the following actions:
@@ -239,10 +285,18 @@ npm install -g pnpm
 
     <Tabs>
       <Tab title="damm-v2-create-balanced-pool" icon="scale-balanced">
-        *If you want to create a balanced pool, you can run the following command.*
+        _If you don't have a base mint, you can configure `createBaseToken` in the config file and run the
+        following command._
 
-        ```bash Terminal
-        pnpm studio damm-v2-create-balanced-pool --config ./studio/config/damm_v2_config.jsonc
+        ```bash
+        pnpm studio damm-v2-create-balanced-pool
+        ```
+
+        _If you already have a base mint, you can provide it via the CLI with a `--baseMint` flag and run
+        the following command._
+
+        ```bash
+        pnpm studio damm-v2-create-balanced-pool --baseMint <YOUR_BASE_MINT_ADDRESS>
         ```
 
         <Note>Creating a balanced pool will require the `quoteAmount` to be set in the `damm_v2_config.jsonc` file.</Note>
@@ -252,10 +306,18 @@ npm install -g pnpm
         </Frame>
       </Tab>
       <Tab title="damm-v2-create-one-sided-pool" icon="scale-unbalanced">
-        *If you want to create a one-sided pool, you can run the following command.*
+        _If you don't have a base mint, you can configure `createBaseToken` in the config file and run the
+        following command._
 
-        ```bash Terminal
-        pnpm studio damm-v2-create-one-sided-pool --config ./studio/config/damm_v2_config.jsonc
+        ```bash
+        pnpm studio damm-v2-create-one-sided-pool
+        ```
+
+        _If you already have a base mint, you can provide it via the CLI with a `--baseMint` flag and run
+        the following command._
+
+        ```bash
+        pnpm studio damm-v2-create-one-sided-pool --baseMint <YOUR_BASE_MINT_ADDRESS>
         ```
 
         This will create your pool with liqudity deposited from your `keypair.json` and print the pool address and other relevant information to the console. <br /> <br />

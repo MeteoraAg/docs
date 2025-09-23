@@ -85,13 +85,15 @@ npm install -g pnpm
   Therafter, you will need to run this command to generate a keypair from your wallet private key.
 
   ```bash Terminal
-    # For devnet (airdrops 5 SOL)
-    pnpm studio generate-keypair --network devnet
+  pnpm studio generate-keypair
 
-    # For localnet (airdrops 5 SOL)
-    # Ensure that you have already started the local validator with pnpm start-test-validator
-    pnpm studio generate-keypair --network localnet
-    ```
+  # For devnet (airdrops 5 SOL)
+  pnpm studio generate-keypair --network devnet --airdrop
+
+  # For localnet (airdrops 5 SOL)
+  # Ensure that you have already started the local validator with pnpm start-test-validator
+  pnpm studio generate-keypair --network localnet --airdrop
+  ```
 
   This will generate a `keypair.json` file in the `studio` directory which will be used for all actions in this guide. <br /> <br />
 
@@ -129,23 +131,10 @@ npm install -g pnpm
       */
       "quoteMint": "So11111111111111111111111111111111111111112",
 
-      /* baseMint is required for the following actions:
-      * 1. dbc-swap (Buy or Sell)
-      * 2. dbc-migrate-damm-v1
-      * 3. dbc-migrate-damm-v2
-      */
-      "baseMint": "YOUR_BASE_MINT_ADDRESS",
-
-      /* Either use dbcConfigAddress or dbcConfig, but not both.
-      *
-      * dbcConfigAddress is only used in the following action:
-      * 1. dbc-create-pool (if the dbcConfigAddress is already created)
-      *
-      * dbcConfig is only used in the following actions:
+      /* dbcConfig is only used in the following actions:
       * 1. dbc-create-config
-      * 2. dbc-create-pool (if there is no dbcConfigAddress)
+      * 2. dbc-create-pool (if there is no --config flag indicated in the command)
       */
-      // "dbcConfigAddress": "YOUR_DBC_CONFIG_ADDRESS",
       "dbcConfig": {
         "buildCurveMode": 0, // 0 - buildCurve | 1 - buildCurveWithMarketCap | 2 - buildCurveWithTwoSegments | 3 - buildCurveWithLiquidityWeights
 
@@ -154,7 +143,7 @@ npm install -g pnpm
         * 2. migrationQuoteThreshold
         */
         "percentageSupplyOnMigration": 20, // percentage of total token supply to be migrated
-        "migrationQuoteThreshold": 1, // migration quote threshold needed to migrate the DBC token pool
+        "migrationQuoteThreshold": 10, // migration quote threshold needed to migrate the DBC token pool
 
         /* Only use the following parameters for buildCurveMode: 1 (buildCurveWithMarketCap)
         * 1. initialMarketCap
@@ -186,17 +175,17 @@ npm install -g pnpm
         "tokenBaseDecimal": 6, // token base decimal
         "tokenQuoteDecimal": 9, // token quote decimal
         "lockedVestingParam": {
-          "totalLockedVestingAmount": 100000000, // total locked vesting amount (not in lamports)
-          "numberOfVestingPeriod": 24, // number of vesting period
-          "cliffUnlockAmount": 100000000, // cliff unlock amount (not in lamports)
-          "totalVestingDuration": 2592000, // total vesting duration (in seconds)
+          "totalLockedVestingAmount": 0, // total locked vesting amount (not in lamports)
+          "numberOfVestingPeriod": 0, // number of vesting period
+          "cliffUnlockAmount": 0, // cliff unlock amount (not in lamports)
+          "totalVestingDuration": 0, // total vesting duration (in seconds)
           "cliffDurationFromMigrationTime": 0 // cliff duration from migration time (in seconds)
         },
         "baseFeeParams": {
           "baseFeeMode": 0, // 0 - Fee Scheduler: Linear | 1 - Fee Scheduler: Exponential
           "feeSchedulerParam": {
-            "startingFeeBps": 200, // starting fee (max 99% fee === 9900 bps)
-            "endingFeeBps": 200, // ending fee (minimum 0.01% fee === 1 bps)
+            "startingFeeBps": 100, // starting fee (max 99% fee === 9900 bps)
+            "endingFeeBps": 100, // ending fee (minimum 0.01% fee === 1 bps)
             "numberOfPeriod": 0, // number of period
             "totalDuration": 0 // total duration (If activationType is 0 (slots), totalDuration = duration / 0.4 | If activationType is 1 (timestamp), totalDuration = duration)
           }
@@ -215,10 +204,10 @@ npm install -g pnpm
         "collectFeeMode": 0, // 0 - Quote Token | 1 - Output Token
         "migrationFeeOption": 3, // 0 - LP Fee 0.25% | 1 - LP Fee 0.3% | 2 - LP Fee 1% | 3 - LP Fee 2% | 4 - LP Fee 4% | 5 - LP Fee 6%
         "tokenType": 0, // 0 - SPL | 1 - Token 2022
-        "partnerLpPercentage": 25, // Partner claimable LP (withdrawable LP once pool migrates)
-        "creatorLpPercentage": 25, // Creator claimable LP (withdrawable LP once pool migrates)
-        "partnerLockedLpPercentage": 25, // Partner locked LP (permanently locked LP once pool migrates)
-        "creatorLockedLpPercentage": 25, // Creator locked LP (permanently locked LP once pool migrates)
+        "partnerLpPercentage": 100, // Partner claimable LP (withdrawable LP once pool migrates)
+        "creatorLpPercentage": 0, // Creator claimable LP (withdrawable LP once pool migrates)
+        "partnerLockedLpPercentage": 0, // Partner locked LP (permanently locked LP once pool migrates)
+        "creatorLockedLpPercentage": 0, // Creator locked LP (permanently locked LP once pool migrates)
         "creatorTradingFeePercentage": 0, // Bonding curve trading fee sharing (0% to 100%) - 0% means all trading fees go to the partner
         "leftover": 0, // leftover tokens in the bonding curve (claimable once pool migrates)
         "tokenUpdateAuthority": 1, // 0 - CreatorUpdateAuthority | 1 - Immutable | 2 - PartnerUpdateAuthority | 3 - CreatorUpdateAndMintAuthority | 4 - PartnerUpdateAndMintAuthority
@@ -226,18 +215,29 @@ npm install -g pnpm
           "feePercentage": 0, // Percentage of fee taken from migration quote threshold once pool migrates (0% to 50%)
           "creatorFeePercentage": 0 // Percentage of the migrationFee.feePercentage claimable by creator (0% to 100%)
         },
-        "leftoverReceiver": "YOUR_LEFTOVER_RECEIVER_ADDRESS", // leftover receiver address
-        "feeClaimer": "YOUR_FEE_CLAIMER_ADDRESS" // fee claimer address
+        "leftoverReceiver": "Dc85YcHkAWs62ndssWcGN5V4xYaQzPzgUDiRGtvnZas6", // leftover receiver address
+        "feeClaimer": "Dc85YcHkAWs62ndssWcGN5V4xYaQzPzgUDiRGtvnZas6" // fee claimer address
       },
 
       /* dbcPool is only used in the following actions:
       * 1. dbc-create-pool
       */
       "dbcPool": {
-        // "baseMintKeypairFilepath": "./baseMintKeypair.json", // optional base mint keypair file path
-        "name": "DBC Pool", // token name
-        "symbol": "DBC", // token symbol
-        "uri": "https://example.com" // metaplex token metadata format for the token - https://developers.metaplex.com/core/json-schema
+        // "baseMintKeypairFilepath": "./mint-keypair.json", // optional base mint keypair file path
+        "name": "YOUR_TOKEN_NAME", // token name
+        "symbol": "YOUR_TOKEN_SYMBOL", // token symbol
+        "metadata": {
+          // "uri": "https://gateway.irys.xyz/123456789", // if you already have a metadata URI created, you can specify it here
+
+          /* Only use the following parameters for createBaseToken if you don't have an existing metadata uri
+          * This will create an image uri and a new metadata uri and upload everything to Irys
+          */
+          "image": "./data/image/test-token.jpg", // this can be a URL of the image address (e.g. https://example.com/token-image.png) or the image file path (e.g. ./data/image/test-token.jpg)
+          "description": "YOUR_TOKEN_DESCRIPTION", // token description
+          "website": "https://example.com", // project website
+          "twitter": "https://x.com/yourproject", // twitter URL
+          "telegram": "https://t.me/yourproject" // telegram URL
+        }
       },
 
       /* dbcSwap is only used in the following actions:
@@ -268,11 +268,21 @@ npm install -g pnpm
   <Step title="Create your DBC Token Pool">
   After configuring your DBC token pool settings in `dbc_config.jsonc`, you can now create your token pool by running the following command.
 
-  ```bash Terminal
-  pnpm studio dbc-create-pool --config ./studio/config/dbc_config.jsonc
+  _If you don't have a DBC config key, you can run the following command and the config key + pool
+  will be created together._
+
+  ```bash
+  pnpm studio dbc-create-pool
   ```
 
-  This will create your DBC curve config and token pool. You will also be able to see the token address and other relevant information in the console. <br /> <br />
+  _If you already have an existing DBC config key, you can provide it via the CLI with a `--config`
+  flag and run the following command._
+
+  ```bash
+  pnpm studio dbc-create-pool --config <YOUR_DBC_CONFIG_KEY>
+  ```
+
+  This will create your DBC curve config (if there is no config key) and token pool. You will also be able to see the token address and other relevant information in the console. <br /> <br />
 
   <Frame>
    <img src="/images/developer-guide/dbc-create-pool.webp" />

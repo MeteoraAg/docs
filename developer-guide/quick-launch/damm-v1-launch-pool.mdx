@@ -84,13 +84,15 @@ npm install -g pnpm
   Therafter, you will need to run this command to generate a keypair from your wallet private key.
 
   ```bash Terminal
+    pnpm studio generate-keypair
+
     # For devnet (airdrops 5 SOL)
-    pnpm studio generate-keypair --network devnet
+    pnpm studio generate-keypair --network devnet --airdrop
 
     # For localnet (airdrops 5 SOL)
     # Ensure that you have already started the local validator with pnpm start-test-validator
-    pnpm studio generate-keypair --network localnet
-    ```
+    pnpm studio generate-keypair --network localnet --airdrop
+  ```
 
   This will generate a `keypair.json` file in the `studio` directory which will be used for all actions in this guide. <br /> <br />
 
@@ -128,16 +130,40 @@ npm install -g pnpm
       */
       "quoteMint": "So11111111111111111111111111111111111111112",
 
-      /* Either use baseMint or createBaseToken, but not both.
-      * baseMint is required for the following actions:
-      * 1. damm-v1-create-pool
-      * 2. damm-v1-lock-liquidity
+      /* If you have a baseMint already created, you can specify it in the cli command via --baseMint flag. If you don't have a baseMint, you can create a new one using createBaseToken.
+      * Either use --baseMint flag or createBaseToken, but not both.
       */
-      "baseMint": "YOUR_BASE_MINT_ADDRESS",
-      // "createBaseToken": {
-      //     "mintBaseTokenAmount": 1000000000, // total amount of base token to be minted
-      //     "baseDecimals": 6 // decimals of the base token
-      // },
+      "createBaseToken": {
+        "supply": 1000000000, // total amount of base token to be minted
+        "decimals": 6, // decimals of the base token
+        // "tokenMintKeypairFilePath": "./mint-keypair.json", // path to token mint keypair if you have a specific keypair for the token mint. If not provided, a new keypair will be generated.
+        "name": "Test Token", // token name
+        "symbol": "TT", // token symbol
+        "authorities": {
+          "mint": "YOUR_MINT_AUTHORITY_ADDRESS", // token mint authority address. <PublicKey | null>
+          "freeze": "YOUR_FREEZE_AUTHORITY_ADDRESS", // token freeze authority address. <PublicKey | null>
+          "update": "YOUR_UPDATE_AUTHORITY_ADDRESS" // token update authority address. <PublicKey | null>
+        },
+        /* Optional Metaplex Token Metadata Properties
+        * Read more about the properties here: https://developers.metaplex.com/token-metadata
+        */
+        "sellerFeeBasisPoints": 0, // Royalty fee in basis points (0-10000)
+        "creators": null, // Array of creator objects of the token (optional)
+        "collection": null, // Collection info (optional)
+        "uses": null, // Usage restrictions (optional)
+        "metadata": {
+          // "uri": "https://gateway.irys.xyz/123456789", // if you already have a metadata URI created, you can specify it here
+
+          /* Only use the following parameters for createBaseToken if you don't have an existing metadata uri
+          * This will create an image uri and a new metadata uri and upload everything to Irys
+          */
+          "image": "./data/image/test-token.jpg", // this can be a URL of the image address (e.g. https://example.com/token-image.png) or the image file path (e.g. ./data/image/test-token.jpg)
+          "description": "YOUR_TOKEN_DESCRIPTION", // token description
+          "website": "https://example.com", // project website
+          "twitter": "https://x.com/yourproject", // twitter URL
+          "telegram": "https://t.me/yourproject" // telegram URL
+        }
+      },
 
       /* dammV1Config is only used in the following actions:
       * 1. damm-v1-create-pool
@@ -234,13 +260,23 @@ npm install -g pnpm
     </Tip>
   </Step>
   <Step title="Create your DAMM v1 Pool">
-  After configuring your DAMM v1 pool settings in `damm_v1_config.jsonc`, you can now create your pool by running the following command. These commands will create your pool and <br /> <br />
+    After configuring your DAMM v1 pool settings in `damm_v1_config.jsonc`, you can now create your pool by running the following command. These commands will create your pool and <br /> <br />
 
-  ```bash Terminal
-  pnpm studio damm-v1-create-pool --config ./studio/config/damm_v1_config.jsonc
-  ```
+    _If you don't have a base mint, you can configure `createBaseToken` in the config file and run the
+    following command._
 
-  This will create your pool with liquidity deposited from your `keypair.json` and print the pool address and other relevant information to the console. <br /> <br />
+    ```bash
+    pnpm studio damm-v1-create-pool
+    ```
+
+    _If you already have a base mint created, you can provide it via the CLI with a `--baseMint` flag
+    and run the following command._
+
+    ```bash
+    pnpm studio damm-v1-create-pool --baseMint <YOUR_BASE_MINT_ADDRESS>
+    ```
+
+    This will create your pool with liquidity deposited from your `keypair.json` and print the pool address and other relevant information to the console. <br /> <br />
 
   <Frame>
    <img src="/images/developer-guide/damm-v1-create-pool.webp" />
