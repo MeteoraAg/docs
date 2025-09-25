@@ -1,0 +1,313 @@
+---
+title: Getting Started
+description: User Guide
+---
+
+## Connecting your wallet
+
+### Supported Wallets on Meteora
+
+A Solana-compatible wallet is a must-have digital tool for you to receive, send, store, and manage your cryptocurrencies or non-fungible tokens (NFTs) on the Solana blockchain. Just like using any other decentralized application (Dapp) on Solana, you will need to first connect your wallet on Meteora in order to add liquidity to a pool or execute other transactions.
+
+Meteora supports wallets that abide by the Solana [Wallet Standard](https://github.com/wallet-standard/wallet-standard) - a chain-agnostic set of interfaces and conventions that aim to improve how applications interact with injected wallets.
+
+Popular wallets supported on Meteora include:
+
+#### Software Wallets
+
+- Phantom
+- Solflare
+- Backpack
+- Coinbase
+- OKX Wallet
+- Coin98
+- Frontier
+- MetaMask (via Snaps with Solflare)
+WalletConnect
+
+#### Hardware Wallets
+
+- Ledger
+- Trezor
+
+<Frame>
+  <img src="/images/user-guide/wallets.webp" />
+</Frame>
+
+## Prepare SOL for transactions and rent
+
+### Transactions 
+
+#### What is SOL?
+
+SOL is the Solana blockchain’s native cryptocurrency which is required for transaction fees and other use cases such as securing the network via staking.
+
+#### What is Wrapped SOL (wSOL)?
+
+Wrapped SOL (wSOL) is native SOL that is wrapped using the Solana Token Program, which allows it to be treated like any other SPL (Solana Program Library) token type.
+
+Currently, Dapps have to wrap and unwrap SOL when trading in SOL or using SOL in DeFi due to the fact that native SOL itself is not an SPL token (e.g. JUP).
+
+If there is unused wSOL from adding liquidity or if you're withdrawing wSOL from a pool, you can unwrap it to get it back to native SOL.
+
+#### How do you unwrap wSOL?
+
+If you use the Phantom wallet, you can follow the instructions [here](https://help.phantom.app/hc/en-us/articles/4406389768339-How-do-I-unwrap-Wrapped-SOL-).
+
+#### Transaction Fees on Solana
+
+Transaction fees on the Solana blockchain use SOL, which means as a user you must have SOL in your wallet whenever you want to initiate any type of on-chain action.
+
+When you add or remove liquidity on Meteora, whether this involves the DLMM, DAMM v1, DAMM v2, Dynamic Vaults, or Multi-token pools, you'd need SOL for transaction fees.
+
+<Note>0.000000001 SOL = 1 lamport (one-billionth of a SOL)</Note>
+
+### Rent
+
+One of the reasons why the Solana blockchain is able to efficiently store data is its novel “rent” mechanism. Solana creates different accounts to record the data related to the transfer and ownership of tokens between different user wallet addresses, as well as other programmatic transactions on the blockchain. Since transaction history or other data stored on the Solana blockchain use resources, a rent fee is imposed.
+
+SOL is the crypto used as a rent fee to create or maintain each unique account on Solana, with the amount of SOL rent dependent on the necessary data resource used for the account.
+
+For example, when you receive a new token in your wallet for the first time, a token associated account (ATA) owned by your wallet gets automatically created and a SOL rent is charged in the process.
+
+In some scenarios, SOL used for rent is **refundable**. If an account is closed, the associated data resource being used on Solana gets freed up and the rent is refunded back to your address (account owner).
+
+### SOL Required on Meteora
+
+#### DAMM v1 or DAMM v2
+
+When you create a DAMM v1 or v2 pool, you may need to pay some rent to open [ATAs (Associated Token Accounts)](https://spl.solana.com/associated-token-account) on Solana. This is roughly ~0.02-0.03+ SOL (may change over time).
+
+#### DLMM
+
+When you create a DLMM position, you also need to pay some rent.
+
+
+<Card title="Refundable" icon="money-bill">
+    <CardGroup cols={2}>
+        <Card title="Position rent" icon="location-pin">
+            Rent of ~0.059 SOL per position is required to open the program account and store data related to your liquidity position. This is refundable; you get it back when you withdraw your liquidity and close the position.
+        </Card>
+        <Card title="Position extension rent" icon="puzzle-piece">
+            Additional rent is also required if your position range covers more than 69 bins. This is refundable.
+        </Card>
+    </CardGroup>
+</Card>
+
+<Card title="Non-refundable" icon="not-equal">
+    <CardGroup cols={1}>
+        <Card title="binArray creation rent" icon="bin">
+            If you happen to be the first to create the specific price bins in the pool, meaning no LPs have used those price bins before, you will also need to pay the rent to create the binArray program account that stores the bins and this rent is unfortunately non-refundable (~0.075 SOL per binArray). But once they are created no one else has to pay that rent again. Meteora can't close that program account because other LPs may have liquidity in those bins.        
+        </Card>
+    </CardGroup>
+</Card>
+
+When you close your own position, you still get back the standard rent for your position (~0.059 SOL per position).
+
+Before you add liquidity, you can view the total amount of SOL required to open your positions. SOL required for the position rent has the "Refundable" label, while the SOL required for creating new bin arrays has the "Non-Refundable" label.
+
+<Frame>
+  <img src="/images/user-guide/cost-details.webp" />
+</Frame>
+
+## Transaction Fee Settings
+
+For any on-chain transaction submitted on Solana (e.g. sending tokens, adding liquidity, buying an NFT, or interacting with a program), a transaction fee is required. This is required to:
+
+- Incentivizes validators to process and prioritize your transaction.
+- Prevents spam on the Solana network by making it expensive to flood it with useless transactions.
+- Helps determine priority — when the Solana network is busy, users who pay more can get transactions processed and executed faster.
+
+Even though Solana is known for low fees, during high traffic (like memecoin launches), paying more can expedite things significantly.
+
+<Frame>
+  <img src="/images/user-guide/transaction-settings.webp" />
+</Frame>
+
+Meteora allows you to be in control, whether you want to save more SOL or prioritize speed by paying more. 
+
+### Transaction Broadcast Modes
+
+This determines how your transaction is executed.
+
+<CardGroup cols={1}>
+    <Card title="Priority Fee" icon="chess-queen">
+        <li>Your transaction is broadcast directly on-chain on Solana with an extra priority fee.</li>
+        <li>Validators are financially incentivized to pick it up faster.</li>
+        <li>Ideal if you want faster execution without going through additional channels.</li>
+    </Card>
+    <Card title="Jito" icon="shield-check">
+        <li>Your transactions (whether a single transaction or multiple transactions) get included in a Jito “bundle”, which is sent directly to validators via the Jito relayer, and you pay a Jito “tip”.</li>
+        <li>Offers better transaction ordering protection.</li>
+        <li>Only works with validators that support Jito, so if these validators or Jito itself is experiencing a down time, transactions may not go through.</li>
+    </Card>
+    <Card title="Mixed" icon="bolt">
+        <li>The best of both worlds: Your transaction is sent via both standard Solana and Jito relayer. Meteora intelligently minimizes and decides the best fee for you.</li>
+        <li>This increases success chances and balances speed, efficiency, and protection.</li>
+    </Card>
+</CardGroup>
+
+<Note>When you select your fee settings, they will apply throughout Meteora, except for DLMM pools (which currently always uses Jito only).</Note>
+
+### Priority level
+
+You can select how fast you prefer your transaction to go through. This affects how much priority fee gets added to your transaction.
+
+<div className="overflow-x-auto">
+  <table className="w-full border-collapse">
+    <thead>
+      <tr className="border-b border-gray-300 dark:border-gray-600">
+        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Level</th>
+        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Description</th>
+        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">When to use</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Fast</strong></td>
+        <td className="py-3 px-4">Normal speed, lowest priority fee</td>
+        <td className="py-3 px-4">Everyday transfers and adding/withdrawing liquidity; no urgency.</td>
+      </tr>
+      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Turbo</strong></td>
+        <td className="py-3 px-4">Faster than normal, moderate priority fee</td>
+        <td className="py-3 px-4">Moderate urgency, like sniping tokens or adding/withdrawing liquidity quickly, while you’re on the go.</td>
+      </tr>
+      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Ultra</strong></td>
+        <td className="py-3 px-4">Highest speed on Meteora, highest priority fee</td>
+        <td className="py-3 px-4">Highest urgency, and for a more seamless LP experience during Solana network congestion; useful if the cost involved is manageable.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+### Fee Mode
+
+This lets you select how you want to define your fee (SOL).
+
+<CardGroup cols={1}>
+    <Card title="Max Cap" icon="chess-queen">
+        <li>Specify a maximum amount of SOL you're willing to pay to execute your transaction.</li>
+        <li>Meteora will dynamically set the best fee within your cap based on current network conditions.</li>
+        <li>Great for users who want flexibility without overspending.</li>
+    </Card>
+    <Card title="Exact Fee" icon="shield-check">
+        <li>Define the exact amount of SOL to use as a transaction fee, nothing more, nothing less.</li>
+        <li>Gives full control over cost, but if you underpay, your transaction might fail altogether.</li>
+        <li>Best for advanced users who are very certain the amount of SOL is required for their transactions.</li>
+    </Card>
+</CardGroup>
+
+## Viewing Transactions
+
+You can view your transaction history on the Solana blockchain by using one of the available Solana blockchain explorers. Transactions sometimes do not show up on your Solana wallet's transaction history, so it is better to verify by using the explorer.
+
+Popular explorers include:
+- [Solscan](https://solscan.io/)
+- [Solana Beach](https://solanabeach.io/)
+- [Solana Explorer](https://explorer.solana.com/)
+- [XRAY](https://xray.helius.xyz/)
+- [OKLink](https://www.oklink.com/)
+
+For SOL transfers to your wallet account, sometimes these are reflected in the "SOL Balance Change” tab in the associated tx link.
+
+For SPL token transfers to your wallet account, sometimes these are reflected in the “Token Balance Change” tab in the associated tx link.
+
+## RPC Settings
+
+RPC (Remote Procedure Call) is a communication protocol used in blockchain applications that allows your Dapp (decentralized app) to interact with the Solana blockchain — like sending transactions, fetching account data, or querying block info — without needing to run a full Solana node on your own.
+
+When you click the Settings icon, users can choose their preferred RPC from multiple options to ensure
+- **Reliability**: If one RPC provider goes down or is slow, users can switch to another.
+- **Performance**: Different RPCs may respond faster depending on region, usage, or load.
+- **Customization**: Advanced users or institutions might want to use their own (custom) RPC for privacy, rate limits, or analytics.
+
+#### Custom RPC
+- Users can input their own RPC endpoint.
+- Ideal for developers or anyone with access to a private or paid Solana node, as this offers full control over data and performance needs.
+
+<Tip>Sometimes, if the site data happens to be lagging or stale, you can try to switch your RPC.</Tip>
+
+<Frame>
+  <img src="/images/user-guide/rpc-settings.webp" />
+</Frame>
+
+## Searching for Pools
+
+### Universal Search Bar
+
+On the https://meteora.ag home page, you can use the "Universal Search Bar" to quickly look for your preferred pool, based on the token ticker or pool address.
+
+<Frame>
+  <img src="/images/user-guide/universal-search.webp" />
+</Frame>
+
+### Pool Search Bar
+
+If you are already on the https://www.meteora.ag/pools tab, you can also search for your preferred pool, based on token ticker, token name, token contract address, or pool address.
+
+<Frame>
+  <img src="/images/user-guide/pools-search.webp" />
+</Frame>
+
+### Pool Filters
+
+On the Pool List page, you can use our Pool Filter feature to identify good LP opportunities based on your preferred parameters. 
+
+Click the “Save” button to save your filters and allow Meteora to remember them on your next visit. You can click the reset icon button anytime to remove all filters and revert back to the default pool list view.
+
+The Pool Filter parameters are split into 3 main categories:
+- Token details
+- Pool details
+- Launchpad details
+
+#### Token details
+
+Under Token details, you can filter to show pools where:
+- Both tokens are verified
+- The Base token has no mint authority
+- The Base token has no freeze authority
+- The Base token is a New Listing according
+- The Base token has no high supply concentration
+- The Base token has no high single ownership
+- The Base token’s market cap is within a specific min-max range
+
+<Frame>
+  <img src="/images/user-guide/pool-filter-token.webp" />
+</Frame>
+
+#### Pool details
+
+Under Pool details, you can input parameters to filter and show pools which:
+- Were created within a specified number of hours
+- Had a minimum amount of trading volume within a specified period
+- Had a minimum amount of fees within a specified period 
+- Had a minimum Fee / TVL % within a specified period
+- Were within a specified TVL min-max range
+- Had a Base Fee which was within a specified min-max range
+- Had a Bin Step which was within a specified min-max range
+
+<Frame>
+  <img src="/images/user-guide/pool-filter-pool.webp" />
+</Frame>
+
+#### Launchpad details
+
+Under Launchpad filter details, you can filter pools based on the launchpads you select from the launchpad filter list.
+
+When you select certain launchpad(s), Meteora will only show you pools that contain a Base token that graduated from those selected launchpads.
+
+For instance, if you had only selected Jupiter Studio, you will only see a list of pools that contain a Base token that graduated from Jupiter Studio (e.g. pools with tokens like URANUS, VIBE). You will not see pools that contain a Base token that graduated from Pump.fun or Letsbonk.fun.
+
+<Frame>
+  <img src="/images/user-guide/pool-filter-launchpad.webp" />
+</Frame>
+
+## Need more help?
+
+Follow Meteora or our LP Army on our socials to get help from our community and team.
+
+<Frame>
+  <img src="/images/user-guide/socials.webp" />
+</Frame>
