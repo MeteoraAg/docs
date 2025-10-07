@@ -2437,15 +2437,22 @@ An object containing:
 **Example**
 
 ```typescript
-const poolState = await cpAmm.fetchPoolState(poolAddress);
-const positionState = await cpAmm.fetchPositionState(positionAddress);
+    const poolState = await cpAmm.fetchPoolState(poolAddress);
+    const positionState = await cpAmm.fetchPositionState(positionAddress);
+    const unClaimedReward = getUnClaimReward(poolState, positionState);
 
-const unclaimed = getUnClaimReward(poolState, positionState);
-console.log(`Unclaimed token A fees: ${unclaimed.feeTokenA.toString()}`);
-console.log(`Unclaimed token B fees: ${unclaimed.feeTokenB.toString()}`);
-unclaimed.rewards.forEach((reward, i) => {
-  console.log(`Unclaimed reward ${i}: ${reward.toString()}`);
-});
+    const totalPositionFeeA = positionState.metrics.totalClaimedAFee.add(
+      unClaimedReward.feeTokenA);
+    const totalPositionFeeB = positionState.metrics.totalClaimedBFee.add(
+      unClaimedReward.feeTokenB
+    );
+    console.log("Total Claimed Fee A:", positionState.metrics.totalClaimedAFee.toString());
+    console.log("Unclaimed Fee A:", unClaimedReward.feeTokenA.toString());
+    console.log("TOTAL POSITION FEE A:", totalPositionFeeA.toString());
+
+    console.log("Total Claimed Fee B:",positionState.metrics.totalClaimedBFee.toString());
+    console.log("Unclaimed Fee B:", unClaimedReward.feeTokenB.toString());
+    console.log("TOTAL POSITION FEE B:", totalPositionFeeB.toString());
 ```
 
 ### getBaseFeeNumerator
