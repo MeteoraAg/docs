@@ -1,0 +1,145 @@
+---
+title: How to create a Liquidity Pool
+description: User Guide
+---
+
+## DLMM
+
+### Creating a New Pool
+
+Anyone can create a DLMM pool here: https://app.meteora.ag/dlmm/create 
+
+<Frame>
+  <img src="/images/user-guide/dlmm-create-pool.webp" />
+</Frame>
+
+<Steps>
+  <Step title="Select your Base token">
+    - You can search by token ticker or by pasting the token contract address
+    - We also display a list of tokens that you already hold in your wallet to help you select quickly
+  </Step>
+  <Step title="Select your Quote token">
+    - SOL or stables (e.g. USDC, USDT) are usually used as the Quote token, which represents the price used to trade the Base token
+    - If you selected SOL, USDC, or USDT as your Base token, there will be a reminder that those tokens are usually used as the Quote token
+    <Frame>
+        <img src="/images/user-guide/dlmm-select-quote-token.webp" />
+    </Frame>
+  </Step>
+  <Step title="Select your Base Fee">
+    - Base Fee is the minimum % charged for every swap that occurs through a liquidity position
+  </Step>
+  <Step title="Select your Bin Step">
+    - Each bin represents a single price point, and the difference between 2 consecutive bins is the bin step. Similar to tick size, a higher bin step means a larger jump from one price to the next.
+    - **Smaller bin step**: Allows you to capture more volume, but your max range per position is smaller, with more limited base fee options. Generally, use smaller steps for more stable pairs and larger steps for more volatile pairs.
+    - **Larger bin step**: Allows you to set a higher base fee and a wider price range per position, but at the cost of less volume, since there's a less continuous price range (harder for liquidity to be picked up for swaps). But useful for highly volatile pairs where price swings can be huge.
+    <Note>You can select your Bin Step, only after you have selected your Base Fee %. And after you have created your pool with your selected Base Fee and Bin Step, you won't be able to change those parameters.</Note>
+  </Step>
+  <Step title="Input the token's Initial Price">
+    - This would be the initial pool price for your token. In other words, it’s the amount of Quote Tokens needed to purchase 1 Base Token. Please verify that the price you input matches the current estimated market price, to avoid losing initial liquidity deposited due to arbitrage trades.
+    - To help you, we provide the estimated market price based on Jupiter’s pricing. But please always verify and conduct your own due diligence.
+    <Frame>
+        <img src="/images/user-guide/dlmm-input-initial-price.webp" />
+    </Frame>
+    <Note>When creating a DLMM pool and setting the initial pool price, the eventual pool price may deviate slightly from your input; this is because if the bin price cannot be represented exactly by the program, the frontend will round up / down to the closest price. The deviation depends on the bin step the user selected.</Note>
+  </Step>
+</Steps>
+
+<Warning>To prevent duplicate DLMM pools, for each token pair, there can only be one pool with a specific Bin Step and Base Fee % parameter combination on Meteora. If that pool already exists, you won’t be able to create a new pool with the same parameters.</Warning>
+
+<Frame>
+    <img src="/images/user-guide/dlmm-duplicate-pool.webp" />
+</Frame>
+
+## DAMM v1 or DAMM v2
+
+### Creating a New Pool
+
+Anyone can create a DAMM v2 pool here: https://www.meteora.ag/pools/create 
+
+When you are on the Dynamic Pool Setup page, select “Create V2 pool” to start creating a DAMM v2 pool.
+
+<Frame>
+  <img src="/images/user-guide/damm-v2-create-pool.webp" />
+</Frame>
+
+You will be directed to the DAMM v2 pool creation page, where you can enter or select your preferred parameters for the pool.
+
+<Frame>
+  <img src="/images/user-guide/damm-v2-create-pool-page.webp" />
+</Frame>
+
+<Steps>
+  <Step title="Select your Base token">
+    - You can search by token ticker or by pasting the token contract address
+    - We also display a list of tokens that you already hold in your wallet to help you select quickly
+    <Note>To support Token 2022 tokens and extensions at DAMM v2 pool creation, a token badge from the project team must be provided. However, some extensions (e.g. transfer hook) are presently unsupported.</Note>
+  </Step>
+  <Step title="Select your Quote token">
+    - SOL or stables (e.g. USDC, USDT) are usually used as the Quote token, which represents the price used to trade the Base token
+    - If you selected SOL, USDC, or USDT as your Base token, there will be a reminder that those tokens are usually used as the Quote token
+    <Frame>
+        <img src="/images/user-guide/damm-v2-select-quote-token.webp" />
+    </Frame>
+  </Step>
+  <Step title="Input the token’s Initial Estimated Price">
+    - This would be the initial pool price for your token. In other words, it’s the amount of Quote Tokens needed to purchase 1 Base Token. Please verify that the price you input matches the current estimated market price, to avoid losing initial liquidity deposited due to arbitrage trades.
+    - To help you, we provide the estimated market price based on Jupiter’s pricing. But please always verify and conduct your own due diligence.
+    <Frame>
+        <img src="/images/user-guide/damm-v2-input-initial-estimated-price.webp" />
+    </Frame>
+  </Step>
+  <Step title="Select your Base Fee Tier">
+    - Base Fee is the minimum % charged for every swap that occurs through a liquidity position. 
+    - A portion of the fee charged goes to the liquidity providers in the pool, and the remainder is taken as a protocol fee.
+    <Frame>
+        <img src="/images/user-guide/damm-v2-select-base-fee-tier.webp" />
+    </Frame>
+  </Step>
+  <Step title="Select your Start Time">
+    - By default, the pool would “Start Now”, meaning your pool would start trading immediately after you confirm the pool creation. 
+    - But you can also choose a “Custom” start time, picking from a future date and time (at 30 min intervals), such that your pool would start trading only from the selected date and time.
+    <Frame>
+        <img src="/images/user-guide/damm-v2-select-start-time.webp" />
+    </Frame>
+  </Step>
+  <Step title="Select whether you want to create a pool with Dynamic Fee and your Fee Collection Token">
+    - **Dynamic Fee**: If you choose “Yes”, your pool will charge slightly higher fees on top of your Base Fee, based on market volatility. If not, the pool fee will always be the Base Fee.
+    - **Fee Collection Token**: If you select “Quote”, you will receive your fees earned only in the form of your Quote token (e.g. USDC of SOL).
+    - Regarding how DAMM 2 collects fee only using the Quote token ("Token B"):
+        - If a user swaps from A -> B, fee is charged on B; protocol takes some of the user's B
+        - If a user swaps from B -> A, fee is charged on B before the swap is calculated; protocol takes some of the user's B before it gets swapped to A
+    <Frame>
+        <img src="/images/user-guide/damm-v2-select-dynamic-fee-and-fee-collection-token.webp" />
+    </Frame>
+  </Step>
+  <Step title="Select whether you want to enable the Anti-Sniper Fee Scheduler for your pool, and if enabled, which mode">
+    - Fee Scheduler is an anti-sniper mechanism. When enabled, fees charged on trades would start a % higher than the Base Fee, then drop over time until it reaches the Base Fee.
+    - Exponential Fee Scheduler:
+        - Fees start at 50%, then start dropping, but at a faster rate than Linear mode. 
+        <Note>This % applies to the Meteora user interface only. Pool creators or partners using the documentation to set up the pool programmatically may adjust their starting fee % and other parameters.</Note>
+        <Frame>
+            <img src="/images/user-guide/damm-v2-pool-exponential-fee-scheduler.webp" />
+        </Frame>
+    - Linear Fee Scheduler:
+        - Fees start at 50%, then start dropping, but at a slower rate than Exponential mode. 
+        <Note>This % applies to the Meteora user interface only. Pool creators or partners using our documentation to set up the pool programmatically may adjust their starting fee % and other parameters.</Note>
+        <Frame>
+            <img src="/images/user-guide/damm-v2-pool-linear-fee-scheduler.webp" />
+        </Frame>
+  </Step>
+  <Step title="Select whether you want to permanently lock your liquidity">
+    <Note>If you select “Permanently lock my liquidity”, all tokens you deposit would be permanently locked and you would no longer be able to access or withdraw the underlying assets, forever.</Note>
+    <Frame>
+        <img src="/images/user-guide/damm-v2-pool-permanent-lock-liquidity.webp" />
+    </Frame>
+  </Step>
+  <Step title="Create your pool">
+    - Once you have entered and selected your preferred parameters, do another quick check. Click the “Create” button and your new pool will be created!
+  </Step>
+</Steps>
+
+<Warning>To prevent duplicate DAMM v2 pools, for each token pair, there can only be one pool for a specific set of DAMM v2 parameter combinations (Base Fee, Dynamic Fee, Fee collection Token, Fee Scheduler Mode etc.) on Meteora. If that pool already exists, you won’t be able to create a new pool with the same parameters.</Warning>
+
+<Frame>
+    <img src="/images/user-guide/damm-v2-duplicate-pool.webp" />
+</Frame>
