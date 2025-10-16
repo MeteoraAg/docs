@@ -16,23 +16,24 @@ totalFees = baseFees + dynamicFees
 Base Fees includes either a Flat Fee or a Fee Scheduler or Rate Limiter. 
 
 <Note>
-    `BaseFeeMode` can only be enums 0 or 1.
-    0 = Linear Fee Scheduler
-    1 = Exponential Fee Scheduler
+    `BaseFeeMode` can only be enums 0, 1, or 2.
+    - 0 = Linear Fee Scheduler
+    - 1 = Exponential Fee Scheduler
+    - 2 = Rate Limiter
 </Note>
 
 #### Flat Fee
 
-You can fetch the flat fee directly from the `cliffFeeNumerator` in the `baseFee` object if `numberOfPeriod`, `periodFrequency`, and `reductionFactor` are all 0.
+You can fetch the flat fee directly from the `cliffFeeNumerator` in the `baseFee` object if `firstFactor`, `secondFactor`, and `thirdFactor` are all 0.
 
 ```typescript
 // Example
 baseFee: {
   cliffFeeNumerator: <BN: 10000000>, // 1% flat fee
-  numberOfPeriod: 0, 
-  periodFrequency: <BN: 0>, 
-  reductionFactor: <BN: 0>, 
-  feeSchedulerMode: 0
+  firstFactor: 0, 
+  secondFactor: <BN: 0>, 
+  thirdFactor: <BN: 0>, 
+  baseFeeMode: 0
 }
 ```
 
@@ -45,15 +46,15 @@ The Fee Scheduler depends on the `poolState.activationType`.
 
 #### Fee Scheduler
 
-- `feeSchedulerMode` can only be 0 or 1.
+- For Fee Scheduler, it contains `numberOfPeriod`, `periodFrequency`, and `reductionFactor` which are paired with the `firstFactor`, `secondFactor`, and `thirdFactor` respectively.
 
 ```typescript
 interface BaseFee = {
     cliffFeeNumerator: BN
-    numberOfPeriod: number 
-    periodFrequency: BN 
-    reductionFactor: BN
-    feeSchedulerMode: BaseFeeMode // 0 or 1
+    firstFactor: number // numberOfPeriod
+    secondFactor: BN // periodFrequency
+    thirdFactor: BN // reductionFactor
+    baseFeeMode: BaseFeeMode // 0 or 1
 }
 ```
 
@@ -83,6 +84,43 @@ baseFee: {
 },
 ```
 
+#### Rate Limiter
+
+- For Rate Limiter, it contains `feeIncrementBps`, `maxLimiterDuration`, and `referenceAmount` which are paired with the `firstFactor`, `secondFactor`, and `thirdFactor` respectively.
+
+- `baseFeeMode` can only be 2.
+
+```typescript
+interface BaseFee = {
+    cliff_fee_numerator: BN
+    first_factor: number //feeIncrementBps
+    secondFactor: BN // maxLimiterDuration
+    thirdFactor: BN // referenceAmount
+    baseFeeMode: BaseFeeMode // 2
+}
+```
+
+<Note>You can refer to the math formula for the Rate Limiter [here](/anti-sniper-suite/rate-limiter/rate-limiter-math)</Note>
+
+Here are some examples of how the Rate Limiter works:
+
+```typescript
+// Rate Limiter: Starts at 1% fee -> Exponential increase in fee for 10 slots based on trade size
+// 0.5 SOL trade
+// fee = 0.5 SOL * 0.1% = 0.0005 SOL
+// 1.5 SOL trade
+// fee = 1 SOL * 0.1% + 0.5 SOL * 0.2% = 0.002 SOL
+// 3 SOL trade
+// fee = 1 SOL * 0.1% + 1 SOL * 0.2% + 1 SOL * 0.3% = 0.006 SOL
+baseFee: {
+   cliffFeeNumerator: new BN(10_000_000), 
+   firstFactor: 10, // feeIncrementBps
+   secondFactor: new BN(10), // maxLimiterDuration
+   thirdFactor: new BN(1000000000), // referenceAmount
+   baseFeeMode: 2, // rate limiter mode
+}
+```
+
 ### Dynamic Fees (Variable Fee)
 
 You can refer to the Dynamic Fee calculation [here](/overview/products/damm-v2/pool-fees-calculation#dynamic-fee-variable-fee)
@@ -91,28 +129,24 @@ You can refer to the Dynamic Fee calculation [here](/overview/products/damm-v2/p
 
 <Danger>Using Transfer logs from Swap transactions is not the correct way of getting the token price as we have Anti-Sniper Suite features that can cause huge fee deductions from `TokenAmountIn` OR `TokenAmountOut`. Plotting the token chart price from these will lead to a very ugly chart.</Danger>
 
-The correct way is to fetch the `EvtSwap` CPI logs from the Swap transaction. 
+The correct way is to fetch the `EvtSwap2` CPI logs from the Swap transaction. 
+
+<Note>`EvtSwap` is an older version of the swap CPI logs and might be deprecated in the future. Use `EvtSwap2` instead.</Note>
 
 Because of the Anti-Sniper Suite features, you will have to apply the following checks to get the correct token price either before/after the fee deduction.
 
-<Note>You will need to fetch the DAMM v2 pool state to get the `collectFeeMode`.</Note>
+[1.1] Firstly, you will need to identify where the fees are coming from (either from input or output): 
 
 ```
-If poolState.collectFeeMode is 0, then:
+feeOnInput: (collectFeeMode == 1 && tradeDirection == 1)? true: false
+```
 
-- Quote to Base (TradeDirection[1]) 
--> use [outputAmount + lpFee + protocolFee + referralFee + partnerFee] (swap happens before fee deduction)
+[1.2] Next, calculate the amount and plot price depending on where the fees are coming from (either from input or output):
 
-- Base to Quote (TradeDirection[0]) 
--> use [outputAmount + lpFee + protocolFee + referralFee + partnerFee] (swap happens before fee deduction)
+```
+if (feeOnInput): price = excludedFeeInputAmount / outputAmount
 
-If poolState.collectFeeMode is 1, then:
-
-- Quote to Base (TradeDirection[1]) 
--> use [actualAmountIn] (swap happens after fee deduction)
-
-- Base to Quote (TradeDirection[0]) 
--> use [outputAmount + lpFee + protocolFee + referralFee + partnerFee] (swap happens before fee deduction)
+if (!feeOnInput): price = excludedFeeInputAmount / outputAmount + tradingFee + protocolFee + referralFee + partnerFee
 ```
 
 ## Trading Volume
