@@ -606,7 +606,7 @@ feeVault: PublicKey;
 
 **Returns**
 
-A transaction that can be signed and sent to the network.
+A fee vault state object.
 
 **Example**
 
@@ -619,6 +619,52 @@ const feeVault = await client.getFeeVault(
 **Notes**
 
 - This function returns the fee vault state.
+
+---
+
+### getFeeBreakdown
+
+Get the fee breakdown in the fee vault.
+
+**Function**
+
+```typescript
+async getFeeBreakdown(feeVault: PublicKey): Promise<{
+  totalFundedFee: BN;
+  totalClaimedFee: BN;
+  totalUnclaimedFee: BN;
+  userFees: {
+    address: PublicKey;
+    totalFee: BN;
+    feeClaimed: BN;
+    feeUnclaimed: BN;
+  }[];
+}>
+```
+
+**Parameters**
+
+```typescript
+feeVault: PublicKey;
+```
+
+**Returns**
+
+A fee breakdown object.
+
+**Example**
+
+```typescript
+const feeBreakdown = await client.getFeeBreakdown(
+  new PublicKey("vault1234567890abcdefghijklmnopqrstuvwxyz")
+);
+
+console.log(feeBreakdown);
+```
+
+**Notes**
+
+- This function returns the fee breakdown object consisting of the total funded fee, total claimed fee, total unclaimed fee, and user fees.
 
 ---
 
