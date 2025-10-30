@@ -88,6 +88,22 @@ At Meteora, we’ve developed a `Node.js <> Typescript SDK`, a `Rust SDK` and a 
 
 DBC pools can be migrated to either a DAMM v1 or DAMM v2 pool. The DAMM v1 and DAMM v2 pools are both derived from the `baseMint`, `quoteMint` and `dammConfig`.
 
+### Flow of migration
+
+#### DAMM V1
+
+1. `createDammV1MigrationMetadata`
+2. `createLocker` (if the token has locked vesting)
+3. `migrateToDammV1`
+4. `lockDammV1LpToken` (if `creatorLockedLpPercentage` or `partnerLockedLpPercentage` is >0)
+5. `claimDammV1LpToken` (if `creatorLpPercentage` or `partnerLpPercentage` is >0)
+
+#### DAMM V2
+
+1. `createDammV2MigrationMetadata`
+2. `createLocker` (if the token has locked vesting)
+3. `migrateToDammV2`
+
 ## DAMM Fee Config Keys
 
 The following section depicts the `dammConfig` key for each pool type.
