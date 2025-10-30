@@ -1,0 +1,92 @@
+---
+title: Getting Started
+description: Presale Vault
+---
+
+This guide provides instructions on how to get started with building on Meteora's Presale Vault program using the Presale Vault TypeScript SDK.
+
+Before you begin, here are some important resources:
+
+<CardGroup cols={2}>
+  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/presale-sdk">
+    Meteora Presale Vault Typescript SDK
+  </Card>
+  <Card title="Presale Vault NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/presale">
+    Meteora Presale Vault NPM Package
+  </Card>
+    <Card title="Presale Vault Examples" icon="code" iconType="solid" href="https://github.com/MeteoraAg/presale-sdk/tree/main/examples">
+    Meteora Presale Vault Examples
+  </Card>
+</CardGroup>
+
+# Installation
+
+To use the SDK in your project, install it using your preferred package manager:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install @meteora-ag/presale @solana/web3.js
+    ```
+  </Tab>
+  <Tab title="pnpm">
+    ```bash
+    pnpm install @meteora-ag/presale @solana/web3.js
+    ```
+  </Tab>
+  <Tab title="yarn">
+    ```bash
+    yarn add @meteora-ag/presale @solana/web3.js
+    ```
+  </Tab>
+</Tabs>
+
+# Initialization
+
+Once installed, you can initialize the SDK in your TypeScript/JavaScript project like this:
+
+```typescript
+import { Connection } from "@solana/web3.js";
+import Presale, { PRESALE_PROGRAM_ID, derivePresale } from "@meteora-ag/presale";
+
+// Initialize a connection to the Solana network (e.g., Mainnet)
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+const baseKeypair = Keypair.generate();
+
+  const presaleAddress = derivePresale(
+    new PublicKey("YOUR_BASE_MINT"),
+    new PublicKey("YOUR_QUOTE_MINT"),
+    baseKeypair.publicKey,
+    PRESALE_PROGRAM_ID
+  );
+
+// Create a new instance of the CpAmm SDK
+  const presaleInstance = await Presale.create(
+    connection,
+    presaleAddress,
+    PRESALE_PROGRAM_ID
+  );
+```
+
+# Testing the SDK (for contributors)
+
+If you have cloned the SDK repository and want to run the built-in tests:
+
+```bash
+# Install dependencies
+pnpm install
+
+# Run tests
+pnpm test
+```
+
+# Development Resources
+
+## Faucets
+
+<CardGroup cols={1}>
+  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.raccoons.dev/">
+    <p>When working on devnet, you might need test tokens. Here is a helpful faucet.</p>
+  </Card>
+</CardGroup>
