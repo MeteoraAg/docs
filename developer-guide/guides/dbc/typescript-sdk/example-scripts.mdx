@@ -748,44 +748,7 @@ async function migrateToDammV2() {
             throw new Error(`Pool not found: ${poolAddress.toString()}`)
         }
 
-        // Step 1: Check if migration metadata exists
-        console.log('Checking if migration metadata exists...')
-        const migrationMetadata =
-            deriveDammV2MigrationMetadataAddress(poolAddress)
-        console.log('Migration metadata address:', migrationMetadata.toString())
-
-        const metadataAccount =
-            await connection.getAccountInfo(migrationMetadata)
-        if (!metadataAccount) {
-            console.log('Creating migration metadata...')
-            const createMetadataTx =
-                await client.migration.createDammV2MigrationMetadata({
-                    payer: wallet.publicKey,
-                    virtualPool: poolAddress,
-                    config: config,
-                })
-
-            const { blockhash } =
-                await connection.getLatestBlockhash('confirmed')
-            createMetadataTx.recentBlockhash = blockhash
-            createMetadataTx.feePayer = wallet.publicKey
-
-            const metadataSignature = await sendAndConfirmTransaction(
-                connection,
-                createMetadataTx,
-                [wallet],
-                { commitment: 'confirmed' }
-            )
-
-            console.log(`Migration metadata created successfully!`)
-            console.log(
-                `Transaction: https://solscan.io/tx/${metadataSignature}?cluster=devnet`
-            )
-        } else {
-            console.log('Migration metadata already exists')
-        }
-
-        // Step 2: Check for locked vesting and create locker if needed
+        // Step 1: Check for locked vesting and create locker if needed
         if (
             poolConfigState.lockedVestingConfig.amountPerPeriod.gt(new BN(0)) ||
             poolConfigState.lockedVestingConfig.cliffUnlockAmount.gt(new BN(0))
@@ -825,7 +788,7 @@ async function migrateToDammV2() {
             console.log('No locked vesting found, skipping locker creation')
         }
 
-        // Step 3: Migrate to DAMM V2
+        // Step 2: Migrate to DAMM V2
         if (!virtualPoolState.isMigrated) {
             console.log('Migrating to DAMM V2...')
             const migrateTx = await client.migration.migrateToDammV2({
