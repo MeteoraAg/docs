@@ -1,0 +1,133 @@
+---
+title: Fee Market Cap Scheduler Math
+---
+
+There are two types of Fee Market Cap Schedulers:
+
+1. **Linear** (Mode 3)
+2. **Exponential** (Mode 4)
+
+# Math Formula
+
+## Step 1: Calculate Passed Periods
+
+The number of periods passed is determined by how much the sqrt price has increased from the initial price:
+
+<div style={{ fontSize: "0.9em" }}>
+```math
+\text{Passed Period} = \frac{(\text{Current Sqrt Price} - \text{Initial Sqrt Price}) \times {10,000}}{\text{Initial Sqrt Price} \times \text{Sqrt Price Step Bps}}
+```
+</div>
+
+Where:
+- `current_sqrt_price`: The current sqrt price of the pool
+- `initial_sqrt_price`: The initial sqrt price when the pool was created
+- `sqrt_price_step_bps`: The sqrt price increase (in bps) required to advance one period
+
+
+## Step 2: Calculate Current Fee
+
+There are two modes for fee calculation:
+
+### Linear Fee Market Cap Scheduler (Mode 3)
+
+<div style={{ fontSize: "0.9em" }}>
+```math
+\text{Current Fee} = \text{Cliff Fee Numerator} - (\text{Passed Period} \times \text{Reduction Factor})
+```
+</div>
+
+The fee decreases by a constant amount (`reduction_factor`) for each period passed.
+
+### Exponential Fee Market Cap Scheduler (Mode 4)
+
+<div style={{ fontSize: "0.9em" }}>
+```math
+\text{Current Fee} = \text{Cliff Fee Numerator} \times \left(1 - \frac{\text{Reduction Factor}}{10,000}\right)^{\text{Passed Period}}
+```
+</div>
+
+The fee decreases by a percentage of the current fee for each period passed.
+
+# Scheduler Expiration
+
+The scheduler has an expiration mechanism to ensure fees eventually reach the minimum:
+
+```
+Expiration Point = Activation Point + Scheduler Expiration Duration
+```
+
+- If `current_point > expiration_point`, the scheduler expires
+- When expired, the fee defaults to the **minimum fee** (fee calculated at `number_of_period`)
+- This prevents fees from staying high indefinitely if the price doesn't increase
+
+# Edge Cases
+
+| Condition | Behavior |
+|-----------|----------|
+| `current_sqrt_price <= init_sqrt_price` | `passed_period = 0` (fee stays at cliff fee) |
+| `passed_period > number_of_period` | `passed_period = number_of_period` (fee at minimum) |
+| Scheduler expired | Fee defaults to minimum fee |
+| Alpha Vault buying (before activation) | Fee at minimum fee |
+
+# Example Calculations
+
+## Linear Mode Example
+
+Given:
+- `cliff_fee_numerator`: 500,000,000 (50% fee)
+- `number_of_period`: 100
+- `sqrt_price_step_bps`: 100 (1% sqrt price step)
+- `reduction_factor`: 4,950,000
+- `init_sqrt_price`: 1,000,000
+- `current_sqrt_price`: 1,050,000 (5% increase)
+
+**Step 1: Calculate passed period**
+```
+Passed Period = (1,050,000 - 1,000,000) × 10,000 / (1,000,000 × 100)
+             = 50,000 × 10,000 / 100,000,000
+             = 5 periods
+```
+
+**Step 2: Calculate fee**
+```
+Fee = 500,000,000 - (5 × 4,950,000)
+    = 500,000,000 - 24,750,000
+    = 475,250,000 (≈ 47.5% fee)
+```
+
+## Exponential Mode Example
+
+Given:
+- `cliff_fee_numerator`: 500,000,000 (50% fee)
+- `number_of_period`: 100
+- `sqrt_price_step_bps`: 100 (1% sqrt price step)
+- `reduction_factor`: 390 (3.9% reduction per period)
+- `init_sqrt_price`: 1,000,000
+- `current_sqrt_price`: 1,050,000 (5% increase)
+
+**Step 1: Calculate passed period**
+```
+Passed Period = 5 periods (same as above)
+```
+
+**Step 2: Calculate fee**
+```
+Fee = 500,000,000 × (1 - 390/10,000)^5
+    = 500,000,000 × (0.961)^5
+    = 500,000,000 × 0.8154
+    = 407,700,000 (≈ 40.8% fee)
+```
+
+# Fee Numerator Conversion
+
+To convert fee numerator to percentage:
+
+```
+Fee Percentage = Fee Numerator / 10,000,000
+```
+
+Examples:
+- 500,000,000 = 50% fee
+- 10,000,000 = 1% fee
+- 100,000,000 = 10% fee
