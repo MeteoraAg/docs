@@ -28,6 +28,20 @@ Base Fees includes either a Flat Fee, Fee Scheduler, Rate Limiter, or Fee Market
     **Pool Version Note:** Pool Version V1 supports up to 99% max fee (increased from V0's 50% max fee).
 </Info>
 
+#### Decoding BaseFee
+
+The `baseFee.data` field is a `number[]` (byte array) that requires decoding when indexed. The decoder type depends on the **data source** and **`baseFeeMode`**.
+
+**From `EvtInitializePool` event** (Borsh serialization, 30 bytes):
+- `baseFeeMode` 0-1: Use `BorshFeeTimeScheduler`
+- `baseFeeMode` 2: Use `BorshFeeRateLimiter`
+- `baseFeeMode` 3-4: Use `BorshFeeMarketCapScheduler`
+
+**From `poolState` account** (Pod-aligned serialization, 32 bytes):
+- `baseFeeMode` 0-1: Use `PodAlignedFeeTimeScheduler`
+- `baseFeeMode` 2: Use `PodAlignedFeeRateLimiter`
+- `baseFeeMode` 3-4: Use `PodAlignedFeeMarketCapScheduler`
+
 #### Flat Fee
 
 You can fetch the flat fee directly from the `cliffFeeNumerator` in the `baseFee` object if all other parameters are 0.
