@@ -31,20 +31,33 @@ LPs can claim these fees whenever they are available.
 The base fee of a pool can be configured by the pool creator in the following ways:
 
 - **Fixed Base Fee**: A fixed fee that is applied to the swap amount.
-- **Fee Scheduler**: A fee decay mechanism that decays the fee from a high starting fee to an ending fixed base fee over a period of time. The ending fee will be the fixed base fee of the pool after the fee scheduler is finished.
-- **Rate Limiter**: *Coming Soon*
+- **Fee Time Scheduler**: A fee decay mechanism that decays the fee from a high starting fee to an ending fixed base fee over a period of time.
+- **Fee Market Cap Scheduler**: A fee decay mechanism that decays the fee based on price movement rather than time.
+- **Rate Limiter**: A fee slope mechanism that increases the fee based on trade size.
 
-<Note>You can only choose one of the three options for the base fee.</Note>
+<Note>You can only choose one of the four options for the base fee.</Note>
 
 ### Fixed Base Fee
 
 Fixed base fee is a fixed fee that is applied to the swap amount. The fee can range from 0.01% to 50%. It is specified in the config key used for the pool creation.
 
-### Fee Scheduler
+### Fee Time Scheduler
 
-Fee scheduler is a fee decay mechanism that decays the fee from a high starting fee to an ending base fee over time. 
+Fee Time Scheduler is a fee decay mechanism that decays the fee from a high starting fee to an ending base fee over time.
 
-The fee math calculation for the scheduler can be found [here](/anti-sniper-suite/fee-scheduler/fee-scheduler-math).
+The fee math calculation for the scheduler can be found [here](/anti-sniper-suite/fee-time-scheduler/fee-time-scheduler-math).
+
+### Fee Market Cap Scheduler
+
+Fee Market Cap Scheduler is a fee decay mechanism that decays the fee based on price movement (market cap growth) rather than time. Fees reduce progressively as the token price increases from its starting point.
+
+The fee math calculation for the scheduler can be found [here](/anti-sniper-suite/fee-market-cap-scheduler/fee-market-cap-scheduler-math).
+
+### Rate Limiter
+
+Rate Limiter is a fee slope mechanism that starts at a fixed base fee and increases the fee based on trade size. This helps deter large trades from manipulating the market during launch.
+
+The fee math calculation for the rate limiter can be found [here](/anti-sniper-suite/rate-limiter/rate-limiter-math).
 
 ## Dynamic Fee (Variable Fee)
 

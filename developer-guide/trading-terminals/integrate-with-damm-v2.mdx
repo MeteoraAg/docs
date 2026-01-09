@@ -13,27 +13,47 @@ totalFees = baseFees + dynamicFees
 
 ### Base Fees
 
-Base Fees includes either a Flat Fee or a Fee Scheduler or Rate Limiter. 
+Base Fees includes either a Flat Fee, Fee Scheduler, Rate Limiter, or Fee Market Cap Scheduler.
 
 <Note>
-    `BaseFeeMode` can only be enums 0, 1, or 2.
-    - 0 = Linear Fee Scheduler
-    - 1 = Exponential Fee Scheduler
+    `BaseFeeMode` can be enums 0, 1, 2, 3, or 4.
+    - 0 = Linear Fee Time Scheduler
+    - 1 = Exponential Fee Time Scheduler
     - 2 = Rate Limiter
+    - 3 = Linear Fee Market Cap Scheduler
+    - 4 = Exponential Fee Market Cap Scheduler
 </Note>
+
+<Info>
+    **Pool Version Note:** Pool Version V1 supports up to 99% max fee (increased from V0's 50% max fee).
+</Info>
+
+#### Decoding BaseFee
+
+The `baseFee.data` field is a `number[]` (byte array) that requires decoding when indexed. The decoder type depends on the **data source** and **`baseFeeMode`**.
+
+**From `EvtInitializePool` event** (Borsh serialization, 30 bytes):
+- `baseFeeMode` 0-1: Use `BorshFeeTimeScheduler`
+- `baseFeeMode` 2: Use `BorshFeeRateLimiter`
+- `baseFeeMode` 3-4: Use `BorshFeeMarketCapScheduler`
+
+**From `poolState` account** (Pod-aligned serialization, 32 bytes):
+- `baseFeeMode` 0-1: Use `PodAlignedFeeTimeScheduler`
+- `baseFeeMode` 2: Use `PodAlignedFeeRateLimiter`
+- `baseFeeMode` 3-4: Use `PodAlignedFeeMarketCapScheduler`
 
 #### Flat Fee
 
-You can fetch the flat fee directly from the `cliffFeeNumerator` in the `baseFee` object if `firstFactor`, `secondFactor`, and `thirdFactor` are all 0.
+You can fetch the flat fee directly from the `cliffFeeNumerator` in the `baseFee` object if all other parameters are 0.
 
 ```typescript
-// Example
+// Example - Flat fee
 baseFee: {
-  cliffFeeNumerator: <BN: 10000000>, // 1% flat fee
-  firstFactor: 0, 
-  secondFactor: <BN: 0>, 
-  thirdFactor: <BN: 0>, 
-  baseFeeMode: 0
+  cliffFeeNumerator: 10000000,        // 1% flat fee
+  baseFeeMode: 0,
+  numberOfPeriod: 0,
+  periodFrequency: 0,
+  reductionFactor: 0
 }
 ```
 
@@ -46,57 +66,64 @@ The Fee Scheduler depends on the `poolState.activationType`.
 
 #### Fee Time Scheduler
 
-- For Fee Scheduler, it contains `numberOfPeriod`, `periodFrequency`, and `reductionFactor` which are paired with the `firstFactor`, `secondFactor`, and `thirdFactor` respectively.
+- For Fee Time Scheduler, the fee reduces over time based on the scheduler configuration.
+
+- `baseFeeMode` can be 0 (Linear) or 1 (Exponential).
 
 ```typescript
-interface BaseFee = {
-    cliffFeeNumerator: BN
-    firstFactor: number // numberOfPeriod
-    secondFactor: BN // periodFrequency
-    thirdFactor: BN // reductionFactor
-    baseFeeMode: BaseFeeMode // 0 or 1
+interface FeeTimeScheduler {
+    cliffFeeNumerator: BN;              // Starting fee numerator (e.g., 500000000 = 50%)
+    baseFeeMode: number;                // 0 = Linear, 1 = Exponential
+    numberOfPeriod: number;             // Number of fee reduction periods
+    periodFrequency: BN;                // Time between periods (slots or seconds based on activationType)
+    reductionFactor: BN;                // Fee reduction per period
 }
 ```
 
-<Note>You can refer to the math formula for the Fee Scheduler [here](/anti-sniper-suite/fee-scheduler/fee-scheduler-math)</Note>
+<Note>You can refer to the math formula for the Fee Time Scheduler [here](/anti-sniper-suite/fee-time-scheduler/fee-time-scheduler-math)</Note>
 
-Here are some examples of how the Fee Scheduler works:
+Here are some examples of how the Fee Time Scheduler works:
 
 ```typescript
-// Fee Scheduler: 50% reduce to 1% in 10 minutes linearly
-baseFee: {
-  cliffFeeNumerator: new BN(500000000),
-  firstFactor: 100, // numberOfPeriods
-  secondFactor: new BN(1), // periodFrequency 
-  thirdFactor: new BN(4900000), // reduction factor
-  baseFeeMode: 0
-},
+// Fee Time Scheduler: 50% reduce to 1% in 10 minutes linearly
+{
+  cliffFeeNumerator: new BN(500000000),   // 50% starting fee
+  baseFeeMode: 0,                         // Linear mode
+  numberOfPeriod: 100,                    // 100 periods
+  periodFrequency: new BN(1),             // Time between periods
+  reductionFactor: new BN(4900000),       // Reduction factor per period
+}
 ```
 
 ```typescript
-// Fee Scheduler: 50% reduce to 1% in 10 minutes exponentially
-baseFee: {
-  cliffFeeNumerator: new BN(500000000),
-  firstFactor: 100, // numberOfPeriods
-  secondFactor: new BN(1), // periodFrequency 
-  thirdFactor: new BN(383), // reduction factor
-  baseFeeMode: 1
-},
+// Fee Time Scheduler: 50% reduce to 1% in 10 minutes exponentially
+{
+  cliffFeeNumerator: new BN(500000000),   // 50% starting fee
+  baseFeeMode: 1,                         // Exponential mode
+  numberOfPeriod: 100,                    // 60 periods
+  periodFrequency: new BN(1),             // Time between periods
+  reductionFactor: new BN(383),           // Reduction factor per period
+}
 ```
 
 #### Rate Limiter
 
-- For Rate Limiter, it contains `feeIncrementBps`, `maxLimiterDuration`, and `referenceAmount` which are paired with the `firstFactor`, `secondFactor`, and `thirdFactor` respectively.
+- For Rate Limiter, the fee increases exponentially based on trade size to prevent large trades from manipulating the market.
 
 - `baseFeeMode` can only be 2.
 
+<Warning>
+When integrating swaps with Rate Limiter pools (`baseFeeMode == 2`), you must include `SYSVAR_INSTRUCTIONS_PUBKEY` in the remaining accounts of the swap instruction.
+</Warning>
+
 ```typescript
-interface BaseFee = {
-    cliff_fee_numerator: BN
-    first_factor: number //feeIncrementBps
-    secondFactor: BN // maxLimiterDuration
-    thirdFactor: BN // referenceAmount
-    baseFeeMode: BaseFeeMode // 2
+interface FeeRateLimiter {
+    cliffFeeNumerator: BN;              // Base fee numerator (e.g., 10000000 = 1%)
+    baseFeeMode: number;                // 2 = Rate Limiter
+    feeIncrementBps: number;            // Fee increment in basis points per reference amount
+    maxLimiterDuration: number;         // Maximum duration for rate limiter (slots or seconds)
+    maxFeeBps: number;                  // Maximum fee cap in basis points
+    referenceAmount: BN;                // Reference amount for fee calculation
 }
 ```
 
@@ -112,12 +139,58 @@ Here are some examples of how the Rate Limiter works:
 // fee = 1 SOL * 0.1% + 0.5 SOL * 0.2% = 0.002 SOL
 // 3 SOL trade
 // fee = 1 SOL * 0.1% + 1 SOL * 0.2% + 1 SOL * 0.3% = 0.006 SOL
-baseFee: {
-   cliffFeeNumerator: new BN(10_000_000), 
-   firstFactor: 10, // feeIncrementBps
-   secondFactor: new BN(10), // maxLimiterDuration
-   thirdFactor: new BN(1000000000), // referenceAmount
-   baseFeeMode: 2, // rate limiter mode
+{
+   cliffFeeNumerator: new BN(10000000),  // Base fee numerator (1%)
+   baseFeeMode: 2,                       // Rate limiter mode
+   feeIncrementBps: 10,                  // Fee increment per reference amount in basis points
+   maxFeeBps: 5000,                      // Max fee cap in basis points (50%)
+   referenceAmount: new BN(1000000000),  // Reference amount in lamports (1 SOL)
+   maxLimiterDuration: 10,               // Duration in slots/seconds
+}
+```
+
+#### Fee Market Cap Scheduler
+
+- Fee Market Cap Scheduler reduces fees based on **price movement (market cap growth)** rather than time. This is different from Fee Time Scheduler which reduces fees over time regardless of price action.
+
+- `baseFeeMode` can be 3 (Linear) or 4 (Exponential).
+
+```typescript
+interface FeeMarketCapScheduler {
+    cliffFeeNumerator: BN;              // Starting fee numerator (e.g., 500000000 = 50%)
+    baseFeeMode: number;                // 3 = Linear, 4 = Exponential
+    numberOfPeriod: number;             // Number of fee reduction periods
+    sqrtPriceStepBps: number;           // Sqrt price step in bps to advance one period
+    schedulerExpirationDuration: number; // Duration after which scheduler expires (slots or seconds)
+    reductionFactor: BN;                // Fee reduction per period
+}
+```
+
+<Note>You can refer to the detailed math formula for the Fee Market Cap Scheduler [here](/anti-sniper-suite/fee-market-cap-scheduler/fee-market-cap-scheduler-math)</Note>
+
+Here are some examples of how the Fee Market Cap Scheduler works:
+
+```typescript
+// Fee Market Cap Scheduler: 50% starting fee, reduces linearly based on price growth
+{
+  cliffFeeNumerator: new BN(500000000),  // 50% starting fee
+  baseFeeMode: 3,                        // Linear mode
+  numberOfPeriod: 100,                   // 100 periods
+  sqrtPriceStepBps: 100,                 // 1% sqrt price step per period
+  schedulerExpirationDuration: 86400,    // 24 hours expiration
+  reductionFactor: new BN(4950000),      // Linear reduction factor
+}
+```
+
+```typescript
+// Fee Market Cap Scheduler: 50% starting fee, reduces exponentially based on price growth
+{
+  cliffFeeNumerator: new BN(500000000),  // 50% starting fee
+  baseFeeMode: 4,                        // Exponential mode
+  numberOfPeriod: 100,                   // 100 periods
+  sqrtPriceStepBps: 100,                 // 1% sqrt price step per period
+  schedulerExpirationDuration: 86400,    // 24 hours expiration
+  reductionFactor: new BN(390),          // Exponential reduction factor (bps)
 }
 ```
 

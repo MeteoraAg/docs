@@ -1,0 +1,69 @@
+---
+title: What's Fee Market Cap Scheduler?
+---
+
+<Info>Available on **DAMM v2**</Info>
+
+Fee Market Cap Scheduler is a configurable fee reduction mechanism based on **price movement (market cap growth)** rather than time. Unlike the Fee Time Scheduler which reduces fees over a fixed time period regardless of price action, Fee Market Cap Scheduler only reduces fees when the token price increases.
+
+# How does it work?
+
+Fee Market Cap Scheduler tracks the sqrt price movement from the initial pool price. As the price increases, the fee decreases according to the configured schedule.
+
+Fee Market Cap Scheduler requires the following parameters to be configured:
+
+- **Cliff Fee Numerator**: The starting fee of the scheduler (e.g., 50%).
+- **Number Of Periods**: The total number of fee reduction periods.
+- **Sqrt Price Step Bps**: The sqrt price increase (in basis points) required to advance one period.
+- **Scheduler Expiration Duration**: The maximum duration after which the scheduler expires and defaults to minimum fee.
+- **Reduction Factor**: The amount to reduce the fee by per period.
+
+With these parameters, the starting fee will be **Cliff Fee Numerator** and will reduce based on how much the sqrt price has increased from the initial price. Each time the sqrt price increases by **Sqrt Price Step Bps**, the fee advances one period and reduces by **Reduction Factor**.
+
+The change in fee can be based on a **Linear** or **Exponential** fee curve.
+
+<CardGroup cols={2}>
+  <Card title="Linear">
+    <Frame>
+      <img src="/images/anti-sniper-suite/linear-fee-market-cap-scheduler.webp" alt="Linear Fee Market Cap Scheduler" />
+    </Frame>
+    Fee decreases at a constant rate as the token price increases. At the same price point, the fee is higher compared to exponential decay.
+  </Card>
+  <Card title="Exponential">
+    <Frame>
+      <img src="/images/anti-sniper-suite/exponential-fee-market-cap-scheduler.webp" alt="Exponential Fee Market Cap Scheduler" />
+    </Frame>
+    Fee decreases rapidly at first, then slows down as the token price increases. At the same price point, the fee is lower compared to linear decay.
+  </Card>
+</CardGroup>
+
+# Example Configuration
+
+A typical Fee Market Cap Scheduler configuration:
+
+- **Starting Fee**: 50%
+- **Ending Fee**: 0.5% (after 100 periods)
+- **Sqrt Price Step**: 1% (100 bps) per period
+- **Expiration**: 24 hours
+
+This means:
+- Fee starts at 50% when the pool launches
+- Each 1% increase in sqrt price reduces the fee
+- After 100% sqrt price increase, fee reaches minimum 0.5%
+- If price doesn't increase enough within 24 hours, fee defaults to 0.5%
+
+# Simulator
+
+Experiment with different Fee Market Cap Scheduler configurations using the simulator below. Simply clone the spreadsheet and modify the fields to test various scenarios.
+
+<Card title="Fee Market Cap Scheduler Simulator" icon="calculator" href="https://docs.google.com/spreadsheets/d/1Z8pyIzahMcVZ15XEXbNSyTr_F2T74PqzGJ2xk8-vP8s/copy">
+  Clone this Google Sheet to simulate and experiment with different Fee Market Cap Scheduler configurations.
+</Card>
+
+# Which Launch Pools support Fee Market Cap Scheduler?
+
+Fee Market Cap Scheduler is available as an option for DAMM v2 Launch Pools.
+
+<Note>
+Fee Market Cap Scheduler is mutually exclusive with Fee Time Scheduler and Rate Limiter. Developers must choose one base fee mode for their pool.
+</Note>
