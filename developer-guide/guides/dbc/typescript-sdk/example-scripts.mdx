@@ -76,10 +76,10 @@ async function buildCurveWithMarketCapAndCreateConfig() {
         collectFeeMode: CollectFeeMode.Both,
         migrationFeeOption: MigrationFeeOption.FixedBps100,
         tokenType: TokenType.SPL,
-        partnerLpPercentage: 0,
-        creatorLpPercentage: 0,
-        partnerLockedLpPercentage: 50,
-        creatorLockedLpPercentage: 50,
+        partnerLiquidityPercentage: 0,
+        creatorLiquidityPercentage: 0,
+        partnerPermanentLockedLiquidityPercentage: 50,
+        creatorPermanentLockedLiquidityPercentage: 50,
         creatorTradingFeePercentage: 50,
         leftover: 0,
         tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
@@ -398,10 +398,10 @@ The migration process follows these steps:
 2. Create Locker (checks if baseMint token has Locked Vesting, and if lockEscrow has been created)
 3. Migrate to DAMM V1 (if isMigrated = 0)
 4. Lock or Claim Partner Or Creator LP
-    - Lock Partner LP (if partnerLockedLpPercentage > 0)
-    - Lock Creator LP (if creatorLockedLpPercentage > 0)
-    - Claim Partner LP (if partnerLpPercentage > 0)
-    - Claim Creator LP (if creatorLpPercentage > 0)
+    - Lock Partner LP (if partnerPermanentLockedLiquidityPercentage > 0)
+    - Lock Creator LP (if creatorPermanentLockedLiquidityPercentage > 0)
+    - Claim Partner LP (if partnerLiquidityPercentage > 0)
+    - Claim Creator LP (if creatorLiquidityPercentage > 0)
 
 ```typescript
 import {
@@ -555,7 +555,7 @@ async function migrateToDammV1() {
         }
 
         // Step 4.1: Lock LP tokens for creator and partner
-        if (poolConfigState.creatorLockedLpPercentage > 0) {
+        if (poolConfigState.creatorPermanentLockedLiquidityPercentage > 0) {
             console.log('Locking LP tokens for creator...')
             const lockCreatorTx = await client.migration.lockDammV1LpToken({
                 payer: wallet.publicKey,
@@ -586,7 +586,7 @@ async function migrateToDammV1() {
         }
 
         // Step 4.2: Lock LP tokens for partner
-        if (poolConfigState.partnerLockedLpPercentage > 0) {
+        if (poolConfigState.partnerPermanentLockedLiquidityPercentage > 0) {
             console.log('Locking LP tokens for partner...')
             const lockCreatorTx = await client.migration.lockDammV1LpToken({
                 payer: wallet.publicKey,
@@ -617,7 +617,7 @@ async function migrateToDammV1() {
         }
 
         // Step 4.3: Claim LP tokens for creator
-        if (poolConfigState.creatorLpPercentage > 0) {
+        if (poolConfigState.creatorLiquidityPercentage > 0) {
             console.log('Claiming LP tokens for creator...')
 
             const claimCreatorTx = await client.migration.claimDammV1LpToken({
@@ -649,7 +649,7 @@ async function migrateToDammV1() {
         }
 
         // Step 4.4: Claim LP tokens for partner
-        if (poolConfigState.partnerLpPercentage > 0) {
+        if (poolConfigState.partnerLiquidityPercentage > 0) {
             console.log('Claiming LP tokens for partner...')
             const claimPartnerTx = await client.migration.claimDammV1LpToken({
                 payer: wallet.publicKey,

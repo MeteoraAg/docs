@@ -45,10 +45,10 @@ A typical DBC curve config will look like this when you parse it into the `creat
         tokenType: 1,
         tokenDecimal: 6,
         migrationQuoteThreshold: new BN(85000000000),
-        partnerLpPercentage: 0,
-        creatorLpPercentage: 0,
-        partnerLockedLpPercentage: 50,
-        creatorLockedLpPercentage: 50,
+        partnerLiquidityPercentage: 0,
+        creatorLiquidityPercentage: 0,
+        partnerPermanentLockedLiquidityPercentage: 50,
+        creatorPermanentLockedLiquidityPercentage: 50,
         sqrtStartPrice: new BN(95072344172433750),
         lockedVesting: {
             amountPerPeriod: new BN(0),
@@ -290,24 +290,111 @@ migrationFee: {
     - `dynamicFee` - The dynamic fee of the post-graduation pool.
     - `poolFeeBps` - The pool fee of the post-graduation pool.
 
-### `lpPercentage`
+### `liquidityPercentage`
 
-- There are 4 types of LP Percentage parameters that you can configure.
-- These 4 LP Percentage parameters must add up to 100%.
-    - `partnerLpPercentage` - The percentage of the LP that will be allocated to the partner in the graduated pool (0-100)
-    - `creatorLpPercentage` - The percentage of the LP that will be allocated to the creator in the graduated pool (0-100)
-    - `partnerLockedLpPercentage` - The percentage of the locked LP that will be allocated to the partner in the graduated pool (0-100)
-    - `creatorLockedLpPercentage` - The percentage of the locked LP that will be allocated to the creator in the graduated pool (0-100)
+- There are 4 types of Liquidity Percentage parameters that you can configure.
+- These 4 Liquidity Percentage parameters must add up to 100%.
+    - `partnerLiquidityPercentage` - The percentage of the LP that will be allocated to the partner in the graduated pool (0-100)
+    - `creatorLiquidityPercentage` - The percentage of the LP that will be allocated to the creator in the graduated pool (0-100)
+    - `partnerPermanentLockedLiquidityPercentage` - The percentage of the permanently locked LP that will be allocated to the partner in the graduated pool (0-100)
+    - `creatorPermanentLockedLiquidityPercentage` - The percentage of the permanently locked LP that will be allocated to the creator in the graduated pool (0-100)
+
+<Warning>
+**Minimum 10% Locked Liquidity Requirement (Day 1 Post-Migration)**
+
+Configs require that at least 10% of liquidity remains locked at day 1 (86400 seconds) after migration. How this is achieved depends on your migration option:
+
+**For DAMM v1 Migration:**
+- Must use **permanent locked liquidity only**: `partnerPermanentLockedLiquidityPercentage` + `creatorPermanentLockedLiquidityPercentage` >= 10
+- LP vesting is **NOT available** for DAMM v1 (uses fungible LP tokens)
+
+**For DAMM v2 Migration:**
+- Can use **permanent locked liquidity only**: `partnerPermanentLockedLiquidityPercentage` + `creatorPermanentLockedLiquidityPercentage` >= 10
+- **OR** combination of permanent + vesting liquidity: If using LP vesting (`partnerLiquidityVestingInfoParams` or `creatorLiquidityVestingInfoParams`), the combined locked liquidity at day 1 must be >= 10%
+
+The SDK validates this using `MIN_LOCKED_LIQUIDITY_BPS = 1000` (10%).
+</Warning>
 
 Example:
 ```
 // All the LP are locked forever in the post-graduation pool
-lpPercentage: {
-    partnerLpPercentage: 0,
-    creatorLpPercentage: 0,
-    partnerLockedLpPercentage: 50,
-    creatorLockedLpPercentage: 50
+liquidityPercentage: {
+    partnerLiquidityPercentage: 0,
+    creatorLiquidityPercentage: 0,
+    partnerPermanentLockedLiquidityPercentage: 50,
+    creatorPermanentLockedLiquidityPercentage: 50
 }
+```
+
+### `liquidityVestingInfo` (DAMM v2 only)
+
+- The `partnerLiquidityVestingInfoParams` and `creatorLiquidityVestingInfoParams` are optional parameters that configure LP vesting for the partner and creator positions after migration to DAMM v2.
+- These parameters are only applicable when `migrationOption` is set to `DAMM v2`.
+- Each vesting info contains the following fields:
+    - `vestingPercentage` - The percentage of non-permanently-locked LP to vest (0-100)
+    - `cliffDurationFromMigrationTime` - The cliff duration in seconds from migration time before vesting starts
+    - `totalDuration` - The total vesting duration in seconds
+    - `bpsPerPeriod` - Basis points released per period (determines release rate)
+    - `numberOfPeriods` - Number of vesting periods
+
+<Note>When LP vesting is configured, the `migrateToDammV2` endpoint will require vesting accounts for the positions.</Note>
+
+<Info>
+**Vesting Contribution to Locked Liquidity**
+
+LP vesting contributes to the minimum 10% locked liquidity requirement. The SDK calculates how much liquidity remains locked at day 1 (86400 seconds) post-migration based on your vesting schedule.
+
+Use the helper function `getLiquidityVestingInfoParams()` to construct valid vesting parameters and `getVestingLockedLiquidityBpsAtNSeconds()` to calculate locked BPS at a specific time.
+</Info>
+
+Example:
+```typescript
+// Configure vesting for 50% of partner's non-locked LP
+// 7-day cliff, 30-day total vesting
+partnerLiquidityVestingInfoParams: {
+    vestingPercentage: 50,                           // 50% of LP will vest
+    cliffDurationFromMigrationTime: 7 * 24 * 60 * 60, // 7 days cliff
+    totalDuration: 30 * 24 * 60 * 60,                 // 30 days total
+    bpsPerPeriod: 100,                                // 1% per period
+    numberOfPeriods: 100,                             // 100 periods
+}
+```
+
+**SDK Helper Function:**
+```typescript
+import { getLiquidityVestingInfoParams } from "@meteora-ag/dynamic-bonding-curve-sdk";
+
+// Use the helper to build valid vesting params
+// Parameters: vestingPercentage, bpsPerPeriod, numberOfPeriods, cliffDurationFromMigrationTime, totalDuration
+const vestingParams = getLiquidityVestingInfoParams(
+    50,                        // vestingPercentage: 50% of LP will vest
+    100,                       // bpsPerPeriod: 1% released per period
+    100,                       // numberOfPeriods: 100 vesting periods
+    7 * 24 * 60 * 60,          // cliffDurationFromMigrationTime: 7 days cliff
+    30 * 24 * 60 * 60          // totalDuration: 30 days total vesting
+);
+
+// Returns LiquidityVestingInfoParameters:
+// {
+//     vestingPercentage: 50,
+//     bpsPerPeriod: 100,
+//     numberOfPeriods: 100,
+//     cliffDurationFromMigrationTime: 604800,
+//     frequency: 2592  // calculated: totalDuration / numberOfPeriods
+// }
+```
+
+### `poolCreationFee`
+
+- Partners can configure a `poolCreationFee` in SOL lamports when creating a config.
+- When token creators create a pool using this config (through `initializeVirtualPoolWithSplToken` or `initializeVirtualPoolWithToken2022`), they will need to pay this fee in SOL.
+- Partners can later claim this fee using the `claimPartnerPoolCreationFee` function.
+- Meteora (protocol) receives 10% of the collected pool creation fees.
+
+Example:
+```typescript
+// Set pool creation fee to 0.1 SOL
+poolCreationFee: new BN(100000000) // 0.1 SOL in lamports
 ```
 
 # Creating the Curve Config
