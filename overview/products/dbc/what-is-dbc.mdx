@@ -69,8 +69,24 @@ This innovation allows every LP to optimize their individual strategy while cont
   <Step title="Meteora auto migrator service creates a DAMM pool">
     Meteora's auto migrator keeper service then migrates the DBC pool by sending a crank to create a new Meteora Dynamic AMM v1 or v2 pool
   </Step>
-  <Step title="LP tokens or NFTs are locked or claimed by partner or creator">
-    Upon migration, depending on the pool's config key, LP tokens or NFTs are either locked or claimable by the partner or creator. This is specified in the `creatorLiquidityPercentage`, `partnerLiquidityPercentage`, `creatorPermanentLockedLiquidityPercentage` and `partnerPermanentLockedLiquidityPercentage` fields.
+  <Step title="LP tokens or NFTs are distributed to partner and creator">
+    Upon migration, the liquidity is distributed to the partner and creator based on the config key settings. The LP is split into three categories:
+
+    **1. Claimable LP** (`partnerLiquidityPercentage`, `creatorLiquidityPercentage`)
+    - Immediately withdrawable by the partner or creator after migration
+    - For DAMM v1: LP tokens sent to the partner/creator wallet
+    - For DAMM v2: NFT positions owned by the partner (`feeClaimer`) or creator (`poolCreator`)
+
+    **2. Permanently Locked LP** (`partnerPermanentLockedLiquidityPercentage`, `creatorPermanentLockedLiquidityPercentage`)
+    - Locked forever in the graduated pool and can never be withdrawn
+    - Partner/creator can still claim trading fees from permanently locked positions
+
+    **3. Vesting LP (DAMM v2 only)** (`partnerLiquidityVestingInfo`, `creatorLiquidityVestingInfo`)
+    - LP that vests over time based on a configured schedule
+    - Includes cliff duration, vesting periods, and release frequency
+    - Gradually becomes claimable as the vesting schedule progresses
+
+    <Note>A minimum of 10% liquidity must remain locked at day 1 post-migration (via permanent locks and/or vesting).</Note>
   </Step>
 </Steps>
 

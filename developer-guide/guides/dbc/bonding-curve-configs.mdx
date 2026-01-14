@@ -306,11 +306,12 @@ Configs require that at least 10% of liquidity remains locked at day 1 (86400 se
 
 **For DAMM v1 Migration:**
 - Must use **permanent locked liquidity only**: `partnerPermanentLockedLiquidityPercentage` + `creatorPermanentLockedLiquidityPercentage` >= 10
-- LP vesting is **NOT available** for DAMM v1 (uses fungible LP tokens)
+- LP vesting is **NOT available** for DAMM v1
 
 **For DAMM v2 Migration:**
-- Can use **permanent locked liquidity only**: `partnerPermanentLockedLiquidityPercentage` + `creatorPermanentLockedLiquidityPercentage` >= 10
-- **OR** combination of permanent + vesting liquidity: If using LP vesting (`partnerLiquidityVestingInfoParams` or `creatorLiquidityVestingInfoParams`), the combined locked liquidity at day 1 must be >= 10%
+- **Option A - Permanent locked liquidity only**: `partnerPermanentLockedLiquidityPercentage` + `creatorPermanentLockedLiquidityPercentage` >= 10
+- **Option B - LP vesting only**: If using LP vesting (`partnerLiquidityVestingInfoParams` or `creatorLiquidityVestingInfoParams`) without permanent locks, the vested liquidity locked at day 1 must be >= 10%
+- **Option C - Combination of permanent + vesting liquidity**: If using both permanent locked liquidity and LP vesting, the combined locked liquidity at day 1 must be >= 10%
 
 The SDK validates this using `MIN_LOCKED_LIQUIDITY_BPS = 1000` (10%).
 </Warning>
@@ -328,14 +329,16 @@ liquidityPercentage: {
 
 ### `liquidityVestingInfo` (DAMM v2 only)
 
-- The `partnerLiquidityVestingInfoParams` and `creatorLiquidityVestingInfoParams` are optional parameters that configure LP vesting for the partner and creator positions after migration to DAMM v2.
+- The `partnerLiquidityVestingInfo` and `creatorLiquidityVestingInfo` are optional parameters that configure LP vesting for the partner and creator positions after migration to DAMM v2.
 - These parameters are only applicable when `migrationOption` is set to `DAMM v2`.
-- Each vesting info contains the following fields:
+- Each vesting info uses the `LiquidityVestingInfoParameters` struct with the following fields:
     - `vestingPercentage` - The percentage of non-permanently-locked LP to vest (0-100)
-    - `cliffDurationFromMigrationTime` - The cliff duration in seconds from migration time before vesting starts
-    - `totalDuration` - The total vesting duration in seconds
-    - `bpsPerPeriod` - Basis points released per period (determines release rate)
+    - `bpsPerPeriod` - Basis points released per vesting period (e.g., 100 = 1% per period)
     - `numberOfPeriods` - Number of vesting periods
+    - `cliffDurationFromMigrationTime` - The cliff duration in seconds from migration time before vesting starts
+    - `frequency` - The interval between vesting releases in seconds (calculated as `totalDuration / numberOfPeriods`)
+
+<Note>LP vesting durations are **always in seconds** regardless of the pool's `activationType` setting (Slot or Timestamp).</Note>
 
 <Note>When LP vesting is configured, the `migrateToDammV2` endpoint will require vesting accounts for the positions.</Note>
 
@@ -350,13 +353,13 @@ Use the helper function `getLiquidityVestingInfoParams()` to construct valid ves
 Example:
 ```typescript
 // Configure vesting for 50% of partner's non-locked LP
-// 7-day cliff, 30-day total vesting
-partnerLiquidityVestingInfoParams: {
+// 7-day cliff, 30-day total vesting (frequency = 30 days / 100 periods = 25920 seconds)
+partnerLiquidityVestingInfo: {
     vestingPercentage: 50,                           // 50% of LP will vest
-    cliffDurationFromMigrationTime: 7 * 24 * 60 * 60, // 7 days cliff
-    totalDuration: 30 * 24 * 60 * 60,                 // 30 days total
-    bpsPerPeriod: 100,                                // 1% per period
-    numberOfPeriods: 100,                             // 100 periods
+    bpsPerPeriod: 100,                               // 1% released per period
+    numberOfPeriods: 100,                            // 100 vesting periods
+    cliffDurationFromMigrationTime: 7 * 24 * 60 * 60, // 7 days cliff (604800 seconds)
+    frequency: 25920,                                // interval between releases (totalDuration / numberOfPeriods) in seconds
 }
 ```
 
