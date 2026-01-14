@@ -1452,6 +1452,160 @@ const transaction = await client.partner.createConfig({
 
 ---
 
+### buildCurveWithCustomSqrtPrices
+
+Builds a constant product curve configuration using custom sqrt price points. This function gives you full control over the exact price points in your curve by specifying sqrt prices directly instead of market caps.
+
+**Function**
+
+```typescript
+async buildCurveWithCustomSqrtPrices(params: BuildCurveWithCustomSqrtPricesParams): Promise<ConfigParameters>
+```
+
+**Parameters**
+
+```typescript
+interface BuildCurveWithCustomSqrtPricesParams {
+    totalTokenSupply: number // Total supply of the token
+    sqrtPrices: BN[] // Array of sqrt price values (must be ascending, min 2, max 16)
+    liquidityWeights?: number[] // Optional: liquidity distribution weights (length = sqrtPrices.length - 1)
+    migrationOption: MigrationOption // MET_DAMM_V1 (0) or MET_DAMM_V2 (1)
+    tokenBaseDecimal: TokenDecimal // Token base decimals (SIX, NINE, etc.)
+    tokenQuoteDecimal: TokenDecimal // Token quote decimals (SIX, NINE, etc.)
+    lockedVestingParam: LockedVestingParam // Locked vesting parameters
+    baseFeeParams: BaseFeeParams // Base fee configuration
+    dynamicFeeEnabled: boolean // Enable dynamic fees
+    activationType: ActivationType // Slot or Timestamp
+    collectFeeMode: CollectFeeMode // OnlyQuote or Both
+    migrationFeeOption: MigrationFeeOption // Migration fee option
+    tokenType: TokenType // SPL or Token2022
+    partnerLiquidityPercentage: number // Partner claimable LP percentage (0-100)
+    creatorLiquidityPercentage: number // Creator claimable LP percentage (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // Partner permanently locked LP percentage
+    creatorPermanentLockedLiquidityPercentage: number // Creator permanently locked LP percentage
+    creatorTradingFeePercentage: number // Creator's share of trading fees (0-100)
+    leftover: number // Leftover amount configuration
+    tokenUpdateAuthority: TokenUpdateAuthorityOption // Token authority option
+    migrationFee: MigrationFee // Migration fee configuration
+    partnerLiquidityVestingInfo?: LiquidityVestingInfoParameters // Partner LP vesting (DAMM v2 only)
+    creatorLiquidityVestingInfo?: LiquidityVestingInfoParameters // Creator LP vesting (DAMM v2 only)
+}
+```
+
+**Helper Function: createSqrtPrices**
+
+Use the `createSqrtPrices` helper function to convert human-readable prices to sqrt price format:
+
+```typescript
+function createSqrtPrices(params: CreateSqrtPricesParams): BN[]
+
+interface CreateSqrtPricesParams {
+    prices: number[] // Array of human-readable prices (must be ascending)
+    tokenBaseDecimal: TokenDecimal // Token base decimals
+    tokenQuoteDecimal: TokenDecimal // Token quote decimals
+}
+```
+
+**Returns**
+
+- `ConfigParameters` that can be spread into `createConfig`.
+
+**Example**
+
+```typescript
+import {
+    buildCurveWithCustomSqrtPrices,
+    createSqrtPrices,
+    TokenDecimal,
+    MigrationOption,
+    ActivationType,
+    CollectFeeMode,
+    BaseFeeMode,
+    MigrationFeeOption,
+    TokenType,
+    TokenUpdateAuthorityOption,
+} from '@meteora-ag/dynamic-bonding-curve-sdk'
+
+// Define token decimals
+const tokenBaseDecimal = TokenDecimal.SIX
+const tokenQuoteDecimal = TokenDecimal.NINE
+
+// Define custom price points (in human-readable format)
+// Example: Start at $0.00003, pass through $0.0001, $0.0003, and migrate at $0.00054
+const humanReadablePrices = [0.00003, 0.0001, 0.0003, 0.00054]
+
+// Convert human-readable prices to sqrt prices
+const sqrtPrices = createSqrtPrices({
+    prices: humanReadablePrices,
+    tokenBaseDecimal,
+    tokenQuoteDecimal,
+})
+
+// Optional: Define liquidity weights for each segment
+// Length must be sqrtPrices.length - 1
+const liquidityWeights = [1, 2, 1] // 3 segments for 4 price points
+
+const curveConfig = buildCurveWithCustomSqrtPrices({
+    totalTokenSupply: 1000000000,
+    sqrtPrices,
+    liquidityWeights, // Optional: omit for equal distribution
+    migrationOption: MigrationOption.MET_DAMM_V2,
+    tokenBaseDecimal,
+    tokenQuoteDecimal,
+    lockedVestingParam: {
+        totalLockedVestingAmount: 0,
+        numberOfVestingPeriod: 0,
+        cliffUnlockAmount: 0,
+        totalVestingDuration: 0,
+        cliffDurationFromMigrationTime: 0,
+    },
+    baseFeeParams: {
+        baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+        feeSchedulerParam: {
+            startingFeeBps: 100,
+            endingFeeBps: 100,
+            numberOfPeriod: 0,
+            totalDuration: 0,
+        },
+    },
+    dynamicFeeEnabled: true,
+    activationType: ActivationType.Slot,
+    collectFeeMode: CollectFeeMode.Both,
+    migrationFeeOption: MigrationFeeOption.FixedBps100,
+    tokenType: TokenType.SPL,
+    partnerLiquidityPercentage: 0,
+    creatorLiquidityPercentage: 0,
+    partnerPermanentLockedLiquidityPercentage: 50,
+    creatorPermanentLockedLiquidityPercentage: 50,
+    creatorTradingFeePercentage: 50,
+    leftover: 0,
+    tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+    migrationFee: {
+        feePercentage: 0,
+        creatorFeePercentage: 0,
+    },
+})
+```
+
+**Notes**
+
+- `buildCurveWithCustomSqrtPrices` gives you full control over exact price points in your curve.
+- The `sqrtPrices` array must:
+    - Be in ascending order
+    - Have a minimum of 2 elements (representing start and end prices)
+    - Have a maximum of 16 elements
+- Use the `createSqrtPrices` helper to convert human-readable prices to sqrt prices.
+- The optional `liquidityWeights` array controls liquidity distribution across curve segments:
+    - Length must be `sqrtPrices.length - 1`
+    - Higher weight = more liquidity concentrated in that price range
+    - Omit for equal distribution across all segments
+- If `dynamicFeeEnabled` is true, the dynamic fee will be enabled and capped at 20% of minimum base fee.
+- `lockedVestingParam.totalVestingDuration` and `lockedVestingParam.cliffDurationFromMigrationTime` are calculated in terms of seconds.
+- `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
+- Slot is 400ms, Timestamp is 1000ms.
+
+---
+
 ## Pool Functions
 
 ### createPool
