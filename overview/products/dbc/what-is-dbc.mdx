@@ -69,8 +69,24 @@ This innovation allows every LP to optimize their individual strategy while cont
   <Step title="Meteora auto migrator service creates a DAMM pool">
     Meteora's auto migrator keeper service then migrates the DBC pool by sending a crank to create a new Meteora Dynamic AMM v1 or v2 pool
   </Step>
-  <Step title="LP tokens or NFTs are locked or claimed by partner or creator">
-    Upon migration, depending on the pool's config key, LP tokens or NFTs are either locked or claimable by the partner or creator. This is specified in the `creator_lp_percentage`, `partner_lp_percentage`, `creator_locked_lp_percentage` and `partner_locked_lp_percentage` fields.
+  <Step title="LP tokens or NFTs are distributed to partner and creator">
+    Upon migration, the liquidity is distributed to the partner and creator based on the config key settings. The LP is split into three categories:
+
+    **1. Claimable LP** (`partnerLiquidityPercentage`, `creatorLiquidityPercentage`)
+    - Immediately withdrawable by the partner or creator after migration
+    - For DAMM v1: LP tokens sent to the partner/creator wallet
+    - For DAMM v2: NFT positions owned by the partner (`feeClaimer`) or creator (`poolCreator`)
+
+    **2. Permanently Locked LP** (`partnerPermanentLockedLiquidityPercentage`, `creatorPermanentLockedLiquidityPercentage`)
+    - Locked forever in the graduated pool and can never be withdrawn
+    - Partner/creator can still claim trading fees from permanently locked positions
+
+    **3. Vesting LP (DAMM v2 only)** (`partnerLiquidityVestingInfo`, `creatorLiquidityVestingInfo`)
+    - LP that vests over time based on a configured schedule
+    - Includes cliff duration, vesting periods, and release frequency
+    - Gradually becomes claimable as the vesting schedule progresses
+
+    <Note>A minimum of 10% liquidity must remain locked at day 1 post-migration (via permanent locks and/or vesting).</Note>
   </Step>
 </Steps>
 
@@ -120,7 +136,19 @@ This innovation allows every LP to optimize their individual strategy while cont
   <Card title="Customizable Liquidity Distribution" icon="chart-bar" iconType="solid">
     Configure up to 16 price ranges with different liquidity curves for advanced pool customization.
   </Card>
+  <Card title="Pool Creation Fee" icon="hand-holding-dollar" iconType="solid">
+    Partners can configure a SOL fee charged to token creators when creating pools. Partners can claim these fees via the SDK.
+  </Card>
+  <Card title="LP Vesting (DAMM v2)" icon="clock" iconType="solid">
+    Configure vesting schedules for partner and creator LP positions after migration to DAMM v2.
+  </Card>
 </CardGroup>
+
+<Warning>
+**Minimum 10% Locked Liquidity Requirement**
+
+All DBC configs require at least 10% of liquidity to remain locked at day 1 (86400 seconds) post-migration. This can be achieved through permanent locked liquidity and/or LP vesting (DAMM v2 only).
+</Warning>
 
 # Customizable Fees
 

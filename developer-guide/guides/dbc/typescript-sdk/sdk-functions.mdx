@@ -24,6 +24,7 @@ interface CreateConfigParams {
     feeClaimer: PublicKey // The wallet that will be able to claim the fee
     leftoverReceiver: PublicKey // The wallet that will receive the bonding curve leftover
     quoteMint: PublicKey // The quote mint address
+    poolCreationFee?: BN // Optional pool creation fee in SOL lamports that creators pay when creating a pool
     poolFees: {
         baseFee: {
             cliffFeeNumerator: BN // Initial fee numerator (base fee)
@@ -49,10 +50,10 @@ interface CreateConfigParams {
     tokenType: number // 0: SPL, 1: Token2022
     tokenDecimal: number // The number of decimals for the token
     migrationQuoteThreshold: BN // The quote threshold for migration
-    partnerLpPercentage: number // The percentage of the LP that will be allocated to the partner in the graduated pool (0-100)
-    creatorLpPercentage: number // The percentage of the LP that will be allocated to the creator in the graduated pool (0-100)
-    partnerLockedLpPercentage: number // The percentage of the locked LP that will be allocated to the partner in the graduated pool (0-100)
-    creatorLockedLpPercentage: number // The percentage of the locked LP that will be allocated to the creator in the graduated pool (0-100)
+    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner in the graduated pool (0-100)
+    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator in the graduated pool (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner in the graduated pool (0-100)
+    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator in the graduated pool (0-100)
     sqrtStartPrice: BN // The starting price of the pool
     lockedVesting: {
         // Optional locked vesting (BN (0) for all fields for no vesting)
@@ -80,6 +81,22 @@ interface CreateConfigParams {
         collectFeeMode: number // 0: QuoteToken, 1: OutputToken
         dynamicFee: number // 0: Disabled, 1: Enabled
         poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
+    }
+    partnerLiquidityVestingInfo?: {
+        // Optional LP vesting for partner (DAMM v2 only)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        frequency: number // Frequency of vesting in seconds (calculated as totalDuration / numberOfPeriods)
+    }
+    creatorLiquidityVestingInfo?: {
+        // Optional LP vesting for creator (DAMM v2 only)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        frequency: number // Frequency of vesting in seconds (calculated as totalDuration / numberOfPeriods)
     }
     padding: []
     curve: {
@@ -127,10 +144,10 @@ const transaction = await client.partner.createConfig({
     tokenType: 0,
     tokenDecimal: 9,
     migrationQuoteThreshold: new BN('1000000000'),
-    partnerLpPercentage: 25,
-    creatorLpPercentage: 25,
-    partnerLockedLpPercentage: 25,
-    creatorLockedLpPercentage: 25,
+    partnerLiquidityPercentage: 25,
+    creatorLiquidityPercentage: 25,
+    partnerPermanentLockedLiquidityPercentage: 25,
+    creatorPermanentLockedLiquidityPercentage: 25,
     sqrtStartPrice: new BN('58333726687135158'),
     lockedVesting: {
         amountPerPeriod: new BN('0'),
@@ -216,9 +233,12 @@ When creating a new configuration for a dynamic bonding curve, several validatio
 
 - Must be between 6 and 9
 
-**LP Percentages**
+**Liquidity Percentages**
 
-- The sum of partner LP, creator LP, partner locked LP, and creator locked LP percentages must equal 100(%)
+- The sum of partner liquidity, creator liquidity, partner permanently locked liquidity, and creator permanently locked liquidity percentages must equal 100(%)
+- **Minimum 10% Locked at Day 1**: At least 10% of liquidity must remain locked at day 1 (86400 seconds) post-migration. This can be achieved through:
+    - Permanent locked liquidity only: `partnerPermanentLockedLiquidityPercentage` + `creatorPermanentLockedLiquidityPercentage` >= 10
+    - Combination of permanent + vesting: The SDK calculates locked liquidity at day 1 including vesting contributions using `MIN_LOCKED_LIQUIDITY_BPS = 1000` (10%)
 
 **Migration Quote Threshold**
 
@@ -472,6 +492,48 @@ const transaction = await client.partner.partnerWithdrawSurplus({
 
 ---
 
+### claimPartnerPoolCreationFee
+
+Claims the pool creation fee for the partner. Partners can configure a pool creation fee in SOL lamports when creating a config, which token creators pay during pool initialization.
+
+**Function**
+
+```typescript
+async claimPartnerPoolCreationFee(params: ClaimPartnerPoolCreationFeeParams): Promise<Transaction>
+```
+
+**Parameters**
+
+```typescript
+interface ClaimPartnerPoolCreationFeeParams {
+    pool: PublicKey // The pool address
+    feeClaimer: PublicKey // The wallet that will claim the fee (must be the partner/feeClaimer in the config)
+    payer: PublicKey // The wallet that will pay for the transaction
+}
+```
+
+**Returns**
+
+- A transaction that can be signed and sent to the network.
+
+**Example**
+
+```typescript
+const transaction = await client.partner.claimPartnerPoolCreationFee({
+    pool: new PublicKey('abcdefghijklmnopqrstuvwxyz1234567890'),
+    feeClaimer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
+    payer: new PublicKey('payer1234567890abcdefghijklmnopqrstuvwxyz'),
+})
+```
+
+**Notes**
+
+- The `feeClaimer` must match the partner's fee claimer address in the pool's config.
+- Pool creation fees are set by partners when creating a config using the `poolCreationFee` parameter.
+- Protocol receives 10% of the collected pool creation fees.
+
+---
+
 ## Build Curve Functions
 
 ### buildCurve
@@ -527,10 +589,10 @@ interface BuildCurveParams {
     collectFeeMode: number // 0: QuoteToken, 1: OutputToken
     migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
     tokenType: number // 0: SPL, 1: Token2022
-    partnerLpPercentage: number // The percentage of the pool that will be allocated to the partner
-    creatorLpPercentage: number // The percentage of the pool that will be allocated to the creator
-    partnerLockedLpPercentage: number // The percentage of the pool that will be allocated to the partner locked
-    creatorLockedLpPercentage: number // The percentage of the pool that will be allocated to the creator locked
+    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
+    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
+    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
     creatorTradingFeePercentage: number // The percentage of the trading fee that will be allocated to the creator
     leftover: number // The leftover amount that can be withdrawn by leftover receiver
     tokenUpdateAuthority: number // 0 - CreatorUpdateAuthority, 1 - Immutable, 2 - PartnerUpdateAuthority, 3 - CreatorUpdateAndMintAuthority, 4 - PartnerUpdateAndMintAuthority
@@ -544,6 +606,22 @@ interface BuildCurveParams {
         collectFeeMode: number // 0: QuoteToken, 1: OutputToken
         dynamicFee: number // 0: Disabled, 1: Enabled
         poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
+    }
+    partnerLiquidityVestingInfoParams?: {
+        // Optional LP vesting for partner (only applicable for DAMM v2 migration)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        totalDuration: number // Total vesting duration in seconds
+    }
+    creatorLiquidityVestingInfoParams?: {
+        // Optional LP vesting for creator (only applicable for DAMM v2 migration)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        totalDuration: number // Total vesting duration in seconds
     }
 }
 ```
@@ -583,10 +661,10 @@ const curveConfig = buildCurve({
     collectFeeMode: CollectFeeMode.QuoteToken,
     migrationFeeOption: MigrationFeeOption.Customizable,
     tokenType: TokenType.SPL,
-    partnerLpPercentage: 0,
-    creatorLpPercentage: 0,
-    partnerLockedLpPercentage: 100,
-    creatorLockedLpPercentage: 0,
+    partnerLiquidityPercentage: 0,
+    creatorLiquidityPercentage: 0,
+    partnerPermanentLockedLiquidityPercentage: 100,
+    creatorPermanentLockedLiquidityPercentage: 0,
     creatorTradingFeePercentage: 0,
     leftover: 0,
     tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
@@ -618,7 +696,74 @@ const transaction = await client.partner.createConfig({
 - `lockedVestingParam.totalVestingDuration` and `lockedVestingParam.cliffDurationFromMigrationTime` are calculated in terms of seconds.
 - `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
 - `migratedPoolFee` is only configurable when `migrationOption = MET_DAMM_V2 (1)` and `migrationFeeOption = Customizable (6)`.
+- `partnerLiquidityVestingInfoParams` and `creatorLiquidityVestingInfoParams` are only applicable when `migrationOption = MET_DAMM_V2 (1)`. These configure LP vesting for the partner and creator positions after migration.
 - Slot is 400ms, Timestamp is 1000ms.
+
+---
+
+### getLiquidityVestingInfoParams
+
+A helper function to craft the `LiquidityVestingInfoParameters` object for use with the LP vesting parameters in buildCurve functions.
+
+**Function**
+
+```typescript
+function getLiquidityVestingInfoParams(
+    vestingPercentage: number,
+    bpsPerPeriod: number,
+    numberOfPeriods: number,
+    cliffDurationFromMigrationTime: number,
+    totalDuration: number
+): LiquidityVestingInfoParameters
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `vestingPercentage` | number | The percentage of non-permanently-locked LP to vest (0-100) |
+| `bpsPerPeriod` | number | Basis points released per vesting period (e.g., 100 = 1% per period) |
+| `numberOfPeriods` | number | Number of vesting periods |
+| `cliffDurationFromMigrationTime` | number | Cliff duration in seconds from migration time before vesting starts |
+| `totalDuration` | number | Total vesting duration in seconds |
+
+**Returns**
+
+```typescript
+interface LiquidityVestingInfoParameters {
+    vestingPercentage: number    // The percentage of LP to vest
+    bpsPerPeriod: number         // Basis points released per period
+    numberOfPeriods: number      // Number of vesting periods
+    cliffDurationFromMigrationTime: number // Cliff duration in seconds
+    frequency: number            // Calculated: totalDuration / numberOfPeriods
+}
+```
+
+**Example**
+
+```typescript
+import { getLiquidityVestingInfoParams } from '@meteora-ag/dynamic-bonding-curve-sdk'
+
+// Create LP vesting config: 50% vesting, 7-day cliff, 30-day total vesting, 1% per period over 100 periods
+const partnerVesting = getLiquidityVestingInfoParams(
+    50,                        // vestingPercentage: 50% of LP will vest
+    100,                       // bpsPerPeriod: 1% released per period
+    100,                       // numberOfPeriods: 100 vesting periods
+    7 * 24 * 60 * 60,          // cliffDurationFromMigrationTime: 7 days cliff
+    30 * 24 * 60 * 60          // totalDuration: 30 days total vesting
+)
+
+const curveConfig = buildCurveWithMarketCap({
+    // ... other params
+    partnerLiquidityVestingInfoParams: partnerVesting,
+})
+```
+
+**Notes**
+
+- This helper calculates the `frequency` field automatically based on `totalDuration / numberOfPeriods`.
+- LP vesting is only applicable for DAMM v2 migrations.
+- When LP vesting is configured, the `migrateToDammV2` endpoint will require vesting accounts for the positions.
 
 ---
 
@@ -675,10 +820,10 @@ interface BuildCurveWithMarketCapParams {
     collectFeeMode: number // 0: QuoteToken, 1: OutputToken
     migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
     tokenType: number // 0: SPL, 1: Token2022
-    partnerLpPercentage: number // The percentage of the pool that will be allocated to the partner
-    creatorLpPercentage: number // The percentage of the pool that will be allocated to the creator
-    partnerLockedLpPercentage: number // The percentage of the pool that will be allocated to the partner locked
-    creatorLockedLpPercentage: number // The percentage of the pool that will be allocated to the creator locked
+    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
+    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
+    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
     creatorTradingFeePercentage: number // The percentage of the trading fee that will be allocated to the creator
     leftover: number // The leftover amount that can be withdrawn by leftover receiver
     tokenUpdateAuthority: number // 0 - CreatorUpdateAuthority, 1 - Immutable, 2 - PartnerUpdateAuthority, 3 - CreatorUpdateAndMintAuthority, 4 - PartnerUpdateAndMintAuthority
@@ -692,6 +837,22 @@ interface BuildCurveWithMarketCapParams {
         collectFeeMode: number // 0: QuoteToken, 1: OutputToken
         dynamicFee: number // 0: Disabled, 1: Enabled
         poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
+    }
+    partnerLiquidityVestingInfoParams?: {
+        // Optional LP vesting for partner (only applicable for DAMM v2 migration)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        totalDuration: number // Total vesting duration in seconds
+    }
+    creatorLiquidityVestingInfoParams?: {
+        // Optional LP vesting for creator (only applicable for DAMM v2 migration)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        totalDuration: number // Total vesting duration in seconds
     }
 }
 ```
@@ -731,10 +892,10 @@ const curveConfig = buildCurveWithMarketCap({
     collectFeeMode: CollectFeeMode.QuoteToken,
     migrationFeeOption: MigrationFeeOption.Customizable,
     tokenType: TokenType.SPL,
-    partnerLpPercentage: 0,
-    creatorLpPercentage: 0,
-    partnerLockedLpPercentage: 100,
-    creatorLockedLpPercentage: 0,
+    partnerLiquidityPercentage: 0,
+    creatorLiquidityPercentage: 0,
+    partnerPermanentLockedLiquidityPercentage: 100,
+    creatorPermanentLockedLiquidityPercentage: 0,
     creatorTradingFeePercentage: 0,
     leftover: 0,
     tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
@@ -766,6 +927,7 @@ const transaction = await client.partner.createConfig({
 - `lockedVestingParam.totalVestingDuration` and `lockedVestingParam.cliffDurationFromMigrationTime` are calculated in terms of seconds.
 - `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
 - `migratedPoolFee` is only configurable when `migrationOption = MET_DAMM_V2 (1)` and `migrationFeeOption = Customizable (6)`.
+- `partnerLiquidityVestingInfoParams` and `creatorLiquidityVestingInfoParams` are only applicable when `migrationOption = MET_DAMM_V2 (1)`. These configure LP vesting for the partner and creator positions after migration.
 - Slot is 400ms, Timestamp is 1000ms.
 
 ---
@@ -824,10 +986,10 @@ interface BuildCurveWithTwoSegmentsParams {
     collectFeeMode: number // 0: QuoteToken, 1: OutputToken
     migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
     tokenType: number // 0: SPL, 1: Token2022
-    partnerLpPercentage: number // The percentage of the pool that will be allocated to the partner
-    creatorLpPercentage: number // The percentage of the pool that will be allocated to the creator
-    partnerLockedLpPercentage: number // The percentage of the pool that will be allocated to the partner locked
-    creatorLockedLpPercentage: number // The percentage of the pool that will be allocated to the creator locked
+    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
+    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
+    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
     creatorTradingFeePercentage: number // The percentage of the trading fee that will be allocated to the creator
     leftover: number // The leftover amount that can be withdrawn by leftover receiver
     tokenUpdateAuthority: number // 0 - CreatorUpdateAuthority, 1 - Immutable, 2 - PartnerUpdateAuthority, 3 - CreatorUpdateAndMintAuthority, 4 - PartnerUpdateAndMintAuthority
@@ -841,6 +1003,22 @@ interface BuildCurveWithTwoSegmentsParams {
         collectFeeMode: number // 0: QuoteToken, 1: OutputToken
         dynamicFee: number // 0: Disabled, 1: Enabled
         poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
+    }
+    partnerLiquidityVestingInfoParams?: {
+        // Optional LP vesting for partner (only applicable for DAMM v2 migration)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        totalDuration: number // Total vesting duration in seconds
+    }
+    creatorLiquidityVestingInfoParams?: {
+        // Optional LP vesting for creator (only applicable for DAMM v2 migration)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        totalDuration: number // Total vesting duration in seconds
     }
 }
 ```
@@ -881,10 +1059,10 @@ const curveConfig = buildCurveWithTwoSegments({
     collectFeeMode: CollectFeeMode.QuoteToken,
     migrationFeeOption: MigrationFeeOption.Customizable,
     tokenType: TokenType.SPL,
-    partnerLpPercentage: 100,
-    creatorLpPercentage: 0,
-    partnerLockedLpPercentage: 0,
-    creatorLockedLpPercentage: 0,
+    partnerLiquidityPercentage: 100,
+    creatorLiquidityPercentage: 0,
+    partnerPermanentLockedLiquidityPercentage: 0,
+    creatorPermanentLockedLiquidityPercentage: 0,
     creatorTradingFeePercentage: 0,
     leftover: 1000,
     tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
@@ -975,10 +1153,10 @@ interface BuildCurveWithMidPriceParams {
     collectFeeMode: number // 0: QuoteToken, 1: OutputToken
     migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
     tokenType: number // 0: SPL, 1: Token2022
-    partnerLpPercentage: number // The percentage of the pool that will be allocated to the partner
-    creatorLpPercentage: number // The percentage of the pool that will be allocated to the creator
-    partnerLockedLpPercentage: number // The percentage of the pool that will be allocated to the partner locked
-    creatorLockedLpPercentage: number // The percentage of the pool that will be allocated to the creator locked
+    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
+    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
+    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
     creatorTradingFeePercentage: number // The percentage of the trading fee that will be allocated to the creator
     leftover: number // The leftover amount that can be withdrawn by leftover receiver
     tokenUpdateAuthority: number // 0 - CreatorUpdateAuthority, 1 - Immutable, 2 - PartnerUpdateAuthority, 3 - CreatorUpdateAndMintAuthority, 4 - PartnerUpdateAndMintAuthority
@@ -992,6 +1170,22 @@ interface BuildCurveWithMidPriceParams {
         collectFeeMode: number // 0: QuoteToken, 1: OutputToken
         dynamicFee: number // 0: Disabled, 1: Enabled
         poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
+    }
+    partnerLiquidityVestingInfoParams?: {
+        // Optional LP vesting for partner (only applicable for DAMM v2 migration)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        totalDuration: number // Total vesting duration in seconds
+    }
+    creatorLiquidityVestingInfoParams?: {
+        // Optional LP vesting for creator (only applicable for DAMM v2 migration)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        totalDuration: number // Total vesting duration in seconds
     }
 }
 ```
@@ -1033,10 +1227,10 @@ const curveConfig = buildCurveWithMidPrice({
     collectFeeMode: CollectFeeMode.QuoteToken,
     migrationFeeOption: MigrationFeeOption.Customizable,
     tokenType: TokenType.SPL,
-    partnerLpPercentage: 100,
-    creatorLpPercentage: 0,
-    partnerLockedLpPercentage: 0,
-    creatorLockedLpPercentage: 0,
+    partnerLiquidityPercentage: 100,
+    creatorLiquidityPercentage: 0,
+    partnerPermanentLockedLiquidityPercentage: 0,
+    creatorPermanentLockedLiquidityPercentage: 0,
     creatorTradingFeePercentage: 0,
     leftover: 1000,
     tokenUpdateAuthority: 1,
@@ -1128,10 +1322,10 @@ interface BuildCurveWithLiquidityWeightsParams {
     collectFeeMode: number // 0: QuoteToken, 1: OutputToken
     migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
     tokenType: number // 0: SPL, 1: Token2022
-    partnerLpPercentage: number // The percentage of the pool that will be allocated to the partner
-    creatorLpPercentage: number // The percentage of the pool that will be allocated to the creator
-    partnerLockedLpPercentage: number // The percentage of the pool that will be allocated to the partner locked
-    creatorLockedLpPercentage: number // The percentage of the pool that will be allocated to the creator locked
+    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
+    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
+    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
     creatorTradingFeePercentage: number // The percentage of the trading fee that will be allocated to the creator
     leftover: number // The leftover amount that can be withdrawn by leftover receiver
     liquidityWeights: number[] // The liquidity weights for each liquidity segment in the curve
@@ -1146,6 +1340,22 @@ interface BuildCurveWithLiquidityWeightsParams {
         collectFeeMode: number // 0: QuoteToken, 1: OutputToken
         dynamicFee: number // 0: Disabled, 1: Enabled
         poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
+    }
+    partnerLiquidityVestingInfoParams?: {
+        // Optional LP vesting for partner (only applicable for DAMM v2 migration)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        totalDuration: number // Total vesting duration in seconds
+    }
+    creatorLiquidityVestingInfoParams?: {
+        // Optional LP vesting for creator (only applicable for DAMM v2 migration)
+        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
+        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
+        numberOfPeriods: number // Number of vesting periods
+        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
+        totalDuration: number // Total vesting duration in seconds
     }
 }
 ```
@@ -1190,10 +1400,10 @@ const curveConfig = buildCurveWithLiquidityWeights({
     collectFeeMode: CollectFeeMode.QuoteToken,
     migrationFeeOption: MigrationFeeOption.Customizable,
     tokenType: TokenType.SPL,
-    partnerLpPercentage: 100,
-    creatorLpPercentage: 0,
-    partnerLockedLpPercentage: 0,
-    creatorLockedLpPercentage: 0,
+    partnerLiquidityPercentage: 100,
+    creatorLiquidityPercentage: 0,
+    partnerPermanentLockedLiquidityPercentage: 0,
+    creatorPermanentLockedLiquidityPercentage: 0,
     creatorTradingFeePercentage: 0,
     leftover: 1000,
     liquidityWeights,
@@ -1238,6 +1448,160 @@ const transaction = await client.partner.createConfig({
 - `lockedVestingParam.totalVestingDuration` and `lockedVestingParam.cliffDurationFromMigrationTime` are calculated in terms of seconds.
 - `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
 - `migratedPoolFee` is only configurable when `migrationOption = MET_DAMM_V2 (1)` and `migrationFeeOption = Customizable (6)`.
+- Slot is 400ms, Timestamp is 1000ms.
+
+---
+
+### buildCurveWithCustomSqrtPrices
+
+Builds a constant product curve configuration using custom sqrt price points. This function gives you full control over the exact price points in your curve by specifying sqrt prices directly instead of market caps.
+
+**Function**
+
+```typescript
+async buildCurveWithCustomSqrtPrices(params: BuildCurveWithCustomSqrtPricesParams): Promise<ConfigParameters>
+```
+
+**Parameters**
+
+```typescript
+interface BuildCurveWithCustomSqrtPricesParams {
+    totalTokenSupply: number // Total supply of the token
+    sqrtPrices: BN[] // Array of sqrt price values (must be ascending, min 2, max 16)
+    liquidityWeights?: number[] // Optional: liquidity distribution weights (length = sqrtPrices.length - 1)
+    migrationOption: MigrationOption // MET_DAMM_V1 (0) or MET_DAMM_V2 (1)
+    tokenBaseDecimal: TokenDecimal // Token base decimals (SIX, NINE, etc.)
+    tokenQuoteDecimal: TokenDecimal // Token quote decimals (SIX, NINE, etc.)
+    lockedVestingParam: LockedVestingParam // Locked vesting parameters
+    baseFeeParams: BaseFeeParams // Base fee configuration
+    dynamicFeeEnabled: boolean // Enable dynamic fees
+    activationType: ActivationType // Slot or Timestamp
+    collectFeeMode: CollectFeeMode // OnlyQuote or Both
+    migrationFeeOption: MigrationFeeOption // Migration fee option
+    tokenType: TokenType // SPL or Token2022
+    partnerLiquidityPercentage: number // Partner claimable LP percentage (0-100)
+    creatorLiquidityPercentage: number // Creator claimable LP percentage (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // Partner permanently locked LP percentage
+    creatorPermanentLockedLiquidityPercentage: number // Creator permanently locked LP percentage
+    creatorTradingFeePercentage: number // Creator's share of trading fees (0-100)
+    leftover: number // Leftover amount configuration
+    tokenUpdateAuthority: TokenUpdateAuthorityOption // Token authority option
+    migrationFee: MigrationFee // Migration fee configuration
+    partnerLiquidityVestingInfo?: LiquidityVestingInfoParameters // Partner LP vesting (DAMM v2 only)
+    creatorLiquidityVestingInfo?: LiquidityVestingInfoParameters // Creator LP vesting (DAMM v2 only)
+}
+```
+
+**Helper Function: createSqrtPrices**
+
+Use the `createSqrtPrices` helper function to convert human-readable prices to sqrt price format:
+
+```typescript
+function createSqrtPrices(params: CreateSqrtPricesParams): BN[]
+
+interface CreateSqrtPricesParams {
+    prices: number[] // Array of human-readable prices (must be ascending)
+    tokenBaseDecimal: TokenDecimal // Token base decimals
+    tokenQuoteDecimal: TokenDecimal // Token quote decimals
+}
+```
+
+**Returns**
+
+- `ConfigParameters` that can be spread into `createConfig`.
+
+**Example**
+
+```typescript
+import {
+    buildCurveWithCustomSqrtPrices,
+    createSqrtPrices,
+    TokenDecimal,
+    MigrationOption,
+    ActivationType,
+    CollectFeeMode,
+    BaseFeeMode,
+    MigrationFeeOption,
+    TokenType,
+    TokenUpdateAuthorityOption,
+} from '@meteora-ag/dynamic-bonding-curve-sdk'
+
+// Define token decimals
+const tokenBaseDecimal = TokenDecimal.SIX
+const tokenQuoteDecimal = TokenDecimal.NINE
+
+// Define custom price points (in human-readable format)
+// Example: Start at $0.00003, pass through $0.0001, $0.0003, and migrate at $0.00054
+const humanReadablePrices = [0.00003, 0.0001, 0.0003, 0.00054]
+
+// Convert human-readable prices to sqrt prices
+const sqrtPrices = createSqrtPrices({
+    prices: humanReadablePrices,
+    tokenBaseDecimal,
+    tokenQuoteDecimal,
+})
+
+// Optional: Define liquidity weights for each segment
+// Length must be sqrtPrices.length - 1
+const liquidityWeights = [1, 2, 1] // 3 segments for 4 price points
+
+const curveConfig = buildCurveWithCustomSqrtPrices({
+    totalTokenSupply: 1000000000,
+    sqrtPrices,
+    liquidityWeights, // Optional: omit for equal distribution
+    migrationOption: MigrationOption.MET_DAMM_V2,
+    tokenBaseDecimal,
+    tokenQuoteDecimal,
+    lockedVestingParam: {
+        totalLockedVestingAmount: 0,
+        numberOfVestingPeriod: 0,
+        cliffUnlockAmount: 0,
+        totalVestingDuration: 0,
+        cliffDurationFromMigrationTime: 0,
+    },
+    baseFeeParams: {
+        baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+        feeSchedulerParam: {
+            startingFeeBps: 100,
+            endingFeeBps: 100,
+            numberOfPeriod: 0,
+            totalDuration: 0,
+        },
+    },
+    dynamicFeeEnabled: true,
+    activationType: ActivationType.Slot,
+    collectFeeMode: CollectFeeMode.Both,
+    migrationFeeOption: MigrationFeeOption.FixedBps100,
+    tokenType: TokenType.SPL,
+    partnerLiquidityPercentage: 0,
+    creatorLiquidityPercentage: 0,
+    partnerPermanentLockedLiquidityPercentage: 50,
+    creatorPermanentLockedLiquidityPercentage: 50,
+    creatorTradingFeePercentage: 50,
+    leftover: 0,
+    tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+    migrationFee: {
+        feePercentage: 0,
+        creatorFeePercentage: 0,
+    },
+})
+```
+
+**Notes**
+
+- `buildCurveWithCustomSqrtPrices` gives you full control over exact price points in your curve.
+- The `sqrtPrices` array must:
+    - Be in ascending order
+    - Have a minimum of 2 elements (representing start and end prices)
+    - Have a maximum of 16 elements
+- Use the `createSqrtPrices` helper to convert human-readable prices to sqrt prices.
+- The optional `liquidityWeights` array controls liquidity distribution across curve segments:
+    - Length must be `sqrtPrices.length - 1`
+    - Higher weight = more liquidity concentrated in that price range
+    - Omit for equal distribution across all segments
+- If `dynamicFeeEnabled` is true, the dynamic fee will be enabled and capped at 20% of minimum base fee.
+- `lockedVestingParam.totalVestingDuration` and `lockedVestingParam.cliffDurationFromMigrationTime` are calculated in terms of seconds.
+- `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
 - Slot is 400ms, Timestamp is 1000ms.
 
 ---
@@ -1338,10 +1702,10 @@ interface CreateConfigAndPoolParams {
     tokenType: number // 0: SPL, 1: Token2022
     tokenDecimal: number // The number of decimals for the token
     migrationQuoteThreshold: BN // The quote threshold for migration
-    partnerLpPercentage: number // The percentage of the pool that will be allocated to the partner (0-100)
-    creatorLpPercentage: number // The percentage of the pool that will be allocated to the creator (0-100)
-    partnerLockedLpPercentage: number // The percentage of the pool that will be allocated to the partner locked (0-100)
-    creatorLockedLpPercentage: number // The percentage of the pool that will be allocated to the creator locked (0-100)
+    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
+    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
+    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
     sqrtStartPrice: BN // The starting price of the pool
     lockedVesting: {
         // Optional locked vesting (BN (0) for all fields for no vesting)
@@ -1423,10 +1787,10 @@ const transaction = await client.pool.createConfigAndPool({
     tokenType: 0,
     tokenDecimal: 9,
     migrationQuoteThreshold: new BN('1000000000'),
-    partnerLpPercentage: 25,
-    creatorLpPercentage: 25,
-    partnerLockedLpPercentage: 25,
-    creatorLockedLpPercentage: 25,
+    partnerLiquidityPercentage: 25,
+    creatorLiquidityPercentage: 25,
+    partnerPermanentLockedLiquidityPercentage: 25,
+    creatorPermanentLockedLiquidityPercentage: 25,
     sqrtStartPrice: new BN('58333726687135158'),
     lockedVesting: {
         amountPerPeriod: new BN('0'),
@@ -1529,10 +1893,10 @@ interface CreateConfigAndPoolWithFirstBuyParams {
     tokenType: number // 0: SPL, 1: Token2022
     tokenDecimal: number // The number of decimals for the token
     migrationQuoteThreshold: BN // The quote threshold for migration
-    partnerLpPercentage: number // The percentage of the pool that will be allocated to the partner (0-100)
-    creatorLpPercentage: number // The percentage of the pool that will be allocated to the creator (0-100)
-    partnerLockedLpPercentage: number // The percentage of the pool that will be allocated to the partner locked (0-100)
-    creatorLockedLpPercentage: number // The percentage of the pool that will be allocated to the creator locked (0-100)
+    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
+    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
+    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
     sqrtStartPrice: BN // The starting price of the pool
     lockedVesting: {
         // Optional locked vesting (BN (0) for all fields for no vesting)
@@ -1624,10 +1988,10 @@ const transaction = await client.pool.createConfigAndPoolWithFirstBuy({
     tokenType: 0,
     tokenDecimal: 9,
     migrationQuoteThreshold: new BN('1000000000'),
-    partnerLpPercentage: 25,
-    creatorLpPercentage: 25,
-    partnerLockedLpPercentage: 25,
-    creatorLockedLpPercentage: 25,
+    partnerLiquidityPercentage: 25,
+    creatorLiquidityPercentage: 25,
+    partnerPermanentLockedLiquidityPercentage: 25,
+    creatorPermanentLockedLiquidityPercentage: 25,
     sqrtStartPrice: new BN('58333726687135158'),
     lockedVesting: {
         amountPerPeriod: new BN('0'),
@@ -2395,7 +2759,7 @@ const transaction = await client.migration.lockDammV1LpToken({
 
 **Notes**
 
-- This function is called when the `creatorLockedLpPercentage` or `partnerLockedLpPercentage` is > 0.
+- This function is called when the `creatorPermanentLockedLiquidityPercentage` or `partnerPermanentLockedLiquidityPercentage` is > 0.
 - You can get the dammConfig key from the [README.md](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/README.md), or you can use `DAMM_V1_MIGRATION_FEE_ADDRESS[i]` to get the dammConfig key address.
 
 ---
@@ -2438,7 +2802,7 @@ const transaction = await client.migration.claimDammV1LpToken({
 
 **Notes**
 
-- This function is called when the `creatorLpPercentage` or `partnerLpPercentage` is > 0.
+- This function is called when the `creatorLiquidityPercentage` or `partnerLiquidityPercentage` is > 0.
 - You can get the dammConfig key from the [README.md](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/README.md), or you can use `DAMM_V1_MIGRATION_FEE_ADDRESS[i]` to get the dammConfig key address.
 
 ---
@@ -2497,6 +2861,7 @@ const transaction = await client.migration.migrateToDammV2({
         - first_position_nft_mint must not equal second_position_nft_mint
     7. Exactly one remaining account must be provided (for the DAMM V2 config)
 - You can get the dammConfig key from the [README.md](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/README.md), or you can use `DAMM_V2_MIGRATION_FEE_ADDRESS[i]` to get the dammConfig key address.
+- **LP Vesting Requirement**: If the config has `partnerLiquidityVestingInfoParams` or `creatorLiquidityVestingInfoParams` configured, the migration will require vesting accounts for `firstPosition` and `secondPosition`. The SDK automatically includes `firstPositionVestingAddress` and `secondPositionVestingAddress` in the remaining accounts when LP vesting is configured.
 
 ---
 
@@ -2814,10 +3179,10 @@ type PoolConfig = {
   version: number;
   tokenType: number;
   quoteTokenFlag: number;
-  partnerLockedLpPercentage: number;
-  partnerLpPercentage: number;
-  creatorLockedLpPercentage: number;
-  creatorLpPercentage: number;
+  partnerPermanentLockedLiquidityPercentage: number;
+  partnerLiquidityPercentage: number;
+  creatorPermanentLockedLiquidityPercentage: number;
+  creatorLiquidityPercentage: number;
   migrationFeeOption: number;
   fixedTokenSupplyFlag: number;
   creatorTradingFeePercentage: number;
@@ -3290,10 +3655,10 @@ type meteoraDammMigrationMetadata = {
     padding0: number | number[]
     partner: PublicKey
     lpMint: PublicKey
-    partnerLockedLp: BN
-    partnerLp: BN
-    creatorLockedLp: BN
-    creatorLp: BN
+    partnerPermanentLockedLiquidity: BN
+    partnerLiquidity: BN
+    creatorPermanentLockedLiquidity: BN
+    creatorLiquidity: BN
     creatorLockedStatus: number
     partnerLockedStatus: number
     creatorClaimStatus: number
