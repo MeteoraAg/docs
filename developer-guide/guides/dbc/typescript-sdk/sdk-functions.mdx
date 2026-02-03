@@ -98,6 +98,15 @@ interface CreateConfigParams {
         cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
         frequency: number // Frequency of vesting in seconds (calculated as totalDuration / numberOfPeriods)
     }
+    migratedPoolBaseFeeMode?: number // 0: FeeTimeSchedulerLinear, 1: FeeTimeSchedulerExponential, 2: RateLimiter (not supported), 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential (see DammV2BaseFeeMode). Defaults to FeeTimeSchedulerLinear (0).
+    migratedPoolMarketCapFeeSchedulerParams?: {
+        // Only when migratedPoolBaseFeeMode = FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4) and migrationOption = MET_DAMM_V2 (1)
+        numberOfPeriod: number // The total number of fee reduction periods
+        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
+        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
+        reductionFactor: BN // The amount to reduce the fee by per period
+    }
+    enableFirstSwapWithMinFee?: boolean // If true, the first swap on the pool will use the minimum fee instead of the starting fee. Default: false.
     padding: []
     curve: {
         // The curve of the pool
@@ -172,6 +181,9 @@ const transaction = await client.partner.createConfig({
         dynamicFee: 0,
         poolFeeBps: 0,
     },
+    migratedPoolBaseFeeMode: DammV2BaseFeeMode.FeeTimeSchedulerLinear, // Optional: defaults to FeeTimeSchedulerLinear (0)
+    // migratedPoolMarketCapFeeSchedulerParams: { ... }, // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
+    enableFirstSwapWithMinFee: false, // Optional: defaults to false
     padding: [],
     curve: [
         {
@@ -623,6 +635,16 @@ interface BuildCurveParams {
         cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
         totalDuration: number // Total vesting duration in seconds
     }
+    migratedPoolBaseFeeMode?: DammV2BaseFeeMode // Optional: 0: FeeTimeSchedulerLinear (default), 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential. Mode 2 (RateLimiter) is not supported.
+    migratedPoolMarketCapFeeSchedulerParams?: {
+        // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
+        endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
+        numberOfPeriod: number // The total number of fee reduction periods
+        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
+        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
+    }
+    poolCreationFee?: number // Pool creation fee in SOL (0 or between 0.001 SOL to 100 SOL)
+    enableFirstSwapWithMinFee?: boolean // If true, allows pool creator's first swap to bypass anti-sniper fees
 }
 ```
 
@@ -677,6 +699,15 @@ const curveConfig = buildCurve({
         dynamicFee: DammV2DynamicFeeMode.Enabled,
         poolFeeBps: 250,
     },
+    // Optional: Fee Market Cap Scheduler params (only for DAMM v2 migration)
+    // migratedPoolBaseFeeMode: DammV2BaseFeeMode.FeeMarketCapSchedulerLinear,
+    // migratedPoolMarketCapFeeSchedulerParams: {
+    //     endingBaseFeeBps: 50,
+    //     numberOfPeriod: 100,
+    //     sqrtPriceStepBps: 100,
+    //     schedulerExpirationDuration: 86400,
+    // },
+    // enableFirstSwapWithMinFee: false,
 })
 
 const transaction = await client.partner.createConfig({
@@ -697,6 +728,9 @@ const transaction = await client.partner.createConfig({
 - `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
 - `migratedPoolFee` is only configurable when `migrationOption = MET_DAMM_V2 (1)` and `migrationFeeOption = Customizable (6)`.
 - `partnerLiquidityVestingInfoParams` and `creatorLiquidityVestingInfoParams` are only applicable when `migrationOption = MET_DAMM_V2 (1)`. These configure LP vesting for the partner and creator positions after migration.
+- `poolCreationFee` is the fee in SOL that token creators pay when creating a pool. Partners can claim this fee later using `claimPartnerPoolCreationFee`.
+- `enableFirstSwapWithMinFee` when true, allows the pool creator to make their first swap without anti-sniper fees. This is useful for pool creation + first buy in a single transaction.
+- `migratedPoolBaseFeeMode` and `migratedPoolMarketCapFeeSchedulerParams` are only applicable when `migrationOption = MET_DAMM_V2 (1)`. These configure the fee scheduling mode for the graduated DAMM v2 pool.
 - Slot is 400ms, Timestamp is 1000ms.
 
 ---
@@ -854,6 +888,16 @@ interface BuildCurveWithMarketCapParams {
         cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
         totalDuration: number // Total vesting duration in seconds
     }
+    migratedPoolBaseFeeMode?: DammV2BaseFeeMode // Optional: 0: FeeTimeSchedulerLinear (default), 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential. Mode 2 (RateLimiter) is not supported.
+    migratedPoolMarketCapFeeSchedulerParams?: {
+        // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
+        endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
+        numberOfPeriod: number // The total number of fee reduction periods
+        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
+        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
+    }
+    poolCreationFee?: number // Pool creation fee in SOL (0 or between 0.001 SOL to 100 SOL)
+    enableFirstSwapWithMinFee?: boolean // Optional: If true, the first swap on the pool will use the minimum fee. Default: false.
 }
 ```
 
@@ -1020,6 +1064,16 @@ interface BuildCurveWithTwoSegmentsParams {
         cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
         totalDuration: number // Total vesting duration in seconds
     }
+    migratedPoolBaseFeeMode?: DammV2BaseFeeMode // Optional: 0: FeeTimeSchedulerLinear (default), 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential. Mode 2 (RateLimiter) is not supported.
+    migratedPoolMarketCapFeeSchedulerParams?: {
+        // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
+        endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
+        numberOfPeriod: number // The total number of fee reduction periods
+        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
+        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
+    }
+    poolCreationFee?: number // Pool creation fee in SOL (0 or between 0.001 SOL to 100 SOL)
+    enableFirstSwapWithMinFee?: boolean // Optional: If true, the first swap on the pool will use the minimum fee. Default: false.
 }
 ```
 
@@ -1187,6 +1241,16 @@ interface BuildCurveWithMidPriceParams {
         cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
         totalDuration: number // Total vesting duration in seconds
     }
+    migratedPoolBaseFeeMode?: DammV2BaseFeeMode // Optional: 0: FeeTimeSchedulerLinear (default), 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential. Mode 2 (RateLimiter) is not supported.
+    migratedPoolMarketCapFeeSchedulerParams?: {
+        // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
+        endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
+        numberOfPeriod: number // The total number of fee reduction periods
+        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
+        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
+    }
+    poolCreationFee?: number // Pool creation fee in SOL (0 or between 0.001 SOL to 100 SOL)
+    enableFirstSwapWithMinFee?: boolean // Optional: If true, the first swap on the pool will use the minimum fee. Default: false.
 }
 ```
 
@@ -1357,6 +1421,16 @@ interface BuildCurveWithLiquidityWeightsParams {
         cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
         totalDuration: number // Total vesting duration in seconds
     }
+    migratedPoolBaseFeeMode?: DammV2BaseFeeMode // Optional: 0: FeeTimeSchedulerLinear (default), 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential. Mode 2 (RateLimiter) is not supported.
+    migratedPoolMarketCapFeeSchedulerParams?: {
+        // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
+        endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
+        numberOfPeriod: number // The total number of fee reduction periods
+        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
+        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
+    }
+    poolCreationFee?: number // Pool creation fee in SOL (0 or between 0.001 SOL to 100 SOL)
+    enableFirstSwapWithMinFee?: boolean // Optional: If true, the first swap on the pool will use the minimum fee. Default: false.
 }
 ```
 
@@ -1734,6 +1808,15 @@ interface CreateConfigAndPoolParams {
         dynamicFee: number // 0: Disabled, 1: Enabled
         poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
     }
+    migratedPoolBaseFeeMode?: number // 0: FeeTimeSchedulerLinear, 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential (see DammV2BaseFeeMode). Defaults to FeeTimeSchedulerLinear (0).
+    migratedPoolMarketCapFeeSchedulerParams?: {
+        // Only when migratedPoolBaseFeeMode = FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4) and migrationOption = MET_DAMM_V2 (1)
+        numberOfPeriod: number // The total number of fee reduction periods
+        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
+        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
+        reductionFactor: BN // The amount to reduce the fee by per period
+    }
+    enableFirstSwapWithMinFee?: boolean // If true, the first swap on the pool will use the minimum fee. Default: false.
     padding: []
     curve: {
         // The curve of the pool
@@ -1925,6 +2008,15 @@ interface CreateConfigAndPoolWithFirstBuyParams {
         dynamicFee: number // 0: Disabled, 1: Enabled
         poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
     }
+    migratedPoolBaseFeeMode?: number // 0: FeeTimeSchedulerLinear, 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential (see DammV2BaseFeeMode). Defaults to FeeTimeSchedulerLinear (0).
+    migratedPoolMarketCapFeeSchedulerParams?: {
+        // Only when migratedPoolBaseFeeMode = FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4) and migrationOption = MET_DAMM_V2 (1)
+        numberOfPeriod: number // The total number of fee reduction periods
+        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
+        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
+        reductionFactor: BN // The amount to reduce the fee by per period
+    }
+    enableFirstSwapWithMinFee?: boolean // If true, the first swap on the pool will use the minimum fee. Default: false.
     padding: []
     curve: {
         // The curve of the pool
@@ -2330,6 +2422,7 @@ interface SwapQuoteParams {
     amountIn: BN // The amount of tokens to swap in
     slippageBps?: number // The slippage in bps
     hasReferral: boolean // Whether to include a referral fee
+    eligibleForFirstSwapWithMinFee: boolean // Only for creator to bundle swap in initialize pool instruction to avoid anti sniper suite fee
     currentPoint: BN // The current point
 }
 ```
@@ -2488,6 +2581,7 @@ interface SwapQuote2Params {
     config: PoolConfig // The pool config address
     swapBaseForQuote: boolean // True for base->quote, false for quote->base
     hasReferral: boolean // Whether to include a referral fee
+    eligibleForFirstSwapWithMinFee: boolean // Only for creator to bundle swap in initialize pool instruction to avoid anti sniper suite fee
     currentPoint: BN // The current point
     slippageBps?: number // The slippage in bps
 } & (
@@ -4303,3 +4397,221 @@ const quoteReserve = getQuoteReserveFromNextSqrtPrice(
 
 - The `nextSqrtPrice` is the next sqrt price that you can fetch from swap cpi logs.
 - The `config` is the pool config that the token pool used to launch.
+
+---
+
+### getStartingBaseFeeBpsFromBaseFeeParams
+
+Derives the starting base fee BPS from the pre-migration pool's `baseFeeParams`. For Fee Scheduler modes (Linear/Exponential), this returns the `endingFeeBps`. For Rate Limiter mode, this returns the `baseFeeBps`.
+
+**Function**
+
+```typescript
+function getStartingBaseFeeBpsFromBaseFeeParams(
+    baseFeeParams: BaseFeeParams
+): number
+```
+
+**Parameters**
+
+```typescript
+baseFeeParams: BaseFeeParams // The base fee parameters from the pre-migration pool
+```
+
+**Returns**
+
+- A `number` representing the starting base fee in basis points for the migrated pool.
+
+**Example**
+
+```typescript
+const startingFeeBps = getStartingBaseFeeBpsFromBaseFeeParams({
+    baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+    feeSchedulerParam: {
+        startingFeeBps: 5000,
+        endingFeeBps: 100,
+        numberOfPeriod: 600,
+        totalDuration: 600,
+    },
+})
+// Returns 100 (the endingFeeBps)
+```
+
+---
+
+### getMigratedPoolMarketCapFeeSchedulerParams
+
+Crafts the `MigratedPoolMarketCapFeeSchedulerParams` object for use in the `buildCurve` functions. Calculates the `reductionFactor` based on the starting and ending base fee and the number of periods.
+
+**Function**
+
+```typescript
+function getMigratedPoolMarketCapFeeSchedulerParams(
+    startingBaseFeeBps: number,
+    endingBaseFeeBps: number,
+    dammV2BaseFeeMode: DammV2BaseFeeMode,
+    numberOfPeriod: number,
+    sqrtPriceStepBps: number,
+    schedulerExpirationDuration: number
+): MigratedPoolMarketCapFeeSchedulerParameters
+```
+
+**Parameters**
+
+```typescript
+startingBaseFeeBps: number // The starting base fee in basis points (the fee at the start of the migrated pool)
+endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
+dammV2BaseFeeMode: DammV2BaseFeeMode // The DAMM V2 base fee mode (3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential)
+numberOfPeriod: number // The total number of fee reduction periods
+sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
+schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
+```
+
+**Returns**
+
+- A `MigratedPoolMarketCapFeeSchedulerParameters` object containing `numberOfPeriod`, `sqrtPriceStepBps`, `schedulerExpirationDuration`, and `reductionFactor`.
+
+**Example**
+
+```typescript
+const params = getMigratedPoolMarketCapFeeSchedulerParams(
+    5000,  // startingBaseFeeBps: 50%
+    50,    // endingBaseFeeBps: 0.5%
+    DammV2BaseFeeMode.FeeMarketCapSchedulerLinear,
+    100,   // numberOfPeriod
+    100,   // sqrtPriceStepBps: 1% per period
+    86400  // schedulerExpirationDuration: 24 hours
+)
+```
+
+**Notes**
+
+- For `FeeTimeSchedulerLinear` (0) or `FeeTimeSchedulerExponential` (1) modes, this function returns default (zeroed) params since market cap scheduling is not used.
+- `RateLimiter` (2) mode is not supported and will throw an error.
+- `startingBaseFeeBps` must be greater than `endingBaseFeeBps`.
+- `numberOfPeriod`, `sqrtPriceStepBps`, and `schedulerExpirationDuration` must all be greater than zero.
+
+---
+
+### decodePodAlignedFeeMarketCapScheduler
+
+Decodes a `PodAlignedFeeMarketCapScheduler` object from raw config account data. Useful for reading the fee market cap scheduler state from an on-chain DAMM v2 pool config account.
+
+**Function**
+
+```typescript
+function decodePodAlignedFeeMarketCapScheduler(
+    data: Buffer
+): PodAlignedFeeMarketCapScheduler
+```
+
+**Parameters**
+
+```typescript
+data: Buffer // The raw account data buffer to decode
+```
+
+**Returns**
+
+- A `PodAlignedFeeMarketCapScheduler` object containing:
+    - `cliffFeeNumerator` - The starting fee numerator
+    - `numberOfPeriod` - The total number of fee reduction periods
+    - `sqrtPriceStepBps` - The sqrt price step in basis points
+    - `schedulerExpirationDuration` - The scheduler expiration duration
+    - `reductionFactor` - The reduction factor per period
+    - `baseFeeMode` - The base fee mode
+    - `padding` - Padding bytes
+
+**Example**
+
+```typescript
+const feeScheduler = decodePodAlignedFeeMarketCapScheduler(accountData)
+```
+
+---
+
+### validateMigratedPoolBaseFeeMode
+
+Validates the migrated pool base fee mode and market cap fee scheduler params for DAMM V2 migrations.
+
+**Function**
+
+```typescript
+function validateMigratedPoolBaseFeeMode(
+    migratedPoolBaseFeeMode: DammV2BaseFeeMode,
+    migratedPoolMarketCapFeeSchedulerParams: MigratedPoolMarketCapFeeSchedulerParameters,
+    migrationOption?: MigrationOption
+): boolean
+```
+
+**Parameters**
+
+```typescript
+migratedPoolBaseFeeMode: DammV2BaseFeeMode // The base fee mode for the migrated pool
+migratedPoolMarketCapFeeSchedulerParams: MigratedPoolMarketCapFeeSchedulerParameters // The market cap fee scheduler params
+migrationOption?: MigrationOption // The migration option (optional - only validates for DAMM V2)
+```
+
+**Returns**
+
+- `true` if valid, throws an `Error` if invalid.
+
+**Notes**
+
+- Mode 2 (`RateLimiter`) is not supported for DAMM V2 migration and will throw an error.
+- For modes 3 (`FeeMarketCapSchedulerLinear`) and 4 (`FeeMarketCapSchedulerExponential`), the `numberOfPeriod`, `sqrtPriceStepBps`, and `schedulerExpirationDuration` must all be greater than zero.
+- For modes 0 (`FeeTimeSchedulerLinear`) and 1 (`FeeTimeSchedulerExponential`), the market cap fee scheduler params must be default (all zeros).
+
+---
+
+### validateDynamicFee
+
+Validates dynamic fee parameters for pool configuration.
+
+**Function**
+
+```typescript
+function validateDynamicFee(
+    dynamicFee: DynamicFeeParameters | undefined
+): boolean
+```
+
+**Parameters**
+
+```typescript
+dynamicFee: DynamicFeeParameters | undefined // The dynamic fee parameters (optional)
+```
+
+**Returns**
+
+- `true` if the dynamic fee parameters are valid, `false` otherwise.
+
+**Notes**
+
+- Returns `true` if `dynamicFee` is `undefined` (since it is optional).
+- Validates that `binStep` equals the default bin step BPS, `binStepU128` equals the default U128 value, `filterPeriod` is less than `decayPeriod`, `reductionFactor` does not exceed `MAX_BASIS_POINT`, and `variableFeeControl` and `maxVolatilityAccumulator` do not exceed `U24_MAX`.
+
+---
+
+### getMinBaseFeeNumerator (BaseFeeHandler method)
+
+Gets the minimum base fee numerator from a `BaseFeeHandler` instance. Available on both `FeeScheduler` and `RateLimiter` handler classes.
+
+**Function**
+
+```typescript
+// On FeeScheduler class
+getMinBaseFeeNumerator(): BN
+
+// On RateLimiter class
+getMinBaseFeeNumerator(): BN
+```
+
+**Returns**
+
+- A `BN` representing the minimum base fee numerator.
+
+**Notes**
+
+- For `FeeScheduler`, the minimum fee depends on the `feeSchedulerMode` (Linear or Exponential), the `cliffFeeNumerator`, `numberOfPeriod`, and `reductionFactor`.
+- For `RateLimiter`, the minimum fee is derived from the `cliffFeeNumerator`.

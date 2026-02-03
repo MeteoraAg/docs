@@ -174,7 +174,7 @@ npm install -g pnpm
         "migrationOption": 1, // 0 - Migrate to DAMM v1 | 1 - Migrate to DAMM v2
         "tokenBaseDecimal": 6, // token base decimal
         "tokenQuoteDecimal": 9, // token quote decimal
-        "lockedVestingParam": {
+        "lockedVestingParams": {
           "totalLockedVestingAmount": 0, // total locked vesting amount (not in lamports)
           "numberOfVestingPeriod": 0, // number of vesting period
           "cliffUnlockAmount": 0, // cliff unlock amount (not in lamports)
@@ -208,7 +208,8 @@ npm install -g pnpm
         "creatorLiquidityPercentage": 45, // Creator claimable LP (withdrawable LP once pool migrates)
         "partnerPermanentLockedLiquidityPercentage": 5, // Partner permanently locked LP (permanently locked LP once pool migrates)
         "creatorPermanentLockedLiquidityPercentage": 5, // Creator permanently locked LP (permanently locked LP once pool migrates)
-        // NOTE: partnerPermanentLockedLiquidityPercentage + creatorPermanentLockedLiquidityPercentage must be >= 10% (minimum 10% locked at day 1 post-migration)
+        // NOTE: Total liquidity percentages (partner + creator + partnerLocked + creatorLocked + partnerVested + creatorVested) must equal 100%
+        // NOTE: Must have minimum 10% (1000 bps) of locked liquidity after 1 day (86400 seconds). This can be permanently locked or vested liquidity.
         "creatorTradingFeePercentage": 0, // Bonding curve trading fee sharing (0% to 100%) - 0% means all trading fees go to the partner
         "leftover": 0, // leftover tokens in the bonding curve (claimable once pool migrates)
         "tokenUpdateAuthority": 1, // 0 - CreatorUpdateAuthority | 1 - Immutable | 2 - PartnerUpdateAuthority | 3 - CreatorUpdateAndMintAuthority | 4 - PartnerUpdateAndMintAuthority
@@ -216,6 +217,47 @@ npm install -g pnpm
           "feePercentage": 0, // Percentage of fee taken from migration quote threshold once pool migrates (0% to 50%)
           "creatorFeePercentage": 0 // Percentage of the migrationFee.feePercentage claimable by creator (0% to 100%)
         },
+        "poolCreationFee": 0, // Pool creation fee in SOL (0 or between 0.001 SOL to 100 SOL). Token creators pay this fee when creating a pool. Partner can claim this fee later.
+        "enableFirstSwapWithMinFee": false, // If true, allows the pool creator to do their first swap (buy) without anti-sniper fees. Useful for single-transaction pool creation + first buy.
+
+        /* Liquidity Vesting Info (Only for DAMM v2 migration - migrationOption: 1)
+        * These parameters configure vesting schedules for partner/creator liquidity in the graduated DAMM v2 pool.
+        * Set all values to 0 if you don't want liquidity vesting.
+        */
+        // "partnerLiquidityVestingInfoParams": {
+        //   "vestingPercentage": 50,                // % of non-permanent LP to vest (0-100)
+        //   "bpsPerPeriod": 100,                    // BPS released per period (100 = 1%)
+        //   "numberOfPeriods": 100,                 // Total vesting periods
+        //   "cliffDurationFromMigrationTime": 86400, // Cliff delay in seconds (86400 = 1 day)
+        //   "totalDuration": 2592000                // Total vesting duration in seconds (30 days)
+        // },
+        // "creatorLiquidityVestingInfoParams": {
+        //   "vestingPercentage": 50,
+        //   "bpsPerPeriod": 100,
+        //   "numberOfPeriods": 100,
+        //   "cliffDurationFromMigrationTime": 86400,
+        //   "totalDuration": 2592000
+        // },
+
+        // "migratedPoolFee": {
+        //   // Configure only when migrationOption = MET_DAMM_V2 (1) and migrationFeeOption = Customizable (6)
+        //   "collectFeeMode": 0, // 0 - Quote Token | 1 - Output Token
+        //   "dynamicFee": 0, // 0: Disabled, 1: Enabled
+        //   "poolFeeBps": 0 // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
+        // },
+
+        "migratedPoolBaseFeeMode": 0, // 0 - FeeTimeSchedulerLinear (default) | 1 - FeeTimeSchedulerExponential | 3 - FeeMarketCapSchedulerLinear | 4 - FeeMarketCapSchedulerExponential (only for DAMM v2)
+
+        /* Only use the following parameters for migratedPoolBaseFeeMode: 3 (FeeMarketCapSchedulerLinear) or 4 (FeeMarketCapSchedulerExponential)
+        * These parameters configure the fee reduction based on price movement (market cap growth) for the post-graduation DAMM v2 pool.
+        */
+        // "migratedPoolMarketCapFeeSchedulerParams": {
+        //   "endingBaseFeeBps": 50, // The ending (minimum) base fee in basis points
+        //   "numberOfPeriod": 100, // The total number of fee reduction periods
+        //   "sqrtPriceStepBps": 100, // The sqrt price increase (in bps) required to advance one period
+        //   "schedulerExpirationDuration": 86400 // The maximum duration (seconds) after which the scheduler expires and defaults to minimum fee
+        // },
+
         "leftoverReceiver": "Dc85YcHkAWs62ndssWcGN5V4xYaQzPzgUDiRGtvnZas6", // leftover receiver address
         "feeClaimer": "Dc85YcHkAWs62ndssWcGN5V4xYaQzPzgUDiRGtvnZas6" // fee claimer address
       },
@@ -262,6 +304,9 @@ npm install -g pnpm
     - Configuring your bonding curve shape based on your `buildCurveMode`.
     - Launching the DBC config and token pool using the config immediately.
     - Configuring your Anti-Sniping settings (such as Fee Scheduler or Rate Limiter) easily.
+    - Setting up liquidity vesting schedules for DAMM v2 migrations.
+    - Configuring market cap-based fee schedules for graduated pools.
+    - Enabling first swap with minimum fee for pool creators.
     - Abstracts the math behind crafting the bonding curve.
   </Tip>
   </Accordion>
