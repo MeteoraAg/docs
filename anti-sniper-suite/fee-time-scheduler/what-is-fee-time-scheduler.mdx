@@ -117,9 +117,18 @@ Unlike the exponential fee time scheduler which reduces fees by a percentage of 
 # DBC Fee Time Scheduler
 <Tip> In DBC max fees you can set is 99% and minimum is 0.25% </Tip>
 
-Partners (e.g. launchpads) that integrate DBC to create and launch tokens on their platform, can also configure a fee time scheduler as part of the virtual bonding curve.
+Partners (e.g. launchpads) that integrate DBC to create and launch tokens on their platform, can also configure a fee scheduler as part of the virtual bonding curve.
 
 This way, even before the token is migrated to an actual liquidity pool, snipers that are the first to buy tokens on the virtual bonding curve are subjected to higher swap fees.
+
+## First Swap with Minimum Fee
+
+DBC supports an optional `enableFirstSwapWithMinFee` configuration that allows the pool creator to perform their first swap (buy) without anti-sniper fees. This is particularly useful when:
+
+- Creating a pool and making an initial purchase in a single transaction
+- The pool creator wants to acquire tokens at launch without paying elevated anti-sniper fees
+
+When enabled, the first swap instruction in a transaction that includes pool creation will use the minimum base fee instead of the elevated anti-sniper fee. Subsequent swaps will be subject to the normal fee scheduler.
 
 # Which Launch Pools supports Fee Time Scheduler?
 
