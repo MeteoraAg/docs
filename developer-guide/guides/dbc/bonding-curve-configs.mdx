@@ -66,6 +66,23 @@ A typical DBC curve config will look like this when you parse it into the `creat
         tokenUpdateAuthority: 1,
         migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
         migratedPoolFee: { collectFeeMode: 0, dynamicFee: 0, poolFeeBps: 0 },
+        poolCreationFee: new BN(0),
+        enableFirstSwapWithMinFee: false,
+        partnerLiquidityVestingInfo: {
+            vestingPercentage: 0,
+            bpsPerPeriod: 0,
+            numberOfPeriods: 0,
+            cliffDurationFromMigrationTime: 0,
+            frequency: 0
+        },
+        creatorLiquidityVestingInfo: {
+            vestingPercentage: 0,
+            bpsPerPeriod: 0,
+            numberOfPeriods: 0,
+            cliffDurationFromMigrationTime: 0,
+            frequency: 0
+        },
+        migratedPoolBaseFeeMode: 0,
         padding: [],
         curve: [
             {
@@ -220,6 +237,27 @@ dynamicFee: null
     - 0: `Quote Token` -> The trading fees collected in the pre-graduation DBC pool is collected in the quote token.
     - 1: `Output Token` -> The trading fees collected in the pre-graduation DBC pool is collected in the output token.
 
+### `enableFirstSwapWithMinFee`
+
+- When set to `true`, allows the pool creator to perform their first swap (buy) without anti-sniper fees.
+- This is particularly useful when creating a pool and making an initial purchase in a single transaction.
+- The first swap instruction in a transaction that includes pool creation will use the minimum base fee instead of the elevated anti-sniper fee.
+- Subsequent swaps will be subject to the normal fee scheduler or rate limiter.
+
+<Warning>
+This feature should be used carefully as it creates an exception to the anti-sniper protection. It is designed for legitimate pool creators who want to acquire tokens at launch without paying elevated anti-sniper fees.
+</Warning>
+
+<Note>
+When `enableFirstSwapWithMinFee` is enabled, the `swap` and `swap2` instructions require the `SYSVAR_INSTRUCTIONS_PUBKEY` to be included in the remaining accounts to verify the transaction context.
+</Note>
+
+Example:
+```typescript
+// Enable first swap with minimum fee for pool creators
+enableFirstSwapWithMinFee: true
+```
+
 ### `migrationQuoteThreshold`
 
 - The `migrationQuoteThreshold` is a u128 value representing the amount of quote token that will be needed to be collected in the pre-graduation DBC pool to qualify for the pool to be ready for migration.
@@ -331,15 +369,15 @@ liquidityPercentage: {
 
 In addition to the 4 liquidity percentage parameters, you can optionally configure LP vesting for DAMM v2 migrations:
 
-- `partnerLiquidityVestingInfo` - Optional vesting configuration for the partner's LP position
-- `creatorLiquidityVestingInfo` - Optional vesting configuration for the creator's LP position
+- `partnerLiquidityVestingInfoParams` - Optional vesting configuration for the partner's LP position
+- `creatorLiquidityVestingInfoParams` - Optional vesting configuration for the creator's LP position
 
 These parameters are only applicable when `migrationOption` is set to `DAMM v2`. Each vesting info uses the `LiquidityVestingInfoParameters` struct with the following fields:
 - `vestingPercentage` - The percentage of non-permanently-locked LP to vest (0-100)
 - `bpsPerPeriod` - Basis points released per vesting period (e.g., 100 = 1% per period)
 - `numberOfPeriods` - Number of vesting periods
 - `cliffDurationFromMigrationTime` - The cliff duration in seconds from migration time before vesting starts
-- `frequency` - The interval between vesting releases in seconds (calculated as `totalDuration / numberOfPeriods`)
+- `totalDuration` - The total vesting duration in seconds
 
 <Note>LP vesting durations are **always in seconds** regardless of the pool's `activationType` setting (Slot or Timestamp).</Note>
 
@@ -356,13 +394,13 @@ Use the helper function `getLiquidityVestingInfoParams()` to construct valid ves
 Example:
 ```typescript
 // Configure vesting for 50% of partner's non-locked LP
-// 7-day cliff, 30-day total vesting (frequency = 30 days / 100 periods = 25920 seconds)
-partnerLiquidityVestingInfo: {
+// 7-day cliff, 30-day total vesting
+partnerLiquidityVestingInfoParams: {
     vestingPercentage: 50,                           // 50% of LP will vest
     bpsPerPeriod: 100,                               // 1% released per period
     numberOfPeriods: 100,                            // 100 vesting periods
     cliffDurationFromMigrationTime: 7 * 24 * 60 * 60, // 7 days cliff (604800 seconds)
-    frequency: 25920,                                // interval between releases (totalDuration / numberOfPeriods) in seconds
+    totalDuration: 30 * 24 * 60 * 60,                // 30 days total vesting (2592000 seconds)
 }
 ```
 
@@ -386,7 +424,7 @@ const vestingParams = getLiquidityVestingInfoParams(
 //     bpsPerPeriod: 100,
 //     numberOfPeriods: 100,
 //     cliffDurationFromMigrationTime: 604800,
-//     frequency: 2592  // calculated: totalDuration / numberOfPeriods
+//     totalDuration: 2592000
 // }
 ```
 
@@ -402,6 +440,35 @@ Example:
 // Set pool creation fee to 0.1 SOL
 poolCreationFee: new BN(100000000) // 0.1 SOL in lamports
 ```
+
+### `migratedPoolBaseFeeMode`
+
+- The `migratedPoolBaseFeeMode` configures the base fee mode for the **post-graduation DAMM v2 pool**.
+- This is only applicable when `migrationOption` is set to `DAMM v2` (1).
+- The available modes are:
+    - 0: `FeeTimeSchedulerLinear` -> Fee decreases linearly over time after migration.
+    - 1: `FeeTimeSchedulerExponential` -> Fee decreases exponentially over time after migration.
+    - 2: `RateLimiter` -> **Not supported** for DAMM v2 migration. Will throw an error if used.
+    - 3: `FeeMarketCapSchedulerLinear` -> Fee decreases linearly based on sqrt price increase (market cap growth) after migration.
+    - 4: `FeeMarketCapSchedulerExponential` -> Fee decreases exponentially based on sqrt price increase (market cap growth) after migration.
+- Defaults to `FeeTimeSchedulerLinear` (0) if not specified.
+
+<Note>Modes 3 and 4 (Fee Market Cap Scheduler) require `migratedPoolMarketCapFeeSchedulerParams` to be configured. See the [Fee Market Cap Scheduler](/anti-sniper-suite/fee-market-cap-scheduler/what-is-fee-market-cap-scheduler) documentation for more details.</Note>
+
+### `migratedPoolMarketCapFeeSchedulerParams`
+
+- This parameter is only required when `migratedPoolBaseFeeMode` is set to `FeeMarketCapSchedulerLinear` (3) or `FeeMarketCapSchedulerExponential` (4) and `migrationOption` is set to `DAMM v2` (1).
+- The `migratedPoolMarketCapFeeSchedulerParams` is a struct that contains the following fields:
+    - `numberOfPeriod` - The total number of fee reduction periods.
+    - `sqrtPriceStepBps` - The sqrt price increase (in basis points) required to advance one fee reduction period.
+    - `schedulerExpirationDuration` - The maximum duration (in seconds) after which the scheduler expires and the fee permanently defaults to the minimum fee.
+    - `reductionFactor` - The amount to reduce the fee by per period.
+
+<Warning>When using `migratedPoolMarketCapFeeSchedulerParams`, all fields (`numberOfPeriod`, `sqrtPriceStepBps`, `schedulerExpirationDuration`) must be greater than zero.</Warning>
+
+### Protocol Migration Fee
+
+<Note>There is a fixed **0.2% (20 bps) protocol migration fee** that is applied during the migration process from the DBC bonding curve to the post-graduation DAMM pool. This fee is deducted from the quote reserve during migration and is separate from any `migrationFee` configured by the partner.</Note>
 
 # Creating the Curve Config
 
