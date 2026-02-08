@@ -48,6 +48,81 @@ At Meteora, we’ve developed a `Node.js <> Typescript SDK` to make deploying an
   </table>
 </div>
 
+## Fee Vault Types
+
+Dynamic Fee Sharing offers two types of fee vaults to accommodate different use cases:
+
+<CardGroup cols={2}>
+  <Card title="Non-PDA Fee Vault" icon="key" iconType="solid">
+    A fee vault created with an external keypair. Provides flexibility for standalone fee-sharing arrangements.
+  </Card>
+  <Card title="PDA Fee Vault" icon="link" iconType="solid">
+    A fee vault derived from a base account. Ideal for protocol integrations where the vault is tied to another entity.
+  </Card>
+</CardGroup>
+
+### Non-PDA Fee Vault
+
+A Non-PDA Fee Vault uses a regular Solana account (keypair-based) for the fee vault address. The vault address is generated externally and must be provided as a signer during initialization.
+
+**Characteristics:**
+- Fee vault address is a randomly generated keypair
+- The keypair must be stored and managed externally
+- Multiple vaults can be created for the same token mint and owner
+- Simpler to understand and implement
+
+**When to Use:**
+- Creating standalone fee vaults without ties to other protocol entities
+- Need to create multiple fee-sharing arrangements for the same token
+- Vault lifecycle is independent of any base account
+- Simpler integration without deterministic address requirements
+
+**Address Derivation:**
+```
+Fee Vault Account: External keypair (random address)
+Token Vault: PDA([TOKEN_VAULT_PREFIX, fee_vault_address], program_id)
+```
+
+### PDA Fee Vault
+
+A PDA Fee Vault uses a Program Derived Account (PDA) for the fee vault address. The vault address is deterministically derived from a base account and token mint, making it recoverable and tied to a specific entity.
+
+**Characteristics:**
+- Fee vault address is derived from seeds: `[FEE_VAULT_PREFIX, base_address, token_mint]`
+- No external keypair storage needed - address is always recoverable
+- Only ONE vault per (base account, token mint) combination
+- Base account must sign during initialization
+
+**When to Use:**
+- Vault is logically tied to another account (e.g., AMM pool, bonding curve, liquidity position)
+- Need deterministic address derivation for protocol integration
+- Want to avoid external keypair management
+- Address should be recoverable from (base, token_mint) pair
+- Integrating with features that reference a base entity
+
+**Address Derivation:**
+```
+Fee Vault Account: PDA([FEE_VAULT_PREFIX, base_address, token_mint], program_id)
+Token Vault: PDA([TOKEN_VAULT_PREFIX, fee_vault_address], program_id)
+```
+
+### Comparison
+
+| Aspect | Non-PDA Fee Vault | PDA Fee Vault |
+|--------|-------------------|---------------|
+| **Address Generation** | External keypair (random) | Derived from seeds (deterministic) |
+| **Address Recovery** | Requires storing keypair | Derivable from (base, token_mint) |
+| **Uniqueness** | Multiple vaults per (owner, token_mint) | One vault per (base, token_mint) |
+| **Signer Requirement** | Fee vault keypair signs init | Base keypair signs init |
+| **Tied to Entity** | No | Yes (via base account) |
+| **Use Case** | Standalone vaults | Protocol-integrated vaults |
+
+<Note>
+Both vault types share the same underlying state structure and support identical operations after initialization: funding fees, claiming fees, and fee distribution via the checkpoint mechanism.
+</Note>
+
+---
+
 ## Official SDKs
 
 <CardGroup cols={2}>

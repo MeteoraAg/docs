@@ -10,6 +10,10 @@ Fee Market Cap Scheduler is a configurable fee reduction mechanism based on **pr
 
 Fee Market Cap Scheduler tracks the sqrt price movement from the initial pool price. As the price increases, the fee decreases according to the configured schedule.
 
+<Note>
+Fee Market Cap Scheduler applies to **graduated DAMM v2 pools** (post-migration), not to pre-graduation DBC bonding curve pools. The fee behavior during the bonding curve phase is controlled by the pre-graduation pool fee settings (Fee Scheduler or Rate Limiter).
+</Note>
+
 Fee Market Cap Scheduler requires the following parameters to be configured:
 
 - **Cliff Fee Numerator**: The starting fee of the scheduler (e.g., 50%).
@@ -51,6 +55,10 @@ This means:
 - Each 1% increase in sqrt price reduces the fee
 - After 100% sqrt price increase, fee reaches minimum 0.5%
 - If price doesn't increase enough within 24 hours, fee defaults to 0.5%
+
+<Note>
+Once the `scheduler_expiration_duration` has elapsed, the fee **permanently** defaults to the minimum fee regardless of price movement. This expiration is irreversible even if the price subsequently drops, the fee will remain at the minimum level.
+</Note>
 
 # Simulator
 
