@@ -1,2674 +1,2742 @@
 {
-    "openapi": "3.1.0",
-    "info": {
-        "title": "keeper",
-        "description": "Keeper backend to index analytic information for liquidity book CLMM",
-        "contact": {
-            "name": "tian",
-            "email": "tian@racoons.dev"
-        },
-        "license": {
-            "name": ""
-        },
-        "version": "1.0.9"
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DLMM API",
+    "description": "",
+    "license": {
+      "name": ""
     },
-    "servers": [
-        {
-            "url": "https://dlmm-api.meteora.ag",
-            "description": "DLMM Mainnet API"
-        },
-        {
-            "url": "https://devnet-dlmm-api.meteora.ag",
-            "description": "DLMM Devnet API"
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/pools": {
+      "get": {
+        "tags": [
+          "Pools"
+        ],
+        "summary": "Pools",
+        "description": "Returns a paginated list of pools",
+        "operationId": "Get Pools",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-based)",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Number of pools to return per page. Max 1000",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "maximum": 1000,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Search query used to match pools by name, tokens, or address",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Sort results by one or more fields\n\nFormat:\n- Time-windowed metrics: `<metric>_<window>:<direction>`\n- Non-windowed metrics: `<field>:<direction>`\n\n- `direction`: `asc` or `desc`\n- `window` (when applicable): `5m` `30m` `1h` `2h` `4h` `12h` `24h`\n\nAvailable fields:\n- Time-windowed metrics: `volume_*` `fee_*` `fee_tvl_ratio_*` `apr_*`\n- Non-windowed metrics: `tvl` `fee_pct` `bin_step` `pool_created_at` `farm_apy`\n\nDefault: `volume_24h:desc`\n\nExamples:\n- `volume_24h:desc`\n- `fee_1h:asc`\n- `tvl:desc`",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "filter_by",
+            "in": "query",
+            "description": "Conditions to filter documents by field values\n\nFormat: `<expr> [&& <expr> ...]`\n\nWhere each expression is: `<field><op><value>`\n\nAllowed fields:\n- Numeric: `tvl` `volume_*` `fee_*` `fee_tvl_ratio_*` `apr_*`\n- Boolean: `is_blacklisted`\n- Text: `pool_address` `name` `token_x` `token_y`\n\nOperators:\n- Numeric: `=` `>` `>=` `<` `<=`\n- Boolean: `=true` `=false`\n- Text:\n  - exact match: `=<value>`\n  - multi-value OR: `=[value1|value2|...]`\n\nNotes:\n- Multiple expressions are combined using logical **AND** (`&&`)\n- Whitespace around operators is ignored\n\nExamples:\n- `tvl>1000`\n- `is_blacklisted=false && volume_24h>=50000`",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "example": "is_blacklisted=false"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "total",
+                    "pages",
+                    "current_page",
+                    "page_size",
+                    "data"
+                  ],
+                  "properties": {
+                    "current_page": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": 0
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "address",
+                          "name",
+                          "token_x",
+                          "token_y",
+                          "reserve_x",
+                          "reserve_y",
+                          "token_x_amount",
+                          "token_y_amount",
+                          "created_at",
+                          "reward_mint_x",
+                          "reward_mint_y",
+                          "pool_config",
+                          "dynamic_fee_pct",
+                          "tvl",
+                          "current_price",
+                          "apr",
+                          "apy",
+                          "has_farm",
+                          "farm_apr",
+                          "farm_apy",
+                          "volume",
+                          "fees",
+                          "protocol_fees",
+                          "fee_tvl_ratio",
+                          "cumulative_metrics",
+                          "is_blacklisted",
+                          "tags"
+                        ],
+                        "properties": {
+                          "address": {
+                            "type": "string",
+                            "description": "Address of the liquidity pair"
+                          },
+                          "apr": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "24 hour APR"
+                          },
+                          "apy": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "24 hour APY"
+                          },
+                          "created_at": {
+                            "type": "integer",
+                            "format": "int64",
+                            "description": "Pool created at timestamp",
+                            "minimum": 0
+                          },
+                          "cumulative_metrics": {
+                            "$ref": "#/components/schemas/CumulativeMetrics",
+                            "description": "Cumulative metrics"
+                          },
+                          "current_price": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "Price of the liquidity pair"
+                          },
+                          "dynamic_fee_pct": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "Dynamic fee rate. Which is equal to base fee + variable fee."
+                          },
+                          "farm_apr": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "Farm reward apr"
+                          },
+                          "farm_apy": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "Farm reward apy"
+                          },
+                          "fee_tvl_ratio": {
+                            "$ref": "#/components/schemas/TimeWindowData",
+                            "description": "Fee TVL ratio in percentage in different timeframes"
+                          },
+                          "fees": {
+                            "$ref": "#/components/schemas/TimeWindowData",
+                            "description": "Fee data in different timeframes"
+                          },
+                          "has_farm": {
+                            "type": "boolean",
+                            "description": "Whether the pool has a farm or not"
+                          },
+                          "is_blacklisted": {
+                            "type": "boolean",
+                            "description": "Flag to indicate whether the pair is blacklisted"
+                          },
+                          "launchpad": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Launchpad of the pair"
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "Name of the liquidity pair"
+                          },
+                          "pool_config": {
+                            "$ref": "#/components/schemas/PoolConfig",
+                            "description": "Pool config"
+                          },
+                          "protocol_fees": {
+                            "$ref": "#/components/schemas/TimeWindowData",
+                            "description": "Protocol fee data in different timeframes"
+                          },
+                          "reserve_x": {
+                            "type": "string",
+                            "description": "Address of token X reserve of the liquidity pair"
+                          },
+                          "reserve_y": {
+                            "type": "string",
+                            "description": "Address of token Y reserve of the liquidity pair"
+                          },
+                          "reward_mint_x": {
+                            "type": "string",
+                            "description": "Address of the farming reward X of the liquidity pair"
+                          },
+                          "reward_mint_y": {
+                            "type": "string",
+                            "description": "Address of the farming reward Y of the liquidity pair"
+                          },
+                          "tags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Tags of the pair"
+                          },
+                          "token_x": {
+                            "$ref": "#/components/schemas/TokenMetrics",
+                            "description": "Token X of the liquidity pair"
+                          },
+                          "token_x_amount": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "Token X amount the liquidity pair hold"
+                          },
+                          "token_y": {
+                            "$ref": "#/components/schemas/TokenMetrics",
+                            "description": "Token Y of the liquidity pair"
+                          },
+                          "token_y_amount": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "Token Y amount the liquidity pair hold"
+                          },
+                          "tvl": {
+                            "type": "number",
+                            "format": "double",
+                            "description": "Total liquidity the liquidity pair holding. Also known as Total Value Locked"
+                          },
+                          "volume": {
+                            "$ref": "#/components/schemas/TimeWindowData",
+                            "description": "Volume data in different timeframes"
+                          }
+                        }
+                      }
+                    },
+                    "page_size": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": 0
+                    },
+                    "pages": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": 0
+                    },
+                    "total": {
+                      "type": "integer",
+                      "format": "int64",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
-    ],
-    "paths": {
-        "/info/protocol_metrics": {
-            "get": {
-                "tags": [
-                    "Protocol Metrics"
-                ],
-                "summary": "get_protocol_metrics",
-                "operationId": "get_protocol_metrics",
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/ProtocolMetrics"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pair/all": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Pairs"
-                ],
-                "summary": "all",
-                "operationId": "all",
-                "parameters": [
-                    {
-                        "name": "include_unknown",
-                        "in": "query",
-                        "description": "Include pool with unverified token. Default true.",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "boolean",
-                                "null"
-                            ]
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/PairInfo"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pair/all_by_groups": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Pairs"
-                ],
-                "summary": "all_by_groups",
-                "operationId": "all_by_groups",
-                "parameters": [
-                    {
-                        "name": "page",
-                        "in": "query",
-                        "description": "Default is 0",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "integer",
-                                "null"
-                            ],
-                            "minimum": 0
-                        }
-                    },
-                    {
-                        "name": "limit",
-                        "in": "query",
-                        "description": "Default is 50",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "integer",
-                                "null"
-                            ],
-                            "minimum": 0
-                        }
-                    },
-                    {
-                        "name": "skip_size",
-                        "in": "query",
-                        "description": "Default is 0",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "integer",
-                                "null"
-                            ],
-                            "minimum": 0
-                        }
-                    },
-                    {
-                        "name": "pools_to_top",
-                        "in": "query",
-                        "description": "Pools to be sorted to top",
-                        "required": false,
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "sort_key",
-                        "in": "query",
-                        "description": "Sort key. Default is Volume.",
-                        "required": false,
-                        "schema": {
-                            "oneOf": [
-                                {
-                                    "type": "null"
-                                },
-                                {
-                                    "$ref": "#/components/schemas/PairSortKey"
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "name": "order_by",
-                        "in": "query",
-                        "description": "Sort order. Default is Descending.",
-                        "required": false,
-                        "schema": {
-                            "oneOf": [
-                                {
-                                    "type": "null"
-                                },
-                                {
-                                    "$ref": "#/components/schemas/OrderBy"
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "name": "search_term",
-                        "in": "query",
-                        "description": "Search term.",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "string",
-                                "null"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "include_unknown",
-                        "in": "query",
-                        "description": "Include pool with unverified token. Default true.",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "boolean",
-                                "null"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "hide_low_tvl",
-                        "in": "query",
-                        "description": "Toggle pools with lower TVL than the value passed in",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "number",
-                                "null"
-                            ],
-                            "format": "double"
-                        }
-                    },
-                    {
-                        "name": "hide_low_apr",
-                        "in": "query",
-                        "description": "Toggle pools with low APR",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "boolean",
-                                "null"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "include_token_mints",
-                        "in": "query",
-                        "description": "Only include token mints. Allow list of token mints",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "include_pool_token_pairs",
-                        "in": "query",
-                        "description": "Only include pool token pairs. Allow list of pool token mints in format EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v-So11111111111111111111111111111111111111112",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "tags",
-                        "in": "query",
-                        "description": "Tags to filter by",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "launchpad",
-                        "in": "query",
-                        "description": "Launchpad to filter by",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AllGroupOfPairs"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pair/all_by_groups_metadata": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Pairs"
-                ],
-                "summary": "all_by_groups_metadata",
-                "operationId": "all_by_groups_metadata",
-                "parameters": [
-                    {
-                        "name": "page",
-                        "in": "query",
-                        "description": "Default is 0",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "integer",
-                                "null"
-                            ],
-                            "minimum": 0
-                        }
-                    },
-                    {
-                        "name": "limit",
-                        "in": "query",
-                        "description": "Default is 50",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "integer",
-                                "null"
-                            ],
-                            "minimum": 0
-                        }
-                    },
-                    {
-                        "name": "skip_size",
-                        "in": "query",
-                        "description": "Default is 0",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "integer",
-                                "null"
-                            ],
-                            "minimum": 0
-                        }
-                    },
-                    {
-                        "name": "pools_to_top",
-                        "in": "query",
-                        "description": "Pools to be sorted to top",
-                        "required": false,
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "sort_key",
-                        "in": "query",
-                        "description": "Sort key. Default is Volume.",
-                        "required": false,
-                        "schema": {
-                            "oneOf": [
-                                {
-                                    "type": "null"
-                                },
-                                {
-                                    "$ref": "#/components/schemas/PairSortKey"
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "name": "order_by",
-                        "in": "query",
-                        "description": "Sort order. Default is Descending.",
-                        "required": false,
-                        "schema": {
-                            "oneOf": [
-                                {
-                                    "type": "null"
-                                },
-                                {
-                                    "$ref": "#/components/schemas/OrderBy"
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "name": "search_term",
-                        "in": "query",
-                        "description": "Search term.",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "string",
-                                "null"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "include_unknown",
-                        "in": "query",
-                        "description": "Include pool with unverified token. Default true.",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "boolean",
-                                "null"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "hide_low_tvl",
-                        "in": "query",
-                        "description": "Toggle pools with lower TVL than the value passed in",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "number",
-                                "null"
-                            ],
-                            "format": "double"
-                        }
-                    },
-                    {
-                        "name": "hide_low_apr",
-                        "in": "query",
-                        "description": "Toggle pools with low APR",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "boolean",
-                                "null"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "include_token_mints",
-                        "in": "query",
-                        "description": "Only include token mints. Allow list of token mints",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "include_pool_token_pairs",
-                        "in": "query",
-                        "description": "Only include pool token pairs. Allow list of pool token mints in format EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v-So11111111111111111111111111111111111111112",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "tags",
-                        "in": "query",
-                        "description": "Tags to filter by",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "launchpad",
-                        "in": "query",
-                        "description": "Launchpad to filter by",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AllGroupOfPairsMetadata"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pair/all_with_pagination": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Pairs"
-                ],
-                "summary": "all_with_pagination",
-                "operationId": "all_with_pagination",
-                "parameters": [
-                    {
-                        "name": "page",
-                        "in": "query",
-                        "description": "Default is 0",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "integer",
-                                "null"
-                            ],
-                            "minimum": 0
-                        }
-                    },
-                    {
-                        "name": "limit",
-                        "in": "query",
-                        "description": "Default is 50",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "integer",
-                                "null"
-                            ],
-                            "minimum": 0
-                        }
-                    },
-                    {
-                        "name": "skip_size",
-                        "in": "query",
-                        "description": "Default is 0",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "integer",
-                                "null"
-                            ],
-                            "minimum": 0
-                        }
-                    },
-                    {
-                        "name": "pools_to_top",
-                        "in": "query",
-                        "description": "Pools to be sorted to top",
-                        "required": false,
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "sort_key",
-                        "in": "query",
-                        "description": "Sort key. Default is Volume.",
-                        "required": false,
-                        "schema": {
-                            "oneOf": [
-                                {
-                                    "type": "null"
-                                },
-                                {
-                                    "$ref": "#/components/schemas/PairSortKey"
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "name": "order_by",
-                        "in": "query",
-                        "description": "Sort order. Default is Descending.",
-                        "required": false,
-                        "schema": {
-                            "oneOf": [
-                                {
-                                    "type": "null"
-                                },
-                                {
-                                    "$ref": "#/components/schemas/OrderBy"
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "name": "search_term",
-                        "in": "query",
-                        "description": "Search term.",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "string",
-                                "null"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "include_unknown",
-                        "in": "query",
-                        "description": "Include pool with unverified token. Default true.",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "boolean",
-                                "null"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "hide_low_tvl",
-                        "in": "query",
-                        "description": "Toggle pools with lower TVL than the value passed in",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "number",
-                                "null"
-                            ],
-                            "format": "double"
-                        }
-                    },
-                    {
-                        "name": "hide_low_apr",
-                        "in": "query",
-                        "description": "Toggle pools with low APR",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "boolean",
-                                "null"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "include_token_mints",
-                        "in": "query",
-                        "description": "Only include token mints. Allow list of token mints",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "include_pool_token_pairs",
-                        "in": "query",
-                        "description": "Only include pool token pairs. Allow list of pool token mints in format EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v-So11111111111111111111111111111111111111112",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "tags",
-                        "in": "query",
-                        "description": "Tags to filter by",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    {
-                        "name": "launchpad",
-                        "in": "query",
-                        "description": "Launchpad to filter by",
-                        "required": false,
-                        "schema": {
-                            "type": [
-                                "array",
-                                "null"
-                            ],
-                            "items": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/AllPairsWithPagination"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pair/group_pair/{lexical_order_mints}": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Pairs"
-                ],
-                "summary": "get_single_group_pair",
-                "operationId": "get_single_group_pair",
-                "parameters": [
-                    {
-                        "name": "lexical_order_mints",
-                        "in": "path",
-                        "description": "Lexical ordered token mints of the pair",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/PairInfo"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pair/{pair_address}": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Pairs"
-                ],
-                "summary": "get_pair",
-                "operationId": "get_pair",
-                "parameters": [
-                    {
-                        "name": "pair_address",
-                        "in": "path",
-                        "description": "Address of the liquidity pair",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/PairInfo"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pair/{pair_address}/analytic/pair_fee_bps": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Pairs"
-                ],
-                "summary": "get_pair_fee_bps_by_days",
-                "operationId": "get_pair_fee_bps_by_days",
-                "parameters": [
-                    {
-                        "name": "pair_address",
-                        "in": "path",
-                        "description": "Address of the liquidity pair",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "num_of_days",
-                        "in": "query",
-                        "description": "Number of days before today. Max 255.",
-                        "required": true,
-                        "schema": {
-                            "type": "integer",
-                            "format": "int32",
-                            "minimum": 0
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/PairFeeBps"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pair/{pair_address}/analytic/pair_trade_volume": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Pairs"
-                ],
-                "summary": "get_pair_volume_by_days",
-                "operationId": "get_pair_daily_trade_volume_by_days",
-                "parameters": [
-                    {
-                        "name": "pair_address",
-                        "in": "path",
-                        "description": "Address of the liquidity pair",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "num_of_days",
-                        "in": "query",
-                        "description": "Number of days before today. Max 255.",
-                        "required": true,
-                        "schema": {
-                            "type": "integer",
-                            "format": "int32",
-                            "minimum": 0
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/PairTradeVolume"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pair/{pair_address}/analytic/pair_tvl": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Pairs"
-                ],
-                "summary": "get_pair_tvl_by_days",
-                "operationId": "get_pair_tvl_by_days",
-                "parameters": [
-                    {
-                        "name": "pair_address",
-                        "in": "path",
-                        "description": "Address of the liquidity pair",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "num_of_days",
-                        "in": "query",
-                        "description": "Number of days before today. Max 255.",
-                        "required": true,
-                        "schema": {
-                            "type": "integer",
-                            "format": "int32",
-                            "minimum": 0
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/PairTvlSnapshotByDay"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pair/{pair_address}/analytic/swap_history": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Pairs"
-                ],
-                "summary": "get_pair_swap_records",
-                "operationId": "get_pair_swap_records",
-                "parameters": [
-                    {
-                        "name": "pair_address",
-                        "in": "path",
-                        "description": "Address of the liquidity pair",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "rows_to_take",
-                        "in": "query",
-                        "description": "Number of records to take. Max 255.",
-                        "required": true,
-                        "schema": {
-                            "type": "integer",
-                            "format": "int32",
-                            "minimum": 0
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/Swap"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/pair/{pair_address}/positions_lock": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Pairs"
-                ],
-                "summary": "get_pair_positions_lock",
-                "operationId": "get_pair_positions_lock",
-                "parameters": [
-                    {
-                        "name": "pair_address",
-                        "in": "path",
-                        "description": "Address of the liquidity pair",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/PositionLock"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/position/{position_address}": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Positions"
-                ],
-                "summary": "get_position",
-                "operationId": "get_position",
-                "parameters": [
-                    {
-                        "name": "position_address",
-                        "in": "path",
-                        "description": "Address of the position",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/PositionWithApy"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/position/{position_address}/claim_fees": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Positions"
-                ],
-                "summary": "get_claim_fees",
-                "operationId": "get_claim_fees",
-                "parameters": [
-                    {
-                        "name": "position_address",
-                        "in": "path",
-                        "description": "Address of the position",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/ClaimFee"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/position/{position_address}/claim_rewards": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Positions"
-                ],
-                "summary": "get_claim_rewards",
-                "operationId": "get_claim_rewards",
-                "parameters": [
-                    {
-                        "name": "position_address",
-                        "in": "path",
-                        "description": "Address of the position",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/ClaimReward"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/position/{position_address}/deposits": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Positions"
-                ],
-                "summary": "get_deposits",
-                "operationId": "get_deposits",
-                "parameters": [
-                    {
-                        "name": "position_address",
-                        "in": "path",
-                        "description": "Address of the position",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/DepositWithdraw"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/position/{position_address}/withdraws": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Positions"
-                ],
-                "summary": "get_withdraws",
-                "operationId": "get_withdraws",
-                "parameters": [
-                    {
-                        "name": "position_address",
-                        "in": "path",
-                        "description": "Address of the position",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/DepositWithdraw"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/position_v2/{position_address}": {
-            "get": {
-                "tags": [
-                    "Liquidity Book Positions"
-                ],
-                "summary": "get_position_v2",
-                "operationId": "get_position_v2",
-                "parameters": [
-                    {
-                        "name": "position_address",
-                        "in": "path",
-                        "description": "Address of the position",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Position"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/wallet/{wallet_address}/{pair_address}/earning": {
-            "get": {
-                "tags": [
-                    "Wallet"
-                ],
-                "summary": "get_wallet_earning",
-                "operationId": "get_wallet_earning",
-                "parameters": [
-                    {
-                        "name": "wallet_address",
-                        "in": "path",
-                        "description": "Address of the wallet",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "pair_address",
-                        "in": "path",
-                        "description": "Address of the pair",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/WalletEarning"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+      }
     },
-    "components": {
-        "schemas": {
-            "AllGroupOfPairs": {
-                "type": "object",
-                "required": [
-                    "groups",
-                    "total"
-                ],
-                "properties": {
-                    "groups": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/PairGroup"
-                        }
-                    },
-                    "total": {
-                        "type": "integer",
-                        "minimum": 0
-                    }
-                }
-            },
-            "AllGroupOfPairsMetadata": {
-                "type": "object",
-                "required": [
-                    "metadatas",
-                    "total"
-                ],
-                "properties": {
-                    "metadatas": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/PairGroupMetadata"
-                        }
-                    },
-                    "total": {
-                        "type": "integer",
-                        "minimum": 0
-                    }
-                }
-            },
-            "AllPairsWithPagination": {
-                "type": "object",
-                "required": [
-                    "pairs",
-                    "total"
-                ],
-                "properties": {
-                    "pairs": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/PairInfo"
-                        }
-                    },
-                    "total": {
-                        "type": "integer",
-                        "minimum": 0
-                    }
-                }
-            },
-            "BinArrayCache": {
-                "type": "object",
-                "required": [
-                    "address",
-                    "index",
-                    "bins"
-                ],
-                "properties": {
-                    "address": {
-                        "type": "string",
-                        "description": "Address of the bin array"
-                    },
-                    "bins": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/BinCache"
-                        },
-                        "description": "Bins"
-                    },
-                    "index": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Index of the bin array"
-                    }
-                }
-            },
-            "BinCache": {
-                "type": "object",
-                "required": [
-                    "amount_x",
-                    "amount_y",
-                    "price",
-                    "liquidity_supply",
-                    "reward_per_token_stored",
-                    "fee_amount_x_per_token_stored",
-                    "fee_amount_y_per_token_stored",
-                    "amount_x_in",
-                    "amount_y_in"
-                ],
-                "properties": {
-                    "amount_x": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of token X in the bin. This already excluded protocol fees.",
-                        "minimum": 0
-                    },
-                    "amount_x_in": {
-                        "type": "integer",
-                        "description": "Total token X swap into the bin. Only used for tracking purpose.",
-                        "minimum": 0
-                    },
-                    "amount_y": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of token Y in the bin. This already excluded protocol fees.",
-                        "minimum": 0
-                    },
-                    "amount_y_in": {
-                        "type": "integer",
-                        "description": "Total token Y swap into he bin. Only used for tracking purpose.",
-                        "minimum": 0
-                    },
-                    "fee_amount_x_per_token_stored": {
-                        "type": "integer",
-                        "description": "Swap fee amount of token X per liquidity deposited.",
-                        "minimum": 0
-                    },
-                    "fee_amount_y_per_token_stored": {
-                        "type": "integer",
-                        "description": "Swap fee amount of token Y per liquidity deposited.",
-                        "minimum": 0
-                    },
-                    "liquidity_supply": {
-                        "type": "integer",
-                        "description": "Liquidities of the bin. This is the same as LP mint supply.",
-                        "minimum": 0
-                    },
-                    "price": {
-                        "type": "integer",
-                        "description": "Bin price",
-                        "minimum": 0
-                    },
-                    "reward_per_token_stored": {
-                        "type": "array",
-                        "items": {
-                            "type": "integer",
-                            "minimum": 0
-                        },
-                        "description": "reward_a_per_token_stored"
-                    }
-                }
-            },
-            "BinTradeVolume": {
-                "type": "object",
-                "required": [
-                    "bin_id",
-                    "total_amount_y",
-                    "total_amount_x",
-                    "total_amount_usd"
-                ],
-                "properties": {
-                    "bin_id": {
-                        "type": "integer",
-                        "format": "int32",
-                        "description": "ID of the bin"
-                    },
-                    "total_amount_usd": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total USD value swapped."
-                    },
-                    "total_amount_x": {
-                        "type": "string",
-                        "description": "Total token X swapped.",
-                        "example": "0"
-                    },
-                    "total_amount_y": {
-                        "type": "string",
-                        "description": "Total token Y swapped.",
-                        "example": "0"
-                    }
-                }
-            },
-            "ClaimFee": {
-                "type": "object",
-                "required": [
-                    "tx_id",
-                    "position_address",
-                    "pair_address",
-                    "token_x_amount",
-                    "token_y_amount",
-                    "token_x_usd_amount",
-                    "token_y_usd_amount",
-                    "onchain_timestamp"
-                ],
-                "properties": {
-                    "onchain_timestamp": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Timestamp of the activity"
-                    },
-                    "pair_address": {
-                        "type": "string",
-                        "description": "Address of the liquidity pair for the position"
-                    },
-                    "position_address": {
-                        "type": "string",
-                        "description": "Address of the position"
-                    },
-                    "token_x_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of token X"
-                    },
-                    "token_x_usd_amount": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Amount of token X in USD"
-                    },
-                    "token_y_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of token Y"
-                    },
-                    "token_y_usd_amount": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Amount of token Y in USD"
-                    },
-                    "tx_id": {
-                        "type": "string",
-                        "description": "Transaction hash"
-                    }
-                }
-            },
-            "ClaimReward": {
-                "type": "object",
-                "required": [
-                    "tx_id",
-                    "position_address",
-                    "pair_address",
-                    "reward_mint_address",
-                    "token_amount",
-                    "token_usd_amount",
-                    "onchain_timestamp"
-                ],
-                "properties": {
-                    "onchain_timestamp": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Timestamp of the activity"
-                    },
-                    "pair_address": {
-                        "type": "string",
-                        "description": "Address of the liquidity pair for the position"
-                    },
-                    "position_address": {
-                        "type": "string",
-                        "description": "Address of the position"
-                    },
-                    "reward_mint_address": {
-                        "type": "string",
-                        "description": "Address of the farm reward claimed"
-                    },
-                    "token_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of reward token claimed"
-                    },
-                    "token_usd_amount": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Amount of reward token claimed in USD"
-                    },
-                    "tx_id": {
-                        "type": "string",
-                        "description": "Transaction hash"
-                    }
-                }
-            },
-            "CustomGroupFeeTvlRatio": {
-                "type": "object",
-                "required": [
-                    "min_fee_tvl_ratio_min_30",
-                    "max_fee_tvl_ratio_min_30",
-                    "min_fee_tvl_ratio_hour_1",
-                    "max_fee_tvl_ratio_hour_1",
-                    "min_fee_tvl_ratio_hour_2",
-                    "max_fee_tvl_ratio_hour_2",
-                    "min_fee_tvl_ratio_hour_4",
-                    "max_fee_tvl_ratio_hour_4",
-                    "min_fee_tvl_ratio_hour_12",
-                    "max_fee_tvl_ratio_hour_12"
-                ],
-                "properties": {
-                    "max_fee_tvl_ratio_hour_1": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "max_fee_tvl_ratio_hour_12": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "max_fee_tvl_ratio_hour_2": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "max_fee_tvl_ratio_hour_4": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "max_fee_tvl_ratio_min_30": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "min_fee_tvl_ratio_hour_1": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "min_fee_tvl_ratio_hour_12": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "min_fee_tvl_ratio_hour_2": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "min_fee_tvl_ratio_hour_4": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "min_fee_tvl_ratio_min_30": {
-                        "type": "number",
-                        "format": "double"
-                    }
-                }
-            },
-            "CustomGroupVolume": {
-                "type": "object",
-                "required": [
-                    "total_trade_volume_min_30",
-                    "total_trade_volume_hour_1",
-                    "total_trade_volume_hour_2",
-                    "total_trade_volume_hour_4",
-                    "total_trade_volume_hour_12"
-                ],
-                "properties": {
-                    "total_trade_volume_hour_1": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "total_trade_volume_hour_12": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "total_trade_volume_hour_2": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "total_trade_volume_hour_4": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "total_trade_volume_min_30": {
-                        "type": "number",
-                        "format": "double"
-                    }
-                }
-            },
-            "DepositWithdraw": {
-                "type": "object",
-                "required": [
-                    "tx_id",
-                    "position_address",
-                    "pair_address",
-                    "active_bin_id",
-                    "token_x_amount",
-                    "token_y_amount",
-                    "price",
-                    "token_x_usd_amount",
-                    "token_y_usd_amount",
-                    "onchain_timestamp"
-                ],
-                "properties": {
-                    "active_bin_id": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Active bin ID"
-                    },
-                    "onchain_timestamp": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Timestamp of the activity"
-                    },
-                    "pair_address": {
-                        "type": "string",
-                        "description": "Address of the liquidity pair for the position"
-                    },
-                    "position_address": {
-                        "type": "string",
-                        "description": "Address of the position"
-                    },
-                    "price": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Liquidity pair price"
-                    },
-                    "token_x_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of token X"
-                    },
-                    "token_x_usd_amount": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Amount of token X in USD"
-                    },
-                    "token_y_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of token Y"
-                    },
-                    "token_y_usd_amount": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Amount of token Y in USD"
-                    },
-                    "tx_id": {
-                        "type": "string",
-                        "description": "Transaction hash"
-                    }
-                }
-            },
-            "FeeData": {
-                "type": "object",
-                "required": [
-                    "min_30",
-                    "hour_1",
-                    "hour_2",
-                    "hour_4",
-                    "hour_12",
-                    "hour_24"
-                ],
-                "properties": {
-                    "hour_1": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_12": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_2": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_24": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_4": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "min_30": {
-                        "type": "number",
-                        "format": "double"
-                    }
-                }
-            },
-            "FeeTvlRatioData": {
-                "type": "object",
-                "required": [
-                    "min_30",
-                    "hour_1",
-                    "hour_2",
-                    "hour_4",
-                    "hour_12",
-                    "hour_24"
-                ],
-                "properties": {
-                    "hour_1": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_12": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_2": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_24": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_4": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "min_30": {
-                        "type": "number",
-                        "format": "double"
-                    }
-                }
-            },
-            "OrderBy": {
-                "type": "string",
-                "enum": [
-                    "asc",
-                    "desc"
-                ]
-            },
-            "PairFeeBps": {
-                "type": "object",
-                "required": [
-                    "pair_address",
-                    "min_fee_bps",
-                    "max_fee_bps",
-                    "average_fee_bps",
-                    "hour_date"
-                ],
-                "properties": {
-                    "average_fee_bps": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Average fee charged in BPS"
-                    },
-                    "hour_date": {
-                        "type": "string",
-                        "description": "Date with hour information",
-                        "example": "2023-10-17T15:00:00"
-                    },
-                    "max_fee_bps": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Maximum fee charged in BPS"
-                    },
-                    "min_fee_bps": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Minimum fee charged in BPS"
-                    },
-                    "pair_address": {
-                        "type": "string",
-                        "description": "Address of the liquidity pair"
-                    }
-                }
-            },
-            "PairGroup": {
-                "type": "object",
-                "required": [
-                    "name",
-                    "pairs"
-                ],
-                "properties": {
-                    "name": {
-                        "type": "string"
-                    },
-                    "pairs": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/PairInfo"
-                        }
-                    }
-                }
-            },
-            "PairGroupMetadata": {
-                "type": "object",
-                "required": [
-                    "name",
-                    "lexical_order_mints",
-                    "total_trade_volume",
-                    "total_tvl",
-                    "min_fee_tvl_ratio",
-                    "max_fee_tvl_ratio",
-                    "min_lm_apr",
-                    "max_lm_apr",
-                    "custom_fee_tvl_ratio",
-                    "custom_volume"
-                ],
-                "properties": {
-                    "custom_fee_tvl_ratio": {
-                        "$ref": "#/components/schemas/CustomGroupFeeTvlRatio"
-                    },
-                    "custom_volume": {
-                        "$ref": "#/components/schemas/CustomGroupVolume"
-                    },
-                    "lexical_order_mints": {
-                        "type": "string"
-                    },
-                    "max_fee_tvl_ratio": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "max_lm_apr": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "min_fee_tvl_ratio": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "min_lm_apr": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "name": {
-                        "type": "string"
-                    },
-                    "total_trade_volume": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "total_tvl": {
-                        "type": "number",
-                        "format": "double"
-                    }
-                }
-            },
-            "PairInfo": {
-                "type": "object",
-                "required": [
-                    "address",
-                    "name",
-                    "mint_x",
-                    "mint_y",
-                    "reserve_x",
-                    "reserve_y",
-                    "reserve_x_amount",
-                    "reserve_y_amount",
-                    "bin_step",
-                    "base_fee_percentage",
-                    "max_fee_percentage",
-                    "protocol_fee_percentage",
-                    "liquidity",
-                    "reward_mint_x",
-                    "reward_mint_y",
-                    "fees_24h",
-                    "today_fees",
-                    "trade_volume_24h",
-                    "cumulative_trade_volume",
-                    "cumulative_fee_volume",
-                    "current_price",
-                    "apr",
-                    "apy",
-                    "farm_apr",
-                    "farm_apy",
-                    "hide",
-                    "is_blacklisted",
-                    "fees",
-                    "fee_tvl_ratio",
-                    "volume",
-                    "tags",
-                    "is_verified"
-                ],
-                "properties": {
-                    "address": {
-                        "type": "string",
-                        "description": "Address of the liquidity pair"
-                    },
-                    "apr": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "24 hour APR"
-                    },
-                    "apy": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "24 hour APY"
-                    },
-                    "base_fee_percentage": {
-                        "type": "string",
-                        "description": "Base fee rate"
-                    },
-                    "bin_step": {
-                        "type": "integer",
-                        "format": "int32",
-                        "description": "Bin step",
-                        "minimum": 0
-                    },
-                    "cumulative_fee_volume": {
-                        "type": "string",
-                        "description": "Cumulative fee volume"
-                    },
-                    "cumulative_trade_volume": {
-                        "type": "string",
-                        "description": "Cumulative trading volume"
-                    },
-                    "current_price": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Price of the liquidity pair"
-                    },
-                    "farm_apr": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Farm reward apr"
-                    },
-                    "farm_apy": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Farm reward apy"
-                    },
-                    "fee_tvl_ratio": {
-                        "$ref": "#/components/schemas/FeeTvlRatioData",
-                        "description": "Fee TVL ratio in percentage in different timeframes"
-                    },
-                    "fees": {
-                        "$ref": "#/components/schemas/FeeData",
-                        "description": "Fee data in different timeframes"
-                    },
-                    "fees_24h": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Trading fees earned in the last 24 hours"
-                    },
-                    "hide": {
-                        "type": "boolean",
-                        "description": "Flag to indicate whether the pair should be shown in the UI"
-                    },
-                    "is_blacklisted": {
-                        "type": "boolean",
-                        "description": "Flag to indicate whether the pair is blacklisted"
-                    },
-                    "is_verified": {
-                        "type": "boolean",
-                        "description": "Whether pool is verified"
-                    },
-                    "launchpad": {
-                        "type": [
-                            "string",
-                            "null"
-                        ],
-                        "description": "Launchpad of the pair"
-                    },
-                    "liquidity": {
-                        "type": "string",
-                        "description": "Total liquidity the liquidity pair holding. Also known as Total Value Locked"
-                    },
-                    "max_fee_percentage": {
-                        "type": "string",
-                        "description": "Maximum fee rate"
-                    },
-                    "mint_x": {
-                        "type": "string",
-                        "description": "Address of token X mint of the liquidity pair"
-                    },
-                    "mint_y": {
-                        "type": "string",
-                        "description": "Address of token Y mint of the liquidity pair"
-                    },
-                    "name": {
-                        "type": "string",
-                        "description": "Name of the liquidity pair"
-                    },
-                    "protocol_fee_percentage": {
-                        "type": "string",
-                        "description": "Protocol fee rate. A cut from trade fee."
-                    },
-                    "reserve_x": {
-                        "type": "string",
-                        "description": "Address of token X reserve of the liquidity pair"
-                    },
-                    "reserve_x_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Token X amount the liquidity pair hold",
-                        "minimum": 0
-                    },
-                    "reserve_y": {
-                        "type": "string",
-                        "description": "Address of token Y reserve of the liquidity pair"
-                    },
-                    "reserve_y_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Token Y amount the liquidity pair hold",
-                        "minimum": 0
-                    },
-                    "reward_mint_x": {
-                        "type": "string",
-                        "description": "Address of the farming reward X of the liquidity pair"
-                    },
-                    "reward_mint_y": {
-                        "type": "string",
-                        "description": "Address of the farming reward Y of the liquidity pair"
-                    },
-                    "tags": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "description": "Tags of the pair"
-                    },
-                    "today_fees": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Trading fees earned since the beginning of the day"
-                    },
-                    "trade_volume_24h": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Trading volume in the last 24 hours"
-                    },
-                    "volume": {
-                        "$ref": "#/components/schemas/VolumeData",
-                        "description": "Volume data in different timeframes"
-                    }
-                }
-            },
-            "PairSortKey": {
-                "type": "string",
-                "enum": [
-                    "tvl",
-                    "volume",
-                    "feetvlratio",
-                    "lm",
-                    "feetvlratio30m",
-                    "feetvlratio1h",
-                    "feetvlratio2h",
-                    "feetvlratio4h",
-                    "feetvlratio12h",
-                    "volume30m",
-                    "volume1h",
-                    "volume2h",
-                    "volume4h",
-                    "volume12h"
-                ]
-            },
-            "PairTradeVolume": {
-                "type": "object",
-                "required": [
-                    "pair_address",
-                    "trade_volume",
-                    "fee_volume",
-                    "protocol_fee_volume",
-                    "day_date"
-                ],
-                "properties": {
-                    "day_date": {
-                        "type": "string",
-                        "description": "Date with only day information",
-                        "example": "2023-10-17"
-                    },
-                    "fee_volume": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total fee in USD"
-                    },
-                    "pair_address": {
-                        "type": "string",
-                        "description": "Address of the liquidity pair"
-                    },
-                    "protocol_fee_volume": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total protocol fee in USD"
-                    },
-                    "trade_volume": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total trading volume in USD"
-                    }
-                }
-            },
-            "PairTvlSnapshotByDay": {
-                "type": "object",
-                "required": [
-                    "pair_address",
-                    "total_value_locked",
-                    "day_date"
-                ],
-                "properties": {
-                    "day_date": {
-                        "type": "string",
-                        "description": "Date with only day information",
-                        "example": "2023-10-17"
-                    },
-                    "pair_address": {
-                        "type": "string",
-                        "description": "Address of the liquidity pair"
-                    },
-                    "total_value_locked": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total value locked"
-                    }
-                }
-            },
-            "Position": {
-                "type": "object",
-                "required": [
-                    "address",
-                    "pair_address",
-                    "owner",
-                    "total_fee_x_claimed",
-                    "total_fee_y_claimed",
-                    "total_reward_x_claimed",
-                    "total_reward_y_claimed",
-                    "total_fee_usd_claimed",
-                    "total_reward_usd_claimed",
-                    "created_at"
-                ],
-                "properties": {
-                    "address": {
-                        "type": "string",
-                        "description": "Address of the position"
-                    },
-                    "created_at": {
-                        "type": "string",
-                        "description": "Created at utc timestamp",
-                        "example": "2024-04-26T04:36:28.766258Z"
-                    },
-                    "owner": {
-                        "type": "string",
-                        "description": "Address of the position owner"
-                    },
-                    "pair_address": {
-                        "type": "string",
-                        "description": "Address of the liquidity pair for the position"
-                    },
-                    "total_fee_usd_claimed": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total fee has been claimed in USD"
-                    },
-                    "total_fee_x_claimed": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Total fee X has been claimed"
-                    },
-                    "total_fee_y_claimed": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Total fee Y has been claimed"
-                    },
-                    "total_reward_usd_claimed": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total farm reward has been claimed in USD"
-                    },
-                    "total_reward_x_claimed": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Total farm reward X has been claimed"
-                    },
-                    "total_reward_y_claimed": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Total farm reward Y has been claimed"
-                    }
-                }
-            },
-            "PositionLock": {
-                "type": "object",
-                "required": [
-                    "position",
-                    "lock_release_point",
-                    "owner",
-                    "slot",
-                    "tx_idx",
-                    "ix_idx",
-                    "inner_ix_idx",
-                    "closed"
-                ],
-                "properties": {
-                    "closed": {
-                        "type": "boolean"
-                    },
-                    "inner_ix_idx": {
-                        "type": "integer",
-                        "format": "int64",
-                        "minimum": 0
-                    },
-                    "ix_idx": {
-                        "type": "integer",
-                        "format": "int64",
-                        "minimum": 0
-                    },
-                    "lock_release_point": {
-                        "type": "integer",
-                        "format": "int64",
-                        "minimum": 0
-                    },
-                    "owner": {
-                        "type": "string"
-                    },
-                    "position": {
-                        "type": "string"
-                    },
-                    "slot": {
-                        "type": "integer",
-                        "format": "int64",
-                        "minimum": 0
-                    },
-                    "tx_idx": {
-                        "type": "integer",
-                        "format": "int64",
-                        "minimum": 0
-                    }
-                }
-            },
-            "PositionSnapshot": {
-                "type": "object",
-                "required": [
-                    "id",
-                    "position_address",
-                    "token_x_amount",
-                    "token_y_amount",
-                    "token_x_usd_rate",
-                    "token_y_usd_rate",
-                    "pending_fee_x_amount",
-                    "pending_fee_y_amount",
-                    "cumulative_fee_x_amount",
-                    "cumulative_fee_y_amount",
-                    "pending_reward_x_amount",
-                    "pending_reward_y_amount",
-                    "reward_x_usd_rate",
-                    "reward_y_usd_rate",
-                    "cumulative_reward_x_amount",
-                    "cumulative_reward_y_amount",
-                    "created_at"
-                ],
-                "properties": {
-                    "created_at": {
-                        "type": "string",
-                        "description": "Created at",
-                        "example": "0"
-                    },
-                    "cumulative_fee_x_amount": {
-                        "type": "string",
-                        "description": "Accumulated fee X amount during the snapshot. This includes pending claimable fee.",
-                        "example": "0"
-                    },
-                    "cumulative_fee_y_amount": {
-                        "type": "string",
-                        "description": "Accumulated fee Y amount during the snapshot. This includes pending claimable fee.",
-                        "example": "0"
-                    },
-                    "cumulative_reward_x_amount": {
-                        "type": "string",
-                        "description": "Accumulated reward X amount during the snapshot. This includes pending claimable reward.",
-                        "example": "0"
-                    },
-                    "cumulative_reward_y_amount": {
-                        "type": "string",
-                        "description": "Accumulated reward Y amount during the snapshot. This includes pending claimable reward.",
-                        "example": "0"
-                    },
-                    "id": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "ID"
-                    },
-                    "pending_fee_x_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of pending claimable fee X during the snapshot"
-                    },
-                    "pending_fee_y_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of pending claimable fee Y during the snapshot"
-                    },
-                    "pending_reward_x_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of pending claimable reward X during the snapshot"
-                    },
-                    "pending_reward_y_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of pending claimable reward Y during the snapshot"
-                    },
-                    "position_address": {
-                        "type": "string",
-                        "description": "Address of the position"
-                    },
-                    "reward_x_usd_rate": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Reward X usd rate during the snapshot"
-                    },
-                    "reward_y_usd_rate": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Reward Y usd rate during the snapshot"
-                    },
-                    "token_x_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of token X the position is holding during the snapshot"
-                    },
-                    "token_x_usd_rate": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Token X usd rate during the snapshot"
-                    },
-                    "token_y_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of token Y the position is holding during the snapshot"
-                    },
-                    "token_y_usd_rate": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Token Y usd rate during the snapshot"
-                    }
-                }
-            },
-            "PositionWithApy": {
-                "type": "object",
-                "required": [
-                    "address",
-                    "pair_address",
-                    "owner",
-                    "total_fee_x_claimed",
-                    "total_fee_y_claimed",
-                    "total_reward_x_claimed",
-                    "total_reward_y_claimed",
-                    "total_fee_usd_claimed",
-                    "total_reward_usd_claimed",
-                    "fee_apy_24h",
-                    "fee_apr_24h",
-                    "daily_fee_yield"
-                ],
-                "properties": {
-                    "address": {
-                        "type": "string",
-                        "description": "Address of the position"
-                    },
-                    "daily_fee_yield": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "fee_apr_24h": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "fee_apy_24h": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "owner": {
-                        "type": "string",
-                        "description": "Address of the position owner"
-                    },
-                    "pair_address": {
-                        "type": "string",
-                        "description": "Address of the liquidity pair for the position"
-                    },
-                    "total_fee_usd_claimed": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total fee has been claimed in USD"
-                    },
-                    "total_fee_x_claimed": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Total fee X has been claimed"
-                    },
-                    "total_fee_y_claimed": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Total fee Y has been claimed"
-                    },
-                    "total_reward_usd_claimed": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total farm reward has been claimed in USD"
-                    },
-                    "total_reward_x_claimed": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Total farm reward X has been claimed"
-                    },
-                    "total_reward_y_claimed": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Total farm reward Y has been claimed"
-                    }
-                }
-            },
-            "ProtocolMetrics": {
-                "type": "object",
-                "required": [
-                    "total_tvl",
-                    "daily_trade_volume",
-                    "total_trade_volume",
-                    "daily_fee",
-                    "total_fee"
-                ],
-                "properties": {
-                    "daily_fee": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Daily trading fee"
-                    },
-                    "daily_trade_volume": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Daily trading volume"
-                    },
-                    "total_fee": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total trading fee"
-                    },
-                    "total_trade_volume": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total trading volume"
-                    },
-                    "total_tvl": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Total value locked"
-                    }
-                }
-            },
-            "Swap": {
-                "type": "object",
-                "required": [
-                    "tx_id",
-                    "in_amount",
-                    "in_amount_usd",
-                    "out_amount",
-                    "out_amount_usd",
-                    "trade_fee",
-                    "trade_fee_usd",
-                    "protocol_fee",
-                    "protocol_fee_usd",
-                    "onchain_timestamp",
-                    "pair_address",
-                    "start_bin_id",
-                    "end_bin_id",
-                    "bin_count",
-                    "fee_bps",
-                    "in_token",
-                    "out_token"
-                ],
-                "properties": {
-                    "bin_count": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Number of bin involved"
-                    },
-                    "end_bin_id": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Ending bin ID for the swap"
-                    },
-                    "fee_bps": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Fee in BPS"
-                    },
-                    "in_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of token swapped in"
-                    },
-                    "in_amount_usd": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Amount of USD value swapped in"
-                    },
-                    "in_token": {
-                        "type": "string",
-                        "description": "Address of the token swapped in"
-                    },
-                    "onchain_timestamp": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Timestamp of the swap activity"
-                    },
-                    "out_amount": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of token swapped out"
-                    },
-                    "out_amount_usd": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Amount of USD value swapped out"
-                    },
-                    "out_token": {
-                        "type": "string",
-                        "description": "Address of the token swapped out"
-                    },
-                    "pair_address": {
-                        "type": "string",
-                        "description": "Address of the liquidity pair"
-                    },
-                    "protocol_fee": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of protocol fee charged"
-                    },
-                    "protocol_fee_usd": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Amount of protocol fee charged in USD"
-                    },
-                    "start_bin_id": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Starting bin ID for the swap"
-                    },
-                    "trade_fee": {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Amount of fee charged"
-                    },
-                    "trade_fee_usd": {
-                        "type": "number",
-                        "format": "double",
-                        "description": "Amount of fee charged in USD"
-                    },
-                    "tx_id": {
-                        "type": "string",
-                        "description": "Transaction hash"
-                    }
-                }
-            },
-            "VolumeData": {
-                "type": "object",
-                "required": [
-                    "min_30",
-                    "hour_1",
-                    "hour_2",
-                    "hour_4",
-                    "hour_12",
-                    "hour_24"
-                ],
-                "properties": {
-                    "hour_1": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_12": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_2": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_24": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "hour_4": {
-                        "type": "number",
-                        "format": "double"
-                    },
-                    "min_30": {
-                        "type": "number",
-                        "format": "double"
-                    }
-                }
-            },
-            "WalletEarning": {
-                "type": "object",
-                "properties": {
-                    "total_fee_usd_claimed": {
-                        "type": [
-                            "number",
-                            "null"
-                        ],
-                        "format": "double",
-                        "description": "Total fee amount has been claimed by the wallet in USD"
-                    },
-                    "total_fee_x_claimed": {
-                        "type": "string",
-                        "description": "Total fee x has been claimed by the wallet",
-                        "example": "0"
-                    },
-                    "total_fee_y_claimed": {
-                        "type": "string",
-                        "description": "Total fee y has been claimed by the wallet",
-                        "example": "0"
-                    },
-                    "total_reward_usd_claimed": {
-                        "type": [
-                            "number",
-                            "null"
-                        ],
-                        "format": "double",
-                        "description": "Total farm reward amount has been claimed by the wallet in USD"
-                    },
-                    "total_reward_x_claimed": {
-                        "type": "string",
-                        "description": "Total reward x has been claimed by the wallet",
-                        "example": "0"
-                    },
-                    "total_reward_y_claimed": {
-                        "type": "string",
-                        "description": "Total reward y has been claimed by the wallet",
-                        "example": "0"
-                    }
-                }
+    "/pools/groups": {
+      "get": {
+        "tags": [
+          "Pools"
+        ],
+        "summary": "Groups",
+        "description": "Returns a paginated list of pool groups",
+        "operationId": "Get Groups",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-based)",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
             }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Number of pools to return per page. Max 100",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "maximum": 100,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Search query used to match pools by name, tokens, or address",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Sort results by one or more fields\n\nFormat:\n- Time-windowed metrics: `<metric>_<window>:<direction>`\n- Non-windowed metrics: `<field>:<direction>`\n\n- `direction`: `asc` or `desc`\n- `window` (when applicable): `5m` `30m` `1h` `2h` `4h` `12h` `24h`\n\nAvailable fields:\n- Time-windowed metrics: `volume_*` `fee_*` `fee_tvl_ratio_*` `apr_*`\n- Non-windowed metrics: `tvl` `fee_pct` `bin_step` `pool_created_at` `farm_apy`\n\nDefault: `volume_24h:desc`\n\nExamples:\n- `volume_24h:desc`\n- `fee_1h:asc`\n- `tvl:desc`",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "filter_by",
+            "in": "query",
+            "description": "Conditions to filter documents by field values\n\nFormat: `<expr> [&& <expr> ...]`\n\nWhere each expression is: `<field><op><value>`\n\nAllowed fields:\n- Numeric: `tvl` `volume_*` `fee_*` `fee_tvl_ratio_*` `apr_*`\n- Boolean: `is_blacklisted`\n- Text: `pool_address` `name` `token_x` `token_y`\n\nOperators:\n- Numeric: `=` `>` `>=` `<` `<=`\n- Boolean: `=true` `=false`\n- Text:\n  - exact match: `=<value>`\n  - multi-value OR: `=[value1|value2|...]`\n\nNotes:\n- Multiple expressions are combined using logical **AND** (`&&`)\n- Whitespace around operators is ignored\n\nExamples:\n- `tvl>1000`\n- `is_blacklisted=false && volume_24h>=50000`",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "example": "is_blacklisted=false"
+          },
+          {
+            "name": "volume_tw",
+            "in": "query",
+            "description": "Time window to aggregate volume. Returns sum",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": "volume_24h"
+            }
+          },
+          {
+            "name": "fee_tvl_ratio_tw",
+            "in": "query",
+            "description": "Time window to aggregate fee tvl ratio. Returns Max",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": "fee_tvl_ratio_24h"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginationResponse_GroupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
+      }
+    },
+    "/pools/groups/{lexical_order_mints}": {
+      "get": {
+        "tags": [
+          "Pools"
+        ],
+        "summary": "Group",
+        "description": " Returns a paginated list of pools that belong to a specific pool group",
+        "operationId": "Get Group",
+        "parameters": [
+          {
+            "name": "lexical_order_mints",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v-METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-based)",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Number of pools to return per page. Max 100",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "maximum": 100,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Search query used to match pools by name, tokens, or address",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "description": "Sort results by one or more fields\n\nFormat:\n- Time-windowed metrics: `<metric>_<window>:<direction>`\n- Non-windowed metrics: `<field>:<direction>`\n\n- `direction`: `asc` or `desc`\n- `window` (when applicable): `5m` `30m` `1h` `2h` `4h` `12h` `24h`\n\nAvailable fields:\n- Time-windowed metrics: `volume_*` `fee_*` `fee_tvl_ratio_*` `apr_*`\n- Non-windowed metrics: `tvl` `fee_pct` `bin_step` `pool_created_at` `farm_apy`\n\nDefault: `volume_24h:desc`\n\nExamples:\n- `volume_24h:desc`\n- `fee_1h:asc`\n- `tvl:desc`",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "filter_by",
+            "in": "query",
+            "description": "Conditions to filter documents by field values\n\nFormat: `<expr> [&& <expr> ...]`\n\nWhere each expression is: `<field><op><value>`\n\nAllowed fields:\n- Numeric: `tvl` `volume_*` `fee_*` `fee_tvl_ratio_*` `apr_*`\n- Boolean: `is_blacklisted`\n- Text: `pool_address` `name` `token_x` `token_y`\n\nOperators:\n- Numeric: `=` `>` `>=` `<` `<=`\n- Boolean: `=true` `=false`\n- Text:\n  - exact match: `=<value>`\n  - multi-value OR: `=[value1|value2|...]`\n\nNotes:\n- Multiple expressions are combined using logical **AND** (`&&`)\n- Whitespace around operators is ignored\n\nExamples:\n- `tvl>1000`\n- `is_blacklisted=false && volume_24h>=50000`",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "example": "is_blacklisted=false"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginationResponse_PoolResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pools/{address}": {
+      "get": {
+        "tags": [
+          "Pools"
+        ],
+        "summary": "Pool",
+        "description": "Returns metadata and current state for a single pool",
+        "operationId": "Get Pool",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "description": "Base58-encoded pool address",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pools/{address}/ohlcv": {
+      "get": {
+        "tags": [
+          "Pools"
+        ],
+        "summary": "OHLCV",
+        "description": "Returns OHLCV candles for a single pool over a time range\n\n**Notes**\n- If both `start_time` and `end_time` are provided, candles are returned in the range `[start_time, end_time]`\n- If only one of `start_time` or `end_time` is provided, the missing bound is inferred using the selected `timeframe`\n- If neither is provided, a default range is used based on `timeframe`",
+        "operationId": "Get OHLCV",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "description": "Base58-encoded pool address",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd"
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "description": "Candle interval\n\nAllowed values `5m` `30m` `1h` `2h` `4h` `12h` `24h`\n\nIf omitted, the API uses `24h`",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "24h"
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "description": "Unix timestamp in seconds (inclusive)\n\nIf omitted, the API uses a default range based on `timeframe`",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "description": "Unix timestamp in seconds (inclusive)\n\nIf omitted, the API uses \"now\" as the end",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeseriesResponse_OHLCVResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pools/{address}/volume/history": {
+      "get": {
+        "tags": [
+          "Pools"
+        ],
+        "summary": "Historical Volume",
+        "description": "Returns historical volume for a pool aggregated into time buckets\n\n**Notes**\n- If both `start_time` and `end_time` are provided, the result covers the range `[start_time, end_time]`\n- If only one of `start_time` or `end_time` is provided, the missing bound is inferred using the selected `timeframe`\n- If neither is provided, a default range is used based on `timeframe`",
+        "operationId": "Get Historical Volume",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "description": "Base58-encoded pool address",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd"
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "description": "Timeframe\n\nAllowed values `5m` `30m` `1h` `2h` `4h` `12h` `24h`\n\nIf omitted, the API uses `24h`",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/TimeFrame"
+                }
+              ],
+              "default": "24h"
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "description": "Unix timestamp in seconds (inclusive)\n\nIf omitted, the API uses a default range based on `timeframe`",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "description": "Unix timestamp in seconds (inclusive)\n\nIf omitted, the API uses \"now\" as the end",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeseriesResponse_VolumeHistoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats/protocol_metrics": {
+      "get": {
+        "tags": [
+          "Stats"
+        ],
+        "summary": "Protocol Overview",
+        "description": "Returns aggregated protocol-level metrics across all pools",
+        "operationId": "Get Protocol Overview",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolMetricsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
+  },
+  "components": {
+    "schemas": {
+      "AddressPath": {
+        "type": "object",
+        "required": [
+          "address"
+        ],
+        "properties": {
+          "address": {
+            "type": "string"
+          }
+        }
+      },
+      "CumulativeMetrics": {
+        "type": "object",
+        "required": [
+          "volume",
+          "trade_fee",
+          "protocol_fee"
+        ],
+        "properties": {
+          "protocol_fee": {
+            "type": "number",
+            "format": "double"
+          },
+          "trade_fee": {
+            "type": "number",
+            "format": "double"
+          },
+          "volume": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "GetGroupDetailsParams": {
+        "type": "object",
+        "required": [
+          "lexical_order_mints"
+        ],
+        "properties": {
+          "lexical_order_mints": {
+            "type": "string"
+          }
+        }
+      },
+      "GetGroupsQuery": {
+        "type": "object",
+        "properties": {
+          "fee_tvl_ratio_tw": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Time window to aggregate fee tvl ratio. Returns Max"
+          },
+          "filter_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Conditions to filter documents by field values\n\nFormat: `<expr> [&& <expr> ...]`\n\nWhere each expression is: `<field><op><value>`\n\nAllowed fields:\n- Numeric: `tvl` `volume_*` `fee_*` `fee_tvl_ratio_*` `apr_*`\n- Boolean: `is_blacklisted`\n- Text: `pool_address` `name` `token_x` `token_y`\n\nOperators:\n- Numeric: `=` `>` `>=` `<` `<=`\n- Boolean: `=true` `=false`\n- Text:\n  - exact match: `=<value>`\n  - multi-value OR: `=[value1|value2|...]`\n\nNotes:\n- Multiple expressions are combined using logical **AND** (`&&`)\n- Whitespace around operators is ignored\n\nExamples:\n- `tvl>1000`\n- `is_blacklisted=false && volume_24h>=50000`"
+          },
+          "page": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Page number (1-based)",
+            "minimum": 0
+          },
+          "page_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Number of pools to return per page. Max 100",
+            "minimum": 0
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Search query used to match pools by name, tokens, or address"
+          },
+          "sort_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sort results by one or more fields\n\nFormat:\n- Time-windowed metrics: `<metric>_<window>:<direction>`\n- Non-windowed metrics: `<field>:<direction>`\n\n- `direction`: `asc` or `desc`\n- `window` (when applicable): `5m` `30m` `1h` `2h` `4h` `12h` `24h`\n\nAvailable fields:\n- Time-windowed metrics: `volume_*` `fee_*` `fee_tvl_ratio_*` `apr_*`\n- Non-windowed metrics: `tvl` `fee_pct` `bin_step` `pool_created_at` `farm_apy`\n\nDefault: `volume_24h:desc`\n\nExamples:\n- `volume_24h:desc`\n- `fee_1h:asc`\n- `tvl:desc`"
+          },
+          "volume_tw": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Time window to aggregate volume. Returns sum"
+          }
+        }
+      },
+      "GetOpenPortfolioQuery": {
+        "type": "object",
+        "description": "Query parameters for getting user's open portfolio\n\nUsed to retrieve a paginated list of pools where the user has open (active) positions.\nSupports sorting by various metrics and pagination.",
+        "required": [
+          "user"
+        ],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page number for pagination (minimum: 1, default: 1)",
+            "minimum": 0
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page size for pagination (default: 20, maximum: 50)",
+            "minimum": 0
+          },
+          "sort_by": {
+            "$ref": "#/components/schemas/GetOpenPortfolioSort",
+            "description": "Sort by field, default is current_balances"
+          },
+          "sort_direction": {
+            "$ref": "#/components/schemas/SortDirection",
+            "description": "Sort direction, default is DESC"
+          },
+          "user": {
+            "type": "string",
+            "description": "User's wallet address"
+          }
+        }
+      },
+      "GetOpenPortfolioResponse": {
+        "type": "object",
+        "required": [
+          "page",
+          "pageSize",
+          "hasNext",
+          "totalCount",
+          "pools"
+        ],
+        "properties": {
+          "hasNext": {
+            "type": "boolean"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "pools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PoolOpenPortfolioItem"
+            }
+          },
+          "total": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TotalMetrics"
+              }
+            ]
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "GetOpenPortfolioSort": {
+        "type": "string",
+        "enum": [
+          "current_balances",
+          "unclaimed_fee",
+          "fee_per_tvl24h"
+        ]
+      },
+      "GetPoolParams": {
+        "type": "object",
+        "required": [
+          "address"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Base58-encoded pool address"
+          }
+        }
+      },
+      "GetPoolPositionPnLQuery": {
+        "type": "object",
+        "description": "Query parameters for getting position PnL data",
+        "required": [
+          "user"
+        ],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page number for pagination (minimum: 1, default: 1)",
+            "minimum": 0
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page size for pagination (minimum: 1, maximum: 100, default: 20)",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/PositionStatus",
+            "description": "Filter positions by status: \"open\", \"closed\", or \"all\" (default: \"all\")"
+          },
+          "user": {
+            "type": "string",
+            "description": "The user's wallet address"
+          }
+        }
+      },
+      "GetPoolPositionPnLResponse": {
+        "type": "object",
+        "required": [
+          "totalCount",
+          "page",
+          "pageSize",
+          "hasNext",
+          "positions",
+          "tokenXPrice",
+          "tokenYPrice",
+          "rewardTokenXPrice",
+          "rewardTokenYPrice"
+        ],
+        "properties": {
+          "hasNext": {
+            "type": "boolean"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "positions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PositionPnLData"
+            }
+          },
+          "rewardTokenX": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rewardTokenXPrice": {
+            "type": "string"
+          },
+          "rewardTokenY": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rewardTokenYPrice": {
+            "type": "string"
+          },
+          "tokenX": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tokenXPrice": {
+            "type": "string"
+          },
+          "tokenY": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tokenYPrice": {
+            "type": "string"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "GetPoolsQuery": {
+        "type": "object",
+        "properties": {
+          "filter_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Conditions to filter documents by field values\n\nFormat: `<expr> [&& <expr> ...]`\n\nWhere each expression is: `<field><op><value>`\n\nAllowed fields:\n- Numeric: `tvl` `volume_*` `fee_*` `fee_tvl_ratio_*` `apr_*`\n- Boolean: `is_blacklisted`\n- Text: `pool_address` `name` `token_x` `token_y`\n\nOperators:\n- Numeric: `=` `>` `>=` `<` `<=`\n- Boolean: `=true` `=false`\n- Text:\n  - exact match: `=<value>`\n  - multi-value OR: `=[value1|value2|...]`\n\nNotes:\n- Multiple expressions are combined using logical **AND** (`&&`)\n- Whitespace around operators is ignored\n\nExamples:\n- `tvl>1000`\n- `is_blacklisted=false && volume_24h>=50000`"
+          },
+          "page": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Page number (1-based)",
+            "minimum": 0
+          },
+          "page_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Number of pools to return per page. Max 1000",
+            "minimum": 0
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Search query used to match pools by name, tokens, or address"
+          },
+          "sort_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sort results by one or more fields\n\nFormat:\n- Time-windowed metrics: `<metric>_<window>:<direction>`\n- Non-windowed metrics: `<field>:<direction>`\n\n- `direction`: `asc` or `desc`\n- `window` (when applicable): `5m` `30m` `1h` `2h` `4h` `12h` `24h`\n\nAvailable fields:\n- Time-windowed metrics: `volume_*` `fee_*` `fee_tvl_ratio_*` `apr_*`\n- Non-windowed metrics: `tvl` `fee_pct` `bin_step` `pool_created_at` `farm_apy`\n\nDefault: `volume_24h:desc`\n\nExamples:\n- `volume_24h:desc`\n- `fee_1h:asc`\n- `tvl:desc`"
+          }
+        }
+      },
+      "GetPortfolioQuery": {
+        "type": "object",
+        "description": "Query parameters for getting user portfolio",
+        "required": [
+          "user"
+        ],
+        "properties": {
+          "days_back": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Only include pools with positions closed within this many days\nApplied only for closed positions\n(minimum: 1, maximum: 365, default: 120)",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page number for pagination (minimum: 1, default: 1)",
+            "minimum": 0
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page size for pagination (default: 20, maximum: 50)",
+            "minimum": 0
+          },
+          "user": {
+            "type": "string",
+            "description": "User's wallet address"
+          }
+        }
+      },
+      "GetPortfolioResponse": {
+        "type": "object",
+        "description": "User portfolio response with aggregated pool data",
+        "required": [
+          "page",
+          "pageSize",
+          "hasNext",
+          "totalCount",
+          "pools"
+        ],
+        "properties": {
+          "hasNext": {
+            "type": "boolean"
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "pools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PoolPortfolioItem"
+            }
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "GetPortfolioTotalQuery": {
+        "type": "object",
+        "description": "Query parameters for getting portfolio totals",
+        "required": [
+          "user"
+        ],
+        "properties": {
+          "user": {
+            "type": "string",
+            "description": "User's wallet address"
+          }
+        }
+      },
+      "GetPositionHistoricalEventsQuery": {
+        "type": "object",
+        "description": "Query parameters for getting historical events for a position",
+        "properties": {
+          "event_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PositionEventType",
+                "description": "Filter by event type (add, remove, claim_fee, claim_reward).\nIf not provided, returns all event types."
+              }
+            ]
+          },
+          "order_direction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PositionEventOrderDirection",
+                "description": "Order direction for sorting events by block time.\n- `asc`: Oldest events first\n- `desc`: Most recent events first (default)"
+              }
+            ]
+          }
+        }
+      },
+      "GetPositionHistoricalEventsResponse": {
+        "type": "object",
+        "required": [
+          "events"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PositionEvent"
+            }
+          }
+        }
+      },
+      "GetPositionTotalClaimFeesResponse": {
+        "type": "object",
+        "required": [
+          "poolAddress",
+          "userAddress",
+          "tokenX",
+          "tokenY",
+          "totalFeeX",
+          "totalFeeY",
+          "totalFeeXUsd",
+          "totalFeeYUsd",
+          "claimCount",
+          "lastClaimTime"
+        ],
+        "properties": {
+          "claimCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "lastClaimTime": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-01-15T12:00:00Z"
+          },
+          "poolAddress": {
+            "type": "string"
+          },
+          "tokenX": {
+            "type": "string"
+          },
+          "tokenY": {
+            "type": "string"
+          },
+          "totalFeeX": {
+            "type": "string"
+          },
+          "totalFeeXUsd": {
+            "type": "string"
+          },
+          "totalFeeY": {
+            "type": "string"
+          },
+          "totalFeeYUsd": {
+            "type": "string"
+          },
+          "userAddress": {
+            "type": "string"
+          }
+        }
+      },
+      "GroupResponse": {
+        "type": "object",
+        "required": [
+          "lexical_order_mints",
+          "group_name",
+          "token_x",
+          "token_y",
+          "pool_count",
+          "total_tvl",
+          "total_volume",
+          "max_fee_tvl_ratio",
+          "has_farm"
+        ],
+        "properties": {
+          "group_name": {
+            "type": "string"
+          },
+          "has_farm": {
+            "type": "boolean"
+          },
+          "lexical_order_mints": {
+            "type": "string"
+          },
+          "max_fee_tvl_ratio": {
+            "type": "number",
+            "format": "double"
+          },
+          "pool_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "token_x": {
+            "type": "string"
+          },
+          "token_y": {
+            "type": "string"
+          },
+          "total_tvl": {
+            "type": "number",
+            "format": "double"
+          },
+          "total_volume": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "OHLCVResponse": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "timestamp_str",
+          "open",
+          "high",
+          "low",
+          "close",
+          "volume"
+        ],
+        "properties": {
+          "close": {
+            "type": "number",
+            "format": "double"
+          },
+          "high": {
+            "type": "number",
+            "format": "double"
+          },
+          "low": {
+            "type": "number",
+            "format": "double"
+          },
+          "open": {
+            "type": "number",
+            "format": "double"
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "timestamp_str": {
+            "type": "string"
+          },
+          "volume": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "PaginationResponse_GroupResponse": {
+        "type": "object",
+        "required": [
+          "total",
+          "pages",
+          "current_page",
+          "page_size",
+          "data"
+        ],
+        "properties": {
+          "current_page": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "lexical_order_mints",
+                "group_name",
+                "token_x",
+                "token_y",
+                "pool_count",
+                "total_tvl",
+                "total_volume",
+                "max_fee_tvl_ratio",
+                "has_farm"
+              ],
+              "properties": {
+                "group_name": {
+                  "type": "string"
+                },
+                "has_farm": {
+                  "type": "boolean"
+                },
+                "lexical_order_mints": {
+                  "type": "string"
+                },
+                "max_fee_tvl_ratio": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "pool_count": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0
+                },
+                "token_x": {
+                  "type": "string"
+                },
+                "token_y": {
+                  "type": "string"
+                },
+                "total_tvl": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "total_volume": {
+                  "type": "number",
+                  "format": "double"
+                }
+              }
+            }
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "pages": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "PaginationResponse_PoolResponse": {
+        "type": "object",
+        "required": [
+          "total",
+          "pages",
+          "current_page",
+          "page_size",
+          "data"
+        ],
+        "properties": {
+          "current_page": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "address",
+                "name",
+                "token_x",
+                "token_y",
+                "reserve_x",
+                "reserve_y",
+                "token_x_amount",
+                "token_y_amount",
+                "created_at",
+                "reward_mint_x",
+                "reward_mint_y",
+                "pool_config",
+                "dynamic_fee_pct",
+                "tvl",
+                "current_price",
+                "apr",
+                "apy",
+                "has_farm",
+                "farm_apr",
+                "farm_apy",
+                "volume",
+                "fees",
+                "protocol_fees",
+                "fee_tvl_ratio",
+                "cumulative_metrics",
+                "is_blacklisted",
+                "tags"
+              ],
+              "properties": {
+                "address": {
+                  "type": "string",
+                  "description": "Address of the liquidity pair"
+                },
+                "apr": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "24 hour APR"
+                },
+                "apy": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "24 hour APY"
+                },
+                "created_at": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Pool created at timestamp",
+                  "minimum": 0
+                },
+                "cumulative_metrics": {
+                  "$ref": "#/components/schemas/CumulativeMetrics",
+                  "description": "Cumulative metrics"
+                },
+                "current_price": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Price of the liquidity pair"
+                },
+                "dynamic_fee_pct": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Dynamic fee rate. Which is equal to base fee + variable fee."
+                },
+                "farm_apr": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Farm reward apr"
+                },
+                "farm_apy": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Farm reward apy"
+                },
+                "fee_tvl_ratio": {
+                  "$ref": "#/components/schemas/TimeWindowData",
+                  "description": "Fee TVL ratio in percentage in different timeframes"
+                },
+                "fees": {
+                  "$ref": "#/components/schemas/TimeWindowData",
+                  "description": "Fee data in different timeframes"
+                },
+                "has_farm": {
+                  "type": "boolean",
+                  "description": "Whether the pool has a farm or not"
+                },
+                "is_blacklisted": {
+                  "type": "boolean",
+                  "description": "Flag to indicate whether the pair is blacklisted"
+                },
+                "launchpad": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Launchpad of the pair"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Name of the liquidity pair"
+                },
+                "pool_config": {
+                  "$ref": "#/components/schemas/PoolConfig",
+                  "description": "Pool config"
+                },
+                "protocol_fees": {
+                  "$ref": "#/components/schemas/TimeWindowData",
+                  "description": "Protocol fee data in different timeframes"
+                },
+                "reserve_x": {
+                  "type": "string",
+                  "description": "Address of token X reserve of the liquidity pair"
+                },
+                "reserve_y": {
+                  "type": "string",
+                  "description": "Address of token Y reserve of the liquidity pair"
+                },
+                "reward_mint_x": {
+                  "type": "string",
+                  "description": "Address of the farming reward X of the liquidity pair"
+                },
+                "reward_mint_y": {
+                  "type": "string",
+                  "description": "Address of the farming reward Y of the liquidity pair"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Tags of the pair"
+                },
+                "token_x": {
+                  "$ref": "#/components/schemas/TokenMetrics",
+                  "description": "Token X of the liquidity pair"
+                },
+                "token_x_amount": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Token X amount the liquidity pair hold"
+                },
+                "token_y": {
+                  "$ref": "#/components/schemas/TokenMetrics",
+                  "description": "Token Y of the liquidity pair"
+                },
+                "token_y_amount": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Token Y amount the liquidity pair hold"
+                },
+                "tvl": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Total liquidity the liquidity pair holding. Also known as Total Value Locked"
+                },
+                "volume": {
+                  "$ref": "#/components/schemas/TimeWindowData",
+                  "description": "Volume data in different timeframes"
+                }
+              }
+            }
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "pages": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "PoolAddressPath": {
+        "type": "object",
+        "required": [
+          "pool_address"
+        ],
+        "properties": {
+          "pool_address": {
+            "type": "string"
+          }
+        }
+      },
+      "PoolConfig": {
+        "type": "object",
+        "required": [
+          "bin_step",
+          "base_fee_pct",
+          "max_fee_pct",
+          "protocol_fee_pct"
+        ],
+        "properties": {
+          "base_fee_pct": {
+            "type": "number",
+            "format": "double",
+            "description": "Base fee rate"
+          },
+          "bin_step": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Bin step of the pool",
+            "minimum": 0
+          },
+          "max_fee_pct": {
+            "type": "number",
+            "format": "double",
+            "description": "Maximum fee rate"
+          },
+          "protocol_fee_pct": {
+            "type": "number",
+            "format": "double",
+            "description": "Protocol fee rate. A cut from trade fee."
+          }
+        }
+      },
+      "PoolOpenPortfolioItem": {
+        "type": "object",
+        "description": "Aggregated portfolio data for a single pool",
+        "required": [
+          "poolAddress",
+          "binStep",
+          "baseFee",
+          "tokenXMint",
+          "tokenYMint",
+          "tokenXIcon",
+          "tokenYIcon",
+          "tokenX",
+          "tokenY",
+          "rewardX",
+          "rewardY",
+          "balances",
+          "unclaimedFees",
+          "feePerTvl24h",
+          "pnl",
+          "pnlPctChange",
+          "openPositionCount",
+          "listPositions"
+        ],
+        "properties": {
+          "balances": {
+            "type": "string",
+            "description": "Current balance in USD"
+          },
+          "baseFee": {
+            "type": "number",
+            "format": "double"
+          },
+          "binStep": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "feePerTvl24h": {
+            "type": "string",
+            "description": "User's fee per tvl in rolling 24h"
+          },
+          "listPositions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of position addresses in pool"
+          },
+          "openPositionCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of open positions",
+            "minimum": 0
+          },
+          "pnl": {
+            "type": "string",
+            "description": "Live PnL"
+          },
+          "pnlPctChange": {
+            "type": "string",
+            "description": "Live PnL percentage change"
+          },
+          "poolAddress": {
+            "type": "string"
+          },
+          "rewardX": {
+            "type": "string"
+          },
+          "rewardY": {
+            "type": "string"
+          },
+          "tokenX": {
+            "type": "string"
+          },
+          "tokenXIcon": {
+            "type": "string"
+          },
+          "tokenXMint": {
+            "type": "string"
+          },
+          "tokenY": {
+            "type": "string"
+          },
+          "tokenYIcon": {
+            "type": "string"
+          },
+          "tokenYMint": {
+            "type": "string"
+          },
+          "unclaimedFees": {
+            "type": "string",
+            "description": "Current unclaimed fee in USD"
+          }
+        }
+      },
+      "PoolPortfolioItem": {
+        "type": "object",
+        "description": "Aggregated portfolio data for a single pool",
+        "required": [
+          "poolAddress",
+          "binStep",
+          "baseFee",
+          "tokenXIcon",
+          "tokenYIcon",
+          "tokenX",
+          "tokenY",
+          "totalDeposit",
+          "totalWithdrawal",
+          "totalFee",
+          "pnlUsd",
+          "pnlPctChange",
+          "totalDepositTokenX",
+          "totalDepositTokenXUsd",
+          "totalWithdrawalTokenX",
+          "totalWithdrawalTokenXUsd",
+          "totalFeeTokenX",
+          "totalFeeTokenXUsd",
+          "totalDepositTokenY",
+          "totalDepositTokenYUsd",
+          "totalWithdrawalTokenY",
+          "totalWithdrawalTokenYUsd",
+          "totalFeeTokenY",
+          "totalFeeTokenYUsd"
+        ],
+        "properties": {
+          "baseFee": {
+            "type": "string"
+          },
+          "binStep": {
+            "type": "string"
+          },
+          "lastClosedAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "pnlPctChange": {
+            "type": "string",
+            "description": "PnL percent change"
+          },
+          "pnlUsd": {
+            "type": "string",
+            "description": "Total PnL in USD, including realized and unrealized"
+          },
+          "poolAddress": {
+            "type": "string"
+          },
+          "tokenX": {
+            "type": "string"
+          },
+          "tokenXIcon": {
+            "type": "string"
+          },
+          "tokenY": {
+            "type": "string"
+          },
+          "tokenYIcon": {
+            "type": "string"
+          },
+          "totalDeposit": {
+            "type": "string",
+            "description": "Total deposit in USD"
+          },
+          "totalDepositTokenX": {
+            "type": "string"
+          },
+          "totalDepositTokenXUsd": {
+            "type": "string"
+          },
+          "totalDepositTokenY": {
+            "type": "string"
+          },
+          "totalDepositTokenYUsd": {
+            "type": "string"
+          },
+          "totalFee": {
+            "type": "string",
+            "description": "Total claim fee in USD"
+          },
+          "totalFeeTokenX": {
+            "type": "string"
+          },
+          "totalFeeTokenXUsd": {
+            "type": "string"
+          },
+          "totalFeeTokenY": {
+            "type": "string"
+          },
+          "totalFeeTokenYUsd": {
+            "type": "string"
+          },
+          "totalWithdrawal": {
+            "type": "string",
+            "description": "Total withdrawal in USD"
+          },
+          "totalWithdrawalTokenX": {
+            "type": "string"
+          },
+          "totalWithdrawalTokenXUsd": {
+            "type": "string"
+          },
+          "totalWithdrawalTokenY": {
+            "type": "string"
+          },
+          "totalWithdrawalTokenYUsd": {
+            "type": "string"
+          }
+        }
+      },
+      "PoolResponse": {
+        "type": "object",
+        "required": [
+          "address",
+          "name",
+          "token_x",
+          "token_y",
+          "reserve_x",
+          "reserve_y",
+          "token_x_amount",
+          "token_y_amount",
+          "created_at",
+          "reward_mint_x",
+          "reward_mint_y",
+          "pool_config",
+          "dynamic_fee_pct",
+          "tvl",
+          "current_price",
+          "apr",
+          "apy",
+          "has_farm",
+          "farm_apr",
+          "farm_apy",
+          "volume",
+          "fees",
+          "protocol_fees",
+          "fee_tvl_ratio",
+          "cumulative_metrics",
+          "is_blacklisted",
+          "tags"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Address of the liquidity pair"
+          },
+          "apr": {
+            "type": "number",
+            "format": "double",
+            "description": "24 hour APR"
+          },
+          "apy": {
+            "type": "number",
+            "format": "double",
+            "description": "24 hour APY"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Pool created at timestamp",
+            "minimum": 0
+          },
+          "cumulative_metrics": {
+            "$ref": "#/components/schemas/CumulativeMetrics",
+            "description": "Cumulative metrics"
+          },
+          "current_price": {
+            "type": "number",
+            "format": "double",
+            "description": "Price of the liquidity pair"
+          },
+          "dynamic_fee_pct": {
+            "type": "number",
+            "format": "double",
+            "description": "Dynamic fee rate. Which is equal to base fee + variable fee."
+          },
+          "farm_apr": {
+            "type": "number",
+            "format": "double",
+            "description": "Farm reward apr"
+          },
+          "farm_apy": {
+            "type": "number",
+            "format": "double",
+            "description": "Farm reward apy"
+          },
+          "fee_tvl_ratio": {
+            "$ref": "#/components/schemas/TimeWindowData",
+            "description": "Fee TVL ratio in percentage in different timeframes"
+          },
+          "fees": {
+            "$ref": "#/components/schemas/TimeWindowData",
+            "description": "Fee data in different timeframes"
+          },
+          "has_farm": {
+            "type": "boolean",
+            "description": "Whether the pool has a farm or not"
+          },
+          "is_blacklisted": {
+            "type": "boolean",
+            "description": "Flag to indicate whether the pair is blacklisted"
+          },
+          "launchpad": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Launchpad of the pair"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the liquidity pair"
+          },
+          "pool_config": {
+            "$ref": "#/components/schemas/PoolConfig",
+            "description": "Pool config"
+          },
+          "protocol_fees": {
+            "$ref": "#/components/schemas/TimeWindowData",
+            "description": "Protocol fee data in different timeframes"
+          },
+          "reserve_x": {
+            "type": "string",
+            "description": "Address of token X reserve of the liquidity pair"
+          },
+          "reserve_y": {
+            "type": "string",
+            "description": "Address of token Y reserve of the liquidity pair"
+          },
+          "reward_mint_x": {
+            "type": "string",
+            "description": "Address of the farming reward X of the liquidity pair"
+          },
+          "reward_mint_y": {
+            "type": "string",
+            "description": "Address of the farming reward Y of the liquidity pair"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags of the pair"
+          },
+          "token_x": {
+            "$ref": "#/components/schemas/TokenMetrics",
+            "description": "Token X of the liquidity pair"
+          },
+          "token_x_amount": {
+            "type": "number",
+            "format": "double",
+            "description": "Token X amount the liquidity pair hold"
+          },
+          "token_y": {
+            "$ref": "#/components/schemas/TokenMetrics",
+            "description": "Token Y of the liquidity pair"
+          },
+          "token_y_amount": {
+            "type": "number",
+            "format": "double",
+            "description": "Token Y amount the liquidity pair hold"
+          },
+          "tvl": {
+            "type": "number",
+            "format": "double",
+            "description": "Total liquidity the liquidity pair holding. Also known as Total Value Locked"
+          },
+          "volume": {
+            "$ref": "#/components/schemas/TimeWindowData",
+            "description": "Volume data in different timeframes"
+          }
+        }
+      },
+      "PoolsSortBy": {
+        "type": "string",
+        "enum": [
+          "tvl",
+          "volume24h",
+          "fee24h"
+        ]
+      },
+      "PortfolioTotalResponse": {
+        "type": "object",
+        "description": "Portfolio total PnL response",
+        "required": [
+          "totalPnlUsd",
+          "totalPnlPctChange"
+        ],
+        "properties": {
+          "totalPnlPctChange": {
+            "type": "string",
+            "description": "Total PnL percentage change across all pools"
+          },
+          "totalPnlUsd": {
+            "type": "string",
+            "description": "Total amount deposited in USD across all pools\nNOTE: Commented out for now, but may be needed in the future\nTotal PnL in USD across all pools"
+          }
+        }
+      },
+      "PositionEvent": {
+        "type": "object",
+        "required": [
+          "signature",
+          "ixIndex",
+          "eventType",
+          "positionAddress",
+          "blockTime",
+          "slot",
+          "poolAddress",
+          "userAddress",
+          "tokenX",
+          "tokenY",
+          "amountX",
+          "amountY",
+          "amountXUsd",
+          "amountYUsd",
+          "totalUsd",
+          "createdAt"
+        ],
+        "properties": {
+          "amountX": {
+            "type": "string"
+          },
+          "amountXUsd": {
+            "type": "string"
+          },
+          "amountY": {
+            "type": "string"
+          },
+          "amountYUsd": {
+            "type": "string"
+          },
+          "blockTime": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-01-15T12:00:00Z"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "ixIndex": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "poolAddress": {
+            "type": "string"
+          },
+          "positionAddress": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "slot": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "tokenX": {
+            "type": "string"
+          },
+          "tokenY": {
+            "type": "string"
+          },
+          "totalUsd": {
+            "type": "string"
+          },
+          "userAddress": {
+            "type": "string"
+          }
+        }
+      },
+      "PositionEventOrderDirection": {
+        "type": "string",
+        "enum": [
+          "asc",
+          "desc"
+        ]
+      },
+      "PositionEventType": {
+        "type": "string",
+        "enum": [
+          "add",
+          "remove",
+          "claim_fee",
+          "claim_reward"
+        ]
+      },
+      "PositionPnLData": {
+        "type": "object",
+        "required": [
+          "positionAddress",
+          "minPrice",
+          "maxPrice",
+          "lowerBinId",
+          "upperBinId",
+          "feePerTvl24h",
+          "isClosed",
+          "createdAt",
+          "pnlUsd",
+          "pnlPctChange",
+          "allTimeDeposits",
+          "allTimeWithdrawals",
+          "allTimeFees"
+        ],
+        "properties": {
+          "allTimeDeposits": {
+            "$ref": "#/components/schemas/TokenPairWithTotal"
+          },
+          "allTimeFees": {
+            "$ref": "#/components/schemas/TokenPairWithTotal"
+          },
+          "allTimeWithdrawals": {
+            "$ref": "#/components/schemas/TokenPairWithTotal"
+          },
+          "closedAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "feePerTvl24h": {
+            "type": "string",
+            "description": "User's fee per tvl in rolling 24h"
+          },
+          "isClosed": {
+            "type": "boolean"
+          },
+          "isOutOfRange": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "lowerBinId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxPrice": {
+            "type": "string"
+          },
+          "minPrice": {
+            "type": "string"
+          },
+          "pnlPctChange": {
+            "type": "string"
+          },
+          "pnlUsd": {
+            "type": "string"
+          },
+          "poolActiveBinId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "poolActivePrice": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "positionAddress": {
+            "type": "string"
+          },
+          "unrealizedPnl": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UnrealizedPnL",
+                "description": "Live PnL, only for open positions"
+              }
+            ]
+          },
+          "upperBinId": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "PositionStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed",
+          "all"
+        ]
+      },
+      "ProtocolMetricsResponse": {
+        "type": "object",
+        "required": [
+          "total_tvl",
+          "volume_24h",
+          "fee_24h",
+          "total_volume",
+          "total_fees",
+          "total_pools"
+        ],
+        "properties": {
+          "fee_24h": {
+            "type": "number",
+            "format": "double"
+          },
+          "total_fees": {
+            "type": "number",
+            "format": "double"
+          },
+          "total_pools": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "total_tvl": {
+            "type": "number",
+            "format": "double"
+          },
+          "total_volume": {
+            "type": "number",
+            "format": "double"
+          },
+          "volume_24h": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "SortDirection": {
+        "type": "string",
+        "enum": [
+          "asc",
+          "desc"
+        ]
+      },
+      "TimeFrame": {
+        "type": "string",
+        "enum": [
+          "5m",
+          "30m",
+          "1h",
+          "2h",
+          "4h",
+          "12h",
+          "24h"
+        ]
+      },
+      "TimeWindowData": {
+        "type": "object",
+        "required": [
+          "30m",
+          "1h",
+          "2h",
+          "4h",
+          "12h",
+          "24h"
+        ],
+        "properties": {
+          "12h": {
+            "type": "number",
+            "format": "double"
+          },
+          "1h": {
+            "type": "number",
+            "format": "double"
+          },
+          "24h": {
+            "type": "number",
+            "format": "double"
+          },
+          "2h": {
+            "type": "number",
+            "format": "double"
+          },
+          "30m": {
+            "type": "number",
+            "format": "double"
+          },
+          "4h": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "TimeseriesResponse_OHLCVResponse": {
+        "type": "object",
+        "required": [
+          "start_time",
+          "end_time",
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "timestamp",
+                "timestamp_str",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume"
+              ],
+              "properties": {
+                "close": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "high": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "low": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "open": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "timestamp": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0
+                },
+                "timestamp_str": {
+                  "type": "string"
+                },
+                "volume": {
+                  "type": "number",
+                  "format": "double"
+                }
+              }
+            }
+          },
+          "end_time": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "start_time": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "timeframe": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "TimeseriesResponse_VolumeHistoryResponse": {
+        "type": "object",
+        "required": [
+          "start_time",
+          "end_time",
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "timestamp",
+                "timestamp_str",
+                "volume",
+                "fees",
+                "protocol_fees"
+              ],
+              "properties": {
+                "fees": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "protocol_fees": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "timestamp": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0
+                },
+                "timestamp_str": {
+                  "type": "string"
+                },
+                "volume": {
+                  "type": "number",
+                  "format": "double"
+                }
+              }
+            }
+          },
+          "end_time": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "start_time": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "timeframe": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "TokenAmount": {
+        "type": "object",
+        "required": [
+          "amount",
+          "usd"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "usd": {
+            "type": "string"
+          }
+        }
+      },
+      "TokenMetrics": {
+        "type": "object",
+        "required": [
+          "address",
+          "name",
+          "symbol",
+          "decimals",
+          "is_verified",
+          "holders",
+          "freeze_authority_disabled",
+          "total_supply",
+          "price",
+          "market_cap"
+        ],
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "decimals": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "freeze_authority_disabled": {
+            "type": "boolean"
+          },
+          "holders": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_verified": {
+            "type": "boolean"
+          },
+          "market_cap": {
+            "type": "number",
+            "format": "double"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "format": "double"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "total_supply": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "TokenPairWithTotal": {
+        "type": "object",
+        "required": [
+          "tokenX",
+          "tokenY",
+          "total"
+        ],
+        "properties": {
+          "tokenX": {
+            "$ref": "#/components/schemas/TokenAmount"
+          },
+          "tokenY": {
+            "$ref": "#/components/schemas/TokenAmount"
+          },
+          "total": {
+            "$ref": "#/components/schemas/TotalUsd"
+          }
+        }
+      },
+      "TotalMetrics": {
+        "type": "object",
+        "description": "Total metrics related to user portfolio",
+        "required": [
+          "balances",
+          "unclaimedFees",
+          "pnl"
+        ],
+        "properties": {
+          "balances": {
+            "type": "string",
+            "description": "Current balance in USD"
+          },
+          "pnl": {
+            "type": "string",
+            "description": "Current pnl in USD"
+          },
+          "unclaimedFees": {
+            "type": "string",
+            "description": "Current unclaimed fees in USD"
+          }
+        }
+      },
+      "TotalUsd": {
+        "type": "object",
+        "required": [
+          "usd"
+        ],
+        "properties": {
+          "usd": {
+            "type": "string"
+          }
+        }
+      },
+      "UnrealizedPnL": {
+        "type": "object",
+        "required": [
+          "balances",
+          "balanceTokenX",
+          "balanceTokenY",
+          "unclaimedFeeTokenX",
+          "unclaimedFeeTokenY",
+          "unclaimedRewardTokenX",
+          "unclaimedRewardTokenY"
+        ],
+        "properties": {
+          "balanceTokenX": {
+            "$ref": "#/components/schemas/TokenAmount"
+          },
+          "balanceTokenY": {
+            "$ref": "#/components/schemas/TokenAmount"
+          },
+          "balances": {
+            "type": "number",
+            "format": "double",
+            "description": "Total current position balances in USD"
+          },
+          "unclaimedFeeTokenX": {
+            "$ref": "#/components/schemas/TokenAmount"
+          },
+          "unclaimedFeeTokenY": {
+            "$ref": "#/components/schemas/TokenAmount"
+          },
+          "unclaimedRewardTokenX": {
+            "$ref": "#/components/schemas/TokenAmount"
+          },
+          "unclaimedRewardTokenY": {
+            "$ref": "#/components/schemas/TokenAmount"
+          }
+        }
+      },
+      "VolumeHistoryResponse": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "timestamp_str",
+          "volume",
+          "fees",
+          "protocol_fees"
+        ],
+        "properties": {
+          "fees": {
+            "type": "number",
+            "format": "double"
+          },
+          "protocol_fees": {
+            "type": "number",
+            "format": "double"
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "timestamp_str": {
+            "type": "string"
+          },
+          "volume": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+      {
+          "url": "https://dlmm.datapi.meteora.ag",
+          "description": "DLMM Mainnet API"
+      }
+  ]
 }
