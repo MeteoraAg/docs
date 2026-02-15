@@ -175,59 +175,52 @@ I = M * x²
 ## Example
 
 ```
-let D = 10000 / SOL_PRICE
-let M = 80000 / SOL_PRICE
-let f = 0.5
-let V = 0
-let L = 1 / 1000000000 // leftover needs to be indicated to cover precision loss
-
-let requiredRatio = Math.sqrt(D / M)
-let percentageSupplyOnMigration =
-    (requiredRatio * (1 - f) * 100) / (1 + requiredRatio * (1 - f))
-let x =
-    percentageSupplyOnMigration /
-    (100 - V - L - percentageSupplyOnMigration)
-let I = M * x * x
-
 const curveConfig = buildCurveWithMarketCap({
-    totalTokenSupply: 1000000000,
-    initialMarketCap: I,
-    migrationMarketCap: M,
-    migrationOption: MigrationOption.MET_DAMM_V2,
-    tokenBaseDecimal: TokenDecimal.SIX,
-    tokenQuoteDecimal: TokenDecimal.NINE,
-    lockedVestingParam: {
+    token: {
+        tokenType: TokenType.SPL,
+        tokenBaseDecimal: TokenDecimal.SIX,
+        tokenQuoteDecimal: TokenDecimal.NINE,
+        tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+        totalTokenSupply: 1_000_000_000,
+        leftover: 1,
+    },
+    fee: {
+        baseFeeParams: {
+            baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+            feeSchedulerParam: {
+                startingFeeBps: 100,
+                endingFeeBps: 100,
+                numberOfPeriod: 0,
+                totalDuration: 0,
+            },
+        },
+        dynamicFeeEnabled: false,
+        collectFeeMode: CollectFeeMode.QuoteToken,
+        creatorTradingFeePercentage: 0,
+        poolCreationFee: 0,
+        enableFirstSwapWithMinFee: false,
+    },
+    migration: {
+        migrationOption: MigrationOption.MET_DAMM_V2,
+        migrationFeeOption: MigrationFeeOption.FixedBps100,
+        migrationFee: { feePercentage: 50, creatorFeePercentage: 0 },
+    },
+    liquidityDistribution: {
+        partnerLiquidityPercentage: 0,
+        partnerPermanentLockedLiquidityPercentage: 100,
+        creatorLiquidityPercentage: 0,
+        creatorPermanentLockedLiquidityPercentage: 0,
+    },
+    lockedVesting: {
         totalLockedVestingAmount: 0,
         numberOfVestingPeriod: 0,
         cliffUnlockAmount: 0,
         totalVestingDuration: 0,
         cliffDurationFromMigrationTime: 0,
     },
-    baseFeeParams: {
-        baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
-        feeSchedulerParam: {
-            startingFeeBps: 100,
-            endingFeeBps: 100,
-            numberOfPeriod: 0,
-            totalDuration: 0,
-        },
-    },
-    dynamicFeeEnabled: false,
     activationType: ActivationType.Slot,
-    collectFeeMode: CollectFeeMode.QuoteToken,
-    migrationFeeOption: MigrationFeeOption.FixedBps100,
-    tokenType: TokenType.SPL,
-    partnerLiquidityPercentage: 0,
-    creatorLiquidityPercentage: 0,
-    partnerPermanentLockedLiquidityPercentage: 100,
-    creatorPermanentLockedLiquidityPercentage: 0,
-    creatorTradingFeePercentage: 0,
-    leftover: 1,
-    tokenUpdateAuthority: 0,
-    migrationFee: {
-        feePercentage: 50,
-        creatorFeePercentage: 0,
-    },
+    initialMarketCap: 4000,
+    migrationMarketCap: 69000,
 })
 ```
 

@@ -24,7 +24,6 @@ interface CreateConfigParams {
     feeClaimer: PublicKey // The wallet that will be able to claim the fee
     leftoverReceiver: PublicKey // The wallet that will receive the bonding curve leftover
     quoteMint: PublicKey // The quote mint address
-    poolCreationFee?: BN // Optional pool creation fee in SOL lamports that creators pay when creating a pool
     poolFees: {
         baseFee: {
             cliffFeeNumerator: BN // Initial fee numerator (base fee)
@@ -44,16 +43,16 @@ interface CreateConfigParams {
             maxVolatilityAccumulator: number // Caps the maximum volatility that can be accumulated
         } | null
     }
-    activationType: number // 0: Slot, 1: Timestamp
     collectFeeMode: number // 0: QuoteToken, 1: OutputToken
     migrationOption: number // 0: DAMM V1, 1: DAMM v2
+    activationType: number // 0: Slot, 1: Timestamp
     tokenType: number // 0: SPL, 1: Token2022
     tokenDecimal: number // The number of decimals for the token
-    migrationQuoteThreshold: BN // The quote threshold for migration
     partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner in the graduated pool (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // The percentage of the locked LP that will be allocated to the partner in the graduated pool (0-100)
     creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator in the graduated pool (0-100)
-    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner in the graduated pool (0-100)
-    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator in the graduated pool (0-100)
+    creatorPermanentLockedLiquidityPercentage: number // The percentage of the locked LP that will be allocated to the creator in the graduated pool (0-100)
+    migrationQuoteThreshold: BN // The quote threshold for migration
     sqrtStartPrice: BN // The starting price of the pool
     lockedVesting: {
         // Optional locked vesting (BN (0) for all fields for no vesting)
@@ -82,31 +81,30 @@ interface CreateConfigParams {
         dynamicFee: number // 0: Disabled, 1: Enabled
         poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
     }
-    partnerLiquidityVestingInfo?: {
-        // Optional LP vesting for partner (DAMM v2 only)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        frequency: number // Frequency of vesting in seconds (calculated as totalDuration / numberOfPeriods)
+    poolCreationFee: BN // The pool creation fee
+    partnerLiquidityVestingInfo: {
+        vestingPercentage: number // The percentage of the liquidity that will be vested
+        bpsPerPeriod: number // The basis points per period
+        numberOfPeriods: number // The number of periods
+        cliffDurationFromMigrationTime: number // The duration of the waiting time before the vesting starts
+        frequency: number // The frequency of the vesting
     }
-    creatorLiquidityVestingInfo?: {
-        // Optional LP vesting for creator (DAMM v2 only)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        frequency: number // Frequency of vesting in seconds (calculated as totalDuration / numberOfPeriods)
+    creatorLiquidityVestingInfo: {
+        vestingPercentage: number // The percentage of the liquidity that will be vested
+        bpsPerPeriod: number // The basis points per period
+        numberOfPeriods: number // The number of periods
+        cliffDurationFromMigrationTime: number // The duration of the waiting time before the vesting starts
+        frequency: number // The frequency of the vesting
     }
-    migratedPoolBaseFeeMode?: number // 0: FeeTimeSchedulerLinear, 1: FeeTimeSchedulerExponential, 2: RateLimiter (not supported), 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential (see DammV2BaseFeeMode). Defaults to FeeTimeSchedulerLinear (0).
-    migratedPoolMarketCapFeeSchedulerParams?: {
-        // Only when migratedPoolBaseFeeMode = FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4) and migrationOption = MET_DAMM_V2 (1)
-        numberOfPeriod: number // The total number of fee reduction periods
-        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
-        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
-        reductionFactor: BN // The amount to reduce the fee by per period
+    migratedPoolBaseFeeMode: number // 0: FeeTimeSchedulerLinear, 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential (defaults to FeeTimeSchedulerLinear)
+    migratedPoolMarketCapFeeSchedulerParams: {
+        // Defaults to all 0. Configure only when migratedPoolBaseFeeMode = FeeMarketCapSchedulerLinear or FeeMarketCapSchedulerExponential
+        numberOfPeriod: number // The number of periods
+        sqrtPriceStepBps: number // The square root price step in basis points
+        schedulerExpirationDuration: number // The scheduler expiration duration in seconds
+        reductionFactor: BN // The reduction factor
     }
-    enableFirstSwapWithMinFee?: boolean // If true, the first swap on the pool will use the minimum fee instead of the starting fee. Default: false.
+    enableFirstSwapWithMinFee: boolean // Whether to enable first swap with minimum fee (defaults to false)
     padding: []
     curve: {
         // The curve of the pool
@@ -131,7 +129,7 @@ const transaction = await client.partner.createConfig({
     quoteMint: new PublicKey('So11111111111111111111111111111111111111112'),
     poolFees: {
         baseFee: {
-            cliffFeeNumerator: new BN('2500000'),
+            cliffFeeNumerator: new BN('25000000'),
             firstFactor: 0,
             secondFactor: new BN('0'),
             thirdFactor: new BN('0'),
@@ -166,24 +164,35 @@ const transaction = await client.partner.createConfig({
         cliffUnlockAmount: new BN('0'),
     },
     migrationFeeOption: 0,
-    tokenSupply: {
-        preMigrationTokenSupply: new BN('10000000000000000000'),
-        postMigrationTokenSupply: new BN('10000000000000000000'),
-    },
+    tokenSupply: null,
     creatorTradingFeePercentage: 0,
-    tokenUpdateAuthority: 1,
+    tokenUpdateAuthority: 0,
     migrationFee: {
         feePercentage: 25,
         creatorFeePercentage: 50,
     },
-    migratedPoolFee: {
-        collectFeeMode: 0,
-        dynamicFee: 0,
-        poolFeeBps: 0,
+    poolCreationFee: new BN(1_000_000_000),
+    creatorLiquidityVestingInfo: {
+        vestingPercentage: 0,
+        bpsPerPeriod: 0,
+        numberOfPeriods: 0,
+        frequency: 0,
+        cliffDurationFromMigrationTime: 0,
     },
-    migratedPoolBaseFeeMode: DammV2BaseFeeMode.FeeTimeSchedulerLinear, // Optional: defaults to FeeTimeSchedulerLinear (0)
-    // migratedPoolMarketCapFeeSchedulerParams: { ... }, // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
-    enableFirstSwapWithMinFee: false, // Optional: defaults to false
+    partnerLiquidityVestingInfo: {
+        vestingPercentage: 0,
+        bpsPerPeriod: 0,
+        numberOfPeriods: 0,
+        frequency: 0,
+        cliffDurationFromMigrationTime: 0,
+    },
+    migratedPoolBaseFeeMode: DammV2BaseFeeMode.FeeTimeSchedulerLinear,
+    migratedPoolMarketCapFeeSchedulerParams: {
+        numberOfPeriod: 0,
+        sqrtPriceStepBps: 0,
+        schedulerExpirationDuration: 0,
+        reductionFactor: new BN('0'),
+    },
     padding: [],
     curve: [
         {
@@ -195,8 +204,18 @@ const transaction = await client.partner.createConfig({
             liquidity: new BN('1'),
         },
     ],
+    enableFirstSwapWithMinFee: false,
+    migratedPoolFee: {
+        dynamicFee: 0,
+        poolFeeBps: 0,
+        collectFeeMode: 0,
+    },
 })
 ```
+
+<Note>
+`createConfig` takes flat, low-level on-chain parameters (BN values, raw fee numerators, curve points, etc.). In contrast, the `buildCurve*` helper functions use a **nested parameter structure** with human-readable values (e.g., market caps in quote token units, fee in bps, percentages). Use a `buildCurve*` function to generate the `ConfigParameters` object and then pass the resulting fields into `createConfig`.
+</Note>
 
 **Notes**
 
@@ -231,10 +250,12 @@ When creating a new configuration for a dynamic bonding curve, several validatio
 
 - Must be either Slot (0) or Timestamp (1)
 
-**Graduated DAMM V1/V2 Pool Fee**
+**Graduated DAMM V1/V2 Pool Fee (migrationFeeOption)**
 
-- Must be a valid option: FixedBps25 (0), FixedBps30 (1), FixedBps100 (2), FixedBps200 (3), FixedBps400 (4), FixedBps600 (5)
+- Must be a valid option: FixedBps25 (0), FixedBps30 (1), FixedBps100 (2), FixedBps200 (3), FixedBps400 (4), FixedBps600 (5), Customizable (6)
 - Customizable (6) is only allowed for DAMM V2 migration
+- When `marketCapFeeSchedulerParams` is configured in `migratedPoolFee`, the on-chain program requires `migrationFeeOption` to be `Customizable` (6). The SDK's `buildCurve*` functions handle this automatically by overriding `migrationFeeOption` to `Customizable` when `marketCapFeeSchedulerParams` is present.
+- For fixed options (0-5), all `migratedPoolFee` fields must be zero (defaults). Custom values are ignored.
 
 **Migration Fee**
 
@@ -245,12 +266,10 @@ When creating a new configuration for a dynamic bonding curve, several validatio
 
 - Must be between 6 and 9
 
-**Liquidity Percentages**
+**Liquidity Percentages (Graduated pool)**
 
-- The sum of partner liquidity, creator liquidity, partner permanently locked liquidity, and creator permanently locked liquidity percentages must equal 100(%)
-- **Minimum 10% Locked at Day 1**: At least 10% of liquidity must remain locked at day 1 (86400 seconds) post-migration. This can be achieved through:
-    - Permanent locked liquidity only: `partnerPermanentLockedLiquidityPercentage` + `creatorPermanentLockedLiquidityPercentage` >= 10
-    - Combination of permanent + vesting: The SDK calculates locked liquidity at day 1 including vesting contributions using `MIN_LOCKED_LIQUIDITY_BPS = 1000` (10%)
+- The sum of partner liquidity LP, creator liquidity LP, partner locked liquidity LP, creator locked liquidity LP, partner vested liquidity LP and creator vested liquidity LP percentages must equal 100(%).
+- Must ensure that there is minimum 1000 bps of locked liquidity after 1 day duration (86400 seconds). The locked liquidity can be vested liquidity or permanently locked liquidity.
 
 **Migration Quote Threshold**
 
@@ -285,6 +304,36 @@ When creating a new configuration for a dynamic bonding curve, several validatio
 **Token Update Authority**
 
 - Must be either CreatorUpdateAuthority (0), Immutable (1), PartnerUpdateAuthority (2), CreatorUpdateAndMintAuthority (3), PartnerUpdateAndMintAuthority (4)
+
+**Pool Creation Fee**
+
+- Can be 0.
+- If non-zero, must be between `1_000_000` and `100_000_000_000` lamports of SOL
+
+**Migrated Pool Base Fee Mode**
+
+- Must be either `FeeTimeSchedulerLinear` (0), `FeeTimeSchedulerExponential` (1), `FeeMarketCapSchedulerLinear` (3), `FeeMarketCapSchedulerExponential` (4)
+- `FeeTimeSchedulerLinear` (0) and `FeeTimeSchedulerExponential` (1) required `migratedPoolMarketCapFeeSchedulerParams` to be all set to 0.
+- `FeeMarketCapSchedulerLinear` (3) and `FeeMarketCapSchedulerExponential` (4) required `migratedPoolMarketCapFeeSchedulerParams` to be provided.
+
+- **Migrated Pool MarketCap Fee Scheduler Params**
+
+- If `migratedPoolBaseFeeMode` is `FeeMarketCapSchedulerLinear` or `FeeMarketCapSchedulerExponential`, then `migratedPoolMarketCapFeeSchedulerParams` must be provided. Else set all parameter to 0.
+
+- **Enable First Swap With Minimum Fee**
+
+- Enable only when you want to concatenate a swap instruction with create pool instruction in a single transaction.
+
+**Migrated Pool Fee**
+
+- Configures the graduated pool fee parameters for the migrated DAMM V2 pool.
+- Only applies when `migrationOption = MET_DAMM_V2` (1).
+- When using `migrationFeeOption = Customizable` (6), you can configure: `collectFeeMode`, `dynamicFee`, and `poolFeeBps`.
+- When `marketCapFeeSchedulerParams` is configured:
+    - `poolFeeBps` must be greater than 0 (serves as the starting/cliff fee for the market cap scheduler).
+    - `baseFeeMode` must be `FeeMarketCapSchedulerLinear` (3) or `FeeMarketCapSchedulerExponential` (4).
+    - `endingBaseFeeBps` must be strictly less than the bonding curve's `endingFeeBps`.
+- For DAMM V1 migration, all migrated pool fee parameters are ignored.
 
 ---
 
@@ -506,7 +555,7 @@ const transaction = await client.partner.partnerWithdrawSurplus({
 
 ### claimPartnerPoolCreationFee
 
-Claims the pool creation fee for the partner. Partners can configure a pool creation fee in SOL lamports when creating a config, which token creators pay during pool initialization.
+Claims the partner's pool creation fee from the pool. (The pool creation fee is paid by the user)
 
 **Function**
 
@@ -518,9 +567,8 @@ async claimPartnerPoolCreationFee(params: ClaimPartnerPoolCreationFeeParams): Pr
 
 ```typescript
 interface ClaimPartnerPoolCreationFeeParams {
-    pool: PublicKey // The pool address
-    feeClaimer: PublicKey // The wallet that will claim the fee (must be the partner/feeClaimer in the config)
-    payer: PublicKey // The wallet that will pay for the transaction
+    virtualPool: PublicKey // The virtual pool address
+    feeReceiver: PublicKey // The wallet that will claim the fee
 }
 ```
 
@@ -532,17 +580,14 @@ interface ClaimPartnerPoolCreationFeeParams {
 
 ```typescript
 const transaction = await client.partner.claimPartnerPoolCreationFee({
-    pool: new PublicKey('abcdefghijklmnopqrstuvwxyz1234567890'),
-    feeClaimer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    payer: new PublicKey('payer1234567890abcdefghijklmnopqrstuvwxyz'),
+    virtualPool: new PublicKey('abcdefghijklmnopqrstuvwxyz1234567890'),
+    feeReceiver: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
 })
 ```
 
 **Notes**
 
-- The `feeClaimer` must match the partner's fee claimer address in the pool's config.
-- Pool creation fees are set by partners when creating a config using the `poolCreationFee` parameter.
-- Protocol receives 10% of the collected pool creation fees.
+- The signer of the transaction must be the same as the feeClaimer in the `virtualPool`'s config.
 
 ---
 
@@ -555,249 +600,279 @@ Builds a new constant product curve. This function does the math for you to crea
 **Function**
 
 ```typescript
-async buildCurve(params: BuildCurveParams): Promise<ConfigParameters>
+function buildCurve(params: BuildCurveParams): ConfigParameters
 ```
 
 **Parameters**
 
+All `buildCurve*` functions share the same base parameters (`BuildCurveBaseParams`), organized into nested groups:
+
 ```typescript
 interface BuildCurveParams {
-    totalTokenSupply: number // The total token supply
-    percentageSupplyOnMigration: number // The percentage of the supply that will be migrated
-    migrationQuoteThreshold: number // The quote threshold for migration
-    migrationOption: number // 0: DAMM V1, 1: DAMM v2
-    tokenBaseDecimal: number // The number of decimals for the base token
-    tokenQuoteDecimal: number // The number of decimals for the quote token
-    lockedVestingParam: {
-        // Optional locked vesting (0 for all fields for no vesting)
+    // Token configuration
+    token: {
+        tokenType: TokenType // 0: SPL, 1: Token2022
+        tokenBaseDecimal: TokenDecimal // 6, 7, 8, or 9
+        tokenQuoteDecimal: TokenDecimal // 6, 7, 8, or 9
+        tokenUpdateAuthority: TokenUpdateAuthorityOption // 0: CreatorUpdateAuthority, 1: Immutable, 2: PartnerUpdateAuthority, 3: CreatorUpdateAndMintAuthority, 4: PartnerUpdateAndMintAuthority
+        totalTokenSupply: number // The total token supply
+        leftover: number // The leftover amount that can be withdrawn by leftover receiver
+    }
+    // Fee configuration
+    fee: {
+        baseFeeParams: BaseFeeParams // Either FeeScheduler or RateLimiter (see below)
+        dynamicFeeEnabled: boolean // Whether dynamic fee is enabled
+        collectFeeMode: CollectFeeMode // 0: QuoteToken, 1: OutputToken
+        creatorTradingFeePercentage: number // The percentage of the trading fee allocated to the creator
+        poolCreationFee: number // The pool creation fee paid by the token pool creator (in SOL)
+        enableFirstSwapWithMinFee: boolean // Enable only when bundling swap with create pool instruction
+    }
+    // Migration configuration
+    migration: {
+        migrationOption: MigrationOption // 0: DAMM V1, 1: DAMM V2
+        migrationFeeOption: MigrationFeeOption // 0-5: Fixed fee options, 6: Customizable (DAMM V2 only)
+        migrationFee: {
+            feePercentage: number // Percentage of fee taken from migration quote threshold (0-99)
+            creatorFeePercentage: number // Fee share percentage for the creator from the migration fee (0-100)
+        }
+        migratedPoolFee?: {
+            // Optional. Configure only for DAMM V2 migration.
+            collectFeeMode: CollectFeeMode // 0: QuoteToken, 1: OutputToken
+            dynamicFee: DammV2DynamicFeeMode // 0: Disabled, 1: Enabled
+            poolFeeBps: number // The pool fee in basis points
+            baseFeeMode?: DammV2BaseFeeMode // 0: FeeTimeSchedulerLinear, 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential
+            marketCapFeeSchedulerParams?: {
+                // Configure for market cap-based fee scheduling
+                endingBaseFeeBps: number // The ending base fee in basis points (must be < bonding curve's endingFeeBps)
+                numberOfPeriod: number // The number of periods
+                sqrtPriceStepBps: number // The square root price step in basis points
+                schedulerExpirationDuration: number // The scheduler expiration duration in seconds
+            }
+        }
+    }
+    // Liquidity distribution for the graduated pool
+    liquidityDistribution: {
+        partnerLiquidityPercentage: number // Partner LP percentage (0-100)
+        partnerPermanentLockedLiquidityPercentage: number // Partner permanent locked LP percentage (0-100)
+        partnerLiquidityVestingInfoParams?: {
+            // Optional partner liquidity vesting (DAMM V2 only)
+            vestingPercentage: number
+            bpsPerPeriod: number
+            numberOfPeriods: number
+            cliffDurationFromMigrationTime: number
+            totalDuration: number
+        }
+        creatorLiquidityPercentage: number // Creator LP percentage (0-100)
+        creatorPermanentLockedLiquidityPercentage: number // Creator permanent locked LP percentage (0-100)
+        creatorLiquidityVestingInfoParams?: {
+            // Optional creator liquidity vesting (DAMM V2 only)
+            vestingPercentage: number
+            bpsPerPeriod: number
+            numberOfPeriods: number
+            cliffDurationFromMigrationTime: number
+            totalDuration: number
+        }
+    }
+    // Locked vesting configuration (set all to 0 for no vesting)
+    lockedVesting: {
         totalLockedVestingAmount: number // The total locked vesting amount
         numberOfVestingPeriod: number // The number of vesting periods
-        cliffUnlockAmount: number // The amount of tokens that will be unlocked when vesting starts
-        totalVestingDuration: number // The total vesting duration in seconds
-        cliffDurationFromMigrationTime: number // The duration of the waiting time before the vesting starts
+        cliffUnlockAmount: number // Tokens unlocked when vesting starts
+        totalVestingDuration: number // Total vesting duration in seconds
+        cliffDurationFromMigrationTime: number // Wait time before vesting starts in seconds
     }
-    // Either FeeSchedulerLinear/FeeSchedulerExponential mode
-    baseFeeParams: {
-        baseFeeMode: 0 | 1 // 0: FeeSchedulerLinear, 1: FeeSchedulerExponential
-        feeSchedulerParam: {
-            startingFeeBps: number // The starting fee in basis points
-            endingFeeBps: number // The ending fee in basis points
-            numberOfPeriod: number // The number of periods
-            totalDuration: number // The total duration of the fee scheduler
-        }
-    }
-    // OR RateLimiter mode
-    baseFeeParams: {
-        baseFeeMode: 2 // RateLimiter
-        rateLimiterParam: {
-            baseFeeBps: number // The base fee in basis points
-            feeIncrementBps: number // The fee increment in basis points
-            referenceAmount: number // The reference amount for rate limiting
-            maxLimiterDuration: number // The maximum duration for rate limiting
-        }
-    }
-    dynamicFeeEnabled: boolean // Whether dynamic fee is enabled (true: enabled, false: disabled)
-    activationType: number // 0: Slot, 1: Timestamp
-    collectFeeMode: number // 0: QuoteToken, 1: OutputToken
-    migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
-    tokenType: number // 0: SPL, 1: Token2022
-    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
-    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
-    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
-    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
-    creatorTradingFeePercentage: number // The percentage of the trading fee that will be allocated to the creator
-    leftover: number // The leftover amount that can be withdrawn by leftover receiver
-    tokenUpdateAuthority: number // 0 - CreatorUpdateAuthority, 1 - Immutable, 2 - PartnerUpdateAuthority, 3 - CreatorUpdateAndMintAuthority, 4 - PartnerUpdateAndMintAuthority
-    migrationFee: {
-        // Optional migration fee (set as 0 for feePercentage and creatorFeePercentage for no migration fee)
-        feePercentage: number // The percentage of fee taken from migration quote threshold (0-99)
-        creatorFeePercentage: number // The fee share percentage for the creator from the migration fee (0-100)
-    }
-    migratedPoolFee?: {
-        // Defaults to all 0. Configure only when migrationOption = MET_DAMM_V2 (1) and migrationFeeOption = Customizable (6)
-        collectFeeMode: number // 0: QuoteToken, 1: OutputToken
-        dynamicFee: number // 0: Disabled, 1: Enabled
-        poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
-    }
-    partnerLiquidityVestingInfoParams?: {
-        // Optional LP vesting for partner (only applicable for DAMM v2 migration)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        totalDuration: number // Total vesting duration in seconds
-    }
-    creatorLiquidityVestingInfoParams?: {
-        // Optional LP vesting for creator (only applicable for DAMM v2 migration)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        totalDuration: number // Total vesting duration in seconds
-    }
-    migratedPoolBaseFeeMode?: DammV2BaseFeeMode // Optional: 0: FeeTimeSchedulerLinear (default), 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential. Mode 2 (RateLimiter) is not supported.
-    migratedPoolMarketCapFeeSchedulerParams?: {
-        // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
-        endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
-        numberOfPeriod: number // The total number of fee reduction periods
-        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
-        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
-    }
-    poolCreationFee?: number // Pool creation fee in SOL (0 or between 0.001 SOL to 100 SOL)
-    enableFirstSwapWithMinFee?: boolean // If true, allows pool creator's first swap to bypass anti-sniper fees
+    activationType: ActivationType // 0: Slot, 1: Timestamp
+    // buildCurve-specific parameters:
+    percentageSupplyOnMigration: number // The percentage of the supply that will be migrated
+    migrationQuoteThreshold: number // The quote threshold for migration (in quote token units)
 }
+```
+
+**BaseFeeParams** (used by all `buildCurve*` functions):
+
+```typescript
+// Either FeeSchedulerLinear/FeeSchedulerExponential mode:
+type BaseFeeParams =
+    | {
+          baseFeeMode:
+              | BaseFeeMode.FeeSchedulerLinear
+              | BaseFeeMode.FeeSchedulerExponential
+          feeSchedulerParam: {
+              startingFeeBps: number // The starting fee in basis points
+              endingFeeBps: number // The ending fee in basis points
+              numberOfPeriod: number // The number of periods
+              totalDuration: number // The total duration of the fee scheduler
+          }
+      }
+    // OR RateLimiter mode:
+    | {
+          baseFeeMode: BaseFeeMode.RateLimiter
+          rateLimiterParam: {
+              baseFeeBps: number // The base fee in basis points
+              feeIncrementBps: number // The fee increment in basis points
+              referenceAmount: number // The reference amount for rate limiting
+              maxLimiterDuration: number // The maximum duration for rate limiting
+          }
+      }
 ```
 
 **Returns**
 
-- A `ConfigParameters` object.
+- A `ConfigParameters` object that can be spread into `createConfig`.
 
 **Example**
 
 ```typescript
+// Example 1: Simple fixed fee option (no custom migrated pool fee needed)
 const curveConfig = buildCurve({
-    totalTokenSupply: 1000000000,
-    percentageSupplyOnMigration: 10,
-    migrationQuoteThreshold: 300,
-    migrationOption: MigrationOption.MET_DAMM_V2,
-    tokenBaseDecimal: TokenDecimal.SIX,
-    tokenQuoteDecimal: TokenDecimal.NINE,
-    lockedVestingParam: {
+    token: {
+        tokenType: TokenType.SPL,
+        tokenBaseDecimal: TokenDecimal.SIX,
+        tokenQuoteDecimal: TokenDecimal.NINE,
+        tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+        totalTokenSupply: 1_000_000_000,
+        leftover: 0,
+    },
+    fee: {
+        baseFeeParams: {
+            baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+            feeSchedulerParam: {
+                startingFeeBps: 500,
+                endingFeeBps: 100,
+                numberOfPeriod: 10,
+                totalDuration: 3600,
+            },
+        },
+        dynamicFeeEnabled: true,
+        collectFeeMode: CollectFeeMode.QuoteToken,
+        creatorTradingFeePercentage: 0,
+        poolCreationFee: 0,
+        enableFirstSwapWithMinFee: false,
+    },
+    migration: {
+        migrationOption: MigrationOption.MET_DAMM_V2,
+        migrationFeeOption: MigrationFeeOption.FixedBps100,
+        migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
+    },
+    liquidityDistribution: {
+        partnerLiquidityPercentage: 0,
+        partnerPermanentLockedLiquidityPercentage: 100,
+        creatorLiquidityPercentage: 0,
+        creatorPermanentLockedLiquidityPercentage: 0,
+    },
+    lockedVesting: {
         totalLockedVestingAmount: 0,
         numberOfVestingPeriod: 0,
         cliffUnlockAmount: 0,
         totalVestingDuration: 0,
         cliffDurationFromMigrationTime: 0,
     },
-    baseFeeParams: {
-        baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
-        feeSchedulerParam: {
-            startingFeeBps: 100,
-            endingFeeBps: 100,
-            numberOfPeriod: 0,
-            totalDuration: 0,
-        },
-    },
-    dynamicFeeEnabled: true,
-    activationType: ActivationType.Slot,
-    collectFeeMode: CollectFeeMode.QuoteToken,
-    migrationFeeOption: MigrationFeeOption.Customizable,
-    tokenType: TokenType.SPL,
-    partnerLiquidityPercentage: 0,
-    creatorLiquidityPercentage: 0,
-    partnerPermanentLockedLiquidityPercentage: 100,
-    creatorPermanentLockedLiquidityPercentage: 0,
-    creatorTradingFeePercentage: 0,
-    leftover: 0,
-    tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
-    migrationFee: {
-        feePercentage: 0,
-        creatorFeePercentage: 0,
-    },
-    migratedPoolFee: {
-        collectFeeMode: CollectFeeMode.QuoteToken,
-        dynamicFee: DammV2DynamicFeeMode.Enabled,
-        poolFeeBps: 250,
-    },
-    // Optional: Fee Market Cap Scheduler params (only for DAMM v2 migration)
-    // migratedPoolBaseFeeMode: DammV2BaseFeeMode.FeeMarketCapSchedulerLinear,
-    // migratedPoolMarketCapFeeSchedulerParams: {
-    //     endingBaseFeeBps: 50,
-    //     numberOfPeriod: 100,
-    //     sqrtPriceStepBps: 100,
-    //     schedulerExpirationDuration: 86400,
-    // },
-    // enableFirstSwapWithMinFee: false,
+    activationType: ActivationType.Timestamp,
+    percentageSupplyOnMigration: 25,
+    migrationQuoteThreshold: 1,
 })
 
+// Example 2: Customizable with market cap fee scheduler
+const curveConfigWithScheduler = buildCurve({
+    token: {
+        tokenType: TokenType.Token2022,
+        tokenBaseDecimal: TokenDecimal.SIX,
+        tokenQuoteDecimal: TokenDecimal.NINE,
+        tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+        totalTokenSupply: 1_000_000_000,
+        leftover: 0,
+    },
+    fee: {
+        baseFeeParams: {
+            baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+            feeSchedulerParam: {
+                startingFeeBps: 500,
+                endingFeeBps: 100,
+                numberOfPeriod: 10,
+                totalDuration: 3600,
+            },
+        },
+        dynamicFeeEnabled: true,
+        collectFeeMode: CollectFeeMode.QuoteToken,
+        creatorTradingFeePercentage: 0,
+        poolCreationFee: 0,
+        enableFirstSwapWithMinFee: true,
+    },
+    migration: {
+        migrationOption: MigrationOption.MET_DAMM_V2,
+        migrationFeeOption: MigrationFeeOption.FixedBps100, // Will be auto-overridden to Customizable
+        migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
+        migratedPoolFee: {
+            collectFeeMode: CollectFeeMode.QuoteToken,
+            dynamicFee: DammV2DynamicFeeMode.Enabled,
+            poolFeeBps: 120,
+            baseFeeMode: DammV2BaseFeeMode.FeeMarketCapSchedulerLinear,
+            marketCapFeeSchedulerParams: {
+                endingBaseFeeBps: 25, // Must be less than bonding curve's endingFeeBps (100)
+                numberOfPeriod: 100,
+                sqrtPriceStepBps: 10,
+                schedulerExpirationDuration: 1000000,
+            },
+        },
+    },
+    liquidityDistribution: {
+        partnerLiquidityPercentage: 55,
+        partnerPermanentLockedLiquidityPercentage: 0,
+        creatorLiquidityPercentage: 0,
+        creatorPermanentLockedLiquidityPercentage: 0,
+        partnerLiquidityVestingInfoParams: {
+            vestingPercentage: 30,
+            bpsPerPeriod: 1000,
+            cliffDurationFromMigrationTime: 86400,
+            numberOfPeriods: 10,
+            totalDuration: 100,
+        },
+        creatorLiquidityVestingInfoParams: {
+            vestingPercentage: 15,
+            bpsPerPeriod: 1,
+            cliffDurationFromMigrationTime: 86400,
+            numberOfPeriods: 10000,
+            totalDuration: 333333,
+        },
+    },
+    lockedVesting: {
+        totalLockedVestingAmount: 1000000,
+        numberOfVestingPeriod: 10,
+        cliffUnlockAmount: 0,
+        totalVestingDuration: 10000,
+        cliffDurationFromMigrationTime: 0,
+    },
+    activationType: ActivationType.Timestamp,
+    percentageSupplyOnMigration: 10,
+    migrationQuoteThreshold: 300,
+})
+
+// Use the curve config in createConfig
 const transaction = await client.partner.createConfig({
-    config: new PublicKey('1234567890abcdefghijklmnopqrstuvwxyz'),
-    feeClaimer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    leftoverReceiver: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    payer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    quoteMint: new PublicKey('So11111111111111111111111111111111111111112'),
+    config: configKeypair.publicKey,
+    feeClaimer: wallet.publicKey,
+    leftoverReceiver: wallet.publicKey,
+    payer: wallet.publicKey,
+    quoteMint: NATIVE_MINT,
     ...curveConfig,
 })
 ```
 
 **Notes**
 
-- `buildCurve` helps you to create a curve structure based on percentage of supply on migration and migration quote threshold.
+- `buildCurve` helps you create a curve structure based on percentage of supply on migration and migration quote threshold.
 - If `dynamicFeeEnabled` is true, the dynamic fee will be enabled and capped at 20% of minimum base fee.
-- `lockedVestingParam.totalVestingDuration` and `lockedVestingParam.cliffDurationFromMigrationTime` are calculated in terms of seconds.
-- `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
-- `migratedPoolFee` is only configurable when `migrationOption = MET_DAMM_V2 (1)` and `migrationFeeOption = Customizable (6)`.
-- `partnerLiquidityVestingInfoParams` and `creatorLiquidityVestingInfoParams` are only applicable when `migrationOption = MET_DAMM_V2 (1)`. These configure LP vesting for the partner and creator positions after migration.
-- `poolCreationFee` is the fee in SOL that token creators pay when creating a pool. Partners can claim this fee later using `claimPartnerPoolCreationFee`.
-- `enableFirstSwapWithMinFee` when true, allows the pool creator to make their first swap without anti-sniper fees. This is useful for pool creation + first buy in a single transaction.
-- `migratedPoolBaseFeeMode` and `migratedPoolMarketCapFeeSchedulerParams` are only applicable when `migrationOption = MET_DAMM_V2 (1)`. These configure the fee scheduling mode for the graduated DAMM v2 pool.
-- Slot is 400ms, Timestamp is 1000ms.
-
----
-
-### getLiquidityVestingInfoParams
-
-A helper function to craft the `LiquidityVestingInfoParameters` object for use with the LP vesting parameters in buildCurve functions.
-
-**Function**
-
-```typescript
-function getLiquidityVestingInfoParams(
-    vestingPercentage: number,
-    bpsPerPeriod: number,
-    numberOfPeriods: number,
-    cliffDurationFromMigrationTime: number,
-    totalDuration: number
-): LiquidityVestingInfoParameters
-```
-
-**Parameters**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `vestingPercentage` | number | The percentage of non-permanently-locked LP to vest (0-100) |
-| `bpsPerPeriod` | number | Basis points released per vesting period (e.g., 100 = 1% per period) |
-| `numberOfPeriods` | number | Number of vesting periods |
-| `cliffDurationFromMigrationTime` | number | Cliff duration in seconds from migration time before vesting starts |
-| `totalDuration` | number | Total vesting duration in seconds |
-
-**Returns**
-
-```typescript
-interface LiquidityVestingInfoParameters {
-    vestingPercentage: number    // The percentage of LP to vest
-    bpsPerPeriod: number         // Basis points released per period
-    numberOfPeriods: number      // Number of vesting periods
-    cliffDurationFromMigrationTime: number // Cliff duration in seconds
-    frequency: number            // Calculated: totalDuration / numberOfPeriods
-}
-```
-
-**Example**
-
-```typescript
-import { getLiquidityVestingInfoParams } from '@meteora-ag/dynamic-bonding-curve-sdk'
-
-// Create LP vesting config: 50% vesting, 7-day cliff, 30-day total vesting, 1% per period over 100 periods
-const partnerVesting = getLiquidityVestingInfoParams(
-    50,                        // vestingPercentage: 50% of LP will vest
-    100,                       // bpsPerPeriod: 1% released per period
-    100,                       // numberOfPeriods: 100 vesting periods
-    7 * 24 * 60 * 60,          // cliffDurationFromMigrationTime: 7 days cliff
-    30 * 24 * 60 * 60          // totalDuration: 30 days total vesting
-)
-
-const curveConfig = buildCurveWithMarketCap({
-    // ... other params
-    partnerLiquidityVestingInfoParams: partnerVesting,
-})
-```
-
-**Notes**
-
-- This helper calculates the `frequency` field automatically based on `totalDuration / numberOfPeriods`.
-- LP vesting is only applicable for DAMM v2 migrations.
-- When LP vesting is configured, the `migrateToDammV2` endpoint will require vesting accounts for the positions.
+- `lockedVesting.totalVestingDuration` and `lockedVesting.cliffDurationFromMigrationTime` are calculated in terms of seconds.
+- `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`. Slot is 400ms, Timestamp is 1000ms.
+- **Migration Fee Option behavior:**
+    - **Fixed options (0-5):** Uses default migrated pool fee parameters. Any custom `migratedPoolFee` values are ignored.
+    - **Customizable (6):** Uses your custom `migratedPoolFee` values. Falls back to defaults for any omitted fields.
+    - **Auto-override:** When `marketCapFeeSchedulerParams` is configured inside `migratedPoolFee`, the SDK automatically overrides `migrationFeeOption` to `Customizable` regardless of what you set. This is required by the on-chain program.
+- When using `marketCapFeeSchedulerParams`:
+    - `baseFeeMode` must be `DammV2BaseFeeMode.FeeMarketCapSchedulerLinear` (3) or `FeeMarketCapSchedulerExponential` (4).
+    - `endingBaseFeeBps` must be strictly less than the bonding curve's `baseFeeParams.feeSchedulerParam.endingFeeBps`.
+    - `poolFeeBps` must be greater than 0.
+- For DAMM V1 migration, all `migratedPoolFee` parameters are ignored and defaults are used.
 
 ---
 
@@ -808,96 +883,26 @@ Builds a new constant product curve with customisable parameters based on market
 **Function**
 
 ```typescript
-async buildCurveWithMarketCap(params: BuildCurveWithMarketCapParams): Promise<ConfigParameters>
+function buildCurveWithMarketCap(
+    params: BuildCurveWithMarketCapParams
+): ConfigParameters
 ```
 
 **Parameters**
 
 ```typescript
 interface BuildCurveWithMarketCapParams {
-    totalTokenSupply: number // The total token supply
+    // Inherits all fields from BuildCurveBaseParams (token, fee, migration, liquidityDistribution, lockedVesting, activationType)
+    // See buildCurve for the full BuildCurveBaseParams definition.
+    token: TokenConfig
+    fee: FeeConfig
+    migration: MigrationConfig
+    liquidityDistribution: LiquidityDistributionConfig
+    lockedVesting: LockedVestingParams
+    activationType: ActivationType
+    // buildCurveWithMarketCap-specific parameters:
     initialMarketCap: number // The initial market cap that your token will start with
     migrationMarketCap: number // The migration market cap that your token will be at migration
-    migrationOption: number // 0: DAMM V1, 1: DAMM v2
-    tokenBaseDecimal: number // The number of decimals for the base token
-    tokenQuoteDecimal: number // The number of decimals for the quote token
-    lockedVestingParam: {
-        // Optional locked vesting (0 for all fields for no vesting)
-        totalLockedVestingAmount: number // The total locked vesting amount
-        numberOfVestingPeriod: number // The number of vesting periods
-        cliffUnlockAmount: number // The amount of tokens that will be unlocked when vesting starts
-        totalVestingDuration: number // The total vesting duration in seconds
-        cliffDurationFromMigrationTime: number // The duration of the waiting time before the vesting starts
-    }
-    // Either FeeSchedulerLinear/FeeSchedulerExponential mode
-    baseFeeParams: {
-        baseFeeMode: 0 | 1 // 0: FeeSchedulerLinear, 1: FeeSchedulerExponential
-        feeSchedulerParam: {
-            startingFeeBps: number // The starting fee in basis points
-            endingFeeBps: number // The ending fee in basis points
-            numberOfPeriod: number // The number of periods
-            totalDuration: number // The total duration of the fee scheduler
-        }
-    }
-    // OR RateLimiter mode
-    baseFeeParams: {
-        baseFeeMode: 2 // RateLimiter
-        rateLimiterParam: {
-            baseFeeBps: number // The base fee in basis points
-            feeIncrementBps: number // The fee increment in basis points
-            referenceAmount: number // The reference amount for rate limiting
-            maxLimiterDuration: number // The maximum duration for rate limiting
-        }
-    }
-    dynamicFeeEnabled: boolean // Whether dynamic fee is enabled (true: enabled, false: disabled)
-    activationType: number // 0: Slot, 1: Timestamp
-    collectFeeMode: number // 0: QuoteToken, 1: OutputToken
-    migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
-    tokenType: number // 0: SPL, 1: Token2022
-    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
-    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
-    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
-    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
-    creatorTradingFeePercentage: number // The percentage of the trading fee that will be allocated to the creator
-    leftover: number // The leftover amount that can be withdrawn by leftover receiver
-    tokenUpdateAuthority: number // 0 - CreatorUpdateAuthority, 1 - Immutable, 2 - PartnerUpdateAuthority, 3 - CreatorUpdateAndMintAuthority, 4 - PartnerUpdateAndMintAuthority
-    migrationFee: {
-        // Optional migration fee (set as 0 for feePercentage and creatorFeePercentage for no migration fee)
-        feePercentage: number // The percentage of fee taken from migration quote threshold (0-99)
-        creatorFeePercentage: number // The fee share percentage for the creator from the migration fee (0-100)
-    }
-    migratedPoolFee?: {
-        // Defaults to all 0. Configure only when migrationOption = MET_DAMM_V2 (1) and migrationFeeOption = Customizable (6)
-        collectFeeMode: number // 0: QuoteToken, 1: OutputToken
-        dynamicFee: number // 0: Disabled, 1: Enabled
-        poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
-    }
-    partnerLiquidityVestingInfoParams?: {
-        // Optional LP vesting for partner (only applicable for DAMM v2 migration)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        totalDuration: number // Total vesting duration in seconds
-    }
-    creatorLiquidityVestingInfoParams?: {
-        // Optional LP vesting for creator (only applicable for DAMM v2 migration)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        totalDuration: number // Total vesting duration in seconds
-    }
-    migratedPoolBaseFeeMode?: DammV2BaseFeeMode // Optional: 0: FeeTimeSchedulerLinear (default), 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential. Mode 2 (RateLimiter) is not supported.
-    migratedPoolMarketCapFeeSchedulerParams?: {
-        // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
-        endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
-        numberOfPeriod: number // The total number of fee reduction periods
-        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
-        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
-    }
-    poolCreationFee?: number // Pool creation fee in SOL (0 or between 0.001 SOL to 100 SOL)
-    enableFirstSwapWithMinFee?: boolean // Optional: If true, the first swap on the pool will use the minimum fee. Default: false.
 }
 ```
 
@@ -909,70 +914,89 @@ interface BuildCurveWithMarketCapParams {
 
 ```typescript
 const curveConfig = buildCurveWithMarketCap({
-    totalTokenSupply: 1000000000,
-    initialMarketCap: 100,
-    migrationMarketCap: 3000,
-    migrationOption: MigrationOption.MET_DAMM_V2,
-    tokenBaseDecimal: TokenDecimal.SIX,
-    tokenQuoteDecimal: TokenDecimal.NINE,
-    lockedVestingParam: {
-        totalLockedVestingAmount: 0,
-        numberOfVestingPeriod: 0,
-        cliffUnlockAmount: 0,
-        totalVestingDuration: 0,
-        cliffDurationFromMigrationTime: 0,
+    token: {
+        tokenType: TokenType.Token2022,
+        tokenBaseDecimal: TokenDecimal.SIX,
+        tokenQuoteDecimal: TokenDecimal.NINE,
+        tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+        totalTokenSupply: 1_000_000_000,
+        leftover: 0,
     },
-    baseFeeParams: {
-        baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
-        feeSchedulerParam: {
-            startingFeeBps: 100,
-            endingFeeBps: 100,
-            numberOfPeriod: 0,
-            totalDuration: 0,
+    fee: {
+        baseFeeParams: {
+            baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+            feeSchedulerParam: {
+                startingFeeBps: 120,
+                endingFeeBps: 120,
+                numberOfPeriod: 0,
+                totalDuration: 0,
+            },
+        },
+        dynamicFeeEnabled: true,
+        collectFeeMode: CollectFeeMode.QuoteToken,
+        creatorTradingFeePercentage: 0,
+        poolCreationFee: 0,
+        enableFirstSwapWithMinFee: true,
+    },
+    migration: {
+        migrationOption: MigrationOption.MET_DAMM_V2,
+        migrationFeeOption: MigrationFeeOption.Customizable,
+        migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
+        migratedPoolFee: {
+            collectFeeMode: CollectFeeMode.QuoteToken,
+            dynamicFee: DammV2DynamicFeeMode.Enabled,
+            poolFeeBps: 120,
         },
     },
-    dynamicFeeEnabled: true,
-    activationType: ActivationType.Slot,
-    collectFeeMode: CollectFeeMode.QuoteToken,
-    migrationFeeOption: MigrationFeeOption.Customizable,
-    tokenType: TokenType.SPL,
-    partnerLiquidityPercentage: 0,
-    creatorLiquidityPercentage: 0,
-    partnerPermanentLockedLiquidityPercentage: 100,
-    creatorPermanentLockedLiquidityPercentage: 0,
-    creatorTradingFeePercentage: 0,
-    leftover: 0,
-    tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
-    migrationFee: {
-        feePercentage: 0,
-        creatorFeePercentage: 0,
+    liquidityDistribution: {
+        partnerLiquidityPercentage: 55,
+        partnerPermanentLockedLiquidityPercentage: 0,
+        creatorLiquidityPercentage: 0,
+        creatorPermanentLockedLiquidityPercentage: 0,
+        partnerLiquidityVestingInfoParams: {
+            vestingPercentage: 30,
+            bpsPerPeriod: 1000,
+            cliffDurationFromMigrationTime: 86400,
+            numberOfPeriods: 10,
+            totalDuration: 100,
+        },
+        creatorLiquidityVestingInfoParams: {
+            vestingPercentage: 15,
+            bpsPerPeriod: 1,
+            cliffDurationFromMigrationTime: 86400,
+            numberOfPeriods: 10000,
+            totalDuration: 333333,
+        },
     },
-    migratedPoolFee: {
-        collectFeeMode: CollectFeeMode.QuoteToken,
-        dynamicFee: DammV2DynamicFeeMode.Enabled,
-        poolFeeBps: 250,
+    lockedVesting: {
+        totalLockedVestingAmount: 1000000,
+        numberOfVestingPeriod: 10,
+        cliffUnlockAmount: 0,
+        totalVestingDuration: 10000,
+        cliffDurationFromMigrationTime: 0,
     },
+    activationType: ActivationType.Timestamp,
+    initialMarketCap: 100,
+    migrationMarketCap: 3000,
 })
 
 const transaction = await client.partner.createConfig({
-    config: new PublicKey('1234567890abcdefghijklmnopqrstuvwxyz'),
-    feeClaimer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    leftoverReceiver: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    payer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    quoteMint: new PublicKey('So11111111111111111111111111111111111111112'),
+    config: configKeypair.publicKey,
+    feeClaimer: wallet.publicKey,
+    leftoverReceiver: wallet.publicKey,
+    payer: wallet.publicKey,
+    quoteMint: NATIVE_MINT,
     ...curveConfig,
 })
 ```
 
 **Notes**
 
-- `buildCurveWithMarketCap` helps you to create a curve structure based on initial market cap and migration market cap.
+- `buildCurveWithMarketCap` helps you create a curve structure based on initial market cap and migration market cap.
 - If `dynamicFeeEnabled` is true, the dynamic fee will be enabled and capped at 20% of minimum base fee.
-- `lockedVestingParam.totalVestingDuration` and `lockedVestingParam.cliffDurationFromMigrationTime` are calculated in terms of seconds.
-- `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
-- `migratedPoolFee` is only configurable when `migrationOption = MET_DAMM_V2 (1)` and `migrationFeeOption = Customizable (6)`.
-- `partnerLiquidityVestingInfoParams` and `creatorLiquidityVestingInfoParams` are only applicable when `migrationOption = MET_DAMM_V2 (1)`. These configure LP vesting for the partner and creator positions after migration.
-- Slot is 400ms, Timestamp is 1000ms.
+- `lockedVesting.totalVestingDuration` and `lockedVesting.cliffDurationFromMigrationTime` are in seconds.
+- `feeSchedulerParam.totalDuration` is based on your `activationType`. Slot is 400ms, Timestamp is 1000ms.
+- See [buildCurve](#buildCurve) notes for details on migration fee option behavior and `marketCapFeeSchedulerParams` constraints.
 
 ---
 
@@ -983,97 +1007,27 @@ Builds a new constant product curve with two segments. This function does the ma
 **Function**
 
 ```typescript
-async buildCurveWithTwoSegments(params: BuildCurveWithTwoSegmentsParams): Promise<ConfigParameters>
+function buildCurveWithTwoSegments(
+    params: BuildCurveWithTwoSegmentsParams
+): ConfigParameters
 ```
 
 **Parameters**
 
 ```typescript
 interface BuildCurveWithTwoSegmentsParams {
-    totalTokenSupply: number // The total token supply
+    // Inherits all fields from BuildCurveBaseParams (token, fee, migration, liquidityDistribution, lockedVesting, activationType)
+    // See buildCurve for the full BuildCurveBaseParams definition.
+    token: TokenConfig
+    fee: FeeConfig
+    migration: MigrationConfig
+    liquidityDistribution: LiquidityDistributionConfig
+    lockedVesting: LockedVestingParams
+    activationType: ActivationType
+    // buildCurveWithTwoSegments-specific parameters:
     initialMarketCap: number // The initial market cap that your token will start with
     migrationMarketCap: number // The migration market cap that your token will be at migration
     percentageSupplyOnMigration: number // The percentage of the supply that will be migrated
-    migrationOption: number // 0: DAMM V1, 1: DAMM v2
-    tokenBaseDecimal: number // The number of decimals for the base token
-    tokenQuoteDecimal: number // The number of decimals for the quote token
-    lockedVestingParam: {
-        // Optional locked vesting (0 for all fields for no vesting)
-        totalLockedVestingAmount: number // The total locked vesting amount
-        numberOfVestingPeriod: number // The number of vesting periods
-        cliffUnlockAmount: number // The amount of tokens that will be unlocked when vesting starts
-        totalVestingDuration: number // The total vesting duration in seconds
-        cliffDurationFromMigrationTime: number // The duration of the waiting time before the vesting starts
-    }
-    // Either FeeSchedulerLinear/FeeSchedulerExponential mode
-    baseFeeParams: {
-        baseFeeMode: 0 | 1 // 0: FeeSchedulerLinear, 1: FeeSchedulerExponential
-        feeSchedulerParam: {
-            startingFeeBps: number // The starting fee in basis points
-            endingFeeBps: number // The ending fee in basis points
-            numberOfPeriod: number // The number of periods
-            totalDuration: number // The total duration of the fee scheduler
-        }
-    }
-    // OR RateLimiter mode
-    baseFeeParams: {
-        baseFeeMode: 2 // RateLimiter
-        rateLimiterParam: {
-            baseFeeBps: number // The base fee in basis points
-            feeIncrementBps: number // The fee increment in basis points
-            referenceAmount: number // The reference amount for rate limiting
-            maxLimiterDuration: number // The maximum duration for rate limiting
-        }
-    }
-    dynamicFeeEnabled: boolean // Whether dynamic fee is enabled (true: enabled, false: disabled)
-    activationType: number // 0: Slot, 1: Timestamp
-    collectFeeMode: number // 0: QuoteToken, 1: OutputToken
-    migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
-    tokenType: number // 0: SPL, 1: Token2022
-    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
-    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
-    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
-    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
-    creatorTradingFeePercentage: number // The percentage of the trading fee that will be allocated to the creator
-    leftover: number // The leftover amount that can be withdrawn by leftover receiver
-    tokenUpdateAuthority: number // 0 - CreatorUpdateAuthority, 1 - Immutable, 2 - PartnerUpdateAuthority, 3 - CreatorUpdateAndMintAuthority, 4 - PartnerUpdateAndMintAuthority
-    migrationFee: {
-        // Optional migration fee (set as 0 for feePercentage and creatorFeePercentage for no migration fee)
-        feePercentage: number // The percentage of fee taken from migration quote threshold (0-99)
-        creatorFeePercentage: number // The fee share percentage for the creator from the migration fee (0-100)
-    }
-    migratedPoolFee?: {
-        // Defaults to all 0. Configure only when migrationOption = MET_DAMM_V2 (1) and migrationFeeOption = Customizable (6)
-        collectFeeMode: number // 0: QuoteToken, 1: OutputToken
-        dynamicFee: number // 0: Disabled, 1: Enabled
-        poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
-    }
-    partnerLiquidityVestingInfoParams?: {
-        // Optional LP vesting for partner (only applicable for DAMM v2 migration)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        totalDuration: number // Total vesting duration in seconds
-    }
-    creatorLiquidityVestingInfoParams?: {
-        // Optional LP vesting for creator (only applicable for DAMM v2 migration)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        totalDuration: number // Total vesting duration in seconds
-    }
-    migratedPoolBaseFeeMode?: DammV2BaseFeeMode // Optional: 0: FeeTimeSchedulerLinear (default), 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential. Mode 2 (RateLimiter) is not supported.
-    migratedPoolMarketCapFeeSchedulerParams?: {
-        // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
-        endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
-        numberOfPeriod: number // The total number of fee reduction periods
-        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
-        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
-    }
-    poolCreationFee?: number // Pool creation fee in SOL (0 or between 0.001 SOL to 100 SOL)
-    enableFirstSwapWithMinFee?: boolean // Optional: If true, the first swap on the pool will use the minimum fee. Default: false.
 }
 ```
 
@@ -1085,70 +1039,76 @@ interface BuildCurveWithTwoSegmentsParams {
 
 ```typescript
 const curveConfig = buildCurveWithTwoSegments({
-    totalTokenSupply: 1000000000,
-    initialMarketCap: 5000,
-    migrationMarketCap: 1000000,
-    percentageSupplyOnMigration: 10,
-    migrationOption: MigrationOption.MET_DAMM_V2,
-    tokenBaseDecimal: TokenDecimal.SIX,
-    tokenQuoteDecimal: TokenDecimal.SIX,
-    lockedVestingParam: {
+    token: {
+        tokenType: TokenType.Token2022,
+        tokenBaseDecimal: TokenDecimal.SIX,
+        tokenQuoteDecimal: TokenDecimal.NINE,
+        tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+        totalTokenSupply: 1_000_000_000,
+        leftover: 0,
+    },
+    fee: {
+        baseFeeParams: {
+            baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+            feeSchedulerParam: {
+                startingFeeBps: 120,
+                endingFeeBps: 120,
+                numberOfPeriod: 0,
+                totalDuration: 0,
+            },
+        },
+        dynamicFeeEnabled: true,
+        collectFeeMode: CollectFeeMode.QuoteToken,
+        creatorTradingFeePercentage: 0,
+        poolCreationFee: 0,
+        enableFirstSwapWithMinFee: true,
+    },
+    migration: {
+        migrationOption: MigrationOption.MET_DAMM_V2,
+        migrationFeeOption: MigrationFeeOption.Customizable,
+        migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
+        migratedPoolFee: {
+            collectFeeMode: CollectFeeMode.QuoteToken,
+            dynamicFee: DammV2DynamicFeeMode.Enabled,
+            poolFeeBps: 120,
+        },
+    },
+    liquidityDistribution: {
+        partnerLiquidityPercentage: 55,
+        partnerPermanentLockedLiquidityPercentage: 0,
+        creatorLiquidityPercentage: 0,
+        creatorPermanentLockedLiquidityPercentage: 0,
+    },
+    lockedVesting: {
         totalLockedVestingAmount: 0,
         numberOfVestingPeriod: 0,
         cliffUnlockAmount: 0,
         totalVestingDuration: 0,
         cliffDurationFromMigrationTime: 0,
     },
-    baseFeeParams: {
-        baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
-        feeSchedulerParam: {
-            startingFeeBps: 100,
-            endingFeeBps: 100,
-            numberOfPeriod: 0,
-            totalDuration: 0,
-        },
-    },
-    dynamicFeeEnabled: true,
-    activationType: ActivationType.Slot,
-    collectFeeMode: CollectFeeMode.QuoteToken,
-    migrationFeeOption: MigrationFeeOption.Customizable,
-    tokenType: TokenType.SPL,
-    partnerLiquidityPercentage: 100,
-    creatorLiquidityPercentage: 0,
-    partnerPermanentLockedLiquidityPercentage: 0,
-    creatorPermanentLockedLiquidityPercentage: 0,
-    creatorTradingFeePercentage: 0,
-    leftover: 1000,
-    tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
-    migrationFee: {
-        feePercentage: 0,
-        creatorFeePercentage: 0,
-    },
-    migratedPoolFee: {
-        collectFeeMode: CollectFeeMode.QuoteToken,
-        dynamicFee: DammV2DynamicFeeMode.Enabled,
-        poolFeeBps: 250,
-    },
+    activationType: ActivationType.Timestamp,
+    initialMarketCap: 5000,
+    migrationMarketCap: 1000000,
+    percentageSupplyOnMigration: 10,
 })
 
 const transaction = await client.partner.createConfig({
-    config: new PublicKey('1234567890abcdefghijklmnopqrstuvwxyz'),
-    feeClaimer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    leftoverReceiver: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    payer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    quoteMint: new PublicKey('So11111111111111111111111111111111111111112'),
+    config: configKeypair.publicKey,
+    feeClaimer: wallet.publicKey,
+    leftoverReceiver: wallet.publicKey,
+    payer: wallet.publicKey,
+    quoteMint: NATIVE_MINT,
     ...curveConfig,
 })
 ```
 
 **Notes**
 
-- `buildCurveWithTwoSegments` helps you to create a curve structure based on initial market cap, migration market cap and percentage of supply on migration.
+- `buildCurveWithTwoSegments` helps you create a curve structure based on initial market cap, migration market cap and percentage of supply on migration.
 - If `dynamicFeeEnabled` is true, the dynamic fee will be enabled and capped at 20% of minimum base fee.
-- `lockedVestingParam.totalVestingDuration` and `lockedVestingParam.cliffDurationFromMigrationTime` are calculated in terms of seconds.
-- `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
-- `migratedPoolFee` is only configurable when `migrationOption = MET_DAMM_V2 (1)` and `migrationFeeOption = Customizable (6)`.
-- Slot is 400ms, Timestamp is 1000ms.
+- `lockedVesting.totalVestingDuration` and `lockedVesting.cliffDurationFromMigrationTime` are in seconds.
+- `feeSchedulerParam.totalDuration` is based on your `activationType`. Slot is 400ms, Timestamp is 1000ms.
+- See [buildCurve](#buildCurve) notes for details on migration fee option behavior and `marketCapFeeSchedulerParams` constraints.
 
 ---
 
@@ -1159,98 +1119,28 @@ Builds a custom constant product curve with a mid price. This will create a two 
 **Function**
 
 ```typescript
-async buildCurveWithMidPrice(params: BuildCurveWithMidPriceParams): Promise<ConfigParameters>
+function buildCurveWithMidPrice(
+    params: BuildCurveWithMidPriceParams
+): ConfigParameters
 ```
 
 **Parameters**
 
 ```typescript
 interface BuildCurveWithMidPriceParams {
-    totalTokenSupply: number // The total token supply
+    // Inherits all fields from BuildCurveBaseParams (token, fee, migration, liquidityDistribution, lockedVesting, activationType)
+    // See buildCurve for the full BuildCurveBaseParams definition.
+    token: TokenConfig
+    fee: FeeConfig
+    migration: MigrationConfig
+    liquidityDistribution: LiquidityDistributionConfig
+    lockedVesting: LockedVestingParams
+    activationType: ActivationType
+    // buildCurveWithMidPrice-specific parameters:
     initialMarketCap: number // The initial market cap
     migrationMarketCap: number // The migration market cap
-    midPrice: number // The mid price
+    midPrice: number // The mid price where the curve segments
     percentageSupplyOnMigration: number // The percentage of the supply that will be migrated
-    migrationOption: number // 0: DAMM V1, 1: DAMM v2
-    tokenBaseDecimal: number // The number of decimals for the base token
-    tokenQuoteDecimal: number // The number of decimals for the quote token
-    lockedVestingParam: {
-        // Optional locked vesting (0 for all fields for no vesting)
-        totalLockedVestingAmount: number // The total locked vesting amount
-        numberOfVestingPeriod: number // The number of vesting periods
-        cliffUnlockAmount: number // The amount of tokens that will be unlocked when vesting starts
-        totalVestingDuration: number // The total vesting duration in seconds
-        cliffDurationFromMigrationTime: number // The duration of the waiting time before the vesting starts
-    }
-    // Either FeeSchedulerLinear/FeeSchedulerExponential mode
-    baseFeeParams: {
-        baseFeeMode: 0 | 1 // 0: FeeSchedulerLinear, 1: FeeSchedulerExponential
-        feeSchedulerParam: {
-            startingFeeBps: number // The starting fee in basis points
-            endingFeeBps: number // The ending fee in basis points
-            numberOfPeriod: number // The number of periods
-            totalDuration: number // The total duration of the fee scheduler
-        }
-    }
-    // OR RateLimiter mode
-    baseFeeParams: {
-        baseFeeMode: 2 // RateLimiter
-        rateLimiterParam: {
-            baseFeeBps: number // The base fee in basis points
-            feeIncrementBps: number // The fee increment in basis points
-            referenceAmount: number // The reference amount for rate limiting
-            maxLimiterDuration: number // The maximum duration for rate limiting
-        }
-    }
-    dynamicFeeEnabled: boolean // Whether dynamic fee is enabled (true: enabled, false: disabled)
-    activationType: number // 0: Slot, 1: Timestamp
-    collectFeeMode: number // 0: QuoteToken, 1: OutputToken
-    migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
-    tokenType: number // 0: SPL, 1: Token2022
-    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
-    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
-    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
-    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
-    creatorTradingFeePercentage: number // The percentage of the trading fee that will be allocated to the creator
-    leftover: number // The leftover amount that can be withdrawn by leftover receiver
-    tokenUpdateAuthority: number // 0 - CreatorUpdateAuthority, 1 - Immutable, 2 - PartnerUpdateAuthority, 3 - CreatorUpdateAndMintAuthority, 4 - PartnerUpdateAndMintAuthority
-    migrationFee: {
-        // Optional migration fee (set as 0 for feePercentage and creatorFeePercentage for no migration fee)
-        feePercentage: number // The percentage of fee taken from migration quote threshold (0-99)
-        creatorFeePercentage: number // The fee share percentage for the creator from the migration fee (0-100)
-    }
-    migratedPoolFee?: {
-        // Defaults to all 0. Configure only when migrationOption = MET_DAMM_V2 (1) and migrationFeeOption = Customizable (6)
-        collectFeeMode: number // 0: QuoteToken, 1: OutputToken
-        dynamicFee: number // 0: Disabled, 1: Enabled
-        poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
-    }
-    partnerLiquidityVestingInfoParams?: {
-        // Optional LP vesting for partner (only applicable for DAMM v2 migration)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        totalDuration: number // Total vesting duration in seconds
-    }
-    creatorLiquidityVestingInfoParams?: {
-        // Optional LP vesting for creator (only applicable for DAMM v2 migration)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        totalDuration: number // Total vesting duration in seconds
-    }
-    migratedPoolBaseFeeMode?: DammV2BaseFeeMode // Optional: 0: FeeTimeSchedulerLinear (default), 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential. Mode 2 (RateLimiter) is not supported.
-    migratedPoolMarketCapFeeSchedulerParams?: {
-        // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
-        endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
-        numberOfPeriod: number // The total number of fee reduction periods
-        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
-        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
-    }
-    poolCreationFee?: number // Pool creation fee in SOL (0 or between 0.001 SOL to 100 SOL)
-    enableFirstSwapWithMinFee?: boolean // Optional: If true, the first swap on the pool will use the minimum fee. Default: false.
 }
 ```
 
@@ -1262,74 +1152,80 @@ interface BuildCurveWithMidPriceParams {
 
 ```typescript
 const curveConfig = buildCurveWithMidPrice({
-    totalTokenSupply: 1000000000,
-    initialMarketCap: 5000,
-    migrationMarketCap: 1000000,
-    midPrice: 141.75,
-    percentageSupplyOnMigration: 20,
-    migrationOption: MigrationOption.MET_DAMM_V2,
-    tokenBaseDecimal: TokenDecimal.SIX,
-    tokenQuoteDecimal: TokenDecimal.SIX,
-    lockedVestingParam: {
+    token: {
+        tokenType: TokenType.Token2022,
+        tokenBaseDecimal: TokenDecimal.SIX,
+        tokenQuoteDecimal: TokenDecimal.NINE,
+        tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+        totalTokenSupply: 1_000_000_000,
+        leftover: 0,
+    },
+    fee: {
+        baseFeeParams: {
+            baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+            feeSchedulerParam: {
+                startingFeeBps: 120,
+                endingFeeBps: 120,
+                numberOfPeriod: 0,
+                totalDuration: 0,
+            },
+        },
+        dynamicFeeEnabled: true,
+        collectFeeMode: CollectFeeMode.QuoteToken,
+        creatorTradingFeePercentage: 0,
+        poolCreationFee: 0,
+        enableFirstSwapWithMinFee: true,
+    },
+    migration: {
+        migrationOption: MigrationOption.MET_DAMM_V2,
+        migrationFeeOption: MigrationFeeOption.Customizable,
+        migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
+        migratedPoolFee: {
+            collectFeeMode: CollectFeeMode.QuoteToken,
+            dynamicFee: DammV2DynamicFeeMode.Enabled,
+            poolFeeBps: 120,
+        },
+    },
+    liquidityDistribution: {
+        partnerLiquidityPercentage: 55,
+        partnerPermanentLockedLiquidityPercentage: 0,
+        creatorLiquidityPercentage: 0,
+        creatorPermanentLockedLiquidityPercentage: 0,
+    },
+    lockedVesting: {
         totalLockedVestingAmount: 0,
         numberOfVestingPeriod: 0,
         cliffUnlockAmount: 0,
         totalVestingDuration: 0,
         cliffDurationFromMigrationTime: 0,
     },
-    baseFeeParams: {
-        baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
-        feeSchedulerParam: {
-            startingFeeBps: 100,
-            endingFeeBps: 100,
-            numberOfPeriod: 0,
-            totalDuration: 0,
-        },
-    },
-    dynamicFeeEnabled: true,
-    activationType: ActivationType.Slot,
-    collectFeeMode: CollectFeeMode.QuoteToken,
-    migrationFeeOption: MigrationFeeOption.Customizable,
-    tokenType: TokenType.SPL,
-    partnerLiquidityPercentage: 100,
-    creatorLiquidityPercentage: 0,
-    partnerPermanentLockedLiquidityPercentage: 0,
-    creatorPermanentLockedLiquidityPercentage: 0,
-    creatorTradingFeePercentage: 0,
-    leftover: 1000,
-    tokenUpdateAuthority: 1,
-    migrationFee: {
-        feePercentage: 0,
-        creatorFeePercentage: 0,
-    },
-    migratedPoolFee: {
-        collectFeeMode: CollectFeeMode.QuoteToken,
-        dynamicFee: DammV2DynamicFeeMode.Disabled,
-        poolFeeBps: 125,
-    },
+    activationType: ActivationType.Timestamp,
+    initialMarketCap: 5000,
+    migrationMarketCap: 1000000,
+    midPrice: 141.75,
+    percentageSupplyOnMigration: 20,
 })
 
 const transaction = await client.partner.createConfig({
-    config: new PublicKey('1234567890abcdefghijklmnopqrstuvwxyz'),
-    feeClaimer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    leftoverReceiver: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    payer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    quoteMint: new PublicKey('So11111111111111111111111111111111111111112'),
+    config: configKeypair.publicKey,
+    feeClaimer: wallet.publicKey,
+    leftoverReceiver: wallet.publicKey,
+    payer: wallet.publicKey,
+    quoteMint: NATIVE_MINT,
     ...curveConfig,
 })
 ```
 
 **Notes**
 
-- `buildCurveWithMidPrice` helps you to create a curve structure based on initial market cap, migration market cap and mid price.
+- `buildCurveWithMidPrice` helps you create a curve structure based on initial market cap, migration market cap and mid price.
 - What does mid price do?
     - The `midPrice` is the price at which the curve will be segmented into two parts between the start price and the migration price.
     - The `percentageSupplyOnMigration` is the percentage of the supply that will be migrated.
 - If `dynamicFeeEnabled` is true, the dynamic fee will be enabled and capped at 20% of minimum base fee.
-- `lockedVestingParam.totalVestingDuration` and `lockedVestingParam.cliffDurationFromMigrationTime` are calculated in terms of seconds.
-- `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
-- `migratedPoolFee` is only configurable when `migrationOption = MET_DAMM_V2 (1)` and `migrationFeeOption = Customizable (6)`.
-- Slot is 400ms, Timestamp is 1000ms.
+- `lockedVesting.totalVestingDuration` and `lockedVesting.cliffDurationFromMigrationTime` are in seconds.
+- `feeSchedulerParam.totalDuration` is based on your `activationType`. Slot is 400ms, Timestamp is 1000ms.
+- See [buildCurve](#buildCurve) notes for details on migration fee option behavior and `marketCapFeeSchedulerParams` constraints.
 
 ---
 
@@ -1340,97 +1236,27 @@ Builds a super customizable constant product curve graph configuration based on 
 **Function**
 
 ```typescript
-async buildCurveWithLiquidityWeights(params: BuildCurveWithLiquidityWeightsParams): Promise<ConfigParameters>
+function buildCurveWithLiquidityWeights(
+    params: BuildCurveWithLiquidityWeightsParams
+): ConfigParameters
 ```
 
 **Parameters**
 
 ```typescript
 interface BuildCurveWithLiquidityWeightsParams {
-    totalTokenSupply: number // The total token supply
+    // Inherits all fields from BuildCurveBaseParams (token, fee, migration, liquidityDistribution, lockedVesting, activationType)
+    // See buildCurve for the full BuildCurveBaseParams definition.
+    token: TokenConfig
+    fee: FeeConfig
+    migration: MigrationConfig
+    liquidityDistribution: LiquidityDistributionConfig
+    lockedVesting: LockedVestingParams
+    activationType: ActivationType
+    // buildCurveWithLiquidityWeights-specific parameters:
     initialMarketCap: number // The initial market cap
     migrationMarketCap: number // The migration market cap
-    migrationOption: number // 0: DAMM V1, 1: DAMM v2
-    tokenBaseDecimal: number // The number of decimals for the base token
-    tokenQuoteDecimal: number // The number of decimals for the quote token
-    lockedVestingParam: {
-        // Optional locked vesting (0 for all fields for no vesting)
-        totalLockedVestingAmount: number // The total locked vesting amount
-        numberOfVestingPeriod: number // The number of vesting periods
-        cliffUnlockAmount: number // The amount of tokens that will be unlocked when vesting starts
-        totalVestingDuration: number // The total vesting duration in seconds
-        cliffDurationFromMigrationTime: number // The duration of the waiting time before the vesting starts
-    }
-    // Either FeeSchedulerLinear/FeeSchedulerExponential mode
-    baseFeeParams: {
-        baseFeeMode: 0 | 1 // 0: FeeSchedulerLinear, 1: FeeSchedulerExponential
-        feeSchedulerParam: {
-            startingFeeBps: number // The starting fee in basis points
-            endingFeeBps: number // The ending fee in basis points
-            numberOfPeriod: number // The number of periods
-            totalDuration: number // The total duration of the fee scheduler
-        }
-    }
-    // OR RateLimiter mode
-    baseFeeParams: {
-        baseFeeMode: 2 // RateLimiter
-        rateLimiterParam: {
-            baseFeeBps: number // The base fee in basis points
-            feeIncrementBps: number // The fee increment in basis points
-            referenceAmount: number // The reference amount for rate limiting
-            maxLimiterDuration: number // The maximum duration for rate limiting
-        }
-    }
-    dynamicFeeEnabled: boolean // Whether dynamic fee is enabled (true: enabled, false: disabled)
-    activationType: number // 0: Slot, 1: Timestamp
-    collectFeeMode: number // 0: QuoteToken, 1: OutputToken
-    migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
-    tokenType: number // 0: SPL, 1: Token2022
-    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
-    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
-    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
-    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
-    creatorTradingFeePercentage: number // The percentage of the trading fee that will be allocated to the creator
-    leftover: number // The leftover amount that can be withdrawn by leftover receiver
-    liquidityWeights: number[] // The liquidity weights for each liquidity segment in the curve
-    tokenUpdateAuthority: number // 0 - CreatorUpdateAuthority, 1 - Immutable, 2 - PartnerUpdateAuthority, 3 - CreatorUpdateAndMintAuthority, 4 - PartnerUpdateAndMintAuthority
-    migrationFee: {
-        // Optional migration fee (set as 0 for feePercentage and creatorFeePercentage for no migration fee)
-        feePercentage: number // The percentage of fee taken from migration quote threshold (0-99)
-        creatorFeePercentage: number // The fee share percentage for the creator from the migration fee (0-100)
-    }
-    migratedPoolFee?: {
-        // Defaults to all 0. Configure only when migrationOption = MET_DAMM_V2 (1) and migrationFeeOption = Customizable (6)
-        collectFeeMode: number // 0: QuoteToken, 1: OutputToken
-        dynamicFee: number // 0: Disabled, 1: Enabled
-        poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
-    }
-    partnerLiquidityVestingInfoParams?: {
-        // Optional LP vesting for partner (only applicable for DAMM v2 migration)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        totalDuration: number // Total vesting duration in seconds
-    }
-    creatorLiquidityVestingInfoParams?: {
-        // Optional LP vesting for creator (only applicable for DAMM v2 migration)
-        vestingPercentage: number // Percentage of non-permanently-locked LP to vest (0-100)
-        bpsPerPeriod: number // Basis points released per vesting period (e.g., 100 = 1% per period)
-        numberOfPeriods: number // Number of vesting periods
-        cliffDurationFromMigrationTime: number // Cliff duration in seconds from migration time
-        totalDuration: number // Total vesting duration in seconds
-    }
-    migratedPoolBaseFeeMode?: DammV2BaseFeeMode // Optional: 0: FeeTimeSchedulerLinear (default), 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential. Mode 2 (RateLimiter) is not supported.
-    migratedPoolMarketCapFeeSchedulerParams?: {
-        // Optional: only for FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4)
-        endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
-        numberOfPeriod: number // The total number of fee reduction periods
-        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
-        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
-    }
-    poolCreationFee?: number // Pool creation fee in SOL (0 or between 0.001 SOL to 100 SOL)
-    enableFirstSwapWithMinFee?: boolean // Optional: If true, the first swap on the pool will use the minimum fee. Default: false.
+    liquidityWeights: number[] // The liquidity weights for each segment (max 16 elements)
 }
 ```
 
@@ -1447,65 +1273,72 @@ for (let i = 0; i < 16; i++) {
 }
 
 const curveConfig = buildCurveWithLiquidityWeights({
-    totalTokenSupply: 1000000000,
-    initialMarketCap: 5000,
-    migrationMarketCap: 1000000,
-    migrationOption: MigrationOption.MET_DAMM_V2,
-    tokenBaseDecimal: TokenDecimal.SIX,
-    tokenQuoteDecimal: TokenDecimal.SIX,
-    lockedVestingParam: {
+    token: {
+        tokenType: TokenType.Token2022,
+        tokenBaseDecimal: TokenDecimal.SIX,
+        tokenQuoteDecimal: TokenDecimal.NINE,
+        tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+        totalTokenSupply: 1_000_000_000,
+        leftover: 0,
+    },
+    fee: {
+        baseFeeParams: {
+            baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+            feeSchedulerParam: {
+                startingFeeBps: 120,
+                endingFeeBps: 120,
+                numberOfPeriod: 0,
+                totalDuration: 0,
+            },
+        },
+        dynamicFeeEnabled: true,
+        collectFeeMode: CollectFeeMode.QuoteToken,
+        creatorTradingFeePercentage: 0,
+        poolCreationFee: 0,
+        enableFirstSwapWithMinFee: true,
+    },
+    migration: {
+        migrationOption: MigrationOption.MET_DAMM_V2,
+        migrationFeeOption: MigrationFeeOption.Customizable,
+        migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
+        migratedPoolFee: {
+            collectFeeMode: CollectFeeMode.QuoteToken,
+            dynamicFee: DammV2DynamicFeeMode.Enabled,
+            poolFeeBps: 120,
+        },
+    },
+    liquidityDistribution: {
+        partnerLiquidityPercentage: 55,
+        partnerPermanentLockedLiquidityPercentage: 0,
+        creatorLiquidityPercentage: 0,
+        creatorPermanentLockedLiquidityPercentage: 0,
+    },
+    lockedVesting: {
         totalLockedVestingAmount: 0,
         numberOfVestingPeriod: 0,
         cliffUnlockAmount: 0,
         totalVestingDuration: 0,
         cliffDurationFromMigrationTime: 0,
     },
-    baseFeeParams: {
-        baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
-        feeSchedulerParam: {
-            startingFeeBps: 100,
-            endingFeeBps: 100,
-            numberOfPeriod: 0,
-            totalDuration: 0,
-        },
-    },
-    dynamicFeeEnabled: true,
-    activationType: ActivationType.Slot,
-    collectFeeMode: CollectFeeMode.QuoteToken,
-    migrationFeeOption: MigrationFeeOption.Customizable,
-    tokenType: TokenType.SPL,
-    partnerLiquidityPercentage: 100,
-    creatorLiquidityPercentage: 0,
-    partnerPermanentLockedLiquidityPercentage: 0,
-    creatorPermanentLockedLiquidityPercentage: 0,
-    creatorTradingFeePercentage: 0,
-    leftover: 1000,
+    activationType: ActivationType.Timestamp,
+    initialMarketCap: 5000,
+    migrationMarketCap: 1000000,
     liquidityWeights,
-    tokenUpdateAuthority: 1,
-    migrationFee: {
-        feePercentage: 0,
-        creatorFeePercentage: 0,
-    },
-    migratedPoolFee: {
-        collectFeeMode: CollectFeeMode.QuoteToken,
-        dynamicFee: DammV2DynamicFeeMode.Disabled,
-        poolFeeBps: 125,
-    },
 })
 
 const transaction = await client.partner.createConfig({
-    config: new PublicKey('1234567890abcdefghijklmnopqrstuvwxyz'),
-    feeClaimer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    leftoverReceiver: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    payer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    quoteMint: new PublicKey('So11111111111111111111111111111111111111112'),
+    config: configKeypair.publicKey,
+    feeClaimer: wallet.publicKey,
+    leftoverReceiver: wallet.publicKey,
+    payer: wallet.publicKey,
+    quoteMint: NATIVE_MINT,
     ...curveConfig,
 })
 ```
 
 **Notes**
 
-- `buildCurveWithLiquidityWeights` helps you to create a curve structure based on initial market cap, migration market cap and liquidity weights.
+- `buildCurveWithLiquidityWeights` helps you create a curve structure based on initial market cap, migration market cap and liquidity weights.
 - What does liquidity weights do?
     - The `liquidityWeights` is an array of numbers that determines how liquidity is distributed across the curve's price ranges.
     - The maximum number of liquidity weights[i] is `16`.
@@ -1514,169 +1347,153 @@ const transaction = await client.partner.createConfig({
     - This means that as you move along the curve (from lower to higher price ranges), the liquidity in each curve segment can be controlled.
 - Effects of changing liquidity weights
     1. `All liquidityWeights[i] === 1`: All segments have the same liquidity. The curve is linear.
-    2. `liquidityWeights[i] < liquidityWeights[i+1]`: Lower liquidity at lower prices.
-        - This means that the price will move more for a given trade at lower prices (less resistance), and price will move less for a given trade at higher prices (more resistance).
-    3. `liquidityWeights[i] > liquidityWeights[i+1]`: Higher liquidity at lower prices.
-        - This means that the price will move less for a given trade at lower prices (more resistance), and price will move more for a given trade at higher prices (less resistance).
+    2. `liquidityWeights[i] < liquidityWeights[i+1]`: Lower liquidity at lower prices. Price moves more at lower prices and less at higher prices.
+    3. `liquidityWeights[i] > liquidityWeights[i+1]`: Higher liquidity at lower prices. Price moves less at lower prices and more at higher prices.
 - If `dynamicFeeEnabled` is true, the dynamic fee will be enabled and capped at 20% of minimum base fee.
-- `lockedVestingParam.totalVestingDuration` and `lockedVestingParam.cliffDurationFromMigrationTime` are calculated in terms of seconds.
-- `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
-- `migratedPoolFee` is only configurable when `migrationOption = MET_DAMM_V2 (1)` and `migrationFeeOption = Customizable (6)`.
-- Slot is 400ms, Timestamp is 1000ms.
+- `lockedVesting.totalVestingDuration` and `lockedVesting.cliffDurationFromMigrationTime` are in seconds.
+- `feeSchedulerParam.totalDuration` is based on your `activationType`. Slot is 400ms, Timestamp is 1000ms.
+- See [buildCurve](#buildCurve) notes for details on migration fee option behavior and `marketCapFeeSchedulerParams` constraints.
 
 ---
 
 ### buildCurveWithCustomSqrtPrices
 
-Builds a constant product curve configuration using custom sqrt price points. This function gives you full control over the exact price points in your curve by specifying sqrt prices directly instead of market caps.
+Builds a super customizable constant product curve graph configuration based on custom sqrt prices. This function does the math for you to create a curve structure based on custom sqrt prices and optional liquidity weights.
 
 **Function**
 
 ```typescript
-async buildCurveWithCustomSqrtPrices(params: BuildCurveWithCustomSqrtPricesParams): Promise<ConfigParameters>
+function buildCurveWithCustomSqrtPrices(
+    params: BuildCurveWithCustomSqrtPricesParams
+): ConfigParameters
 ```
 
 **Parameters**
 
 ```typescript
 interface BuildCurveWithCustomSqrtPricesParams {
-    totalTokenSupply: number // Total supply of the token
-    sqrtPrices: BN[] // Array of sqrt price values (must be ascending, min 2, max 16)
-    liquidityWeights?: number[] // Optional: liquidity distribution weights (length = sqrtPrices.length - 1)
-    migrationOption: MigrationOption // MET_DAMM_V1 (0) or MET_DAMM_V2 (1)
-    tokenBaseDecimal: TokenDecimal // Token base decimals (SIX, NINE, etc.)
-    tokenQuoteDecimal: TokenDecimal // Token quote decimals (SIX, NINE, etc.)
-    lockedVestingParam: LockedVestingParam // Locked vesting parameters
-    baseFeeParams: BaseFeeParams // Base fee configuration
-    dynamicFeeEnabled: boolean // Enable dynamic fees
-    activationType: ActivationType // Slot or Timestamp
-    collectFeeMode: CollectFeeMode // OnlyQuote or Both
-    migrationFeeOption: MigrationFeeOption // Migration fee option
-    tokenType: TokenType // SPL or Token2022
-    partnerLiquidityPercentage: number // Partner claimable LP percentage (0-100)
-    creatorLiquidityPercentage: number // Creator claimable LP percentage (0-100)
-    partnerPermanentLockedLiquidityPercentage: number // Partner permanently locked LP percentage
-    creatorPermanentLockedLiquidityPercentage: number // Creator permanently locked LP percentage
-    creatorTradingFeePercentage: number // Creator's share of trading fees (0-100)
-    leftover: number // Leftover amount configuration
-    tokenUpdateAuthority: TokenUpdateAuthorityOption // Token authority option
-    migrationFee: MigrationFee // Migration fee configuration
-    partnerLiquidityVestingInfo?: LiquidityVestingInfoParameters // Partner LP vesting (DAMM v2 only)
-    creatorLiquidityVestingInfo?: LiquidityVestingInfoParameters // Creator LP vesting (DAMM v2 only)
-}
-```
-
-**Helper Function: createSqrtPrices**
-
-Use the `createSqrtPrices` helper function to convert human-readable prices to sqrt price format:
-
-```typescript
-function createSqrtPrices(params: CreateSqrtPricesParams): BN[]
-
-interface CreateSqrtPricesParams {
-    prices: number[] // Array of human-readable prices (must be ascending)
-    tokenBaseDecimal: TokenDecimal // Token base decimals
-    tokenQuoteDecimal: TokenDecimal // Token quote decimals
+    // Inherits all fields from BuildCurveBaseParams (token, fee, migration, liquidityDistribution, lockedVesting, activationType)
+    // See buildCurve for the full BuildCurveBaseParams definition.
+    token: TokenConfig
+    fee: FeeConfig
+    migration: MigrationConfig
+    liquidityDistribution: LiquidityDistributionConfig
+    lockedVesting: LockedVestingParams
+    activationType: ActivationType
+    // buildCurveWithCustomSqrtPrices-specific parameters:
+    sqrtPrices: BN[] // Array of custom sqrt prices (must be in ascending order, min 2 elements)
+    liquidityWeights?: number[] // Optional weights for each segment. Length must be sqrtPrices.length - 1. If not provided, liquidity is distributed evenly.
 }
 ```
 
 **Returns**
 
-- `ConfigParameters` that can be spread into `createConfig`.
+- A `ConfigParameters` object.
 
 **Example**
 
 ```typescript
-import {
-    buildCurveWithCustomSqrtPrices,
-    createSqrtPrices,
-    TokenDecimal,
-    MigrationOption,
-    ActivationType,
-    CollectFeeMode,
-    BaseFeeMode,
-    MigrationFeeOption,
-    TokenType,
-    TokenUpdateAuthorityOption,
-} from '@meteora-ag/dynamic-bonding-curve-sdk'
-
-// Define token decimals
+const customPrices = [0.000001, 0.00000105, 0.000002, 0.001]
 const tokenBaseDecimal = TokenDecimal.SIX
-const tokenQuoteDecimal = TokenDecimal.NINE
+const tokenQuoteDecimal = TokenDecimal.SIX
 
-// Define custom price points (in human-readable format)
-// Example: Start at $0.00003, pass through $0.0001, $0.0003, and migrate at $0.00054
-const humanReadablePrices = [0.00003, 0.0001, 0.0003, 0.00054]
-
-// Convert human-readable prices to sqrt prices
-const sqrtPrices = createSqrtPrices({
-    prices: humanReadablePrices,
+// convert prices to sqrtPrices
+const sqrtPrices = createSqrtPrices(
+    customPrices,
     tokenBaseDecimal,
-    tokenQuoteDecimal,
-})
+    tokenQuoteDecimal
+)
 
-// Optional: Define liquidity weights for each segment
-// Length must be sqrtPrices.length - 1
-const liquidityWeights = [1, 2, 1] // 3 segments for 4 price points
+// define custom liquidity weights for custom segments (optional)
+// length must be sqrtPrices.length - 1, or leave undefined for even distribution
+const liquidityWeights = [2, 1, 1]
 
 const curveConfig = buildCurveWithCustomSqrtPrices({
-    totalTokenSupply: 1000000000,
-    sqrtPrices,
-    liquidityWeights, // Optional: omit for equal distribution
-    migrationOption: MigrationOption.MET_DAMM_V2,
-    tokenBaseDecimal,
-    tokenQuoteDecimal,
-    lockedVestingParam: {
+    token: {
+        tokenType: TokenType.Token2022,
+        tokenBaseDecimal: TokenDecimal.SIX,
+        tokenQuoteDecimal: TokenDecimal.SIX,
+        tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+        totalTokenSupply: 1_000_000_000,
+        leftover: 0,
+    },
+    fee: {
+        baseFeeParams: {
+            baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+            feeSchedulerParam: {
+                startingFeeBps: 120,
+                endingFeeBps: 120,
+                numberOfPeriod: 0,
+                totalDuration: 0,
+            },
+        },
+        dynamicFeeEnabled: true,
+        collectFeeMode: CollectFeeMode.QuoteToken,
+        creatorTradingFeePercentage: 0,
+        poolCreationFee: 0,
+        enableFirstSwapWithMinFee: true,
+    },
+    migration: {
+        migrationOption: MigrationOption.MET_DAMM_V2,
+        migrationFeeOption: MigrationFeeOption.Customizable,
+        migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
+        migratedPoolFee: {
+            collectFeeMode: CollectFeeMode.QuoteToken,
+            dynamicFee: DammV2DynamicFeeMode.Enabled,
+            poolFeeBps: 120,
+        },
+    },
+    liquidityDistribution: {
+        partnerLiquidityPercentage: 55,
+        partnerPermanentLockedLiquidityPercentage: 0,
+        creatorLiquidityPercentage: 0,
+        creatorPermanentLockedLiquidityPercentage: 0,
+    },
+    lockedVesting: {
         totalLockedVestingAmount: 0,
         numberOfVestingPeriod: 0,
         cliffUnlockAmount: 0,
         totalVestingDuration: 0,
         cliffDurationFromMigrationTime: 0,
     },
-    baseFeeParams: {
-        baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
-        feeSchedulerParam: {
-            startingFeeBps: 100,
-            endingFeeBps: 100,
-            numberOfPeriod: 0,
-            totalDuration: 0,
-        },
-    },
-    dynamicFeeEnabled: true,
-    activationType: ActivationType.Slot,
-    collectFeeMode: CollectFeeMode.Both,
-    migrationFeeOption: MigrationFeeOption.FixedBps100,
-    tokenType: TokenType.SPL,
-    partnerLiquidityPercentage: 0,
-    creatorLiquidityPercentage: 0,
-    partnerPermanentLockedLiquidityPercentage: 50,
-    creatorPermanentLockedLiquidityPercentage: 50,
-    creatorTradingFeePercentage: 50,
-    leftover: 0,
-    tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
-    migrationFee: {
-        feePercentage: 0,
-        creatorFeePercentage: 0,
-    },
+    activationType: ActivationType.Timestamp,
+    sqrtPrices,
+    liquidityWeights,
+})
+
+const transaction = await client.partner.createConfig({
+    config: configKeypair.publicKey,
+    feeClaimer: wallet.publicKey,
+    leftoverReceiver: wallet.publicKey,
+    payer: wallet.publicKey,
+    quoteMint: NATIVE_MINT,
+    ...curveConfig,
 })
 ```
 
 **Notes**
 
-- `buildCurveWithCustomSqrtPrices` gives you full control over exact price points in your curve.
-- The `sqrtPrices` array must:
-    - Be in ascending order
-    - Have a minimum of 2 elements (representing start and end prices)
-    - Have a maximum of 16 elements
-- Use the `createSqrtPrices` helper to convert human-readable prices to sqrt prices.
-- The optional `liquidityWeights` array controls liquidity distribution across curve segments:
-    - Length must be `sqrtPrices.length - 1`
-    - Higher weight = more liquidity concentrated in that price range
-    - Omit for equal distribution across all segments
+- `buildCurveWithCustomSqrtPrices` helps you create a curve structure based on custom sqrt prices and optional liquidity weights.
+- What does sqrt prices do?
+    - The `sqrtPrices` is an array of BN values representing the sqrt prices of the curve segments.
+    - The length of the `sqrtPrices` array must be at least 2.
+    - The first price will be the starting price (pMin) and the last price will be the migration price (pMax).
+    - The prices must be in ascending order.
+    - Use `createSqrtPrices()` helper to convert regular prices to sqrt prices.
+- What does liquidity weights do?
+    - The `liquidityWeights` is an array of numbers that determines how liquidity is distributed across the curve's price ranges.
+    - The maximum number of liquidity weights[i] is `16`.
+    - Each element in the array represents the liquidity weight for a specific curve segment.
+    - If not provided, liquidity is distributed evenly across all segments.
+    - The length of the `liquidityWeights` array must be `sqrtPrices.length - 1`.
+- Effects of changing liquidity weights
+    1. `All liquidityWeights[i] === 1`: All segments have the same liquidity. The curve is linear.
+    2. `liquidityWeights[i] < liquidityWeights[i+1]`: Lower liquidity at lower prices. Price moves more at lower prices and less at higher prices.
+    3. `liquidityWeights[i] > liquidityWeights[i+1]`: Higher liquidity at lower prices. Price moves less at lower prices and more at higher prices.
 - If `dynamicFeeEnabled` is true, the dynamic fee will be enabled and capped at 20% of minimum base fee.
-- `lockedVestingParam.totalVestingDuration` and `lockedVestingParam.cliffDurationFromMigrationTime` are calculated in terms of seconds.
-- `feeSchedulerParam.totalDuration` is calculated based on your `activationType` and `activationTime`.
-- Slot is 400ms, Timestamp is 1000ms.
+- `lockedVesting.totalVestingDuration` and `lockedVesting.cliffDurationFromMigrationTime` are in seconds.
+- `feeSchedulerParam.totalDuration` is based on your `activationType`. Slot is 400ms, Timestamp is 1000ms.
+- See [buildCurve](#buildCurve) notes for details on migration fee option behavior and `marketCapFeeSchedulerParams` constraints.
 
 ---
 
@@ -1760,7 +1577,7 @@ interface CreateConfigAndPoolParams {
             baseFeeMode: number // 0: FeeSchedulerLinear, 1: FeeSchedulerExponential, 2: RateLimiter
         }
         dynamicFee: {
-            // Optional dynamic fee, put null if you don't want to use dynamic fee
+            // Optional dynamic fee
             binStep: number // u16 value representing the bin step in bps
             binStepU128: BN // u128 value for a more accurate bin step
             filterPeriod: number // Minimum time that must pass between fee updates
@@ -1770,24 +1587,24 @@ interface CreateConfigAndPoolParams {
             maxVolatilityAccumulator: number // Caps the maximum volatility that can be accumulated
         } | null
     }
-    activationType: number // 0: Slot, 1: Timestamp
     collectFeeMode: number // 0: QuoteToken, 1: OutputToken
     migrationOption: number // 0: DAMM V1, 1: DAMM v2
+    activationType: number // 0: Slot, 1: Timestamp
     tokenType: number // 0: SPL, 1: Token2022
     tokenDecimal: number // The number of decimals for the token
+    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner in the graduated pool (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // The percentage of the locked LP that will be allocated to the partner in the graduated pool (0-100)
+    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator in the graduated pool (0-100)
+    creatorPermanentLockedLiquidityPercentage: number // The percentage of the locked LP that will be allocated to the creator in the graduated pool (0-100)
     migrationQuoteThreshold: BN // The quote threshold for migration
-    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
-    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
-    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
-    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
     sqrtStartPrice: BN // The starting price of the pool
     lockedVesting: {
         // Optional locked vesting (BN (0) for all fields for no vesting)
         amountPerPeriod: BN // The amount of tokens that will be vested per period
-        cliffDurationFromMigrationTime: BN // The duration of the cliff period
+        cliffDurationFromMigrationTime: BN // The duration of the waiting time before the vesting starts
         frequency: BN // The frequency of the vesting
-        numberOfPeriod: BN // The number of periods
-        cliffUnlockAmount: BN // The amount of tokens that will be unlocked at the cliff
+        numberOfPeriod: BN // The number of periods of the vesting
+        cliffUnlockAmount: BN // The amount of tokens that will be unlocked when vesting starts
     }
     migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
     tokenSupply: {
@@ -1803,20 +1620,35 @@ interface CreateConfigAndPoolParams {
         creatorFeePercentage: number // The fee share percentage for the creator from the migration fee (0-100)
     }
     migratedPoolFee: {
-        // Defaults to all 0. Configure only when migrationOption = MET_DAMM_V2 (1) and migrationFeeOption = Customizable (6)
+        // Only when migrationOption = MET_DAMM_V2 (1) and migrationFeeOption = Customizable (6)
         collectFeeMode: number // 0: QuoteToken, 1: OutputToken
         dynamicFee: number // 0: Disabled, 1: Enabled
         poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
     }
-    migratedPoolBaseFeeMode?: number // 0: FeeTimeSchedulerLinear, 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential (see DammV2BaseFeeMode). Defaults to FeeTimeSchedulerLinear (0).
-    migratedPoolMarketCapFeeSchedulerParams?: {
-        // Only when migratedPoolBaseFeeMode = FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4) and migrationOption = MET_DAMM_V2 (1)
-        numberOfPeriod: number // The total number of fee reduction periods
-        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
-        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
-        reductionFactor: BN // The amount to reduce the fee by per period
+    migratedPoolBaseFeeMode: number // 0: FeeTimeSchedulerLinear, 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential (defaults to FeeTimeSchedulerLinear)
+    migratedPoolMarketCapFeeSchedulerParams: {
+        // Defaults to all 0. Configure only when migratedPoolBaseFeeMode = FeeMarketCapSchedulerLinear or FeeMarketCapSchedulerExponential
+        numberOfPeriod: number // The number of periods
+        sqrtPriceStepBps: number // The square root price step in basis points
+        schedulerExpirationDuration: number // The scheduler expiration duration in seconds
+        reductionFactor: BN // The reduction factor
     }
-    enableFirstSwapWithMinFee?: boolean // If true, the first swap on the pool will use the minimum fee. Default: false.
+    enableFirstSwapWithMinFee: boolean // Whether to enable first swap with minimum fee (defaults to false)
+    poolCreationFee: BN // The pool creation fee
+    partnerLiquidityVestingInfo: {
+        vestingPercentage: number // The percentage of the liquidity that will be vested
+        bpsPerPeriod: number // The basis points per period
+        numberOfPeriods: number // The number of periods
+        cliffDurationFromMigrationTime: number // The duration of the waiting time before the vesting starts
+        frequency: number // The frequency of the vesting
+    }
+    creatorLiquidityVestingInfo: {
+        vestingPercentage: number // The percentage of the liquidity that will be vested
+        bpsPerPeriod: number // The basis points per period
+        numberOfPeriods: number // The number of periods
+        cliffDurationFromMigrationTime: number // The duration of the waiting time before the vesting starts
+        frequency: number // The frequency of the vesting
+    }
     padding: []
     curve: {
         // The curve of the pool
@@ -1848,7 +1680,7 @@ const transaction = await client.pool.createConfigAndPool({
     quoteMint: new PublicKey('So11111111111111111111111111111111111111112'),
     poolFees: {
         baseFee: {
-            cliffFeeNumerator: new BN('2500000'),
+            cliffFeeNumerator: new BN('25000000'),
             firstFactor: 0,
             secondFactor: new BN('0'),
             thirdFactor: new BN('0'),
@@ -1883,20 +1715,34 @@ const transaction = await client.pool.createConfigAndPool({
         cliffUnlockAmount: new BN('0'),
     },
     migrationFeeOption: 0,
-    tokenSupply: {
-        preMigrationTokenSupply: new BN('10000000000000000000'),
-        postMigrationTokenSupply: new BN('10000000000000000000'),
-    },
+    tokenSupply: null,
     creatorTradingFeePercentage: 0,
-    tokenUpdateAuthority: 1,
+    tokenUpdateAuthority: 0,
     migrationFee: {
         feePercentage: 25,
         creatorFeePercentage: 50,
     },
-    migratedPoolFee: {
-        collectFeeMode: CollectFeeMode.QuoteToken,
-        dynamicFee: DammV2DynamicFeeMode.Disabled,
-        poolFeeBps: 0,
+    poolCreationFee: new BN(1_000_000_000),
+    creatorLiquidityVestingInfo: {
+        vestingPercentage: 0,
+        bpsPerPeriod: 0,
+        numberOfPeriods: 0,
+        frequency: 0,
+        cliffDurationFromMigrationTime: 0,
+    },
+    partnerLiquidityVestingInfo: {
+        vestingPercentage: 0,
+        bpsPerPeriod: 0,
+        numberOfPeriods: 0,
+        frequency: 0,
+        cliffDurationFromMigrationTime: 0,
+    },
+    migratedPoolBaseFeeMode: DammV2BaseFeeMode.FeeTimeSchedulerLinear,
+    migratedPoolMarketCapFeeSchedulerParams: {
+        numberOfPeriod: 0,
+        sqrtPriceStepBps: 0,
+        schedulerExpirationDuration: 0,
+        reductionFactor: new BN('0'),
     },
     padding: [],
     curve: [
@@ -1909,6 +1755,12 @@ const transaction = await client.pool.createConfigAndPool({
             liquidity: new BN('1'),
         },
     ],
+    enableFirstSwapWithMinFee: false,
+    migratedPoolFee: {
+        dynamicFee: 0,
+        poolFeeBps: 0,
+        collectFeeMode: 0,
+    },
     preCreatePoolParam: {
         baseMint: new PublicKey('0987654321zyxwvutsrqponmlkjihgfedcba'),
         name: 'Meteora',
@@ -1970,24 +1822,24 @@ interface CreateConfigAndPoolWithFirstBuyParams {
             maxVolatilityAccumulator: number // Caps the maximum volatility that can be accumulated
         } | null
     }
-    activationType: number // 0: Slot, 1: Timestamp
     collectFeeMode: number // 0: QuoteToken, 1: OutputToken
     migrationOption: number // 0: DAMM V1, 1: DAMM v2
+    activationType: number // 0: Slot, 1: Timestamp
     tokenType: number // 0: SPL, 1: Token2022
     tokenDecimal: number // The number of decimals for the token
+    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner in the graduated pool (0-100)
+    partnerPermanentLockedLiquidityPercentage: number // The percentage of the locked LP that will be allocated to the partner in the graduated pool (0-100)
+    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator in the graduated pool (0-100)
+    creatorPermanentLockedLiquidityPercentage: number // The percentage of the locked LP that will be allocated to the creator in the graduated pool (0-100)
     migrationQuoteThreshold: BN // The quote threshold for migration
-    partnerLiquidityPercentage: number // The percentage of the LP that will be allocated to the partner (0-100)
-    creatorLiquidityPercentage: number // The percentage of the LP that will be allocated to the creator (0-100)
-    partnerPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the partner (0-100)
-    creatorPermanentLockedLiquidityPercentage: number // The percentage of the permanently locked LP that will be allocated to the creator (0-100)
     sqrtStartPrice: BN // The starting price of the pool
     lockedVesting: {
         // Optional locked vesting (BN (0) for all fields for no vesting)
         amountPerPeriod: BN // The amount of tokens that will be vested per period
-        cliffDurationFromMigrationTime: BN // The duration of the cliff period
+        cliffDurationFromMigrationTime: BN // The duration of the waiting time before the vesting starts
         frequency: BN // The frequency of the vesting
-        numberOfPeriod: BN // The number of periods
-        cliffUnlockAmount: BN // The amount of tokens that will be unlocked at the cliff
+        numberOfPeriod: BN // The number of periods of the vesting
+        cliffUnlockAmount: BN // The amount of tokens that will be unlocked when vesting starts
     }
     migrationFeeOption: number // 0: Fixed 25bps, 1: Fixed 30bps, 2: Fixed 100bps, 3: Fixed 200bps, 4: Fixed 400bps, 5: Fixed 600bps, 6: Customizable (only for DAMM v2)
     tokenSupply: {
@@ -2003,20 +1855,35 @@ interface CreateConfigAndPoolWithFirstBuyParams {
         creatorFeePercentage: number // The fee share percentage for the creator from the migration fee (0-100)
     }
     migratedPoolFee: {
-        // Defaults to all 0. Configure only when migrationOption = MET_DAMM_V2 (1) and migrationFeeOption = Customizable (6)
+        // Only when migrationOption = MET_DAMM_V2 (1) and migrationFeeOption = Customizable (6)
         collectFeeMode: number // 0: QuoteToken, 1: OutputToken
         dynamicFee: number // 0: Disabled, 1: Enabled
         poolFeeBps: number // The pool fee in basis points. Minimum 10, Maximum 1000 bps.
     }
-    migratedPoolBaseFeeMode?: number // 0: FeeTimeSchedulerLinear, 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential (see DammV2BaseFeeMode). Defaults to FeeTimeSchedulerLinear (0).
-    migratedPoolMarketCapFeeSchedulerParams?: {
-        // Only when migratedPoolBaseFeeMode = FeeMarketCapSchedulerLinear (3) or FeeMarketCapSchedulerExponential (4) and migrationOption = MET_DAMM_V2 (1)
-        numberOfPeriod: number // The total number of fee reduction periods
-        sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
-        schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
-        reductionFactor: BN // The amount to reduce the fee by per period
+    migratedPoolBaseFeeMode: number // 0: FeeTimeSchedulerLinear, 1: FeeTimeSchedulerExponential, 3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential (defaults to FeeTimeSchedulerLinear)
+    migratedPoolMarketCapFeeSchedulerParams: {
+        // Defaults to all 0. Configure only when migratedPoolBaseFeeMode = FeeMarketCapSchedulerLinear or FeeMarketCapSchedulerExponential
+        numberOfPeriod: number // The number of periods
+        sqrtPriceStepBps: number // The square root price step in basis points
+        schedulerExpirationDuration: number // The scheduler expiration duration in seconds
+        reductionFactor: BN // The reduction factor
     }
-    enableFirstSwapWithMinFee?: boolean // If true, the first swap on the pool will use the minimum fee. Default: false.
+    enableFirstSwapWithMinFee: boolean // Whether to enable first swap with minimum fee (defaults to false)
+    poolCreationFee: BN // The pool creation fee
+    partnerLiquidityVestingInfo: {
+        vestingPercentage: number // The percentage of the liquidity that will be vested
+        bpsPerPeriod: number // The basis points per period
+        numberOfPeriods: number // The number of periods
+        cliffDurationFromMigrationTime: number // The duration of the waiting time before the vesting starts
+        frequency: number // The frequency of the vesting
+    }
+    creatorLiquidityVestingInfo: {
+        vestingPercentage: number // The percentage of the liquidity that will be vested
+        bpsPerPeriod: number // The basis points per period
+        numberOfPeriods: number // The number of periods
+        cliffDurationFromMigrationTime: number // The duration of the waiting time before the vesting starts
+        frequency: number // The frequency of the vesting
+    }
     padding: []
     curve: {
         // The curve of the pool
@@ -2058,7 +1925,7 @@ const transaction = await client.pool.createConfigAndPoolWithFirstBuy({
     quoteMint: new PublicKey('So11111111111111111111111111111111111111112'),
     poolFees: {
         baseFee: {
-            cliffFeeNumerator: new BN('2500000'),
+            cliffFeeNumerator: new BN('25000000'),
             firstFactor: 0,
             secondFactor: new BN('0'),
             thirdFactor: new BN('0'),
@@ -2093,20 +1960,34 @@ const transaction = await client.pool.createConfigAndPoolWithFirstBuy({
         cliffUnlockAmount: new BN('0'),
     },
     migrationFeeOption: 0,
-    tokenSupply: {
-        preMigrationTokenSupply: new BN('10000000000000000000'),
-        postMigrationTokenSupply: new BN('10000000000000000000'),
-    },
+    tokenSupply: null,
     creatorTradingFeePercentage: 0,
-    tokenUpdateAuthority: 1,
+    tokenUpdateAuthority: 0,
     migrationFee: {
         feePercentage: 25,
         creatorFeePercentage: 50,
     },
-    migratedPoolFee: {
-        collectFeeMode: CollectFeeMode.QuoteToken,
-        dynamicFee: DammV2DynamicFeeMode.Disabled,
-        poolFeeBps: 0,
+    poolCreationFee: new BN(1_000_000_000),
+    creatorLiquidityVestingInfo: {
+        vestingPercentage: 0,
+        bpsPerPeriod: 0,
+        numberOfPeriods: 0,
+        frequency: 0,
+        cliffDurationFromMigrationTime: 0,
+    },
+    partnerLiquidityVestingInfo: {
+        vestingPercentage: 0,
+        bpsPerPeriod: 0,
+        numberOfPeriods: 0,
+        frequency: 0,
+        cliffDurationFromMigrationTime: 0,
+    },
+    migratedPoolBaseFeeMode: DammV2BaseFeeMode.FeeTimeSchedulerLinear,
+    migratedPoolMarketCapFeeSchedulerParams: {
+        numberOfPeriod: 0,
+        sqrtPriceStepBps: 0,
+        schedulerExpirationDuration: 0,
+        reductionFactor: new BN('0'),
     },
     padding: [],
     curve: [
@@ -2119,6 +2000,12 @@ const transaction = await client.pool.createConfigAndPoolWithFirstBuy({
             liquidity: new BN('1'),
         },
     ],
+    enableFirstSwapWithMinFee: false,
+    migratedPoolFee: {
+        dynamicFee: 0,
+        poolFeeBps: 0,
+        collectFeeMode: 0,
+    },
     preCreatePoolParam: {
         baseMint: new PublicKey('0987654321zyxwvutsrqponmlkjihgfedcba'),
         name: 'Meteora',
@@ -2422,7 +2309,6 @@ interface SwapQuoteParams {
     amountIn: BN // The amount of tokens to swap in
     slippageBps?: number // The slippage in bps
     hasReferral: boolean // Whether to include a referral fee
-    eligibleForFirstSwapWithMinFee: boolean // Only for creator to bundle swap in initialize pool instruction to avoid anti sniper suite fee
     currentPoint: BN // The current point
 }
 ```
@@ -2581,7 +2467,6 @@ interface SwapQuote2Params {
     config: PoolConfig // The pool config address
     swapBaseForQuote: boolean // True for base->quote, false for quote->base
     hasReferral: boolean // Whether to include a referral fee
-    eligibleForFirstSwapWithMinFee: boolean // Only for creator to bundle swap in initialize pool instruction to avoid anti sniper suite fee
     currentPoint: BN // The current point
     slippageBps?: number // The slippage in bps
 } & (
@@ -2896,7 +2781,7 @@ const transaction = await client.migration.claimDammV1LpToken({
 
 **Notes**
 
-- This function is called when the `creatorLiquidityPercentage` or `partnerLiquidityPercentage` is > 0.
+- This function is called when the `creatorLiquidityPercentage` or `partnerLiquiditypercentage` is > 0.
 - You can get the dammConfig key from the [README.md](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/README.md), or you can use `DAMM_V1_MIGRATION_FEE_ADDRESS[i]` to get the dammConfig key address.
 
 ---
@@ -2955,7 +2840,6 @@ const transaction = await client.migration.migrateToDammV2({
         - first_position_nft_mint must not equal second_position_nft_mint
     7. Exactly one remaining account must be provided (for the DAMM V2 config)
 - You can get the dammConfig key from the [README.md](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/README.md), or you can use `DAMM_V2_MIGRATION_FEE_ADDRESS[i]` to get the dammConfig key address.
-- **LP Vesting Requirement**: If the config has `partnerLiquidityVestingInfoParams` or `creatorLiquidityVestingInfoParams` configured, the migration will require vesting accounts for `firstPosition` and `secondPosition`. The SDK automatically includes `firstPositionVestingAddress` and `secondPositionVestingAddress` in the remaining accounts when LP vesting is configured.
 
 ---
 
@@ -3241,67 +3125,6 @@ configAddress: PublicKey | string // The address of the config key
 **Returns**
 
 - A `PoolConfig` object containing the config key details.
-
-```typescript
-type PoolFees = {
-  baseFee: any; // Replace 'any' with the actual type if known
-  dynamicFee: any; // Replace 'any' with the actual type if known
-  padding0: number[];
-  padding1: number[];
-  protocolFeePercent: number;
-  referralFeePercent: number;
-}
-
-type LockedVestingConfig = {
-  amountPerPeriod: BN;
-  cliffDurationFromMigrationTime: BN;
-  frequency: BN;
-  numberOfPeriod: BN;
-  cliffUnlockAmount: BN;
-  padding: BN;
-}
-
-type PoolConfig = {
-  quoteMint: PublicKey;
-  feeClaimer: PublicKey;
-  leftoverReceiver: PublicKey;
-  poolFees: PoolFees;
-  collectFeeMode: number;
-  migrationOption: number;
-  activationType: number;
-  tokenDecimal: number;
-  version: number;
-  tokenType: number;
-  quoteTokenFlag: number;
-  partnerPermanentLockedLiquidityPercentage: number;
-  partnerLiquidityPercentage: number;
-  creatorPermanentLockedLiquidityPercentage: number;
-  creatorLiquidityPercentage: number;
-  migrationFeeOption: number;
-  fixedTokenSupplyFlag: number;
-  creatorTradingFeePercentage: number;
-  tokenUpdateAuthority: number;
-  migrationFeePercentage: number;
-  creatorMigrationFeePercentage: number;
-  padding0: number[];
-  swapBaseAmount: BN;
-  migrationQuoteThreshold: BN;
-  migrationBaseThreshold: BN;
-  migrationSqrtPrice: BN;
-  lockedVestingConfig: LockedVestingConfig;
-  preMigrationTokenSupply: BN;
-  postMigrationTokenSupply: BN;
-  migratedCollectFeeMode: number;
-  migratedDynamicFee: number;
-  migratedPoolFeeBps: number;
-  padding1: number[];
-  padding2: BN;
-  sqrtStartPrice: BN;
-  curve: [{
-    sqrtPrice: BN, liquidity: BN: 0
-  }];
-}
-```
 
 **Example**
 
@@ -3749,9 +3572,9 @@ type meteoraDammMigrationMetadata = {
     padding0: number | number[]
     partner: PublicKey
     lpMint: PublicKey
-    partnerPermanentLockedLiquidity: BN
+    partnerLockedLiquidity: BN
     partnerLiquidity: BN
-    creatorPermanentLockedLiquidity: BN
+    creatorLockedLiquidity: BN
     creatorLiquidity: BN
     creatorLockedStatus: number
     partnerLockedStatus: number
@@ -4397,221 +4220,3 @@ const quoteReserve = getQuoteReserveFromNextSqrtPrice(
 
 - The `nextSqrtPrice` is the next sqrt price that you can fetch from swap cpi logs.
 - The `config` is the pool config that the token pool used to launch.
-
----
-
-### getStartingBaseFeeBpsFromBaseFeeParams
-
-Derives the starting base fee BPS from the pre-migration pool's `baseFeeParams`. For Fee Scheduler modes (Linear/Exponential), this returns the `endingFeeBps`. For Rate Limiter mode, this returns the `baseFeeBps`.
-
-**Function**
-
-```typescript
-function getStartingBaseFeeBpsFromBaseFeeParams(
-    baseFeeParams: BaseFeeParams
-): number
-```
-
-**Parameters**
-
-```typescript
-baseFeeParams: BaseFeeParams // The base fee parameters from the pre-migration pool
-```
-
-**Returns**
-
-- A `number` representing the starting base fee in basis points for the migrated pool.
-
-**Example**
-
-```typescript
-const startingFeeBps = getStartingBaseFeeBpsFromBaseFeeParams({
-    baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
-    feeSchedulerParam: {
-        startingFeeBps: 5000,
-        endingFeeBps: 100,
-        numberOfPeriod: 600,
-        totalDuration: 600,
-    },
-})
-// Returns 100 (the endingFeeBps)
-```
-
----
-
-### getMigratedPoolMarketCapFeeSchedulerParams
-
-Crafts the `MigratedPoolMarketCapFeeSchedulerParams` object for use in the `buildCurve` functions. Calculates the `reductionFactor` based on the starting and ending base fee and the number of periods.
-
-**Function**
-
-```typescript
-function getMigratedPoolMarketCapFeeSchedulerParams(
-    startingBaseFeeBps: number,
-    endingBaseFeeBps: number,
-    dammV2BaseFeeMode: DammV2BaseFeeMode,
-    numberOfPeriod: number,
-    sqrtPriceStepBps: number,
-    schedulerExpirationDuration: number
-): MigratedPoolMarketCapFeeSchedulerParameters
-```
-
-**Parameters**
-
-```typescript
-startingBaseFeeBps: number // The starting base fee in basis points (the fee at the start of the migrated pool)
-endingBaseFeeBps: number // The ending base fee in basis points (the minimum fee after all periods complete)
-dammV2BaseFeeMode: DammV2BaseFeeMode // The DAMM V2 base fee mode (3: FeeMarketCapSchedulerLinear, 4: FeeMarketCapSchedulerExponential)
-numberOfPeriod: number // The total number of fee reduction periods
-sqrtPriceStepBps: number // The sqrt price increase (in basis points) required to advance one period
-schedulerExpirationDuration: number // The maximum duration after which the scheduler expires and defaults to minimum fee
-```
-
-**Returns**
-
-- A `MigratedPoolMarketCapFeeSchedulerParameters` object containing `numberOfPeriod`, `sqrtPriceStepBps`, `schedulerExpirationDuration`, and `reductionFactor`.
-
-**Example**
-
-```typescript
-const params = getMigratedPoolMarketCapFeeSchedulerParams(
-    5000,  // startingBaseFeeBps: 50%
-    50,    // endingBaseFeeBps: 0.5%
-    DammV2BaseFeeMode.FeeMarketCapSchedulerLinear,
-    100,   // numberOfPeriod
-    100,   // sqrtPriceStepBps: 1% per period
-    86400  // schedulerExpirationDuration: 24 hours
-)
-```
-
-**Notes**
-
-- For `FeeTimeSchedulerLinear` (0) or `FeeTimeSchedulerExponential` (1) modes, this function returns default (zeroed) params since market cap scheduling is not used.
-- `RateLimiter` (2) mode is not supported and will throw an error.
-- `startingBaseFeeBps` must be greater than `endingBaseFeeBps`.
-- `numberOfPeriod`, `sqrtPriceStepBps`, and `schedulerExpirationDuration` must all be greater than zero.
-
----
-
-### decodePodAlignedFeeMarketCapScheduler
-
-Decodes a `PodAlignedFeeMarketCapScheduler` object from raw config account data. Useful for reading the fee market cap scheduler state from an on-chain DAMM v2 pool config account.
-
-**Function**
-
-```typescript
-function decodePodAlignedFeeMarketCapScheduler(
-    data: Buffer
-): PodAlignedFeeMarketCapScheduler
-```
-
-**Parameters**
-
-```typescript
-data: Buffer // The raw account data buffer to decode
-```
-
-**Returns**
-
-- A `PodAlignedFeeMarketCapScheduler` object containing:
-    - `cliffFeeNumerator` - The starting fee numerator
-    - `numberOfPeriod` - The total number of fee reduction periods
-    - `sqrtPriceStepBps` - The sqrt price step in basis points
-    - `schedulerExpirationDuration` - The scheduler expiration duration
-    - `reductionFactor` - The reduction factor per period
-    - `baseFeeMode` - The base fee mode
-    - `padding` - Padding bytes
-
-**Example**
-
-```typescript
-const feeScheduler = decodePodAlignedFeeMarketCapScheduler(accountData)
-```
-
----
-
-### validateMigratedPoolBaseFeeMode
-
-Validates the migrated pool base fee mode and market cap fee scheduler params for DAMM V2 migrations.
-
-**Function**
-
-```typescript
-function validateMigratedPoolBaseFeeMode(
-    migratedPoolBaseFeeMode: DammV2BaseFeeMode,
-    migratedPoolMarketCapFeeSchedulerParams: MigratedPoolMarketCapFeeSchedulerParameters,
-    migrationOption?: MigrationOption
-): boolean
-```
-
-**Parameters**
-
-```typescript
-migratedPoolBaseFeeMode: DammV2BaseFeeMode // The base fee mode for the migrated pool
-migratedPoolMarketCapFeeSchedulerParams: MigratedPoolMarketCapFeeSchedulerParameters // The market cap fee scheduler params
-migrationOption?: MigrationOption // The migration option (optional - only validates for DAMM V2)
-```
-
-**Returns**
-
-- `true` if valid, throws an `Error` if invalid.
-
-**Notes**
-
-- Mode 2 (`RateLimiter`) is not supported for DAMM V2 migration and will throw an error.
-- For modes 3 (`FeeMarketCapSchedulerLinear`) and 4 (`FeeMarketCapSchedulerExponential`), the `numberOfPeriod`, `sqrtPriceStepBps`, and `schedulerExpirationDuration` must all be greater than zero.
-- For modes 0 (`FeeTimeSchedulerLinear`) and 1 (`FeeTimeSchedulerExponential`), the market cap fee scheduler params must be default (all zeros).
-
----
-
-### validateDynamicFee
-
-Validates dynamic fee parameters for pool configuration.
-
-**Function**
-
-```typescript
-function validateDynamicFee(
-    dynamicFee: DynamicFeeParameters | undefined
-): boolean
-```
-
-**Parameters**
-
-```typescript
-dynamicFee: DynamicFeeParameters | undefined // The dynamic fee parameters (optional)
-```
-
-**Returns**
-
-- `true` if the dynamic fee parameters are valid, `false` otherwise.
-
-**Notes**
-
-- Returns `true` if `dynamicFee` is `undefined` (since it is optional).
-- Validates that `binStep` equals the default bin step BPS, `binStepU128` equals the default U128 value, `filterPeriod` is less than `decayPeriod`, `reductionFactor` does not exceed `MAX_BASIS_POINT`, and `variableFeeControl` and `maxVolatilityAccumulator` do not exceed `U24_MAX`.
-
----
-
-### getMinBaseFeeNumerator (BaseFeeHandler method)
-
-Gets the minimum base fee numerator from a `BaseFeeHandler` instance. Available on both `FeeScheduler` and `RateLimiter` handler classes.
-
-**Function**
-
-```typescript
-// On FeeScheduler class
-getMinBaseFeeNumerator(): BN
-
-// On RateLimiter class
-getMinBaseFeeNumerator(): BN
-```
-
-**Returns**
-
-- A `BN` representing the minimum base fee numerator.
-
-**Notes**
-
-- For `FeeScheduler`, the minimum fee depends on the `feeSchedulerMode` (Linear or Exponential), the `cliffFeeNumerator`, `numberOfPeriod`, and `reductionFactor`.
-- For `RateLimiter`, the minimum fee is derived from the `cliffFeeNumerator`.

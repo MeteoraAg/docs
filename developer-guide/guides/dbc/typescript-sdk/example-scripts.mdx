@@ -50,44 +50,51 @@ async function buildCurveWithMarketCapAndCreateConfig() {
     console.log(`Config account: ${config.publicKey.toString()}`)
 
     const curveConfig = buildCurveWithMarketCap({
-        totalTokenSupply: 1000000000,
-        initialMarketCap: 30,
-        migrationMarketCap: 540,
-        migrationOption: MigrationOption.MET_DAMM_V2,
-        tokenBaseDecimal: TokenDecimal.SIX,
-        tokenQuoteDecimal: TokenDecimal.NINE,
-        lockedVestingParam: {
+        token: {
+            tokenType: TokenType.SPL,
+            tokenBaseDecimal: TokenDecimal.SIX,
+            tokenQuoteDecimal: TokenDecimal.NINE,
+            tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+            totalTokenSupply: 1_000_000_000,
+            leftover: 0,
+        },
+        fee: {
+            baseFeeParams: {
+                baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+                feeSchedulerParam: {
+                    startingFeeBps: 100,
+                    endingFeeBps: 100,
+                    numberOfPeriod: 0,
+                    totalDuration: 0,
+                },
+            },
+            dynamicFeeEnabled: true,
+            collectFeeMode: CollectFeeMode.QuoteToken,
+            creatorTradingFeePercentage: 50,
+            poolCreationFee: 0,
+            enableFirstSwapWithMinFee: false,
+        },
+        migration: {
+            migrationOption: MigrationOption.MET_DAMM_V2,
+            migrationFeeOption: MigrationFeeOption.FixedBps100,
+            migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
+        },
+        liquidityDistribution: {
+            partnerLiquidityPercentage: 0,
+            partnerPermanentLockedLiquidityPercentage: 50,
+            creatorLiquidityPercentage: 0,
+            creatorPermanentLockedLiquidityPercentage: 50,
+        },
+        lockedVesting: {
             totalLockedVestingAmount: 0,
             numberOfVestingPeriod: 0,
             cliffUnlockAmount: 0,
             totalVestingDuration: 0,
             cliffDurationFromMigrationTime: 0,
         },
-        baseFeeParams: {
-            baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
-            feeSchedulerParam: {
-                startingFeeBps: 100,
-                endingFeeBps: 100,
-                numberOfPeriod: 0,
-                totalDuration: 0,
-            },
-        },
-        dynamicFeeEnabled: true,
         activationType: ActivationType.Slot,
-        collectFeeMode: CollectFeeMode.Both,
-        migrationFeeOption: MigrationFeeOption.FixedBps100,
-        tokenType: TokenType.SPL,
-        partnerLiquidityPercentage: 0,
-        creatorLiquidityPercentage: 0,
-        partnerPermanentLockedLiquidityPercentage: 50,
-        creatorPermanentLockedLiquidityPercentage: 50,
-        creatorTradingFeePercentage: 50,
-        leftover: 0,
-        tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
-        migrationFee: {
-            feePercentage: 0,
-            creatorFeePercentage: 0,
-        },
+        initialMarketCap: 30,
+        migrationMarketCap: 540,
     })
 
     console.log(curveConfig)

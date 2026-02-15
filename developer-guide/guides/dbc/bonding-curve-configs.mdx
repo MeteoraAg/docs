@@ -318,15 +318,19 @@ migrationFee: {
     - 3: `FixedBps200` -> The pool fee of the post-graduation pool will be 200 bps.
     - 4: `FixedBps400` -> The pool fee of the post-graduation pool will be 400 bps.
     - 5: `FixedBps600` -> The pool fee of the post-graduation pool will be 600 bps.
-    - 6: `Cuztomizable` -> Only if your `migrationOption` is set to `DAMM v2`. You can set the pool fees of the post-graduation pool in the `migratedPoolFee` struct.
+    - 6: `Customizable` -> Only if your `migrationOption` is set to `DAMM v2`. You can set the pool fees of the post-graduation pool in the `migratedPoolFee` struct.
+
+<Note>When using the SDK's `buildCurve*` functions with `marketCapFeeSchedulerParams` configured in `migratedPoolFee`, the SDK automatically overrides `migrationFeeOption` to `Customizable` (6) regardless of what you set. This is required by the on-chain program.</Note>
 
 ### `migratedPoolFee`
 
-- The `migratedPoolFee` is only available if your `migrationOption` is set to `DAMM v2` and `migrationFeeOption` is set to `Cuztomizable` [6].
+- The `migratedPoolFee` is only available if your `migrationOption` is set to `DAMM v2` and `migrationFeeOption` is set to `Customizable` [6].
 - The `migratedPoolFee` is a struct that contains the following fields:
     - `collectFeeMode` - The collect fee mode of the post-graduation pool.
     - `dynamicFee` - The dynamic fee of the post-graduation pool.
     - `poolFeeBps` - The pool fee of the post-graduation pool.
+
+<Note>When `marketCapFeeSchedulerParams` is configured, `poolFeeBps` must be greater than 0 as it serves as the starting (cliff) fee for the market cap fee scheduler.</Note>
 
 ### `liquidityPercentage`
 
@@ -508,3 +512,17 @@ Creating a curve config key is a highly complex process that involves understand
 - The `liquidityWeights` is an array of values that you want to be the exponent of the liquidity of the curve segments. Using these liquidity weights, you can control how thick or thin each curve segment's liquidity is to control the price action of the curve.
 - The `initialMarketCap` is the initial market cap of the token when the pre-graduation pool is first created.
 - The `migrationMarketCap` is the market cap of the token when the pre-graduation pool is ready to migrate to the post-graduation pool.
+
+### [buildCurveWithMidPrice](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithmidprice)
+
+- This function is useful when you want to create a 2 constant product curve structure with a specific mid-point price. This allows you to control the price at which the two curve segments meet.
+- The `initialMarketCap` is the initial market cap of the token when the pre-graduation pool is first created.
+- The `migrationMarketCap` is the market cap of the token when the pre-graduation pool is ready to migrate to the post-graduation pool.
+- The `midPrice` is the price at which the two curve segments will meet (the breakpoint price between the two constant product curves).
+- The `percentageSupplyOnMigration` is the percentage of the total token supply that you want to be migrated into the post-graduation pool's LP.
+
+### [buildCurveWithCustomSqrtPrices](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithcustomsqrtprices)
+
+- This function is useful when you want full control over the curve by specifying custom sqrt price breakpoints directly.
+- The `sqrtPrices` is an array of custom sqrt prices that must be in ascending order. The first element is the starting price (pMin) and the last element is the migration price (pMax).
+- The `liquidityWeights` is an optional array of weights for each segment between the sqrt price breakpoints. If omitted, liquidity is distributed evenly across all segments. If provided, the array length must be `sqrtPrices.length - 1`.
