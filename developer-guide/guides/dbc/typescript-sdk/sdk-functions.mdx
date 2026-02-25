@@ -213,10 +213,6 @@ const transaction = await client.partner.createConfig({
 })
 ```
 
-<Note>
-`createConfig` takes flat, low-level on-chain parameters (BN values, raw fee numerators, curve points, etc.). In contrast, the `buildCurve*` helper functions use a **nested parameter structure** with human-readable values (e.g., market caps in quote token units, fee in bps, percentages). Use a `buildCurve*` function to generate the `ConfigParameters` object and then pass the resulting fields into `createConfig`.
-</Note>
-
 **Notes**
 
 When creating a new configuration for a dynamic bonding curve, several validations are performed to ensure the parameters are valid:
@@ -1782,7 +1778,7 @@ const transaction = await client.pool.createConfigAndPool({
 
 ### createConfigAndPoolWithFirstBuy
 
-Creates a config key and a token pool and buys the token immediately in a single transaction.
+Creates a config key and a token pool and buys the token immediately.
 
 **Function**
 
@@ -1790,7 +1786,6 @@ Creates a config key and a token pool and buys the token immediately in a single
 async createConfigAndPoolWithFirstBuy(params: CreateConfigAndPoolWithFirstBuyParams): Promise<{
     createConfigTx: Transaction
     createPoolTx: Transaction
-    swapBuyTx: Transaction | undefined
 }>
 ```
 
@@ -1910,14 +1905,17 @@ interface CreateConfigAndPoolWithFirstBuyParams {
 
 **Returns**
 
-An object of transactions (containing createConfigTx, createPoolTx, and swapBuyTx) that requires signatures before being submitted to the network. Can be bundled together.
+An object of transactions containing:
+
+- `createConfigTx`: config creation transaction
+- `createPoolTx`: pool creation transaction, with first-buy instructions included when `firstBuyParam` is provided and `buyAmount > 0`
 
 **Example**
 
 ```typescript
 const amountIn = await prepareSwapAmountParam(1, NATIVE_MINT, connection)
 
-const transaction = await client.pool.createConfigAndPoolWithFirstBuy({
+const transactions = await client.pool.createConfigAndPoolWithFirstBuy({
     payer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
     config: new PublicKey('1234567890abcdefghijklmnopqrstuvwxyz'),
     feeClaimer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
@@ -2026,9 +2024,8 @@ const transaction = await client.pool.createConfigAndPoolWithFirstBuy({
 
 - The payer must be the same as the payer in the `CreateConfigAndPoolWithFirstBuyParam` params.
 - The `createConfigTx` requires the payer and config to sign the transaction.
-- The `createPoolTx` requires the payer, poolCreator, and baseMint to sign the transaction.
-- If the `firstBuyParam` is not provided, the `swapBuyTx` will be undefined.
-- The `swapBuyTx` requires the buyer and payer to sign the transaction.
+- The `createPoolTx` requires the payer, poolCreator, and baseMint to sign the transaction. If `firstBuyParam` is provided, it also requires buyer/payer signatures for the appended first-buy instructions.
+- If the `firstBuyParam` is not provided, `createPoolTx` includes only pool-creation instructions.
 - The `receiver` parameter is an optional account. If provided, the token will be sent to the receiver address.
 
 ---
@@ -2042,7 +2039,6 @@ Creates a new pool with the config key and buys the token immediately.
 ```typescript
 async createPoolWithFirstBuy(params: CreatePoolWithFirstBuyParams): Promise<{
     createPoolTx: Transaction
-    swapBuyTx: Transaction | undefined
 }>
 ```
 
@@ -2072,7 +2068,7 @@ interface CreatePoolWithFirstBuyParams {
 
 **Returns**
 
-An object of transactions (containing createPoolTx and swapBuyTx) that requires signatures before being submitted to the network. Can be bundled together.
+An object containing `createPoolTx`, where first-buy instructions are included when `firstBuyParam` is provided and `buyAmount > 0`.
 
 **Example**
 
@@ -2101,7 +2097,7 @@ const transaction = await client.pool.createPoolWithFirstBuy({
 **Notes**
 
 - The `poolCreator` is required to sign when creating the pool.
-- The `buyer` is required to sign when buying the token.
+- The `buyer` is required to sign when `firstBuyParam` is provided.
 - The `baseMint` token type must be the same as the config key's token type.
 - The `minimumAmountOut` parameter protects against slippage. Set it to a value slightly lower than the expected output.
 - The `referralTokenAccount` parameter is an optional token account. If provided, the referral fee will be applied to the transaction.
@@ -2116,11 +2112,7 @@ Creates a new pool with the config key and buys the token immediately with partn
 **Function**
 
 ```typescript
-async createPoolWithPartnerAndCreatorFirstBuy(params: CreatePoolWithPartnerAndCreatorFirstBuyParams): Promise<{
-    createPoolTx: Transaction
-    partnerSwapBuyTx: Transaction | undefined
-    creatorSwapBuyTx: Transaction | undefined
-}>
+async createPoolWithPartnerAndCreatorFirstBuy(params: CreatePoolWithPartnerAndCreatorFirstBuyParams): Promise<Transaction>
 ```
 
 **Parameters**
@@ -2157,7 +2149,7 @@ interface CreatePoolWithPartnerAndCreatorFirstBuyParams {
 
 **Returns**
 
-An object of transactions (containing createPoolTx, partnerSwapBuyTx, and creatorSwapBuyTx) that requires signatures before being submitted to the network. Can be bundled together.
+A single transaction containing pool creation and optional partner/creator first buy instructions. Partner and creator swap instructions are appended when their corresponding params are provided with `buyAmount > 0`.
 
 **Example**
 
@@ -2203,8 +2195,8 @@ const transaction = await client.pool.createPoolWithPartnerAndCreatorFirstBuy({
 **Notes**
 
 - The `poolCreator` is required to sign when creating the pool.
-- The `partner` is required to sign when buying the token.
-- The `creator` is required to sign when buying the token.
+- The `partner` is required to sign when `partnerFirstBuyParam` is provided with `buyAmount > 0`.
+- The `creator` is required to sign when `creatorFirstBuyParam` is provided with `buyAmount > 0`.
 - The `baseMint` token type must be the same as the config key's token type.
 - The `minimumAmountOut` parameter protects against slippage. Set it to a value slightly lower than the expected output.
 - The `referralTokenAccount` parameter is an optional token account. If provided, the referral fee will be applied to the transaction.
@@ -3399,14 +3391,14 @@ const threshold = await client.state.getPoolMigrationQuoteThreshold(poolAddress)
 
 ---
 
-### getPoolCurveProgress
+### getPoolQuoteTokenCurveProgress
 
 Gets the progress of the curve by comparing current quote reserve to migration threshold.
 
 **Function**
 
 ```typescript
-async getPoolCurveProgress(poolAddress: PublicKey | string): Promise<number>
+async getPoolQuoteTokenCurveProgress(poolAddress: PublicKey | string): Promise<number>
 ```
 
 **Parameters**
@@ -3422,7 +3414,35 @@ poolAddress: PublicKey | string // The address of the pool
 **Example**
 
 ```typescript
-const progress = await client.state.getPoolCurveProgress(poolAddress)
+const progress = await client.state.getPoolQuoteTokenCurveProgress(poolAddress)
+```
+
+---
+
+### getPoolBaseTokenCurveProgress
+
+Gets the progress of the curve based on base tokens sold relative to total base tokens available for trading.
+
+**Function**
+
+```typescript
+async getPoolBaseTokenCurveProgress(poolAddress: PublicKey | string): Promise<number>
+```
+
+**Parameters**
+
+```typescript
+poolAddress: PublicKey | string // The address of the pool
+```
+
+**Returns**
+
+- A number between 0 and 1 representing the curve progress.
+
+**Example**
+
+```typescript
+const progress = await client.state.getPoolBaseTokenCurveProgress(poolAddress)
 ```
 
 ---
