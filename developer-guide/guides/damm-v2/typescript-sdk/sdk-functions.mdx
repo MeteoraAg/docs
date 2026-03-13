@@ -43,18 +43,19 @@ A transaction builder (`TxBuilder`) that can be used to build, sign, and send th
 **Example**
 
 ```typescript
-// First, prepare the pool creation parameters
-const configState = await cpAmm.getConfigState(configAccount);
+// First, fetch the config and prepare pool creation parameters
+const configState = await cpAmm.fetchConfigState(configAddress);
 const initPrice = 10; // 1 base token = 10 quote token
-const {actualInputAmount, consumedInputAmount, outputAmount, liquidityDelta} = cpAmm.getDepositQuote({
-  inAmount: new BN(5_000_000_000), // 5 tokenA (base token) with 9 decimals
-  isTokenA: true;
+const initSqrtPrice = getSqrtPriceFromPrice(initPrice, tokenADecimal, tokenBDecimal);
+
+// Use preparePoolCreationParams to compute initial liquidity
+const { liquidityDelta } = cpAmm.preparePoolCreationParams({
+  tokenAAmount: new BN(5_000_000_000), // 5 tokenA with 9 decimals
+  tokenBAmount: new BN(50_000_000_000), // 50 tokenB with 9 decimals
   minSqrtPrice: configState.sqrtMinPrice,
-  maxSqrtPrice: configState.sqrtMinPrice,
-  sqrtPrice: getSqrtPriceFromPrice(initPrice, tokenADecimal, tokenBDecimal),
-  inputTokenInfo, // provide if input token is token2022
-  outputTokenInfo // provide if output token is token2022
-})
+  maxSqrtPrice: configState.sqrtMaxPrice,
+  collectFeeMode: configState.collectFeeMode,
+});
 
 const createPoolTx = await cpAmm.createPool({
   payer: wallet.publicKey,
@@ -64,12 +65,12 @@ const createPoolTx = await cpAmm.createPool({
   tokenAMint,
   tokenBMint,
   activationPoint: null,
-  tokenAAmount: consumedInputAmount,
-  tokenBAmount: outputAmount,
-  initSqrtPrice: getSqrtPriceFromPrice(initPrice, tokenADecimal, tokenBDecimal);,
-  liquidityDelta: liquidityDelta,
+  tokenAAmount: new BN(5_000_000_000),
+  tokenBAmount: new BN(50_000_000_000),
+  initSqrtPrice,
+  liquidityDelta,
   tokenAProgram,
-  tokenBProgram
+  tokenBProgram,
 });
 ```
 
@@ -112,28 +113,21 @@ interface InitializeCustomizeablePoolParams {
   sqrtMaxPrice: BN; // Maximum sqrt price
   initSqrtPrice: BN; // Initial sqrt price in Q64 format
   liquidityDelta: BN; // Initial liquidity in Q64 format
+  poolFees: PoolFeesParams; // Fee configuration
+  hasAlphaVault: boolean; // Whether the pool has an alpha vault
+  collectFeeMode: number; // How fees are collected (0: BothToken, 1: OnlyB, 2: Compounding)
+  activationPoint: BN | null; // The slot or timestamp for activation (null for immediate)
+  activationType: number; // 0: slot, 1: timestamp
   tokenAProgram: PublicKey; // Token program for token A
   tokenBProgram: PublicKey; // Token program for token B
-  poolFees: PoolFees; // Fee configuration
-  hasAlphaVault: boolean; // Whether the pool has an alpha vault
-  collectFeeMode: number; // How fees are collected (0: normal, 1: alpha)
-  activationPoint: BN; // The slot or timestamp for activation
-  activationType: number; // 0: slot, 1: timestamp
   isLockLiquidity?: boolean; // true if you wanna permanent lock position after pool created.
 }
 
-interface PoolFees {
-  baseFee: BaseFee; // Base fee configuration (see below for different modes)
-  dynamicFee?: {
-    // Optional dynamic fee configuration
-    binStep: number;
-    binStepU128: BN;
-    filterPeriod: number;
-    decayPeriod: number;
-    reductionFactor: number;
-    variableFeeControl: number;
-    maxVolatilityAccumulator: number;
-  };
+interface PoolFeesParams {
+  baseFee: BaseFee; // Base fee configuration (encoded via getBaseFeeParams)
+  compoundingFeeBps: number; // Compounding fee in basis points (only for Compounding collect fee mode)
+  padding: number; // Padding for future use
+  dynamicFee: DynamicFee | null; // Optional dynamic fee configuration (via getDynamicFeeParams), null to disable
 }
 
 // Base Fee Mode Types:
@@ -145,31 +139,31 @@ interface PoolFees {
 
 // For Fee Time Scheduler (baseFeeMode 0 or 1):
 interface FeeTimeSchedulerBaseFee {
-  cliffFeeNumerator: BN;        // Starting fee numerator (e.g., 500000000 = 50%)
-  baseFeeMode: number;          // 0 = Linear, 1 = Exponential
-  numberOfPeriod: number;       // Number of fee reduction periods
-  periodFrequency: BN;          // Time between periods (slots or seconds)
-  reductionFactor: BN;          // Fee reduction per period
+  cliffFeeNumerator: BN; // Starting fee numerator (e.g., 500000000 = 50%)
+  baseFeeMode: number; // 0 = Linear, 1 = Exponential
+  numberOfPeriod: number; // Number of fee reduction periods
+  periodFrequency: BN; // Time between periods (slots or seconds)
+  reductionFactor: BN; // Fee reduction per period
 }
 
 // For Rate Limiter (baseFeeMode 2):
 interface RateLimiterBaseFee {
-  cliffFeeNumerator: BN;        // Base fee numerator (e.g., 10000000 = 1%)
-  baseFeeMode: number;          // 2 = Rate Limiter
-  feeIncrementBps: number;      // Fee increment in basis points per reference amount
-  maxLimiterDuration: number;   // Maximum duration for rate limiter
-  maxFeeBps: number;            // Maximum fee cap in basis points
-  referenceAmount: BN;          // Reference amount for fee calculation
+  cliffFeeNumerator: BN; // Base fee numerator (e.g., 10000000 = 1%)
+  baseFeeMode: number; // 2 = Rate Limiter
+  feeIncrementBps: number; // Fee increment in basis points per reference amount
+  maxLimiterDuration: number; // Maximum duration for rate limiter
+  maxFeeBps: number; // Maximum fee cap in basis points
+  referenceAmount: BN; // Reference amount for fee calculation
 }
 
 // For Fee Market Cap Scheduler (baseFeeMode 3 or 4):
 interface FeeMarketCapSchedulerBaseFee {
-  cliffFeeNumerator: BN;               // Starting fee numerator (e.g., 500000000 = 50%)
-  baseFeeMode: number;                 // 3 = Linear, 4 = Exponential
-  numberOfPeriod: number;              // Number of fee reduction periods
-  sqrtPriceStepBps: number;            // Sqrt price step in bps to advance one period
+  cliffFeeNumerator: BN; // Starting fee numerator (e.g., 500000000 = 50%)
+  baseFeeMode: number; // 3 = Linear, 4 = Exponential
+  numberOfPeriod: number; // Number of fee reduction periods
+  sqrtPriceStepBps: number; // Sqrt price step in bps to advance one period
   schedulerExpirationDuration: number; // Duration after which scheduler expires
-  reductionFactor: BN;                 // Fee reduction per period
+  reductionFactor: BN; // Fee reduction per period
 }
 ```
 
@@ -190,9 +184,9 @@ const { initSqrtPrice, liquidityDelta } = cpAmm.preparePoolCreationParams({
   tokenBAmount: new BN(20_000_000),
   minSqrtPrice: MIN_SQRT_PRICE,
   maxSqrtPrice: MAX_SQRT_PRICE,
+  collectFeeMode: CollectFeeMode.BothToken,
 });
 
-// Example using Fee Time Scheduler (Exponential)
 const baseFeeParams = getBaseFeeParams(
   {
     baseFeeMode: BaseFeeMode.FeeTimeSchedulerExponential,
@@ -209,7 +203,8 @@ const baseFeeParams = getBaseFeeParams(
 const dynamicFeeParams = getDynamicFeeParams(25); // max dynamic fee is 20% of 0.25%
 const poolFees: PoolFeesParams = {
   baseFee: baseFeeParams,
-  padding: [],
+  compoundingFeeBps: 0,
+  padding: 0,
   dynamicFee: dynamicFeeParams,
 };
 
@@ -227,7 +222,7 @@ const { tx, pool, position } = await cpAmm.createCustomPool({
   liquidityDelta: liquidityDelta,
   poolFees,
   hasAlphaVault: false,
-  collectFeeMode: 0, // 0: BothToken, 1: onlyB
+  collectFeeMode: 0, // 0: BothToken, 1: OnlyB, 2: Compounding
   activationPoint: new BN(Date.now()),
   activationType: 1, // 0: slot, 1: timestamp
   tokenAProgram,
@@ -273,7 +268,7 @@ interface InitializeCustomizeablePoolWithDynamicConfigParams {
   liquidityDelta: BN; // Initial liquidity in Q64 format
   poolFees: PoolFeesParams; // Fee configuration
   hasAlphaVault: boolean; // Whether the pool has an alpha vault
-  collectFeeMode: number; // How fees are collected (0: normal, 1: alpha)
+  collectFeeMode: number; // How fees are collected (0: BothToken, 1: OnlyB, 2: Compounding)
   activationPoint: BN | null; // The slot or timestamp for activation (null for immediate)
   activationType: number; // 0: slot, 1: timestamp
   tokenAProgram: PublicKey; // Token program for token A
@@ -307,6 +302,7 @@ const { initSqrtPrice, liquidityDelta } = cpAmm.getLiquidityDelta({
   sqrtMaxPrice,
   sqrtMinPrice,
   sqrtPrice,
+  collectFeeMode: CollectFeeMode.BothToken,
 });
 
 const baseFeeParams = getBaseFeeParams(
@@ -325,13 +321,14 @@ const baseFeeParams = getBaseFeeParams(
 const dynamicFeeParams = getDynamicFeeParams(25); // max dynamic fee is 20% of 0.25%
 const poolFees: PoolFeesParams = {
   baseFee: baseFeeParams,
-  padding: [],
+  compoundingFeeBps: 0,
+  padding: 0,
   dynamicFee: dynamicFeeParams,
 };
 
 const { tx, pool, position } = await cpAmm.createCustomPoolWithDynamicConfig({
-  payer
-  creator,
+  payer: wallet.publicKey,
+  creator: wallet.publicKey,
   config: dynamicConfigAddress,
   poolCreatorAuthority: poolCreatorAuth.publicKey,
   positionNft: positionNftMint,
@@ -345,7 +342,7 @@ const { tx, pool, position } = await cpAmm.createCustomPoolWithDynamicConfig({
   liquidityDelta,
   poolFees,
   hasAlphaVault: false,
-  collectFeeMode: 0, // 0: Both tokens, 1: Only token B
+  collectFeeMode: 0, // 0: BothToken, 1: OnlyB, 2: Compounding
   activationPoint: null,
   activationType: 1, // 0: slot, 1: timestamp
   tokenAProgram: TOKEN_PROGRAM_ID,
@@ -419,6 +416,7 @@ interface LiquidityDeltaParams {
   sqrtMaxPrice: BN; // Maximum sqrt price for the range
   sqrtMinPrice: BN; // Minimum sqrt price for the range
   sqrtPrice: BN; // Current sqrt price
+  collectFeeMode: CollectFeeMode; // How fees are collected (BothToken, OnlyB, or Compounding)
 }
 ```
 
@@ -532,9 +530,9 @@ async getQuote2(params: GetQuote2Params): Promise<{
   amountLeft: BN;
   outputAmount: BN;
   nextSqrtPrice: BN;
-  tradingFee: BN;
+  claimingFee: BN;
+  compoundingFee: BN;
   protocolFee: BN;
-  partnerFee: BN; // Deprecating soon
   referralFee: BN;
   priceImpact: Decimal;
   minimumAmountOut?: BN;
@@ -576,9 +574,9 @@ An object containing:
 - `amountLeft`: The remaining amount after the swap (if any)
 - `outputAmount`: The expected output amount
 - `nextSqrtPrice`: The next sqrt price after the swap
-- `tradingFee`: The trading fee charged for the swap
+- `claimingFee`: The portion of the trading fee claimable by LPs
+- `compoundingFee`: The portion of the trading fee compounded back into pool liquidity (only for `Compounding` collect fee mode)
 - `protocolFee`: The protocol fee charged for the swap
-- `partnerFee`: The partner fee charged for the swap (Deprecating soon)
 - `referralFee`: The referral fee charged for the swap
 - `priceImpact`: The price impact of the swap
 - `minimumAmountOut` (optional): The minimum output amount guaranteed (for ExactIn and PartialFill modes)
@@ -640,6 +638,10 @@ interface GetDepositQuoteParams {
     mint: Mint;
     currentEpoch: number;
   }; // Token info for Token2022 transfer fee calculations
+  collectFeeMode: CollectFeeMode; // How fees are collected (BothToken, OnlyB, or Compounding)
+  tokenAAmount: BN; // Current token A amount in the pool (required for Compounding mode)
+  tokenBAmount: BN; // Current token B amount in the pool (required for Compounding mode)
+  liquidity: BN; // Current liquidity of the pool (required for Compounding mode)
 }
 ```
 
@@ -663,6 +665,10 @@ const depositQuote = await cpAmm.getDepositQuote({
   minSqrtPrice: poolState.sqrtMinPrice,
   maxSqrtPrice: poolState.sqrtMaxPrice,
   sqrtPrice: poolState.sqrtPrice,
+  collectFeeMode: poolState.collectFeeMode,
+  tokenAAmount: poolState.tokenAAmount,
+  tokenBAmount: poolState.tokenBAmount,
+  liquidity: poolState.liquidity,
 });
 
 console.log(`Liquidity delta: ${depositQuote.liquidityDelta.toString()}`);
@@ -703,6 +709,10 @@ interface GetWithdrawQuoteParams {
     mint: Mint;
     currentEpoch: number;
   }; // Token info for Token2022 transfer fee calculations
+  collectFeeMode: CollectFeeMode; // How fees are collected (BothToken, OnlyB, or Compounding)
+  tokenAAmount: BN; // Current token A amount in the pool (required for Compounding mode)
+  tokenBAmount: BN; // Current token B amount in the pool (required for Compounding mode)
+  liquidity: BN; // Current liquidity of the pool (required for Compounding mode)
 }
 ```
 
@@ -728,6 +738,10 @@ const withdrawQuote = await cpAmm.getWithdrawQuote({
   sqrtPrice: poolState.sqrtPrice,
   minSqrtPrice: poolState.sqrtMinPrice,
   maxSqrtPrice: poolState.sqrtMaxPrice,
+  collectFeeMode: poolState.collectFeeMode,
+  tokenAAmount: poolState.tokenAAmount,
+  tokenBAmount: poolState.tokenBAmount,
+  liquidity: poolState.liquidity,
 });
 
 console.log(`Expected token A: ${withdrawQuote.outAmountA.toString()}`);
@@ -768,6 +782,7 @@ interface SwapParams {
   tokenBMint: PublicKey; // Pool's token B mint
   tokenAProgram: PublicKey; // Token program for token A
   tokenBProgram: PublicKey; // Token program for token B
+  receiver?: PublicKey; // Optional receiver of the input and output tokens
   referralTokenAccount?: PublicKey; // Optional referral account for fees
   poolState?: PoolState; // Optional pool state to pass in to atomically fetch the pool state
 }
@@ -833,24 +848,24 @@ async swap2(params: Swap2Params): TxBuilder
 **Parameters**
 
 ```typescript
-interface SwapParams {
+interface Swap2Params {
   payer: PublicKey; // The wallet paying for the transaction
   pool: PublicKey; // Address of the pool to swap in
   inputTokenMint: PublicKey; // Mint of the input token
   outputTokenMint: PublicKey; // Mint of the output token
-  tokenAVault: PublicKey; // Pool's token A vault
-  tokenBVault: PublicKey; // Pool's token B vault
   tokenAMint: PublicKey; // Pool's token A mint
   tokenBMint: PublicKey; // Pool's token B mint
+  tokenAVault: PublicKey; // Pool's token A vault
+  tokenBVault: PublicKey; // Pool's token B vault
   tokenAProgram: PublicKey; // Token program for token A
   tokenBProgram: PublicKey; // Token program for token B
-  referralTokenAccount?: PublicKey; // Optional referral account for fees
-  poolState?: PoolState; // Optional pool state to pass in to atomically fetch the pool state
-  swapMode: SwapMode; // The swap mode
-  amountIn?: BN; // The amount of input token to swap (for ExactIn and PartialFill modes)
-  amountOut?: BN; // The amount of output token to swap (for ExactOut mode)
-  minimumAmountOut?: BN; // Minimum amount of output token (slippage protection) for ExactIn and PartialFill modes
-  maximumAmountIn?: BN; // Maximum amount of input token (slippage protection) for ExactOut mode
+  referralTokenAccount: PublicKey | null; // Referral account for fees, null if none
+  receiver?: PublicKey; // Optional receiver of the input and output tokens
+  poolState?: PoolState; // Optional pool state to avoid refetching
+  // Union type: provide one of the following swap mode configurations:
+  // ExactIn: { swapMode: SwapMode.ExactIn, amountIn: BN, minimumAmountOut: BN }
+  // ExactOut: { swapMode: SwapMode.ExactOut, amountOut: BN, maximumAmountIn: BN }
+  // PartialFill: { swapMode: SwapMode.PartialFill, amountIn: BN, minimumAmountOut: BN }
 }
 ```
 
@@ -957,6 +972,10 @@ const depositQuote = await cpAmm.getDepositQuote({
   minSqrtPrice: poolState.sqrtMinPrice,
   maxSqrtPrice: poolState.sqrtMaxPrice,
   sqrtPrice: poolState.sqrtPrice,
+  collectFeeMode: poolState.collectFeeMode,
+  tokenAAmount: poolState.tokenAAmount,
+  tokenBAmount: poolState.tokenBAmount,
+  liquidity: poolState.liquidity,
 });
 
 // Add liquidity
@@ -985,6 +1004,81 @@ const addLiquidityTx = await cpAmm.addLiquidity({
 - The SDK handles wrapping/unwrapping of SOL automatically
 - Token accounts are created automatically if they don't exist
 - Set appropriate thresholds to protect against slippage
+
+---
+
+### createPositionAndAddLiquidity
+
+Creates a new position and adds liquidity in a single transaction. Handles both native SOL and other tokens, automatically wrapping/unwrapping SOL as needed.
+
+**Function**
+
+```typescript
+async createPositionAndAddLiquidity(params: CreatePositionAndAddLiquidity): TxBuilder
+```
+
+**Parameters**
+
+```typescript
+interface CreatePositionAndAddLiquidity {
+  owner: PublicKey; // The owner of the position
+  pool: PublicKey; // The pool to create a position in
+  positionNft: PublicKey; // The mint for the position NFT
+  liquidityDelta: BN; // The amount of liquidity to add
+  maxAmountTokenA: BN; // Maximum token A amount to deposit
+  maxAmountTokenB: BN; // Maximum token B amount to deposit
+  tokenAAmountThreshold: BN; // Minimum token A threshold (slippage protection)
+  tokenBAmountThreshold: BN; // Minimum token B threshold (slippage protection)
+  tokenAMint: PublicKey; // Pool's token A mint
+  tokenBMint: PublicKey; // Pool's token B mint
+  tokenAProgram: PublicKey; // Token program for token A
+  tokenBProgram: PublicKey; // Token program for token B
+}
+```
+
+**Returns**
+
+A transaction builder (`TxBuilder`) that can be used to build, sign, and send the transaction.
+
+**Example**
+
+```typescript
+const poolState = await cpAmm.fetchPoolState(poolAddress);
+const positionNftMint = Keypair.generate();
+
+const depositQuote = cpAmm.getDepositQuote({
+  inAmount: new BN(1_000_000_000),
+  isTokenA: true,
+  minSqrtPrice: poolState.sqrtMinPrice,
+  maxSqrtPrice: poolState.sqrtMaxPrice,
+  sqrtPrice: poolState.sqrtPrice,
+  collectFeeMode: poolState.collectFeeMode,
+  tokenAAmount: poolState.tokenAAmount,
+  tokenBAmount: poolState.tokenBAmount,
+  liquidity: poolState.liquidity,
+});
+
+const tx = await cpAmm.createPositionAndAddLiquidity({
+  owner: wallet.publicKey,
+  pool: poolAddress,
+  positionNft: positionNftMint.publicKey,
+  liquidityDelta: depositQuote.liquidityDelta,
+  maxAmountTokenA: new BN(1_000_000_000),
+  maxAmountTokenB: depositQuote.outputAmount,
+  tokenAAmountThreshold: new BN(1_000_000_000),
+  tokenBAmountThreshold: depositQuote.outputAmount,
+  tokenAMint: poolState.tokenAMint,
+  tokenBMint: poolState.tokenBMint,
+  tokenAProgram: TOKEN_PROGRAM_ID,
+  tokenBProgram: TOKEN_PROGRAM_ID,
+});
+```
+
+**Notes**
+
+- Combines `createPosition` and `addLiquidity` into a single transaction for convenience
+- The SDK handles wrapping/unwrapping of SOL automatically
+- Token accounts are created automatically if they don't exist
 
 ---
 
@@ -1036,6 +1130,10 @@ const withdrawQuote = await cpAmm.getWithdrawQuote({
   sqrtPrice: poolState.sqrtPrice,
   minSqrtPrice: poolState.sqrtMinPrice,
   maxSqrtPrice: poolState.sqrtMaxPrice,
+  collectFeeMode: poolState.collectFeeMode,
+  tokenAAmount: poolState.tokenAAmount,
+  tokenBAmount: poolState.tokenBAmount,
+  liquidity: poolState.liquidity,
 });
 
 const removeLiquidityTx = await cpAmm.removeLiquidity({
@@ -1291,7 +1389,6 @@ interface LockPositionParams {
   owner: PublicKey; // The owner of the position
   pool: PublicKey; // The pool address
   payer: PublicKey; // The wallet paying for the transaction
-  vestingAccount: PublicKey; // The vesting account to create
   position: PublicKey; // The position address
   positionNftAccount: PublicKey; // The position NFT account
   cliffPoint: BN | null; // The cliff point (slot or timestamp)
@@ -1299,6 +1396,8 @@ interface LockPositionParams {
   cliffUnlockLiquidity: BN; // Amount to unlock at cliff
   liquidityPerPeriod: BN; // Amount to unlock per period
   numberOfPeriod: number; // Number of vesting periods
+  vestingAccount?: PublicKey; // The vesting account to create (required for when innerPosition is not provided or false)
+  innerPosition?: boolean; // Whether the position is an inner position (required to be true for when vestingAccount is not provided)
 }
 ```
 
@@ -1307,6 +1406,8 @@ interface LockPositionParams {
 A transaction builder (`TxBuilder`) that can be used to build, sign, and send the transaction.
 
 **Example**
+
+With vesting account:
 
 ```typescript
 const vestingAccount = Keypair.generate();
@@ -1323,6 +1424,24 @@ const lockPositionTx = await cpAmm.lockPosition({
   cliffUnlockLiquidity: new BN(0), // No initial unlock
   liquidityPerPeriod: positionState.unlockedLiquidity.div(new BN(30)), // Unlock over 30 days
   numberOfPeriod: 30, // 30 periods
+});
+```
+
+Without vesting account:
+
+```typescript
+const lockPositionTx = await cpAmm.lockPosition({
+  owner: wallet.publicKey,
+  pool: poolAddress,
+  payer: wallet.publicKey,
+  position: positionAddress,
+  positionNftAccount: positionNftAccount,
+  cliffPoint: new BN(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days cliff
+  periodFrequency: new BN(24 * 60 * 60 * 1000), // 1 day periods
+  cliffUnlockLiquidity: new BN(0), // No initial unlock
+  liquidityPerPeriod: positionState.unlockedLiquidity.div(new BN(30)), // Unlock over 30 days
+  numberOfPeriod: 30, // 30 periods
+  innerPosition: true,
 });
 ```
 
@@ -1558,54 +1677,6 @@ const claimFeeTx = await cpAmm.claimPositionFee2({
 - Fees will claim to receiver address
 - Fees are earned on both token A and token B based on the amount of liquidity provided
 - The SDK handles wrapping/unwrapping of SOL automatically
-
----
-
-### claimPartnerFee
-
-Claims partner fee rewards. (Deprecating soon)
-
-**Function**
-
-```typescript
-async claimPartnerFee(params: ClaimPartnerFeeParams): TxBuilder
-```
-
-**Parameters**
-
-```typescript
-interface ClaimPartnerFeeParams {
-  partner: PublicKey; // Partner address to receive fees
-  pool: PublicKey; // The pool address
-  maxAmountA: BN; // Maximum amount of token A to claim
-  maxAmountB: BN; // Maximum amount of token B to claim
-}
-```
-
-**Returns**
-
-A transaction builder (`TxBuilder`) that can be used to build, sign, and send the transaction.
-
-**Example**
-
-```typescript
-const poolState = await cpAmm.fetchPoolState(poolAddress);
-
-const claimPartnerFeeTx = await cpAmm.claimPartnerFee({
-  partner: partnerWallet.publicKey,
-  pool: poolAddress,
-  maxAmountA: new BN(1_000_000_000), // 1,000 USDC
-  maxAmountB: new BN(5_000_000_000), // 5 SOL
-});
-```
-
-**Notes**
-
-- Partner fees are a portion of trading fees directed to a specific account
-- Only the configured partner address can claim these fees
-- Partner fees must be enabled in the pool configuration
-- The SDK handles wrapping/unwrapping of SOL automatically
-- Token accounts are created automatically if they don't exist
 
 ---
 
@@ -2049,6 +2120,7 @@ interface SplitPositionParams {
   feeBPercentage: number; // The percentage of fee B to split
   reward0Percentage: number; // The percentage of reward 0 to split
   reward1Percentage: number; // The percentage of reward 1 to split
+  innerVestingLiquidityPercentage: number; // The percentage of inner vesting liquidity to split
 }
 ```
 
@@ -2103,6 +2175,7 @@ const splitPositionTx = await client.splitPosition({
   feeBPercentage: 50,
   reward0Percentage: 50,
   reward1Percentage: 50,
+  innerVestingLiquidityPercentage: 50,
 });
 ```
 
@@ -2227,61 +2300,6 @@ console.log(configState);
 
 ---
 
-### fetchPoolFees
-
-Fetches and decodes the pool fees from Pod Aligned format.
-
-**Function**
-
-```typescript
-async fetchPoolFees(pool: PublicKey): Promise<DecodedPoolFees>
-```
-
-**Parameters**
-
-- `pool`: Public key of the pool.
-
-**Returns**
-
-`DecodedPoolFees` - The decoded pool fees which can be one of:
-- `PodAlignedFeeTimeScheduler` - For modes 0 (Linear) and 1 (Exponential)
-- `PodAlignedFeeRateLimiter` - For mode 2 (Rate Limiter)
-- `PodAlignedFeeMarketCapScheduler` - For modes 3 (Linear) and 4 (Exponential)
-
-**Example**
-
-```typescript
-const poolFees = await cpAmm.fetchPoolFees(poolAddress);
-
-// Check the base fee mode to determine the structure
-if (poolFees.baseFeeMode === BaseFeeMode.FeeTimeSchedulerLinear ||
-    poolFees.baseFeeMode === BaseFeeMode.FeeTimeSchedulerExponential) {
-  // Fee Time Scheduler structure
-  console.log(`Number of Periods: ${poolFees.numberOfPeriod}`);
-  console.log(`Period Frequency: ${poolFees.periodFrequency.toString()}`);
-  console.log(`Reduction Factor: ${poolFees.reductionFactor.toString()}`);
-} else if (poolFees.baseFeeMode === BaseFeeMode.RateLimiter) {
-  // Rate Limiter structure
-  console.log(`Fee Increment Bps: ${poolFees.feeIncrementBps}`);
-  console.log(`Max Limiter Duration: ${poolFees.maxLimiterDuration}`);
-  console.log(`Reference Amount: ${poolFees.referenceAmount.toString()}`);
-} else if (poolFees.baseFeeMode === BaseFeeMode.FeeMarketCapSchedulerLinear ||
-           poolFees.baseFeeMode === BaseFeeMode.FeeMarketCapSchedulerExponential) {
-  // Fee Market Cap Scheduler structure
-  console.log(`Number of Periods: ${poolFees.numberOfPeriod}`);
-  console.log(`Sqrt Price Step Bps: ${poolFees.sqrtPriceStepBps}`);
-  console.log(`Scheduler Expiration Duration: ${poolFees.schedulerExpirationDuration}`);
-}
-```
-
-**Notes**
-
-- Throws an error if the pool account does not exist
-- Decodes the fees from the on-chain Pod Aligned format to a usable structure
-- The returned structure varies based on `baseFeeMode`
-
----
-
 ### fetchPoolState
 
 Fetches the Pool state.
@@ -2351,6 +2369,38 @@ poolStates.forEach((pool, i) => {
 
 ---
 
+### fetchPoolFees
+
+Fetches and decodes the pool fee configuration for a given pool. Automatically determines the base fee mode and returns the decoded fee parameters.
+
+**Function**
+
+```typescript
+async fetchPoolFees(pool: PublicKey): Promise<DecodedPoolFees | null>
+```
+
+**Parameters**
+
+- `pool`: Public key of the pool.
+
+**Returns**
+
+Decoded pool fees (`PodAlignedFeeTimeScheduler`, `PodAlignedFeeRateLimiter`, or `PodAlignedFeeMarketCapScheduler`) depending on the base fee mode, or throws if the pool is not found.
+
+**Example**
+
+```typescript
+const decodedFees = await cpAmm.fetchPoolFees(poolAddress);
+console.log(`Decoded fees: ${JSON.stringify(decodedFees)}`);
+```
+
+**Notes**
+
+- Throws an error if the pool account does not exist
+- Automatically determines the correct decoder based on `baseFeeMode`
+
+---
+
 ### fetchPositionState
 
 Fetches the Position state.
@@ -2386,6 +2436,108 @@ console.log(
 
 - Throws an error if the position account does not exist
 - Contains information about liquidity amounts, fee collection, and rewards
+
+---
+
+### getMultipleConfigs
+
+Fetches multiple Config states in a single RPC call.
+
+**Function**
+
+```typescript
+async getMultipleConfigs(configs: PublicKey[]): Promise<ConfigState[]>
+```
+
+**Parameters**
+
+- `configs`: Array of public keys of config accounts.
+
+**Returns**
+
+Array of parsed ConfigState.
+
+**Example**
+
+```typescript
+const configStates = await cpAmm.getMultipleConfigs([configAddress1, configAddress2]);
+configStates.forEach((config, i) => {
+  console.log(`Config ${i}: activation type = ${config.activationType}`);
+});
+```
+
+**Notes**
+
+- Throws an error if any config account does not exist
+- More efficient than calling `fetchConfigState` multiple times
+
+---
+
+### getMultiplePools
+
+Fetches multiple Pool states in a single RPC call.
+
+**Function**
+
+```typescript
+async getMultiplePools(pools: PublicKey[]): Promise<PoolState[]>
+```
+
+**Parameters**
+
+- `pools`: Array of public keys of pool accounts.
+
+**Returns**
+
+Array of parsed PoolState.
+
+**Example**
+
+```typescript
+const poolStates = await cpAmm.getMultiplePools([poolAddress1, poolAddress2]);
+poolStates.forEach((pool, i) => {
+  console.log(`Pool ${i}: liquidity = ${pool.liquidity.toString()}`);
+});
+```
+
+**Notes**
+
+- Throws an error if any pool account does not exist
+- More efficient than calling `fetchPoolState` multiple times
+
+---
+
+### getMultiplePositions
+
+Fetches multiple Position states in a single RPC call.
+
+**Function**
+
+```typescript
+async getMultiplePositions(positions: PublicKey[]): Promise<PositionState[]>
+```
+
+**Parameters**
+
+- `positions`: Array of public keys of position accounts.
+
+**Returns**
+
+Array of parsed PositionState.
+
+**Example**
+
+```typescript
+const positionStates = await cpAmm.getMultiplePositions([positionAddress1, positionAddress2]);
+positionStates.forEach((pos, i) => {
+  console.log(`Position ${i}: unlocked liquidity = ${pos.unlockedLiquidity.toString()}`);
+});
+```
+
+**Notes**
+
+- Throws an error if any position account does not exist
+- More efficient than calling `fetchPositionState` multiple times
 
 ---
 
@@ -2614,6 +2766,92 @@ if (cpAmm.isLockedPosition(positionState)) {
 
 ---
 
+### isPermanentLockedPosition
+
+Checks if a position is permanently locked.
+
+**Function**
+
+```typescript
+isPermanentLockedPosition(positionState: PositionState): boolean
+```
+
+**Parameters**
+
+- `positionState`: The position state.
+
+**Returns**
+
+Boolean indicating whether the position has permanent locked liquidity.
+
+**Example**
+
+```typescript
+const positionState = await cpAmm.fetchPositionState(positionAddress);
+if (cpAmm.isPermanentLockedPosition(positionState)) {
+  console.log("Position is permanently locked");
+} else {
+  console.log("Position is not permanently locked");
+}
+```
+
+---
+
+### canUnlockPosition
+
+Checks if a position can be unlocked based on its locking state and vesting schedules. Useful to determine eligibility before calling `removeAllLiquidity` or `closePosition`.
+
+**Function**
+
+```typescript
+canUnlockPosition(
+  positionState: PositionState,
+  vestings: Array<{ account: PublicKey; vestingState: VestingState }>,
+  currentPoint: BN,
+): { canUnlock: boolean; reason?: string }
+```
+
+**Parameters**
+
+- `positionState`: The current state of the position.
+- `vestings`: Array of vesting accounts and their states (from `getAllVestingsByPosition`).
+- `currentPoint`: Current timestamp or slot number (depending on pool activation type).
+
+**Returns**
+
+An object containing:
+
+- `canUnlock`: Whether the position can be unlocked.
+- `reason` (optional): Reason why the position cannot be unlocked.
+
+**Example**
+
+```typescript
+const positionState = await cpAmm.fetchPositionState(positionAddress);
+const vestings = await cpAmm.getAllVestingsByPosition(positionAddress);
+const currentSlot = await connection.getSlot();
+
+const { canUnlock, reason } = cpAmm.canUnlockPosition(
+  positionState,
+  vestings.map((v) => ({ account: v.publicKey, vestingState: v.account })),
+  new BN(currentSlot),
+);
+
+if (canUnlock) {
+  console.log("Position can be unlocked");
+} else {
+  console.log(`Cannot unlock: ${reason}`);
+}
+```
+
+**Notes**
+
+- Returns `{ canUnlock: false, reason: "Position is permanently locked" }` if the position has permanent locked liquidity
+- Returns `{ canUnlock: false, reason: "Position has incomplete vesting schedule" }` if any vesting schedule is still active
+- Returns `{ canUnlock: true }` if no locks or all vesting schedules are complete
+
+---
+
 ### isPoolExist
 
 Checks if a pool exists.
@@ -2667,6 +2905,7 @@ interface PreparePoolCreationParams {
   maxSqrtPrice: BN; // Maximum sqrt price
   tokenAInfo?: any; // Token info for Token2022 transfer fee calculations
   tokenBInfo?: any; // Token info for Token2022 transfer fee calculations
+  collectFeeMode: CollectFeeMode; // How fees are collected (BothToken, OnlyB, or Compounding)
 }
 ```
 
@@ -2685,6 +2924,7 @@ const { initSqrtPrice, liquidityDelta } = cpAmm.preparePoolCreationParams({
   tokenBAmount: new BN(5_000_000_000), // 5 SOL with 9 decimals
   minSqrtPrice: MIN_SQRT_PRICE,
   maxSqrtPrice: MAX_SQRT_PRICE,
+  collectFeeMode: CollectFeeMode.BothToken,
 });
 
 console.log(`Initial sqrt price: ${initSqrtPrice.toString()}`);
@@ -2696,6 +2936,61 @@ console.log(`Initial liquidity: ${liquidityDelta.toString()}`);
 - This function calculates the correct initial price and liquidity based on the token amounts
 - Both token amounts must be greater than zero
 - The function handles Token2022 transfer fees if token info is provided
+
+---
+
+### preparePoolCreationSingleSide
+
+Calculates liquidity delta for single-sided pool creation where only token A is provided. Only supports initialization where the initial price equals the minimum sqrt price.
+
+**Function**
+
+```typescript
+preparePoolCreationSingleSide(params: PreparePoolCreationSingleSide): BN
+```
+
+**Parameters**
+
+```typescript
+interface PreparePoolCreationSingleSide {
+  tokenAAmount: BN; // Amount of token A to deposit
+  minSqrtPrice: BN; // Minimum sqrt price
+  maxSqrtPrice: BN; // Maximum sqrt price
+  initSqrtPrice: BN; // Initial sqrt price (must equal minSqrtPrice)
+  tokenAInfo?: {
+    mint: Mint;
+    currentEpoch: number;
+  }; // Token info for Token2022 transfer fee calculations
+  collectFeeMode: CollectFeeMode; // How fees are collected (BothToken, OnlyB, or Compounding)
+}
+```
+
+**Returns**
+
+A BN representing the liquidity delta.
+
+**Example**
+
+```typescript
+const initSqrtPrice = getSqrtPriceFromPrice("100", tokenADecimal, tokenBDecimal);
+const liquidityDelta = cpAmm.preparePoolCreationSingleSide({
+  tokenAAmount: new BN(10_000_000_000),
+  minSqrtPrice: initSqrtPrice,
+  maxSqrtPrice: MAX_SQRT_PRICE,
+  initSqrtPrice,
+  collectFeeMode: CollectFeeMode.BothToken,
+});
+
+console.log(`Liquidity delta: ${liquidityDelta.toString()}`);
+```
+
+**Notes**
+
+- Only supports single-sided deposits where `initSqrtPrice` equals `minSqrtPrice`
+- Throws an error if `initSqrtPrice` does not equal `minSqrtPrice`
+- Handles Token2022 transfer fees if token info is provided
+
+---
 
 ### isVestingComplete
 
@@ -3177,244 +3472,91 @@ Get and prepares the base fee parameters of the pool.
 **Function**
 
 ```typescript
-function getBaseFeeParams(
-  params: BaseFeeParamsInput,
+getBaseFeeParams(
+  baseFeeParams: {
+    baseFeeMode: BaseFeeMode;
+    rateLimiterParam?: {
+      baseFeeBps: number;
+      feeIncrementBps: number;
+      referenceAmount: number;
+      maxLimiterDuration: number;
+      maxFeeBps: number;
+    };
+    feeTimeSchedulerParam?: {
+      startingFeeBps: number;
+      endingFeeBps: number;
+      numberOfPeriod: number;
+      totalDuration: number;
+    };
+    feeMarketCapSchedulerParam?: {
+      startingFeeBps: number;
+      endingFeeBps: number;
+      numberOfPeriod: number;
+      sqrtPriceStepBps: number;
+      schedulerExpirationDuration: number;
+    };
+  },
   tokenBDecimal: number,
-  activationType: ActivationType
-): BaseFee;
+  activationType: ActivationType): BaseFee
 ```
 
 **Parameters**
 
 ```typescript
-interface BaseFeeParamsInput {
-  baseFeeMode: BaseFeeMode;
-  feeTimeSchedulerParam?: {
-    startingFeeBps: number;
-    endingFeeBps: number;
-    numberOfPeriod: number;
-    totalDuration: number;
+connection: Connection, // rpc connection
+baseFeeParams: {
+  baseFeeMode: BaseFeeMode; // base fee mode
+  rateLimiterParam?: { // if you choose BaseFeeMode.RateLimiter mode
+    baseFeeBps: number; // base fee in basis points
+    feeIncrementBps: number; // fee increment in basis points
+    referenceAmount: number; // reference amount (in terms of quote token)
+    maxLimiterDuration: number; // max limiter duration in seconds
+    maxFeeBps: number; // max fee in basis points
   };
-  feeMarketCapSchedulerParam?: {
-    startingFeeBps: number;
-    endingFeeBps: number;
-    numberOfPeriod: number;
-    sqrtPriceStepBps: number;
-    schedulerExpirationDuration: number;
+  feeTimeSchedulerParam?: { // if you choose BaseFeeMode.FeeTimeSchedulerLinear or BaseFeeMode.FeeTimeSchedulerExponential mode
+    startingFeeBps: number; // starting fee in basis points
+    endingFeeBps: number; // ending fee in basis points
+    numberOfPeriod: number; // number of periods
+    totalDuration: number; // total duration in seconds
   };
-  rateLimiterParam?: {
-    baseFeeBps: number;
-    feeIncrementBps: number;
-    referenceAmount: number;
-    maxLimiterDuration: number;
-    maxFeeBps: number;
+  feeMarketCapSchedulerParam?: { // if you choose BaseFeeMode.FeeMarketCapSchedulerLinear or BaseFeeMode.FeeMarketCapSchedulerExponential mode
+    startingFeeBps: number; // starting fee in basis points
+    endingFeeBps: number; // ending fee in basis points
+    numberOfPeriod: number; // number of periods
+    sqrtPriceStepBps: number; // sqrt price step in basis points
+    schedulerExpirationDuration: number; // scheduler expiration duration in seconds
   };
-}
-
-enum BaseFeeMode {
-  FeeTimeSchedulerLinear = 0,
-  FeeTimeSchedulerExponential = 1,
-  RateLimiter = 2,
-  FeeMarketCapSchedulerLinear = 3,
-  FeeMarketCapSchedulerExponential = 4,
-}
-
-enum ActivationType {
-  Slot = 0,
-  Timestamp = 1,
-}
+},
+tokenBDecimal: number, // token B decimal
+activationType: ActivationType // activation type
 ```
 
 **Returns**
 
-A `BaseFee` object containing encoded fee parameters.
-
-**Example - Fee Time Scheduler (Linear)**
-
-```typescript
-const baseFeeParams = getBaseFeeParams(
-  {
-    baseFeeMode: BaseFeeMode.FeeTimeSchedulerLinear,
-    feeTimeSchedulerParam: {
-      startingFeeBps: 5000, // 50% starting fee
-      endingFeeBps: 25,     // 0.25% ending fee
-      numberOfPeriod: 60,   // 60 decay periods
-      totalDuration: 600,   // 10 minutes in seconds
-    },
-  },
-  9, // token B decimal
-  ActivationType.Timestamp
-);
-```
-
-**Example - Fee Market Cap Scheduler (Exponential)**
-
-```typescript
-const baseFeeParams = getBaseFeeParams(
-  {
-    baseFeeMode: BaseFeeMode.FeeMarketCapSchedulerExponential,
-    feeMarketCapSchedulerParam: {
-      startingFeeBps: 5000,               // 50% starting fee
-      endingFeeBps: 100,                  // 1% ending fee
-      numberOfPeriod: 100,                // 100 decay periods
-      sqrtPriceStepBps: 100,              // 1% sqrt price step per period
-      schedulerExpirationDuration: 86400, // 24 hours expiration
-    },
-  },
-  9, // token B decimal
-  ActivationType.Timestamp
-);
-```
-
-**Example - Rate Limiter**
-
-```typescript
-const baseFeeParams = getBaseFeeParams(
-  {
-    baseFeeMode: BaseFeeMode.RateLimiter,
-    rateLimiterParam: {
-      baseFeeBps: 100,        // 1% base fee
-      feeIncrementBps: 10,    // 0.1% increment per reference amount
-      referenceAmount: 1,     // 1 token B reference amount
-      maxLimiterDuration: 10, // Max 10 slots/seconds for fee increase
-      maxFeeBps: 9900,        // 99% max fee cap
-    },
-  },
-  9, // token B decimal
-  ActivationType.Slot
-);
-```
-
-**Function**
-
-- Supports 5 base fee modes:
-  - `FeeTimeSchedulerLinear` (0): Time-based linear fee reduction
-  - `FeeTimeSchedulerExponential` (1): Time-based exponential fee reduction
-  - `RateLimiter` (2): Volume-based dynamic fee
-  - `FeeMarketCapSchedulerLinear` (3): Price/market cap-based linear fee reduction
-  - `FeeMarketCapSchedulerExponential` (4): Price/market cap-based exponential fee reduction
-- Calculates period frequency and reduction factors based on the selected mode
-
-**Notes**
-
-- Use `feeTimeSchedulerParam` for modes 0 and 1 (time-based schedulers)
-- Use `feeMarketCapSchedulerParam` for modes 3 and 4 (price/market cap-based schedulers)
-  - `sqrtPriceStepBps`: Sqrt price increase in bps required to advance one fee reduction period
-  - `schedulerExpirationDuration`: Duration after which scheduler expires and uses minimum fee
-- Use `rateLimiterParam` for mode 2 (rate limiter)
-- Pool Version V1 supports up to 99% max fee (increased from V0's 50% max fee)
-
----
-
-### getRateLimiterParams
-
-Prepares rate limiter parameters for fee configuration.
-
-**Function**
-
-```typescript
-function getRateLimiterParams(
-  baseFeeBps: number,
-  feeIncrementBps: number,
-  referenceAmount: number,
-  maxLimiterDuration: number,
-  maxFeeBps: number,
-  tokenBDecimal: number,
-  activationType: ActivationType
-): BaseFee;
-```
-
-**Parameters**
-
-- `baseFeeBps`: Base fee in basis points (e.g., 100 = 1%)
-- `feeIncrementBps`: Fee increment per reference amount in basis points
-- `referenceAmount`: Reference trade amount for fee calculation
-- `maxLimiterDuration`: Maximum duration (in slots or seconds) for fee accumulation
-- `maxFeeBps`: Maximum fee cap in basis points
-- `tokenBDecimal`: Decimal places of token B
-- `activationType`: The activation type (0: Slot, 1: Timestamp)
-
-**Returns**
-
-A `BaseFee` object with the formatted rate limiter parameters.
+The base fee parameters in encoded Borsh format. (data: number[])
 
 **Example**
 
 ```typescript
-const rateLimiterParams = getRateLimiterParams(
-  100,    // 1% base fee
-  10,     // 0.1% increment
-  1,      // 1 SOL reference amount
-  10,     // 10 slots/seconds max duration
-  9900,   // 99% max fee
-  9,      // SOL decimals
-  ActivationType.Slot
+const baseFee = getBaseFeeParams(
+  {
+    baseFeeMode: BaseFeeMode.FeeMarketCapSchedulerLinear,
+    feeMarketCapSchedulerParam: {
+      startingFeeBps: 5000,
+      endingFeeBps: 100,
+      numberOfPeriod: 180,
+      sqrtPriceStepBps: 200,
+      schedulerExpirationDuration: 2592000,
+    },
+  },
+  6,
+  ActivationType.Timestamp
 );
 ```
 
----
+**Notes**
 
-### getFeeTimeSchedulerParams
-
-Prepares fee time scheduler parameters for fee configuration.
-
-**Function**
-
-```typescript
-function getFeeTimeSchedulerParams(
-  startingBaseFeeBps: number,
-  endingBaseFeeBps: number,
-  baseFeeMode: BaseFeeMode,
-  numberOfPeriod: number,
-  totalDuration: number
-): BaseFee;
-```
-
-**Parameters**
-
-- `startingBaseFeeBps`: Starting fee in basis points
-- `endingBaseFeeBps`: Ending fee in basis points
-- `baseFeeMode`: Fee scheduler mode (0: Linear, 1: Exponential)
-- `numberOfPeriod`: Number of fee reduction periods
-- `totalDuration`: Total duration for fee reduction
-
-**Returns**
-
-A `BaseFee` object with period frequency and reduction factor calculated.
-
----
-
-### getFeeMarketCapSchedulerParams
-
-Prepares fee market cap scheduler parameters for fee configuration.
-
-**Function**
-
-```typescript
-function getFeeMarketCapSchedulerParams(
-  startingBaseFeeBps: number,
-  endingBaseFeeBps: number,
-  baseFeeMode: BaseFeeMode,
-  numberOfPeriod: number,
-  sqrtPriceStepBps: number,
-  schedulerExpirationDuration: number
-): BaseFee;
-```
-
-**Parameters**
-
-- `startingBaseFeeBps`: Starting fee in basis points
-- `endingBaseFeeBps`: Ending fee in basis points
-- `baseFeeMode`: Fee scheduler mode (3: Linear, 4: Exponential)
-- `numberOfPeriod`: Number of fee reduction periods
-- `sqrtPriceStepBps`: Sqrt price step in basis points to advance one period
-- `schedulerExpirationDuration`: Duration after which scheduler expires
-
-**Returns**
-
-A `BaseFee` object with the calculated reduction factor.
-
----
+- Returns the base fee parameters in encoded Borsh format. (data: number[])
 
 ### getDynamicFeeParams
 
@@ -3428,136 +3570,385 @@ Calculates the parameters needed for dynamic fee. This function will always retu
 
 ---
 
-## Fee Encode/Decode Functions
+## Fee Codec Functions
 
-These functions encode and decode fee parameters between Borsh format and Pod Aligned formats used on-chain.
+These functions are used to encode and decode base fee parameters. There are two serialization formats:
 
-### encodeFeeTimeSchedulerParams / decodeFeeTimeSchedulerParams
+- **Borsh format (30 bytes)**: Used in `EvtInitializePool` events
+- **PodAligned format (32 bytes)**: Used in `poolState` account data
 
-Encodes and decodes Fee Time Scheduler parameters.
+### encodeFeeTimeSchedulerParams
 
-**Functions**
+Encodes Fee Time Scheduler parameters into Borsh format for pool creation.
+
+**Function**
 
 ```typescript
-function encodeFeeTimeSchedulerParams(
+encodeFeeTimeSchedulerParams(
   cliffFeeNumerator: BN,
   numberOfPeriod: number,
   periodFrequency: BN,
   reductionFactor: BN,
   baseFeeMode: BaseFeeMode
-): Buffer;
-
-function decodeFeeTimeSchedulerParams(data: Buffer): BorshFeeTimeScheduler;
+): Buffer
 ```
+
+**Parameters**
+
+- `cliffFeeNumerator`: Starting fee numerator (e.g., 500000000 = 50%)
+- `numberOfPeriod`: Number of fee reduction periods
+- `periodFrequency`: Time between periods (slots or seconds)
+- `reductionFactor`: Fee reduction per period
+- `baseFeeMode`: `BaseFeeMode.FeeTimeSchedulerLinear` (0) or `BaseFeeMode.FeeTimeSchedulerExponential` (1)
+
+**Returns**
+
+A `Buffer` containing the Borsh-encoded fee parameters.
 
 **Example**
 
 ```typescript
-// Encode
 const encoded = encodeFeeTimeSchedulerParams(
-  new BN(500000000),   // 50% cliff fee
-  60,                  // 60 periods
-  new BN(10),          // 10 seconds per period
-  new BN(8166666),     // reduction factor
+  new BN(500000000), // 50% starting fee
+  100, // 100 periods
+  new BN(6), // 6 seconds between periods
+  new BN(4900000), // reduction factor
   BaseFeeMode.FeeTimeSchedulerLinear
 );
-
-// Decode
-const decoded = decodeFeeTimeSchedulerParams(encoded);
-// Returns: { cliffFeeNumerator, numberOfPeriod, periodFrequency, reductionFactor, baseFeeMode }
 ```
 
 ---
 
-### encodeFeeMarketCapSchedulerParams / decodeFeeMarketCapSchedulerParams
+### encodeFeeMarketCapSchedulerParams
 
-Encodes and decodes Fee Market Cap Scheduler parameters.
+Encodes Fee Market Cap Scheduler parameters into Borsh format for pool creation.
 
-**Functions**
+**Function**
 
 ```typescript
-function encodeFeeMarketCapSchedulerParams(
+encodeFeeMarketCapSchedulerParams(
   cliffFeeNumerator: BN,
   numberOfPeriod: number,
   sqrtPriceStepBps: number,
   schedulerExpirationDuration: number,
   reductionFactor: BN,
   baseFeeMode: BaseFeeMode
-): Buffer;
-
-function decodeFeeMarketCapSchedulerParams(data: Buffer): BorshFeeMarketCapScheduler;
+): Buffer
 ```
+
+**Parameters**
+
+- `cliffFeeNumerator`: Starting fee numerator (e.g., 500000000 = 50%)
+- `numberOfPeriod`: Number of fee reduction periods
+- `sqrtPriceStepBps`: Sqrt price step in basis points to advance one period
+- `schedulerExpirationDuration`: Duration after which scheduler expires (slots or seconds)
+- `reductionFactor`: Fee reduction per period
+- `baseFeeMode`: `BaseFeeMode.FeeMarketCapSchedulerLinear` (3) or `BaseFeeMode.FeeMarketCapSchedulerExponential` (4)
+
+**Returns**
+
+A `Buffer` containing the Borsh-encoded fee parameters.
 
 **Example**
 
 ```typescript
-// Encode
 const encoded = encodeFeeMarketCapSchedulerParams(
-  new BN(500000000),   // 50% cliff fee
-  100,                 // 100 periods
-  100,                 // 1% sqrt price step
-  86400,               // 24 hours expiration
-  new BN(4950000),     // reduction factor
+  new BN(500000000), // 50% starting fee
+  100, // 100 periods
+  100, // 1% sqrt price step
+  86400, // 24 hours expiration
+  new BN(4950000), // reduction factor
   BaseFeeMode.FeeMarketCapSchedulerLinear
 );
-
-// Decode
-const decoded = decodeFeeMarketCapSchedulerParams(encoded);
-// Returns: { cliffFeeNumerator, numberOfPeriod, sqrtPriceStepBps, schedulerExpirationDuration, reductionFactor, baseFeeMode }
 ```
 
 ---
 
-### encodeFeeRateLimiterParams / decodeFeeRateLimiterParams
+### encodeFeeRateLimiterParams
 
-Encodes and decodes Fee Rate Limiter parameters.
+Encodes Rate Limiter parameters into Borsh format for pool creation.
 
-**Functions**
+**Function**
 
 ```typescript
-function encodeFeeRateLimiterParams(
+encodeFeeRateLimiterParams(
   cliffFeeNumerator: BN,
   feeIncrementBps: number,
   maxLimiterDuration: number,
   maxFeeBps: number,
   referenceAmount: BN
-): Buffer;
+): Buffer
+```
 
-function decodeFeeRateLimiterParams(data: Buffer): BorshFeeRateLimiter;
+**Parameters**
+
+- `cliffFeeNumerator`: Base fee numerator (e.g., 10000000 = 1%)
+- `feeIncrementBps`: Fee increment in basis points per reference amount
+- `maxLimiterDuration`: Maximum duration for rate limiter (slots or seconds)
+- `maxFeeBps`: Maximum fee cap in basis points
+- `referenceAmount`: Reference amount for fee calculation (in lamports)
+
+**Returns**
+
+A `Buffer` containing the Borsh-encoded fee parameters.
+
+**Example**
+
+```typescript
+const encoded = encodeFeeRateLimiterParams(
+  new BN(10000000), // 1% base fee
+  10, // 0.1% fee increment per reference amount
+  10, // 10 slots/seconds max duration
+  5000, // 50% max fee cap
+  new BN(1000000000) // 1 SOL reference amount
+);
+```
+
+---
+
+### decodeFeeTimeSchedulerParams
+
+Decodes Borsh-encoded Fee Time Scheduler parameters (from `EvtInitializePool` events).
+
+**Function**
+
+```typescript
+decodeFeeTimeSchedulerParams(data: Buffer): BorshFeeTimeScheduler
+```
+
+**Parameters**
+
+- `data`: A `Buffer` containing Borsh-encoded fee data (30 bytes)
+
+**Returns**
+
+```typescript
+interface BorshFeeTimeScheduler {
+  cliffFeeNumerator: BN;
+  numberOfPeriod: number;
+  periodFrequency: BN;
+  reductionFactor: BN;
+  baseFeeMode: number;
+  padding: number[];
+}
 ```
 
 **Example**
 
 ```typescript
-// Encode
-const encoded = encodeFeeRateLimiterParams(
-  new BN(10000000),     // 1% cliff fee
-  10,                   // 0.1% fee increment
-  10,                   // 10 slots/seconds max duration
-  9900,                 // 99% max fee
-  new BN(1000000000)    // 1 token B reference amount
-);
-
-// Decode
-const decoded = decodeFeeRateLimiterParams(encoded);
-// Returns: { cliffFeeNumerator, feeIncrementBps, maxLimiterDuration, maxFeeBps, referenceAmount, baseFeeMode }
+// Decode from EvtInitializePool event
+const decoded = decodeFeeTimeSchedulerParams(eventData.baseFee.data);
+console.log(`Starting Fee: ${decoded.cliffFeeNumerator.toString()}`);
+console.log(`Number of Periods: ${decoded.numberOfPeriod}`);
 ```
 
 ---
 
-### decodePodAlignedFeeTimeScheduler / decodePodAlignedFeeMarketCapScheduler / decodePodAlignedFeeRateLimiter
+### decodeFeeMarketCapSchedulerParams
 
-Decodes fee parameters from the on-chain Pod Aligned format.
+Decodes Borsh-encoded Fee Market Cap Scheduler parameters (from `EvtInitializePool` events).
 
-**Functions**
+**Function**
 
 ```typescript
-function decodePodAlignedFeeTimeScheduler(data: Buffer): PodAlignedFeeTimeScheduler;
-function decodePodAlignedFeeMarketCapScheduler(data: Buffer): PodAlignedFeeMarketCapScheduler;
-function decodePodAlignedFeeRateLimiter(data: Buffer): PodAlignedFeeRateLimiter;
+decodeFeeMarketCapSchedulerParams(data: Buffer): BorshFeeMarketCapScheduler
 ```
 
-**Notes**
+**Parameters**
 
-- Use these functions when reading fee data directly from on-chain accounts
-- The `fetchPoolFees` function uses these internally to decode pool fee data
+- `data`: A `Buffer` containing Borsh-encoded fee data (30 bytes)
+
+**Returns**
+
+```typescript
+interface BorshFeeMarketCapScheduler {
+  cliffFeeNumerator: BN;
+  numberOfPeriod: number;
+  sqrtPriceStepBps: number;
+  schedulerExpirationDuration: number;
+  reductionFactor: BN;
+  baseFeeMode: number;
+  padding: number[];
+}
+```
+
+**Example**
+
+```typescript
+// Decode from EvtInitializePool event
+const decoded = decodeFeeMarketCapSchedulerParams(eventData.baseFee.data);
+console.log(`Starting Fee: ${decoded.cliffFeeNumerator.toString()}`);
+console.log(`Sqrt Price Step: ${decoded.sqrtPriceStepBps} bps`);
+```
+
+---
+
+### decodeFeeRateLimiterParams
+
+Decodes Borsh-encoded Rate Limiter parameters (from `EvtInitializePool` events).
+
+**Function**
+
+```typescript
+decodeFeeRateLimiterParams(data: Buffer): BorshFeeRateLimiter
+```
+
+**Parameters**
+
+- `data`: A `Buffer` containing Borsh-encoded fee data (30 bytes)
+
+**Returns**
+
+```typescript
+interface BorshFeeRateLimiter {
+  cliffFeeNumerator: BN;
+  feeIncrementBps: number;
+  maxLimiterDuration: number;
+  maxFeeBps: number;
+  referenceAmount: BN;
+  baseFeeMode: number;
+  padding: number[];
+}
+```
+
+**Example**
+
+```typescript
+// Decode from EvtInitializePool event
+const decoded = decodeFeeRateLimiterParams(eventData.baseFee.data);
+console.log(`Base Fee: ${decoded.cliffFeeNumerator.toString()}`);
+console.log(`Max Fee: ${decoded.maxFeeBps} bps`);
+```
+
+---
+
+### decodePodAlignedFeeTimeScheduler
+
+Decodes PodAligned Fee Time Scheduler parameters (from `poolState` account data).
+
+**Function**
+
+```typescript
+decodePodAlignedFeeTimeScheduler(data: Buffer): PodAlignedFeeTimeScheduler
+```
+
+**Parameters**
+
+- `data`: A `Buffer` containing PodAligned fee data (32 bytes)
+
+**Returns**
+
+```typescript
+interface PodAlignedFeeTimeScheduler {
+  cliffFeeNumerator: BN;
+  numberOfPeriod: number;
+  periodFrequency: BN;
+  reductionFactor: BN;
+  baseFeeMode: number;
+  padding: number[];
+}
+```
+
+**Example**
+
+```typescript
+// Decode from poolState account
+const poolState = await program.account.pool.fetch(poolAddress);
+const decoded = decodePodAlignedFeeTimeScheduler(
+  Buffer.from(poolState.poolFees.baseFee.data)
+);
+console.log(`Current Fee Config: ${decoded.cliffFeeNumerator.toString()}`);
+```
+
+---
+
+### decodePodAlignedFeeMarketCapScheduler
+
+Decodes PodAligned Fee Market Cap Scheduler parameters (from `poolState` account data).
+
+**Function**
+
+```typescript
+decodePodAlignedFeeMarketCapScheduler(data: Buffer): PodAlignedFeeMarketCapScheduler
+```
+
+**Parameters**
+
+- `data`: A `Buffer` containing PodAligned fee data (32 bytes)
+
+**Returns**
+
+```typescript
+interface PodAlignedFeeMarketCapScheduler {
+  cliffFeeNumerator: BN;
+  numberOfPeriod: number;
+  sqrtPriceStepBps: number;
+  schedulerExpirationDuration: number;
+  reductionFactor: BN;
+  baseFeeMode: number;
+  padding: number[];
+}
+```
+
+**Example**
+
+```typescript
+// Decode from poolState account
+const poolState = await program.account.pool.fetch(poolAddress);
+const decoded = decodePodAlignedFeeMarketCapScheduler(
+  Buffer.from(poolState.poolFees.baseFee.data)
+);
+console.log(`Expiration Duration: ${decoded.schedulerExpirationDuration}`);
+```
+
+---
+
+### decodePodAlignedFeeRateLimiter
+
+Decodes PodAligned Rate Limiter parameters (from `poolState` account data).
+
+**Function**
+
+```typescript
+decodePodAlignedFeeRateLimiter(data: Buffer): PodAlignedFeeRateLimiter
+```
+
+**Parameters**
+
+- `data`: A `Buffer` containing PodAligned fee data (32 bytes)
+
+**Returns**
+
+```typescript
+interface PodAlignedFeeRateLimiter {
+  cliffFeeNumerator: BN;
+  feeIncrementBps: number;
+  maxLimiterDuration: number;
+  maxFeeBps: number;
+  referenceAmount: BN;
+  baseFeeMode: number;
+  padding: number[];
+}
+```
+
+**Example**
+
+```typescript
+// Decode from poolState account
+const poolState = await program.account.pool.fetch(poolAddress);
+const decoded = decodePodAlignedFeeRateLimiter(
+  Buffer.from(poolState.poolFees.baseFee.data)
+);
+console.log(`Reference Amount: ${decoded.referenceAmount.toString()}`);
+```
+
+---
+
+## Decoding BaseFee Summary
+
+When decoding `baseFee.data`, choose the decoder based on **data source** and **`baseFeeMode`**:
+
+| Data Source               | Format     | Size     | baseFeeMode 0-1                    | baseFeeMode 2                    | baseFeeMode 3-4                         |
+| ------------------------- | ---------- | -------- | ---------------------------------- | -------------------------------- | --------------------------------------- |
+| `EvtInitializePool` event | Borsh      | 30 bytes | `decodeFeeTimeSchedulerParams`     | `decodeFeeRateLimiterParams`     | `decodeFeeMarketCapSchedulerParams`     |
+| `poolState` account       | PodAligned | 32 bytes | `decodePodAlignedFeeTimeScheduler` | `decodePodAlignedFeeRateLimiter` | `decodePodAlignedFeeMarketCapScheduler` |
