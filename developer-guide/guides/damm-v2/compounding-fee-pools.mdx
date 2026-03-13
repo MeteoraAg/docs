@@ -1,0 +1,232 @@
+---
+title: Compounding Fee Pools
+description: Create DAMM v2 pools where trading fees automatically compound back into pool liquidity
+---
+
+## Overview
+
+Compounding fee pools are a DAMM v2 pool type where a configurable percentage of trading fees are automatically reinvested back into pool liquidity as token B, rather than being held for LP claiming. The remaining portion of fees is still claimable by LPs as normal.
+
+**Key characteristics:**
+
+- **Full-range liquidity** — Compounding pools use the full price range (constant-product x·y=k model). Price range parameters (`minPrice`, `maxPrice`) are ignored.
+- **Balanced pools only** — You must provide both token A and token B at creation. Single-sided deposits are not supported due to DEAD_LIQUIDITY.
+- **`collectFeeMode: 2`** — The enum value for compounding mode (`CollectFeeMode.Compounding`).
+- **`compoundingFeeBps`** — Controls how much of each trade's fee is compounded back (0–10000 bps). For example, `5000` = 50% of fees compound back, 50% are claimable.
+- **Fee split** — In swap results, `tradingFee` is replaced by `claimingFee + compoundingFee`.
+
+<Note>
+  Compounding pools work best for long-term LPs who want their fee income to grow their position size automatically, reducing the need to manually reinvest.
+</Note>
+
+---
+
+## TypeScript SDK
+
+**SDK version required:** `@meteora-ag/cp-amm-sdk >= 1.3.7`
+
+### Installation
+
+```bash
+npm install @meteora-ag/cp-amm-sdk@^1.3.7
+```
+
+### Create a Compounding Fee Pool
+
+Use `createCustomPool` with `collectFeeMode: CollectFeeMode.Compounding`.
+
+```typescript
+import { Connection, Keypair } from "@solana/web3.js";
+import {
+  CpAmm,
+  CollectFeeMode,
+  BaseFeeMode,
+  ActivationType,
+  MIN_SQRT_PRICE,
+  MAX_SQRT_PRICE,
+  getBaseFeeParams,
+  getDynamicFeeParams,
+} from "@meteora-ag/cp-amm-sdk";
+import BN from "bn.js";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+const cpAmm = new CpAmm(connection);
+
+// 1. Calculate initial sqrt price and liquidity delta
+//    Compounding pools use full range: MIN_SQRT_PRICE to MAX_SQRT_PRICE
+const { initSqrtPrice, liquidityDelta } = cpAmm.preparePoolCreationParams({
+  tokenAAmount: new BN(1_000_000_000), // 1 token A (9 decimals)
+  tokenBAmount: new BN(10_000_000_000), // 10 token B (9 decimals)
+  minSqrtPrice: MIN_SQRT_PRICE,
+  maxSqrtPrice: MAX_SQRT_PRICE,
+  collectFeeMode: CollectFeeMode.Compounding, // required for correct calculation
+});
+
+// 2. Configure fees
+const baseFeeParams = getBaseFeeParams(
+  {
+    baseFeeMode: BaseFeeMode.FeeTimeSchedulerLinear,
+    feeTimeSchedulerParam: {
+      startingFeeBps: 100, // 1% starting fee
+      endingFeeBps: 25,    // 0.25% ending fee
+      numberOfPeriod: 10,
+      totalDuration: 3600, // 1 hour in seconds
+    },
+  },
+  9, // token B decimals
+  ActivationType.Timestamp
+);
+
+const poolFees = {
+  baseFee: baseFeeParams,
+  compoundingFeeBps: 5000, // 50% of trading fees compound back into liquidity
+  padding: 0,
+  dynamicFee: getDynamicFeeParams(25), // optional dynamic fee
+};
+
+// 3. Create the pool
+const positionNft = Keypair.generate();
+
+const { tx, pool, position } = await cpAmm.createCustomPool({
+  payer: wallet.publicKey,
+  creator: wallet.publicKey,
+  positionNft: positionNft.publicKey,
+  tokenAMint,
+  tokenBMint,
+  tokenAAmount: new BN(1_000_000_000),
+  tokenBAmount: new BN(10_000_000_000),
+  sqrtMinPrice: MIN_SQRT_PRICE, // full range
+  sqrtMaxPrice: MAX_SQRT_PRICE, // full range
+  initSqrtPrice,
+  liquidityDelta,
+  poolFees,
+  hasAlphaVault: false,
+  collectFeeMode: CollectFeeMode.Compounding, // mode 2
+  activationPoint: null,
+  activationType: ActivationType.Slot,
+  tokenAProgram,
+  tokenBProgram,
+});
+
+console.log("Pool address:", pool.toString());
+console.log("Position:", position.toString());
+```
+
+---
+
+### Deposit / Withdraw Liquidity
+
+The `getDepositQuote` and `getWithdrawQuote` functions now require pool state fields for compounding calculations. Fetch `poolState` first.
+
+```typescript
+const poolState = await cpAmm.fetchPoolState(poolAddress);
+
+// Deposit quote
+const depositQuote = cpAmm.getDepositQuote({
+  inAmount: new BN(500_000_000),
+  isTokenA: true,
+  sqrtPrice: poolState.sqrtPrice,
+  minSqrtPrice: poolState.sqrtMinPrice,
+  maxSqrtPrice: poolState.sqrtMaxPrice,
+  collectFeeMode: poolState.collectFeeMode, // from pool state
+  tokenAAmount: poolState.tokenAAmount,     // from pool state
+  tokenBAmount: poolState.tokenBAmount,     // from pool state
+  liquidity: poolState.liquidity,           // from pool state
+});
+
+// Withdraw quote
+const withdrawQuote = cpAmm.getWithdrawQuote({
+  liquidityDelta: positionState.unlockedLiquidity,
+  sqrtPrice: poolState.sqrtPrice,
+  minSqrtPrice: poolState.sqrtMinPrice,
+  maxSqrtPrice: poolState.sqrtMaxPrice,
+  collectFeeMode: poolState.collectFeeMode,
+  tokenAAmount: poolState.tokenAAmount,
+  tokenBAmount: poolState.tokenBAmount,
+  liquidity: poolState.liquidity,
+});
+```
+
+---
+
+### Reading Compounding Fee from Swap Results
+
+In compounding mode, swap results split the fee into two components:
+
+```typescript
+const swapResult = await cpAmm.swapQuoteExactInput({ ... });
+
+// claimingFee  — portion LPs can claim
+// compoundingFee — portion compounded back into pool liquidity
+console.log("Claiming fee:", swapResult.claimingFee.toString());
+console.log("Compounding fee:", swapResult.compoundingFee.toString());
+```
+
+<Note>
+  For non-compounding pools (`BothToken` / `OnlyB`), `compoundingFee` is always `0` and `tradingFee = claimingFee`.
+</Note>
+
+---
+
+## Meteora Invent
+
+Meteora Invent supports compounding fee pool creation via the `damm-v2-create-balanced-pool` command.
+
+### Configuration
+
+In `studio/config/damm_v2_config.jsonc`, set `collectFeeMode` to `2` and add `compoundingFeeBps` to `poolFees`:
+
+```jsonc
+{
+  "dammV2Config": {
+    "collectFeeMode": 2, // 0 - Both Token | 1 - Token B Only | 2 - Compounding
+
+    // Both baseAmount and quoteAmount are required for compounding pools
+    "baseAmount": 1000,
+    "quoteAmount": 10000,
+
+    "initPrice": 10,
+    // minPrice and maxPrice are ignored for compounding pools (full range is used)
+
+    "poolFees": {
+      "baseFee": {
+        "baseFeeMode": 0,
+        "feeTimeSchedulerParam": {
+          "startingFeeBps": 100,
+          "endingFeeBps": 25,
+          "numberOfPeriod": 10,
+          "totalDuration": 3600
+        }
+      },
+      "compoundingFeeBps": 5000, // 0 to 10000 bps (e.g. 5000 = 50%). Required for compounding mode.
+      "dynamicFeeEnabled": true
+    },
+
+    "activationType": 1,
+    "hasAlphaVault": false,
+    "creator": "<YOUR_WALLET_ADDRESS>"
+  }
+}
+```
+
+### Create the Pool
+
+```bash
+pnpm damm-v2-create-balanced-pool
+```
+
+<Warning>
+  `pnpm damm-v2-create-one-sided-pool` will throw an error if `collectFeeMode` is set to `2`. Compounding pools require both tokens at creation.
+</Warning>
+
+---
+
+## Summary
+
+| | BothToken (0) | OnlyB (1) | Compounding (2) |
+|---|---|---|---|
+| Price range | Concentrated or full | Concentrated or full | Full range only |
+| Single-sided | ✅ | ✅ | ❌ |
+| Fee reinvestment | Manual claim | Manual claim | Auto-compounds |
+| `compoundingFeeBps` | N/A | N/A | 0–10000 |
+| Fee result fields | `claimingFee` | `claimingFee` | `claimingFee` + `compoundingFee` |
