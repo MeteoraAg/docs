@@ -1,0 +1,169 @@
+---
+title: Creator Configuration
+description: "Every parameter a DBC launch creator controls — token supply, fees, migration targets, LP distribution, vesting, and post-migration pool settings."
+---
+
+## Overview
+
+A DBC launch is configured via a `PoolConfig` account (the "config key"). The config is created once and can be used to launch many virtual pools from it. All parameters that determine how the launch behaves are set here.
+
+---
+
+## Token Configuration
+
+| Parameter | Description |
+|-----------|-------------|
+| `token_decimal` | Base token decimals (1–9) |
+| `token_type` | `SplToken` (0) or `Token2022` (1) |
+| `token_update_authority` | Whether the creator retains update authority post-migration |
+| `fixed_token_supply_flag` | `0` = dynamic (mint on buy), `1` = fixed (pre-minted) |
+| `pre_migration_token_supply` | Only for fixed supply — total initial supply |
+| `post_migration_token_supply` | Tokens remaining after migration (for LP + locked) |
+| `leftover_receiver` | Address to receive leftover tokens (fixed supply only) |
+
+---
+
+## Fee Configuration
+
+### Trading Fees
+
+Fees are collected in the quote token (`quote_token` mode) or the output token (`output_token` mode):
+
+| `collect_fee_mode` | Value | Description |
+|--------------------|-------|-------------|
+| `QuoteToken` | `0` | Fees always in quote token (SOL/USDC) |
+| `OutputToken` | `1` | Fees in whichever token is received by the trader |
+
+<Note>
+  DBC's `collect_fee_mode` has different values from DAMM v2. DBC: `0 = QuoteToken`, `1 = OutputToken`. DAMM v2: `0 = BothToken`, `1 = OnlyB`, `2 = Compounding`.
+</Note>
+
+### Fee Split
+
+```
+Trading Fee
+  ├── Protocol Fee   (fixed by program)
+  ├── Partner Fee    (configured by partner/launchpad)
+  └── Creator Fee    (creator_trading_fee_percentage %)
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `creator_trading_fee_percentage` | Percent of LP fee that goes to creator (0–100) |
+
+---
+
+## Migration Configuration
+
+### Migration Target
+
+| `migration_option` | Value | Target |
+|--------------------|-------|--------|
+| `MeteoraDamm` | `0` | Migrate to DAMM v1 |
+| `DammV2` | `1` | Migrate to DAMM v2 |
+
+### Migration Thresholds
+
+| Parameter | Description |
+|-----------|-------------|
+| `migration_quote_threshold` | Quote reserve level that triggers migration |
+| `migration_base_threshold` | Base tokens to add to the migrated pool |
+| `migration_sqrt_price` | Initial price of the post-migration DAMM pool |
+
+### Migration Fee
+
+A one-time fee is deducted at migration. Options:
+
+| `MigrationFeeOption` | Fee |
+|---------------------|-----|
+| `FixedBps25` | 0.25% |
+| `FixedBps30` | 0.30% |
+| `FixedBps100` | 1.00% |
+| `FixedBps200` | 2.00% |
+| `FixedBps400` | 4.00% |
+| `FixedBps600` | 6.00% |
+| `Customizable` | Custom (set with a separate config for DAMM v2 migration) |
+
+Split between:
+- `migration_fee_percentage` → protocol
+- `creator_migration_fee_percentage` → creator
+
+---
+
+## LP Distribution
+
+After migration, the post-migration liquidity is distributed across:
+
+| Bucket | Parameter | Description |
+|--------|-----------|-------------|
+| Partner LP | `partner_liquidity_percentage` | % of LP going to the partner/launchpad |
+| Creator LP | `creator_liquidity_percentage` | % of LP going to the creator |
+
+Additionally, a portion of each allocation can be **permanently locked**:
+
+| Parameter | Description |
+|-----------|-------------|
+| `partner_permanent_locked_liquidity_percentage` | % of partner LP locked forever |
+| `creator_permanent_locked_liquidity_percentage` | % of creator LP locked forever |
+
+### Vesting
+
+The remaining (non-permanently-locked) LP can vest on a schedule:
+
+<Tabs>
+  <Tab title="Partner Vesting">
+    ```
+    partner_liquidity_vesting_info:
+      cliff_duration_from_migration_time: 0       // immediate cliff
+      frequency: 86400                            // daily releases
+      number_of_period: 365                       // over 1 year
+      cliff_unlock_amount: <amount>
+      amount_per_period: <amount>
+    ```
+  </Tab>
+  <Tab title="Creator Vesting">
+    ```
+    creator_liquidity_vesting_info:
+      cliff_duration_from_migration_time: 2592000 // 30 days cliff
+      frequency: 604800                           // weekly releases
+      number_of_period: 52                        // over 1 year
+      cliff_unlock_amount: <amount>
+      amount_per_period: <amount>
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Post-Migration Pool Settings (DAMM v2)
+
+When migrating to DAMM v2, additional parameters control the post-migration pool:
+
+| Parameter | Description |
+|-----------|-------------|
+| `migrated_collect_fee_mode` | Collect fee mode for the DAMM v2 pool |
+| `migrated_dynamic_fee` | Whether dynamic fee is enabled on DAMM v2 pool |
+| `migrated_pool_fee_bps` | Base fee for the DAMM v2 pool |
+| `migrated_pool_base_fee_mode` | Base fee mode for DAMM v2 pool |
+| `migrated_pool_base_fee_bytes` | Encoded base fee params for the DAMM v2 pool |
+
+---
+
+## Activation Type
+
+| `activation_type` | Value | Description |
+|-------------------|-------|-------------|
+| `Slot` | `0` | Pool opens at a specific slot |
+| `Timestamp` | `1` | Pool opens at a specific timestamp |
+
+Setting `activation_point` to a future slot/timestamp delays all trading until that point.
+
+---
+
+## Pool Creation Fee
+
+| Parameter | Description |
+|-----------|-------------|
+| `pool_creation_fee` | Lamports charged to create a virtual pool from this config |
+
+This is collected from the pool creator at creation time and distributable via `claimCreatorTradingFee`.

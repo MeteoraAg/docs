@@ -1,0 +1,159 @@
+---
+title: Position Management
+description: "How DAMM v2 positions work — NFT ownership, liquidity buckets, adding and removing liquidity, claiming fees, and closing positions."
+---
+
+## How Positions Work
+
+Every DAMM v2 LP position is an on-chain account paired with a **position NFT**. Whoever holds the NFT controls the position. This design enables positions to be:
+
+- Transferred between wallets (NFT transfer = position ownership transfer)
+- Traded on secondary markets
+- Used as collateral in future integrations
+
+### Position Account Structure
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pool` | `Pubkey` | The pool this position belongs to |
+| `nft_mint` | `Pubkey` | The position NFT mint address |
+| `unlocked_liquidity` | `u128` | Freely withdrawable liquidity |
+| `vested_liquidity` | `u128` | Liquidity releasing on a vesting schedule |
+| `permanent_locked_liquidity` | `u128` | Liquidity locked forever |
+| `fee_a_pending` | `u64` | Unclaimed token A fees |
+| `fee_b_pending` | `u64` | Unclaimed token B fees |
+| `fee_a_per_token_checkpoint` | `[u8; 32]` | Last fee-per-token snapshot (U256) |
+| `fee_b_per_token_checkpoint` | `[u8; 32]` | Last fee-per-token snapshot (U256) |
+| `reward_infos` | `[UserRewardInfo; 2]` | Per-position farming reward state |
+| `inner_vesting` | `InnerVesting` | Inline vesting schedule (no separate account needed) |
+| `metrics` | `PositionMetrics` | Cumulative claimed fee totals |
+
+---
+
+## Creating a Position
+
+A position is created when a pool is initialized via `createCustomPool`. The first position is created as part of pool setup. Additional positions can be created via `addLiquidity` / separate position creation instructions.
+
+**Required accounts:**
+- `payer` — who pays rent
+- `creator` — who receives protocol creation fee credit
+- `positionNft` — new Keypair whose public key becomes the NFT mint
+- `tokenAMint`, `tokenBMint` — pool tokens
+- Pool config account
+
+**Events emitted:** `EvtCreatePosition`, `EvtInitializePool` (on first creation), `EvtLiquidityChange`
+
+---
+
+## Adding Liquidity
+
+After a pool is live, any wallet can add liquidity to an existing position (if they own the position NFT) or create a new position.
+
+### Calculating how much to deposit
+
+Use `getDepositQuote` on the SDK with the current pool state:
+
+```typescript
+const poolState = await cpAmm.fetchPoolState(poolAddress);
+
+const depositQuote = cpAmm.getDepositQuote({
+  inAmount: new BN(1_000_000_000),
+  isTokenA: true, // true = specify token A amount, false = token B
+  sqrtPrice: poolState.sqrtPrice,
+  minSqrtPrice: poolState.sqrtMinPrice,
+  maxSqrtPrice: poolState.sqrtMaxPrice,
+  collectFeeMode: poolState.collectFeeMode,
+  tokenAAmount: poolState.tokenAAmount,
+  tokenBAmount: poolState.tokenBAmount,
+  liquidity: poolState.liquidity,
+});
+
+console.log("Token A to deposit:", depositQuote.tokenAAmount.toString());
+console.log("Token B to deposit:", depositQuote.tokenBAmount.toString());
+console.log("Liquidity delta:", depositQuote.liquidityDelta.toString());
+```
+
+**Event emitted:** `EvtLiquidityChange` with `change_type: 0`
+
+---
+
+## Removing Liquidity
+
+To withdraw liquidity, pass the liquidity delta you want to remove. The program returns proportional token amounts from the pool's current reserves.
+
+### Calculating withdraw amounts
+
+```typescript
+const withdrawQuote = cpAmm.getWithdrawQuote({
+  liquidityDelta: positionState.unlockedLiquidity, // withdraw all unlocked
+  sqrtPrice: poolState.sqrtPrice,
+  minSqrtPrice: poolState.sqrtMinPrice,
+  maxSqrtPrice: poolState.sqrtMaxPrice,
+  collectFeeMode: poolState.collectFeeMode,
+  tokenAAmount: poolState.tokenAAmount,
+  tokenBAmount: poolState.tokenBAmount,
+  liquidity: poolState.liquidity,
+});
+
+console.log("Token A out:", withdrawQuote.outAmountA.toString());
+console.log("Token B out:", withdrawQuote.outAmountB.toString());
+```
+
+<Note>
+  Only `unlocked_liquidity` can be withdrawn. `vested_liquidity` and `permanent_locked_liquidity` cannot be removed (unless vesting releases them first).
+</Note>
+
+**Event emitted:** `EvtLiquidityChange` with `change_type: 1`
+
+---
+
+## Claiming Fees
+
+Fee claims are separate from liquidity removal. Accumulated fees sit in `fee_a_pending` and `fee_b_pending` until claimed.
+
+```typescript
+const tx = await cpAmm.claimPositionFee({
+  owner: wallet.publicKey,
+  position: positionAddress,
+  pool: poolAddress,
+});
+```
+
+**Event emitted:** `EvtClaimPositionFee` with `fee_a_claimed` and `fee_b_claimed` amounts.
+
+<Note>
+  In `CollectFeeMode.OnlyB` and `CollectFeeMode.Compounding` mode, `fee_a_claimed` is always 0.
+</Note>
+
+---
+
+## Splitting Positions
+
+A position can be split into two positions using `splitPosition`. This is useful for:
+- Separating vesting tranches
+- Transferring a portion of a position to a different wallet
+- LP token distribution events
+
+The split is specified as a numerator over `SPLIT_POSITION_DENOMINATOR` (10,000). E.g., `split_numerator = 5000` splits the position 50/50.
+
+The split proportionally divides:
+- `unlocked_liquidity`
+- `permanent_locked_liquidity`
+- `fee_a_pending`, `fee_b_pending`
+- Reward pendings (both slots)
+- Inner vesting schedule (cliff amounts and per-period amounts)
+
+**Event emitted:** `EvtSplitPosition3`
+
+---
+
+## Closing a Position
+
+A position can be closed only when it is **empty**:
+- `get_total_liquidity() == 0` (all liquidity removed)
+- `fee_a_pending == 0`, `fee_b_pending == 0` (fees claimed)
+- All reward pendings == 0 (rewards claimed)
+
+Closing returns the rent to the payer and burns the position NFT.
+
+**Event emitted:** `EvtClosePosition`

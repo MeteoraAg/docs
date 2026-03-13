@@ -1,0 +1,148 @@
+---
+title: Farming Rewards
+description: "How DAMM v2's built-in farming works — reward slots, pro-rata distribution, initializing rewards, funding, and claiming. No separate staking contract needed."
+---
+
+## Overview
+
+Every DAMM v2 pool has **two built-in reward slots** (`reward_infos[0]` and `reward_infos[1]`). Any SPL token (including Token 2022) can be used as a reward. LPs earn rewards proportional to their total position liquidity — including vested and permanently locked liquidity.
+
+No staking contract, no LP token wrapping. Positions earn rewards automatically while they hold liquidity.
+
+---
+
+## Reward Distribution Model
+
+Rewards use a **reward-per-token-stored** accumulator pattern (similar to Uniswap v3 staking):
+
+```
+reward_rate = total_funded_amount / reward_duration
+reward_per_token += reward_rate × elapsed_time / total_pool_liquidity
+
+pending_reward[position] = position_liquidity × (reward_per_token - checkpoint[position])
+```
+
+| Field | Description |
+|-------|-------------|
+| `reward_per_token_stored` | Cumulative rewards per unit liquidity (U256, stored as `[u8; 32]`) |
+| `reward_rate` | Tokens emitted per second (or slot) |
+| `reward_duration_end` | When the current campaign ends |
+| `total_claimed_rewards` | Lifetime claimed by this position |
+
+### Why U256?
+
+The accumulator uses 256-bit math to avoid overflow over long reward campaigns with small reward rates or large liquidity values.
+
+---
+
+## Lifecycle
+
+### 1. Initialize a Reward
+
+The pool creator calls `initializeReward` to set up one of the two reward slots:
+
+```typescript
+const tx = await cpAmm.initializeReward({
+  pool: poolAddress,
+  rewardMint: rewardTokenMint,
+  funder: wallet.publicKey,
+  rewardIndex: 0, // 0 or 1
+  rewardDuration: 30 * 24 * 3600, // 30 days in seconds
+});
+```
+
+**Constraints:**
+- `reward_index` must be 0 or 1 (`InvalidRewardIndex` if out of range)
+- `reward_duration` must be > 0 (`InvalidRewardDuration`)
+- Cannot re-initialize an already active slot (`RewardInitialized`)
+
+**Event emitted:** `EvtInitializeReward`
+
+---
+
+### 2. Fund the Reward
+
+Transfer reward tokens into the reward vault:
+
+```typescript
+const tx = await cpAmm.fundReward({
+  pool: poolAddress,
+  rewardIndex: 0,
+  amount: new BN(1_000_000_000_000), // total reward budget
+});
+```
+
+Funding sets `reward_rate = amount / remaining_duration` and extends the campaign if called mid-campaign.
+
+**Events emitted:** `EvtFundReward` with `pre_reward_rate` and `post_reward_rate`
+
+---
+
+### 3. LPs Accrue Rewards Passively
+
+As time passes, `reward_per_token_stored` increases. Every time a position is touched (add/remove liquidity, claim fees, claim reward), the position's checkpoint is updated:
+
+```
+new_reward = position_liquidity × (reward_per_token_stored - checkpoint)
+pending += new_reward
+checkpoint = reward_per_token_stored
+```
+
+---
+
+### 4. Claim Rewards
+
+```typescript
+const tx = await cpAmm.claimReward({
+  owner: wallet.publicKey,
+  position: positionAddress,
+  pool: poolAddress,
+  rewardIndex: 0,
+});
+```
+
+This transfers all `reward_pendings[0]` to the owner and resets the pending amount.
+
+**Event emitted:** `EvtClaimReward`
+
+---
+
+## Updating a Reward Campaign
+
+| Action | Instruction | Notes |
+|--------|-------------|-------|
+| Change duration | `updateRewardDuration` | Can only extend, not shorten an active campaign |
+| Change funder | `updateRewardFunder` | New funder becomes responsible for future `fundReward` calls |
+| Withdraw ineligible | `withdrawIneligibleReward` | Reclaim tokens after campaign ends with unfunded remainder |
+
+---
+
+## Reward Constraints
+
+| Constraint | Details |
+|------------|---------|
+| Max reward slots | 2 per pool |
+| Reward during locked liquidity | ✅ Vested + permanent locked liquidity earns rewards |
+| Token 2022 rewards | ✅ Supported |
+| Native SOL rewards | ❌ (use wrapped SOL) |
+| Frozen vault | If reward vault is frozen, must skip reward (`RewardVaultFrozenSkipRequired`) |
+
+---
+
+## Reading Pending Rewards (TypeScript)
+
+```typescript
+const poolState = await cpAmm.fetchPoolState(poolAddress);
+const positionState = await cpAmm.fetchPositionState(positionAddress);
+
+// Update position reward checkpoints first (simulate on-chain update)
+const currentTime = Math.floor(Date.now() / 1000);
+
+for (let i = 0; i < 2; i++) {
+  const rewardInfo = poolState.rewardInfos[i];
+  if (rewardInfo.initialized) {
+    const pending = positionState.rewardInfos[i].rewardPendings;
+    console.log(`Reward ${i} pending:`, pending.toString());
+  }
+}
+```
