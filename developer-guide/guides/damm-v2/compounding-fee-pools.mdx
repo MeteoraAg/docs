@@ -1,0 +1,193 @@
+---
+title: Pool Liquidity Modes
+sidebarTitle: Pool Liquidity Modes
+description: How to create DAMM v2 pools using concentrated liquidity or compounding fee mode
+---
+
+DAMM v2 supports three collect fee modes, each suited to different LP strategies. This guide covers the two pool creation approaches developers use: **concentrated liquidity** (modes 0 and 1) and **compounding fee** (mode 2).
+
+| Mode | `collectFeeMode` | Price Range | Single-Sided | Fee Behaviour |
+|------|-----------------|-------------|--------------|---------------|
+| BothToken | `0` | Concentrated or full | ✅ | Fees claimable in both tokens |
+| OnlyB | `1` | Concentrated or full | ✅ | Fees claimable in quote token only |
+| Compounding | `2` | Full range only | ❌ | Portion of fees auto-compounds back into liquidity |
+
+---
+
+## Concentrated Liquidity Pools
+
+Concentrated liquidity pools allow LPs to focus capital within a chosen price range, earning more fees per dollar deposited when the market price stays within range. These use `collectFeeMode` `0` (BothToken) or `1` (OnlyB).
+
+**Key characteristics:**
+
+- **Custom price range** — Set `minPrice` / `maxPrice` to concentrate liquidity. Use `MIN_SQRT_PRICE` / `MAX_SQRT_PRICE` for full-range.
+- **Single-sided supported** — Deposit only token A (one-sided) or both tokens (balanced).
+- **Fees claimable** — LPs claim accumulated fees separately from their position.
+
+### TypeScript SDK
+
+```typescript
+import { Connection, Keypair } from "@solana/web3.js";
+import {
+  CpAmm,
+  CollectFeeMode,
+  BaseFeeMode,
+  ActivationType,
+  MIN_SQRT_PRICE,
+  MAX_SQRT_PRICE,
+  getSqrtPriceFromPrice,
+  getBaseFeeParams,
+  getDynamicFeeParams,
+} from "@meteora-ag/cp-amm-sdk";
+import BN from "bn.js";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+const cpAmm = new CpAmm(connection);
+
+const tokenADecimals = 9;
+const tokenBDecimals = 6;
+
+// Define your price range (or use MIN/MAX for full range)
+const minSqrtPrice = getSqrtPriceFromPrice("0.5", tokenADecimals, tokenBDecimals);
+const maxSqrtPrice = getSqrtPriceFromPrice("2.0", tokenADecimals, tokenBDecimals);
+
+// Calculate initial sqrt price and liquidity
+const { initSqrtPrice, liquidityDelta } = cpAmm.preparePoolCreationParams({
+  tokenAAmount: new BN(1_000_000_000),
+  tokenBAmount: new BN(1_000_000),
+  minSqrtPrice,
+  maxSqrtPrice,
+  collectFeeMode: CollectFeeMode.BothToken, // or CollectFeeMode.OnlyB
+});
+
+// Configure fees
+const baseFeeParams = getBaseFeeParams(
+  {
+    baseFeeMode: BaseFeeMode.FeeTimeSchedulerLinear,
+    feeTimeSchedulerParam: {
+      startingFeeBps: 100, // 1%
+      endingFeeBps: 25,    // 0.25%
+      numberOfPeriod: 10,
+      totalDuration: 3600,
+    },
+  },
+  tokenBDecimals,
+  ActivationType.Timestamp
+);
+
+const poolFees = {
+  baseFee: baseFeeParams,
+  compoundingFeeBps: 0, // not used for concentrated liquidity
+  padding: 0,
+  dynamicFee: getDynamicFeeParams(25),
+};
+
+const positionNft = Keypair.generate();
+
+const { tx, pool, position } = await cpAmm.createCustomPool({
+  payer: wallet.publicKey,
+  creator: wallet.publicKey,
+  positionNft: positionNft.publicKey,
+  tokenAMint,
+  tokenBMint,
+  tokenAAmount: new BN(1_000_000_000),
+  tokenBAmount: new BN(1_000_000),
+  sqrtMinPrice: minSqrtPrice,
+  sqrtMaxPrice: maxSqrtPrice,
+  initSqrtPrice,
+  liquidityDelta,
+  poolFees,
+  hasAlphaVault: false,
+  collectFeeMode: CollectFeeMode.BothToken, // 0 or 1
+  activationPoint: null,
+  activationType: ActivationType.Slot,
+  tokenAProgram,
+  tokenBProgram,
+});
+
+console.log("Pool:", pool.toString());
+```
+
+---
+
+## Compounding Fee Pools
+
+Compounding fee pools use a constant-product full-range (x·y=k) model where a configurable percentage of trading fees are automatically reinvested back into pool liquidity as token B. The remaining fees are claimable by LPs.
+
+**Key characteristics:**
+
+- **Full-range only** — Uses the full price range. `minPrice` / `maxPrice` config values are ignored.
+- **Balanced pools only** — Both tokens required at creation. Single-sided deposits are not supported due to DEAD_LIQUIDITY.
+- **`collectFeeMode: 2`** — `CollectFeeMode.Compounding`.
+- **`compoundingFeeBps`** — Controls the fee split (0–10000 bps). E.g. `5000` = 50% compounds back, 50% claimable.
+- **Fee fields** — Swap results expose `claimingFee` + `compoundingFee` instead of a single `tradingFee`.
+
+<Note>
+  Compounding pools work best for long-term LPs who want fee income to grow their position size automatically.
+</Note>
+
+### TypeScript SDK
+
+```typescript
+import {
+  CpAmm,
+  CollectFeeMode,
+  BaseFeeMode,
+  ActivationType,
+  MIN_SQRT_PRICE,
+  MAX_SQRT_PRICE,
+  getBaseFeeParams,
+  getDynamicFeeParams,
+} from "@meteora-ag/cp-amm-sdk"; // requires ^1.3.7
+
+// Compounding pools use full range
+const { initSqrtPrice, liquidityDelta } = cpAmm.preparePoolCreationParams({
+  tokenAAmount: new BN(1_000_000_000),
+  tokenBAmount: new BN(10_000_000_000),
+  minSqrtPrice: MIN_SQRT_PRICE,
+  maxSqrtPrice: MAX_SQRT_PRICE,
+  collectFeeMode: CollectFeeMode.Compounding,
+});
+
+const poolFees = {
+  baseFee: getBaseFeeParams(
+    {
+      baseFeeMode: BaseFeeMode.FeeTimeSchedulerLinear,
+      feeTimeSchedulerParam: {
+        startingFeeBps: 100,
+        endingFeeBps: 25,
+        numberOfPeriod: 10,
+        totalDuration: 3600,
+      },
+    },
+    tokenBDecimals,
+    ActivationType.Timestamp
+  ),
+  compoundingFeeBps: 5000, // 50% of fees compound back into liquidity
+  padding: 0,
+  dynamicFee: getDynamicFeeParams(25),
+};
+
+const positionNft = Keypair.generate();
+
+const { tx, pool, position } = await cpAmm.createCustomPool({
+  payer: wallet.publicKey,
+  creator: wallet.publicKey,
+  positionNft: positionNft.publicKey,
+  tokenAMint,
+  tokenBMint,
+  tokenAAmount: new BN(1_000_000_000),
+  tokenBAmount: new BN(10_000_000_000),
+  sqrtMinPrice: MIN_SQRT_PRICE, // full range
+  sqrtMaxPrice: MAX_SQRT_PRICE,
+  initSqrtPrice,
+  liquidityDelta,
+  poolFees,
+  hasAlphaVault: false,
+  collectFeeMode: CollectFeeMode.Compounding, // mode 2
+  activationPoint: null,
+  activationType: ActivationType.Slot,
+  tokenAProgram,
+  tokenBProgram,
+});
+```
