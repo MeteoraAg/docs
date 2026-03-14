@@ -95,8 +95,6 @@ Standard API patterns:
 - DLMM API: `https://dlmm.datapi.meteora.ag`
 - DAMM v2 API: `https://damm-v2.datapi.meteora.ag/`
 
-Note: The legacy endpoints (`dlmm-api.meteora.ag` and `dammv2-api.meteora.ag`) were decommissioned on March 15, 2026. The new API is a full rewrite — request and response schemas have changed. See https://docs.meteora.ag/api-reference for the updated API reference.
-
 ## Frontmatter requirements for pages
 
 - title: Clear, descriptive page title
