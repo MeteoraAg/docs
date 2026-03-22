@@ -41,7 +41,70 @@ DAMM v2 comes with the following features.
   </Card>
 </CardGroup>
 
----
+# Pool Creation Options
+
+DAMM v2 supports three ways to create a pool, each offering different levels of control:
+
+| Method | Description |
+|---|---|
+| `initialize_pool` | Creates a pool using a pre-defined **static config** created by Meteora. Fee parameters are fixed. |
+| `initialize_pool_with_dynamic_config` | Creates a pool using a **dynamic config**. The pool creator defines all fee parameters during creation. |
+| `initialize_customizable_pool` | Creates a **fully customizable** pool where the pool creator sets all parameters including fee mode, dynamic fees, and compounding settings. |
+
+<Note>All three creation methods support `collect_fee_mode = 2` (Compounding) and `compounding_fee_bps` configuration.</Note>
+
+# Position Features
+
+Each liquidity position in DAMM v2 is represented by an NFT, making positions transferable between wallets.
+
+## Liquidity Locking & Vesting
+
+Positions support three liquidity states:
+
+| State | Description |
+|---|---|
+| **Unlocked** | Can be withdrawn at any time by the position owner. |
+| **Vesting** | Time-locked liquidity that gradually becomes unlocked based on a cliff + periodic release schedule. |
+| **Permanently Locked** | Cannot be withdrawn ever, but still earns trading fees and farming rewards. |
+
+Use `lock_position` or `lock_inner_position` to vest liquidity directly within a position (no separate vesting account required). Use `permanent_lock_position` to permanently lock liquidity. Call `refresh_vesting` to release vested liquidity that has reached its unlock time.
+
+<Note>`lock_inner_position` stores vesting state inside the position itself, enabling better composability with other programs.</Note>
+
+## Position Splitting
+
+Position owners can split a position into two using `split_position` or `split_position2`. The split proportionally divides:
+
+- Unlocked, vested, and permanently locked liquidity
+- Pending trading fees (both tokens)
+- Pending farming rewards
+- Inner vesting state
+
+This is useful for partially transferring or selling a portion of a position.
+
+# Swap Modes
+
+DAMM v2 supports two swap instructions:
+
+| Instruction | Modes |
+|---|---|
+| `swap` | ExactIn only (deprecated) |
+| `swap2` | ExactIn (0), PartialFill (1), ExactOut (2) |
+
+<Warning>The original `swap` instruction and the `EvtSwap`, `EvtRemoveLiquidity`, and `EvtAddLiquidity` events are deprecated. Use `swap2` and `EvtSwap2` / `EvtLiquidityChange` instead.</Warning>
+
+<Note>For pools with Rate Limiter enabled (`baseFeeMode == 2`), the `SYSVAR_INSTRUCTIONS_PUBKEY` must be included in the remaining accounts of the swap instruction.</Note>
+
+# Farming Rewards
+
+DAMM v2 has a built-in farming mechanism (no separate farm program required). Each pool supports up to **2 reward tokens** simultaneously.
+
+- Pool creators can permissionlessly initialize the first reward (index 0) for their own pool
+- Rewards are distributed proportionally based on position liquidity (including unlocked, vesting, and permanently locked)
+- LPs claim rewards via `claim_reward`
+- The `skip_reward` parameter allows claiming even if a reward vault is frozen
+
+# Case Studies
 
 ## Program Address
 

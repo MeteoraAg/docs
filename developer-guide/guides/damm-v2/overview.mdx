@@ -77,17 +77,11 @@ DAMM v2 pools have a `layout_version` field that indicates the on-chain account 
 | 0 | Original layout. Does not track `token_a_amount` or `token_b_amount`. |
 | 1 | Tracks `token_a_amount` and `token_b_amount` directly in the pool state. |
 
-All new pools are created with `layout_version = 1`. Existing v0 pools can be migrated to v1 using the `fix_pool_layout_version` instruction.
+All new pools are created with `layout_version = 1`.
 
 <Note>
 When reading pool state, check `layout_version` before accessing `token_a_amount` or `token_b_amount`. These fields are only populated on v1 pools.
 </Note>
-
-## Operator Permission System
-
-DAMM v2 pools support a granular operator permission system with 12 discrete permissions. An operator account can be delegated a subset of these permissions by the pool creator, allowing third parties (such as market makers or bots) to manage specific pool parameters without holding full authority.
-
-Permissions cover operations such as updating fee parameters, activating or deactivating the pool, and modifying liquidity ranges. Refer to the DAMM v2 program source for the full list of permission flags.
 
 ## Compounding Fee Mode
 

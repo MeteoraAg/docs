@@ -84,40 +84,22 @@ At Meteora, we’ve developed a `Node.js <> Typescript SDK`, a `Rust SDK` and a 
 
 ---
 
-# Operator Account System
+# Swap Modes
 
-The Operator Account System provides a flexible, permission-based way for admins to delegate protocol fee management to whitelisted addresses.
+DBC supports two swap instructions:
 
-<Note>Operator accounts replace the previous `create_claim_protocol_fee_operator` approach. They are created by the program admin only.</Note>
+| Instruction | Modes |
+|---|---|
+| `swap` | ExactIn only |
+| `swap2` | ExactIn (0), PartialFill (1), ExactOut (2) |
 
-## Instructions
+`swap2` includes additional information in the `EvtSwap2` event such as `quoteReserveAmount`, `migrationThreshold`, and `includedFeeInputAmount`.
 
-- `create_operator_account(permission: u128)` — Creates an operator account for a whitelisted address with a bitmask of permissions.
-- `close_operator_account()` — Removes an existing operator account.
+<Note>For pools with Rate Limiter enabled (`baseFeeMode == 2`), the `SYSVAR_INSTRUCTIONS_PUBKEY` must be included in the remaining accounts of the swap instruction.</Note>
 
-## Permissions
+# Pool Creator Transfer
 
-Permissions are encoded as a `u128` bitmask. Multiple permissions can be combined.
-
-| Permission | Bit | Description |
-|---|---|---|
-| `ClaimProtocolFee` | 0 | Can claim protocol fees and pool creation fees |
-| `ZapProtocolFee` | 1 | Can zap protocol fees into SOL/USDC or pool tokens |
-
-## PDA
-
-Operator accounts are PDAs derived from:
-```
-[OPERATOR_PREFIX, whitelisted_address]
-```
-
-## `zap_protocol_fee`
-
-Operators with the `ZapProtocolFee` permission can call `zap_protocol_fee` to convert accumulated protocol fees from any token into SOL, USDC, or pool tokens.
-
-<Warning>SOL and USDC protocol fees cannot be zapped — they must be claimed directly via `claim_protocol_fee`.</Warning>
-
-<Note>`zap_protocol_fee` requires the `SYSVAR_INSTRUCTIONS_PUBKEY` sysvar account to be included for transaction context validation.</Note>
+Pool creators can transfer their creator rights to a new address using the `transfer_pool_creator` instruction. This transfers all creator privileges including fee claiming rights and surplus withdrawal.
 
 ---
 
