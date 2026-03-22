@@ -47,6 +47,36 @@ The farming rewards are calculated as:
 ```
 </div>
 
+# Compounding Fee Mode
+
+When a pool uses Compounding Fee Mode (`collect_fee_mode = 2`), it operates as a standard constant-product AMM with no concentrated price range. The pool reserves grow over time as a portion of trading fees are automatically reinvested.
+
+## Constant-Product Formula
+
+The pool maintains the invariant:
+
+```math
+\text{token\_a\_amount} \times \text{token\_b\_amount} = k
+```
+
+where $k$ is a constant. Unlike the standard DAMM v2 concentrated liquidity formula, there is no `sqrt_min_price` or `sqrt_max_price` bound — liquidity spans the full price range.
+
+<Note>Pools with `layout_version == 1` track `token_a_amount` and `token_b_amount` directly in the pool state, enabling accurate reserve accounting for the compounding mechanism.</Note>
+
+## Fee Split Formulas
+
+The total trading fee ($f_s$) is split between the claimable LP fee and the compounding fee:
+
+```math
+\text{claiming\_fee} = f_s \times \left(1 - \frac{\text{compounding\_fee\_bps}}{10000}\right)
+```
+
+```math
+\text{compounding\_fee} = f_s \times \frac{\text{compounding\_fee\_bps}}{10000}
+```
+
+The compounding fee is added directly to the pool reserves, increasing $k$ over time and benefiting all LPs proportionally.
+
 # Price Impact
 
 The price impact for a swap can be calculated as:

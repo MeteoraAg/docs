@@ -7,7 +7,11 @@ DAMM v2 LPs earn a swap fee from traders when they perform a swap. The fees can 
 
 - **BothToken (0)** — fees claimable in both base and quote tokens
 - **OnlyB (1)** — fees claimable in quote token only
-- **Compounding (2)** — a configurable portion of fees is automatically reinvested into pool liquidity; the remainder is claimable
+- **Compounding (2)** — a configurable percentage of fees is automatically reinvested back into the pool reserves; the remainder is claimable
+
+<Note>In BothToken and OnlyB modes, fees are not compounded into pool liquidity and can be claimed separately. In Compounding mode, a portion of fees is automatically reinvested — see [Compounding Fee Mode](#compounding-fee-mode) below.</Note>
+
+<Warning>**Breaking change in v0.2.0:** The `partner_fee` field has been removed from DAMM v2. It has been replaced by `compounding_fee` in the `EvtSwap2` event. If you were tracking `partner_fee` in your integrations, update your code to use `compounding_fee` instead.</Warning>
 
 # Total Trading Fee
 
@@ -112,7 +116,39 @@ The decay mechanism is based on the time elapsed since the last significant trad
 
 If you set the `useDynamicFee` to `true` in the config key when you deploy via [DAMM v2 Launch Pool](/developer-guide/quick-launch/damm-v2-launch-pool), the max dynamic fee on DAMM v2 will be less than or equals to 20% of the Base Fee. You can also choose to configure the dynamic fee manually based on the math formula above.
 
-**Example:** 
+**Example:**
 - Base Fee = 1%
 - Dynamic Fee = 0.2%
 - Total Trading/LP Fee = 1.2%
+
+# Compounding Fee Mode
+
+Compounding Fee Mode is a third fee collection option (`collect_fee_mode = 2`) where a configurable percentage of trading fees is automatically reinvested into the pool reserves, instead of being held for LP claiming. The rest of the fee is still claimable by LPs as normal.
+
+This mode is configured using the `compounding_fee_bps` parameter, which defines how many basis points of the LP fee are compounded. For example, a value of 5000 means 50% of the trading fee auto-compounds, and the remaining 50% is claimable.
+
+<Note>Pools using Compounding Fee Mode operate as a standard constant-product AMM with no concentrated price range. See [DAMM v2 Formulas](/overview/products/damm-v2/damm-v2-formulas) for details.</Note>
+
+## Fee Split
+
+The protocol fee is calculated from the total trading fee ($f_s$) before the split. The remainder is then divided between the claiming fee and the compounding fee:
+
+```math
+\text{claiming\_fee} = f_s \times \left(1 - \frac{\text{compounding\_fee\_bps}}{10000}\right)
+```
+
+```math
+\text{compounding\_fee} = f_s \times \frac{\text{compounding\_fee\_bps}}{10000}
+```
+
+So:
+
+```math
+f_s = \text{claiming\_fee} + \text{compounding\_fee}
+```
+
+**Example:**
+- Total trading fee ($f_s$) = 1%
+- `compounding_fee_bps` = 3000 (30%)
+- Compounding fee = 0.3% (auto-reinvested into pool reserves)
+- Claiming fee = 0.7% (claimable by LPs)

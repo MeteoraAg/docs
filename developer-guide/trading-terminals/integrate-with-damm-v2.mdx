@@ -24,10 +24,6 @@ Base Fees includes either a Flat Fee, Fee Scheduler, Rate Limiter, or Fee Market
     - 4 = Exponential Fee Market Cap Scheduler
 </Note>
 
-<Info>
-    **Pool Version Note:** Pool Version V1 supports up to 99% max fee (increased from V0's 50% max fee).
-</Info>
-
 #### Decoding BaseFee
 
 The `baseFee.data` field is a `number[]` (byte array) that requires decoding when indexed. The decoder type depends on the **data source** and **`baseFeeMode`**.
@@ -198,6 +194,19 @@ Here are some examples of how the Fee Market Cap Scheduler works:
 
 You can refer to the Dynamic Fee calculation [here](/overview/products/damm-v2/pool-fees-calculation#dynamic-fee-variable-fee)
 
+## Pool Version (fee_version)
+
+The `fee_version` field on a pool state indicates its version. Pool version determines the maximum allowed fee.
+
+| `fee_version` | Max Fee |
+|---|---|
+| 0 (V0) | 50% |
+| 1 (V1) | 99% |
+
+<Info>
+All newly created pools are V1. V0 pools can be upgraded to V1 using the `fix_pool_layout_version` instruction.
+</Info>
+
 ## Plotting Charts
 
 <Danger>Using Transfer logs from Swap transactions is not the correct way of getting the token price as we have Anti-Sniper Suite features that can cause huge fee deductions from `TokenAmountIn` OR `TokenAmountOut`. Plotting the token chart price from these will lead to a very ugly chart.</Danger>
@@ -211,7 +220,7 @@ Because of the Anti-Sniper Suite features, you will have to apply the following 
 [1.1] Firstly, you will need to identify where the fees are coming from (either from input or output): 
 
 ```
-feeOnInput: (collectFeeMode == 1 && tradeDirection == 1)? true: false
+feeOnInput: (collectFeeMode == 1 && tradeDirection == 1) || (collectFeeMode == 2 && tradeDirection == 1) ? true : false
 ```
 
 [1.2] Next, calculate the amount and plot price depending on where the fees are coming from (either from input or output):
@@ -219,7 +228,46 @@ feeOnInput: (collectFeeMode == 1 && tradeDirection == 1)? true: false
 ```
 if (feeOnInput): price = excludedFeeInputAmount / outputAmount
 
-if (!feeOnInput): price = excludedFeeInputAmount / outputAmount + tradingFee + protocolFee + referralFee + partnerFee
+if (!feeOnInput): price = excludedFeeInputAmount / (outputAmount + tradingFee + protocolFee + referralFee + compoundingFee)
+```
+
+<Warning>
+**Breaking change in v0.2.0:** `EvtSwap2` no longer contains a `partner_fee` field. It has been replaced by `compounding_fee`. Update any integrations that previously read `partner_fee` from swap CPI logs to use `compounding_fee` instead.
+
+The total trading fee is now: `tradingFee = claimingFee + compoundingFee`
+</Warning>
+
+### Collect Fee Mode 2 (Compounding)
+
+When `collectFeeMode == 2`, the pool operates in **Compounding** mode. This affects how you interpret swap events and price calculations:
+
+- Fees are always collected in Token B (quote token), regardless of trade direction.
+- For B→A trades (`tradeDirection == 1`), fees are deducted from the input amount (`feeOnInput = true`).
+- A percentage of the fee (configured by `compounding_fee_bps`) is automatically reinvested back into the pool reserves rather than being claimable by LPs. This portion appears as `compounding_fee` in `EvtSwap2`.
+- The pool uses a constant-product formula (no concentrated liquidity range) in this mode.
+
+**Fee collection summary by mode and direction:**
+
+| `collectFeeMode` | A→B trade | B→A trade |
+|---|---|---|
+| 0 (BothToken) | Fee on B (output) | Fee on A (output) |
+| 1 (OnlyB) | Fee on B (output) | Fee on B (input) |
+| 2 (Compounding) | Fee on B (output) | Fee on B (input) + auto-compound |
+
+**`SwapResult2` fields (v0.2.0+):**
+
+```typescript
+interface SwapResult2 {
+  included_fee_input_amount: BN;   // Input amount including fee (when feeOnInput)
+  excluded_fee_input_amount: BN;   // Input amount excluding fee
+  amount_left: BN;                 // Remaining amount after swap
+  output_amount: BN;               // Output amount to recipient
+  next_sqrt_price: BN;             // Pool sqrt price after swap
+  claiming_fee: BN;                // Fee claimable by LPs
+  compounding_fee: BN;             // Fee auto-reinvested into reserves (replaces partner_fee)
+  protocol_fee: BN;                // Fee taken by protocol
+  referral_fee: BN;                // Fee taken by referral account
+}
 ```
 
 ## Trading Volume

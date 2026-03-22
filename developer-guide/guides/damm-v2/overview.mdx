@@ -68,6 +68,47 @@ At Meteora, we’ve developed a `Node.js <> Typescript SDK`, a `Rust SDK` and a 
   </table>
 </div>
 
+## Pool Layout Versioning
+
+DAMM v2 pools have a `layout_version` field that indicates the on-chain account layout version.
+
+| `layout_version` | Description |
+|---|---|
+| 0 | Original layout. Does not track `token_a_amount` or `token_b_amount`. |
+| 1 | Tracks `token_a_amount` and `token_b_amount` directly in the pool state. |
+
+All new pools are created with `layout_version = 1`. Existing v0 pools can be migrated to v1 using the `fix_pool_layout_version` instruction.
+
+<Note>
+When reading pool state, check `layout_version` before accessing `token_a_amount` or `token_b_amount`. These fields are only populated on v1 pools.
+</Note>
+
+## Operator Permission System
+
+DAMM v2 pools support a granular operator permission system with 12 discrete permissions. An operator account can be delegated a subset of these permissions by the pool creator, allowing third parties (such as market makers or bots) to manage specific pool parameters without holding full authority.
+
+Permissions cover operations such as updating fee parameters, activating or deactivating the pool, and modifying liquidity ranges. Refer to the DAMM v2 program source for the full list of permission flags.
+
+## Compounding Fee Mode
+
+DAMM v2 v0.2.0 introduces a third fee collection mode (`collect_fee_mode = 2`).
+
+| `collect_fee_mode` | Fee Token | Fee on Input? |
+|---|---|---|
+| 0 (BothToken) | Output token | No (fee on output) |
+| 1 (OnlyB) | Token B | Only for B→A trades |
+| 2 (Compounding) | Token B | Only for B→A trades |
+
+In Compounding mode, a percentage of the collected fee (set by `compounding_fee_bps` on the config) is automatically reinvested back into pool reserves rather than accruing to LP positions. This portion is reported as `compounding_fee` in `EvtSwap2`. The remaining claimable portion is reported as `claiming_fee`.
+
+<Note>
+Compounding mode pools use a constant-product formula with no concentrated liquidity range.
+</Note>
+
+<Warning>
+**Breaking change in v0.2.0:** The `partner` field has been removed from the Pool struct and the `claim_partner_fee` instruction has been removed. The `partner_fee` field in `EvtSwap2` has been replaced by `compounding_fee`. Integrations that previously read `partner_fee` must be updated.
+</Warning>
+
 ## Official SDKs
 
 <CardGroup cols={2}>
