@@ -118,3 +118,41 @@ Protocol Fee is a percentage of the Total Trading Fee (i.e. base + dynamic/varia
 **Current Protocol Fees:** Protocol Fee is 20% of the Total Trading Fee.
 
 Protocol fees are collected as either Quote token, or Quote + Both tokens, depending on each pool’s configuration.
+
+# Post-Migration Fee Modes (DAMM v2 Graduated Pools)
+
+When a DBC pool graduates and migrates to DAMM v2, the fee collection behavior is controlled by the `collectFeeMode` set in the `migratedPoolFee` config. There are three modes available:
+
+## Mode 0 — QuoteToken (OnlyB)
+
+Fees from all trades are collected entirely in the quote token (e.g. SOL or USDC), regardless of trade direction. Maps to DAMM v2’s `OnlyB` collect fee mode.
+
+## Mode 1 — OutputToken (BothToken)
+
+Fees are collected in the output token of each swap. For a buy (quote → base), the fee is in the base token. For a sell (base → quote), the fee is in the quote token. Maps to DAMM v2’s `BothToken` collect fee mode.
+
+## Mode 2 — Compounding
+
+Fees are not distributed as claimable amounts. Instead, they are automatically reinvested back into the LP position, compounding the liquidity value over time.
+
+The compounding fee rate is specified in basis points via `compoundingFeeBps`:
+
+```math
+\text{compounded amount} = \text{fee collected} \times \frac{\text{compoundingFeeBps}}{10000}
+```
+
+<Note>
+When `collectFeeMode` is set to `2` (Compounding), `compoundingFeeBps` must be a non-zero value. When using any other mode, `compoundingFeeBps` must be `0`.
+</Note>
+
+<Warning>
+SOL and USDC protocol fees cannot be zapped or compounded automatically — they must be claimed directly using `claim_protocol_fee`.
+</Warning>
+
+### DBC to DAMM v2 Fee Mode Mapping
+
+| DBC `collectFeeMode` | DAMM v2 mode |
+|---|---|
+| 0 (QuoteToken) | 1 (OnlyB) |
+| 1 (OutputToken) | 0 (BothToken) |
+| 2 (Compounding) | 2 (Compounding) |

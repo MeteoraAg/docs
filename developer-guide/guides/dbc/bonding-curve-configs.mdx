@@ -65,7 +65,7 @@ A typical DBC curve config will look like this when you parse it into the `creat
         creatorTradingFeePercentage: 0,
         tokenUpdateAuthority: 1,
         migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
-        migratedPoolFee: { collectFeeMode: 0, dynamicFee: 0, poolFeeBps: 0 },
+        migratedPoolFee: { collectFeeMode: 0, dynamicFee: 0, poolFeeBps: 0, compoundingFeeBps: 0 },
         poolCreationFee: new BN(0),
         enableFirstSwapWithMinFee: false,
         partnerLiquidityVestingInfo: {
@@ -329,8 +329,31 @@ migrationFee: {
     - `collectFeeMode` - The collect fee mode of the post-graduation pool.
     - `dynamicFee` - The dynamic fee of the post-graduation pool.
     - `poolFeeBps` - The pool fee of the post-graduation pool.
+    - `compoundingFeeBps` - The compounding fee rate in basis points. Must be non-zero when `collectFeeMode` is `2` (Compounding), and must be `0` for all other modes.
 
 <Note>When `marketCapFeeSchedulerParams` is configured, `poolFeeBps` must be greater than 0 as it serves as the starting (cliff) fee for the market cap fee scheduler.</Note>
+
+#### `migratedPoolFee.collectFeeMode` options
+
+Controls how trading fees are collected in the graduated DAMM v2 pool:
+
+- `0` (`QuoteToken`) — Fees are collected in the quote token only. Maps to DAMM v2's `OnlyB` mode.
+- `1` (`OutputToken`) — Fees are collected in the output token of each swap (both tokens). Maps to DAMM v2's `BothToken` mode.
+- `2` (`Compounding`) — Fees are automatically reinvested into the LP position. Requires `compoundingFeeBps` to be non-zero.
+
+Example — Compounding fee mode:
+```typescript
+migratedPoolFee: {
+    collectFeeMode: 2,       // Compounding
+    dynamicFee: 0,
+    poolFeeBps: 100,         // 1% base fee
+    compoundingFeeBps: 50    // 0.5% compounded back into LP
+}
+```
+
+<Warning>
+When `collectFeeMode` is set to `2` (Compounding), `compoundingFeeBps` must be greater than `0`. When using any other mode, `compoundingFeeBps` must be `0`.
+</Warning>
 
 ### `liquidityPercentage`
 

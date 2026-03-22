@@ -48,7 +48,19 @@ A DBC Config Key is a unique configuration key that will dictate your curve stru
       <li><strong>Migrated Pool Base Fee Mode</strong> - Fee mode for the graduated DAMM v2 pool: FeeTimeSchedulerLinear (0), FeeTimeSchedulerExponential (1), FeeMarketCapSchedulerLinear (3), or FeeMarketCapSchedulerExponential (4)</li>
       <li><strong>Market Cap Fee Scheduler Params</strong> - Configure fee reduction based on price movement for DAMM v2 pools (number of periods, sqrt price step, expiration duration)</li>
       <li><strong>First Swap with Min Fee</strong> - Allow the first swap to use minimum fee for creator bundled buys</li>
+      <li><strong>Compounding Fee Mode</strong> - For DAMM v2 graduated pools, set <code>collectFeeMode: 2</code> (Compounding) to reinvest trading fees back into the LP position. Requires <code>compoundingFeeBps</code> to be set to a non-zero value.</li>
+      <li><strong>compoundingFeeBps</strong> - The fee rate (in basis points) applied when compounding fees back into the LP position. Must be non-zero when Compounding mode is active, and must be 0 for all other modes.</li>
     </ul>
+  </Card>
+
+  <Card title="Migrated Pool Fee Configuration (DAMM v2 only)" icon="money-bill-transfer">
+    <p>When your pool migrates to DAMM v2 and you use the Customizable fee option, you can set the <code>migratedPoolFee</code> struct with these options:</p>
+    <ul>
+      <li><strong>QuoteToken (0)</strong> - Fees collected in the quote token only (maps to DAMM v2 <em>OnlyB</em> mode)</li>
+      <li><strong>OutputToken (1)</strong> - Fees collected in both tokens (maps to DAMM v2 <em>BothToken</em> mode)</li>
+      <li><strong>Compounding (2)</strong> - Fees are automatically reinvested back into the liquidity position, growing LP value over time instead of accumulating as separate claimable fees</li>
+    </ul>
+    <p><em>Note: SOL and USDC fees cannot be zapped and must be claimed directly when using the Compounding mode.</em></p>
   </Card>
   
   <Card title="Liquidity Percentages" icon="percent">

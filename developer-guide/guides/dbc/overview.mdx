@@ -84,6 +84,43 @@ At Meteora, we’ve developed a `Node.js <> Typescript SDK`, a `Rust SDK` and a 
 
 ---
 
+# Operator Account System
+
+The Operator Account System provides a flexible, permission-based way for admins to delegate protocol fee management to whitelisted addresses.
+
+<Note>Operator accounts replace the previous `create_claim_protocol_fee_operator` approach. They are created by the program admin only.</Note>
+
+## Instructions
+
+- `create_operator_account(permission: u128)` — Creates an operator account for a whitelisted address with a bitmask of permissions.
+- `close_operator_account()` — Removes an existing operator account.
+
+## Permissions
+
+Permissions are encoded as a `u128` bitmask. Multiple permissions can be combined.
+
+| Permission | Bit | Description |
+|---|---|---|
+| `ClaimProtocolFee` | 0 | Can claim protocol fees and pool creation fees |
+| `ZapProtocolFee` | 1 | Can zap protocol fees into SOL/USDC or pool tokens |
+
+## PDA
+
+Operator accounts are PDAs derived from:
+```
+[OPERATOR_PREFIX, whitelisted_address]
+```
+
+## `zap_protocol_fee`
+
+Operators with the `ZapProtocolFee` permission can call `zap_protocol_fee` to convert accumulated protocol fees from any token into SOL, USDC, or pool tokens.
+
+<Warning>SOL and USDC protocol fees cannot be zapped — they must be claimed directly via `claim_protocol_fee`.</Warning>
+
+<Note>`zap_protocol_fee` requires the `SYSVAR_INSTRUCTIONS_PUBKEY` sysvar account to be included for transaction context validation.</Note>
+
+---
+
 # Migration
 
 DBC pools can be migrated to either a DAMM v1 or DAMM v2 pool. The DAMM v1 and DAMM v2 pools are both derived from the `baseMint`, `quoteMint` and `dammConfig`.
@@ -100,12 +137,14 @@ DBC pools can be migrated to either a DAMM v1 or DAMM v2 pool. The DAMM v1 and D
 
 #### Liquidity Vesting (DAMM V2 only)
 
-If `partnerLiquidityVestingInfoParams` or `creatorLiquidityVestingInfoParams` are configured, the migration will also create vesting accounts for the LP positions.
+If `partnerLiquidityVestingInfoParams` or `creatorLiquidityVestingInfoParams` are configured, vesting is handled directly via LP positions during migration. No separate `migration_metadata` account is required.
 
 #### DAMM V2
 
 1. `createLocker` (if the token has locked vesting)
 2. `migrateToDammV2`
+
+<Note>DAMM v2 migration now uses positions directly for vesting, removing the need for a separate `migration_metadata` account. This simplifies the migration flow and reduces the number of accounts and transactions required.</Note>
 
 ## DAMM Fee Config Keys
 

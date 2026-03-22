@@ -274,6 +274,18 @@ MigrationProgress::LockedVesting    // 2
 MigrationProgress::CreatedPool      // 3
 ```
 
+### Post-Migration Fee Collection Mode (DAMM v2)
+
+When a DBC pool graduates to DAMM v2, the fee collection behavior depends on the `collectFeeMode` set in the pool's `migratedPoolFee` config. Trading terminals should be aware of these modes when displaying fee or liquidity information for graduated pools:
+
+| `collectFeeMode` | Behavior |
+|---|---|
+| `0` (QuoteToken) | Fees accumulate in the quote token. Maps to DAMM v2 `OnlyB`. |
+| `1` (OutputToken) | Fees accumulate in the output token of each trade. Maps to DAMM v2 `BothToken`. |
+| `2` (Compounding) | Fees are automatically reinvested into the LP position. No separate claimable fee balance accumulates. |
+
+<Note>For graduated DAMM v2 pools with `collectFeeMode: 2` (Compounding), trading fee revenue is reflected in growing LP position value rather than a separate fee balance. Displaying "claimable fees" for these pools is not applicable.</Note>
+
 ### Meteora's DBC Migration Keepers
 
 - We run a total of 2 DBC Migration Keepers to migrate the DBC pools. These migration keepers each have their individual threshold requirements of >= 750 USD worth of `quoteReserve` to migrate the pool provided `quoteReserve >= migrationQuoteThreshold`.
