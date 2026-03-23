@@ -131,24 +131,34 @@ This mode is configured using the `compounding_fee_bps` parameter, which defines
 
 ## Fee Split
 
-The protocol fee is calculated from the total trading fee ($f_s$) before the split. The remainder is then divided between the claiming fee and the compounding fee:
+The protocol fee is first subtracted from the total trading fee. The compounding/claiming split then applies to the remaining LP fee:
 
 ```math
-\text{claiming\_fee} = f_s \times \left(1 - \frac{\text{compounding\_fee\_bps}}{10000}\right)
+\text{protocol\_fee} = f_s \times \frac{\text{protocol\_fee\_percent}}{100}
 ```
 
 ```math
-\text{compounding\_fee} = f_s \times \frac{\text{compounding\_fee\_bps}}{10000}
+\text{lp\_fee} = f_s - \text{protocol\_fee}
+```
+
+```math
+\text{compounding\_fee} = \text{lp\_fee} \times \frac{\text{compounding\_fee\_bps}}{10000}
+```
+
+```math
+\text{claiming\_fee} = \text{lp\_fee} - \text{compounding\_fee}
 ```
 
 So:
 
 ```math
-f_s = \text{claiming\_fee} + \text{compounding\_fee}
+\text{lp\_fee} = \text{claiming\_fee} + \text{compounding\_fee}
 ```
 
 **Example:**
 - Total trading fee ($f_s$) = 1%
+- Protocol fee = 10% of total → 0.1%
+- LP fee = 0.9%
 - `compounding_fee_bps` = 3000 (30%)
-- Compounding fee = 0.3% (auto-reinvested into pool reserves)
-- Claiming fee = 0.7% (claimable by LPs)
+- Compounding fee = 0.27% (auto-reinvested into pool reserves)
+- Claiming fee = 0.63% (claimable by LPs)

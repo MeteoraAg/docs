@@ -93,9 +93,9 @@ A one-time migration fee is taken from the migrated quote reserves:
 migration_fee_amount = total_quote × migration_fee_bps / 10_000
 ```
 
-Split between protocol and creator:
-- `migration_fee_percentage %` → protocol
-- `creator_migration_fee_percentage %` → creator
+The `migration_fee_percentage` is the total fee percentage. This total fee is split between partner and creator:
+- Partner receives the portion not allocated to the creator
+- `creator_migration_fee_percentage %` → creator's share of the migration fee
 
 Both parties can claim their migration fee separately via `withdrawMigrationFee`.
 
@@ -111,7 +111,7 @@ After migration, there may be surplus quote tokens beyond what's needed for the 
 
 | Claimant | Instruction | Condition |
 |----------|-------------|-----------|
-| Protocol | `withdrawProtocolSurplus` | `is_protocol_withdraw_surplus = 0` |
+| Protocol | `claimProtocolFee` | Protocol surplus claimed via the unified fee claim endpoint |
 | Partner | `withdrawPartnerSurplus` | `is_partner_withdraw_surplus = 0` |
 | Creator | `withdrawCreatorSurplus` | `is_creator_withdraw_surplus = 0` |
 

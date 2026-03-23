@@ -28,7 +28,7 @@ The minimum fee charged per swap. Lower fee gets more volume but higher fee earn
 The base fee of a market is configured by the pool creator and determined by the base factor (B) and the bin step (s):
 
 <div align="center">
-$f_b = B \cdot s$ * 10^base_fee_power_factor
+$f_b = B \cdot s \cdot 10 \cdot 10^{\text{base\_fee\_power\_factor}}$
 
 </div>
 
@@ -71,6 +71,8 @@ The formula is:
 $f_v(k) = A(v_a(k) \cdot s)^2$
 
 </div>
+
+<Note>The on-chain computation uses ceiling division: it adds 99,999,999,999 before dividing by 100,000,000,000, ensuring the variable fee always rounds up.</Note>
 
 where:
 
@@ -207,7 +209,7 @@ Protocol Fee is a percentage of the total swap fee (base + variable fee).
 - Protocol Fee is **5%** of the total swap fee for all standard DLMM pools.
 - Protocol Fee is **20%** of the total swap fee for DLMM Launch Pools.
 
-Protocol fees are configured via the `protocol_share` parameter on each pool's preset parameters (measured in basis points, max 1000 = 10%).
+Protocol fees are configured via the `protocol_share` parameter on each pool's preset parameters (measured in basis points, max 2500 = 25%).
 
 <Warning>
 **Breaking change in v0.11.0:** Bin state no longer stores `amount_x_in` and `amount_y_in` fields. The `reward_per_token_stored` fields have been renamed to `function_bytes`. Integrations that index bin state directly must update their deserialization logic.

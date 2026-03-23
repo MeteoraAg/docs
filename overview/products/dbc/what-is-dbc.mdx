@@ -54,8 +54,8 @@ Dynamic Bonding Curve (DBC) lets anyone launch a token on Solana with a fully on
 DBC uses a **virtual pool** (`VirtualPool` account) during the bonding phase:
 - No real AMM pool exists yet
 - Price is determined by the current position on the bonding curve
-- Token reserves are virtual; only quote token reserves are real
-- After migration, a real DAMM pool is created and all quote liquidity moves
+- Both `base_vault` and `quote_vault` hold real tokens. Base tokens are either pre-minted (fixed supply) or minted on buy (dynamic supply). Quote tokens accumulate with each buy.
+- After migration, a real DAMM pool is created and all liquidity moves
 
 ---
 
@@ -159,8 +159,8 @@ The Dynamic Bonding Curve (DBC) virtual pool collects a trading fee on every tra
 - **Referral Fee:**  
   Swap hosts (such as Jupiter, Photon, or trading bots) can include a referral account in the swap transaction to receive a referral fee, which is taken from the protocol fee (Fixed 20% of the protocol fee).
 
-- **Fee Sharing in the Bonding Curve:**  
-  The remaining trading fee is distributed to the launch partner (Fixed 80% of the trading fee). This fee can be fee shared between the partner and the token creator.
+- **Fee Sharing in the Bonding Curve:**
+  The remaining 80% of the trading fee is the LP fee, which is split between the partner and the creator based on `creator_trading_fee_percentage`. For example, if `creator_trading_fee_percentage = 20%`, the partner gets 64% and the creator gets 16% of the total trading fee.
 
 - **Fee Distribution After Migration:**
   Once a token has graduated, the LP tokens are locked for both the partner and the token creator. The ratio of locked LP tokens is determined by the partner’s configuration. Both the partner and the token creator can claim fees from these locked LP tokens on Meteora DAMM v1 or DAMM v2. For DAMM v2 graduated pools, partners can also configure a **compounding fee mode** that reinvests trading fees back into the LP position instead of distributing them as separate claimable fees.

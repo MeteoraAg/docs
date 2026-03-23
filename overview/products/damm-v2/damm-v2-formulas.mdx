@@ -37,13 +37,13 @@ The farming rewards are calculated as:
 
 <div style={{ fontSize: "0.85em" }}>
 ```math
-\text{Reward per token} = \frac{\text{Elapsed Time} \times \text{Reward Rate} \times 2^{64}}{\text{Total Liquidity}}
+\text{Reward per token} = \frac{\text{Elapsed Time} \times \text{Reward Rate} \times 2^{128}}{\text{Total Liquidity}}
 ```
 </div>
 
 <div style={{ fontSize: "0.85em" }}>
 ```math
-\text{User reward} = \text{Position Liquidity} \times (\text{Current Reward per Token} - \text{User Last Reward per Token}) \gg 64
+\text{User reward} = \text{Position Liquidity} \times (\text{Current Reward per Token} - \text{User Last Reward per Token}) \gg 192
 ```
 </div>
 
@@ -65,14 +65,22 @@ where $k$ is a constant. Unlike the standard DAMM v2 concentrated liquidity form
 
 ## Fee Split Formulas
 
-The total trading fee ($f_s$) is split between the claimable LP fee and the compounding fee:
+The protocol fee is first subtracted from the total trading fee. The compounding/claiming split then applies to the LP fee (after protocol fee is removed):
 
 ```math
-\text{claiming\_fee} = f_s \times \left(1 - \frac{\text{compounding\_fee\_bps}}{10000}\right)
+\text{protocol\_fee} = f_s \times \frac{\text{protocol\_fee\_percent}}{100}
 ```
 
 ```math
-\text{compounding\_fee} = f_s \times \frac{\text{compounding\_fee\_bps}}{10000}
+\text{lp\_fee} = f_s - \text{protocol\_fee}
+```
+
+```math
+\text{compounding\_fee} = \text{lp\_fee} \times \frac{\text{compounding\_fee\_bps}}{10000}
+```
+
+```math
+\text{claiming\_fee} = \text{lp\_fee} - \text{compounding\_fee}
 ```
 
 The compounding fee is added directly to the pool reserves, increasing $k$ over time and benefiting all LPs proportionally.
