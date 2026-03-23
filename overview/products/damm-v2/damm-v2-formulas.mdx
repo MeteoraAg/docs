@@ -37,15 +37,53 @@ The farming rewards are calculated as:
 
 <div style={{ fontSize: "0.85em" }}>
 ```math
-\text{Reward per token} = \frac{\text{Elapsed Time} \times \text{Reward Rate} \times 2^{64}}{\text{Total Liquidity}}
+\text{Reward per token} = \frac{\text{Elapsed Time} \times \text{Reward Rate} \times 2^{128}}{\text{Total Liquidity}}
 ```
 </div>
 
 <div style={{ fontSize: "0.85em" }}>
 ```math
-\text{User reward} = \text{Position Liquidity} \times (\text{Current Reward per Token} - \text{User Last Reward per Token}) \gg 64
+\text{User reward} = \text{Position Liquidity} \times (\text{Current Reward per Token} - \text{User Last Reward per Token}) \gg 192
 ```
 </div>
+
+# Compounding Fee Mode
+
+When a pool uses Compounding Fee Mode (`collect_fee_mode = 2`), it operates as a standard constant-product AMM with no concentrated price range. The pool reserves grow over time as a portion of trading fees are automatically reinvested.
+
+## Constant-Product Formula
+
+The pool maintains the invariant:
+
+```math
+\text{token\_a\_amount} \times \text{token\_b\_amount} = k
+```
+
+where $k$ is a constant. Unlike the standard DAMM v2 concentrated liquidity formula, there is no `sqrt_min_price` or `sqrt_max_price` bound — liquidity spans the full price range.
+
+<Note>Pools with `layout_version == 1` track `token_a_amount` and `token_b_amount` directly in the pool state, enabling accurate reserve accounting for the compounding mechanism.</Note>
+
+## Fee Split Formulas
+
+The protocol fee is first subtracted from the total trading fee. The compounding/claiming split then applies to the LP fee (after protocol fee is removed):
+
+```math
+\text{protocol\_fee} = f_s \times \frac{\text{protocol\_fee\_percent}}{100}
+```
+
+```math
+\text{lp\_fee} = f_s - \text{protocol\_fee}
+```
+
+```math
+\text{compounding\_fee} = \text{lp\_fee} \times \frac{\text{compounding\_fee\_bps}}{10000}
+```
+
+```math
+\text{claiming\_fee} = \text{lp\_fee} - \text{compounding\_fee}
+```
+
+The compounding fee is added directly to the pool reserves, increasing $k$ over time and benefiting all LPs proportionally.
 
 # Price Impact
 

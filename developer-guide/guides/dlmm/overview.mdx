@@ -50,6 +50,81 @@ We also outline a list of unofficial community SDKs made by our wonderful commun
   </table>
 </div>
 
+## Pool Types
+
+DLMM supports four pool types:
+
+| Pool Type | Description |
+|---|---|
+| `Permissionless` | Standard open pool, no special requirements. |
+| `PermissionlessV2` | Latest pool type with Token 2022 support, extended config parameters, and `function_type` setting. Created via `initialize_lb_pair2`. |
+| `Permission` | Admin-controlled pool for token launches with activation point, pre-activation duration, and lock duration settings. |
+| `CustomizablePermissionless` | Open pool with creator-controlled on/off switch, customizable base fee, activation point, and Alpha Vault support. |
+
+<Note>`PermissionlessV2` pools no longer enforce SOL/USDC quote token constraints — any token pair is supported.</Note>
+
+## Function Type
+
+When creating a `PermissionlessV2` pool, a `function_type` parameter is required:
+
+| Function Type | Description |
+|---|---|
+| `LiquidityMining` (0) | Pool supports farming rewards via `initialize_reward`. |
+
+<Warning>The `initialize_reward` instruction only works on pools with `function_type = LiquidityMining`. Pools created without this function type cannot have farming rewards added later.</Warning>
+
+## Dynamic Positions
+
+DLMM supports `PositionV2`, which supports up to **1,400 bins** per position — a significant increase from the previous 70-bin limit. This is achieved through extended byte data attached to the position account, which is allocated on demand as the position grows.
+
+### Position Resize
+
+Positions can be resized dynamically without closing and reopening:
+
+| Instruction | Description |
+|---|---|
+| `increase_position_length` / `increase_position_length2` | Expand the position's bin range. |
+| `decrease_position_length` | Shrink the position from the lower or upper end. |
+
+### Rebalance Liquidity
+
+The `rebalance_liquidity` instruction allows position owners to combine multiple liquidity operations (add, remove, shift) and resize the position in a single instruction.
+
+It supports a `shrink_mode` parameter:
+
+| Shrink Mode | Description |
+|---|---|
+| `ShrinkBoth` | Shrink empty bins on both sides. |
+| `NoShrinkLeft` | Keep left (lower) bins, shrink right only. |
+| `NoShrinkRight` | Keep right (upper) bins, shrink left only. |
+| `NoShrinkBoth` | Do not shrink on either side. |
+
+### Additional Position Instructions
+
+| Instruction | Description |
+|---|---|
+| `initialize_position2` | Creates a position, succeeding silently if it already exists (idempotent). |
+| `close_position_if_empty` | Closes a position only if it has no liquidity; otherwise does nothing. |
+| `migrate_position` | Migrates a v1 position to v2 format. |
+
+## Bin Array Initialization
+
+<Warning>
+**Breaking change:** The `initialize_bin_array` instruction now sets all bin prices during initialization and consumes approximately **250,000 compute units**. Integrations should allocate additional CU for this instruction. The instruction is idempotent — re-initializing an existing bin array does not return an error.
+</Warning>
+
+## Token 2022 Support
+
+DLMM supports Token 2022 tokens with the following permissionless extensions:
+
+- `TransferFeeConfig` / `TransferFeeAmount`
+- `TokenMetadata` / `MetadataPointer`
+- `ConfidentialTransferMint` / `ConfidentialTransferFeeConfig`
+
+Extensions like `PermanentDelegate`, `TransferHook`, and `MintCloseAuthority` require a **Token Badge** to be initialized by the program admin before they can be used in DLMM pools.
+
+<Note>Transfer hook mints are supported permissionlessly if both the transfer hook program and transfer hook authority have been revoked.</Note>
+
 ## Official SDKs
 
 <CardGroup cols={2}>

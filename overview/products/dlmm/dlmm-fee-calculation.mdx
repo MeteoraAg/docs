@@ -28,11 +28,14 @@ The minimum fee charged per swap. Lower fee gets more volume but higher fee earn
 The base fee of a market is configured by the pool creator and determined by the base factor (B) and the bin step (s):
 
 <div align="center">
-$f_b = B \cdot s$ * 10^base_fee_power_factor
+$f_b = B \cdot s \cdot 10 \cdot 10^{\text{base\_fee\_power\_factor}}$
 
 </div>
 
-Base factor is the amplification to add to the bin step, to allow for adjustment of the pool base fees.
+Where:
+- **Base Factor** ($B$): An amplification to add to the bin step, to allow for adjustment of the pool base fees.
+- **Bin Step** ($s$): The price increment per bin, in basis points.
+- **Base Fee Power Factor**: An exponent that scales the base fee calculation. Default is 0 for most pools. Higher values increase the base fee exponentially.
 
 ## Variable Fee (Dynamic Fee)
 
@@ -68,6 +71,8 @@ The formula is:
 $f_v(k) = A(v_a(k) \cdot s)^2$
 
 </div>
+
+<Note>The on-chain computation uses ceiling division: it adds 99,999,999,999 before dividing by 100,000,000,000, ensuring the variable fee always rounds up.</Note>
 
 where:
 
@@ -199,9 +204,13 @@ You can see that the volatility accumulator is decreasing despite high frequency
 
 # DLMM Protocol Fees
 
-Protocol Fee is a percentage of the Dynamic Fee (total swap fee i.e. base \+ variable fee).
+Protocol Fee is a percentage of the total swap fee (base + variable fee).
 
-For our initial testing phase:
+- Protocol Fee is **5%** of the total swap fee for all standard DLMM pools.
+- Protocol Fee is **20%** of the total swap fee for DLMM Launch Pools.
 
-- Protocol Fee is 5% of the Dynamic Fee for all standard DLMM Pools.
-- Protocol Fee is 20% of the Dynamic Fee for DLMM Bootstrapping Pools (Launch Pools).
+Protocol fees are configured via the `protocol_share` parameter on each pool's preset parameters (measured in basis points, max 2500 = 25%).
+
+<Warning>
+**Breaking change in v0.11.0:** Bin state no longer stores `amount_x_in` and `amount_y_in` fields. The `reward_per_token_stored` fields have been renamed to `function_bytes`. Integrations that index bin state directly must update their deserialization logic.
+</Warning>

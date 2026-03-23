@@ -68,6 +68,22 @@ At Meteora, we’ve developed a `Node.js <> Typescript SDK`, a `Rust SDK` and a 
   </table>
 </div>
 
+## Compounding Fee Mode
+
+DAMM v2 v0.2.0 introduces a third fee collection mode (`collect_fee_mode = 2`).
+
+| `collect_fee_mode` | Fee Token | Fee on Input? |
+|---|---|---|
+| 0 (BothToken) | Output token | No (fee on output) |
+| 1 (OnlyB) | Token B | Only for B→A trades |
+| 2 (Compounding) | Token B | Only for B→A trades |
+
+In Compounding mode, a percentage of the collected fee (set by `compounding_fee_bps` on the config) is automatically reinvested back into pool reserves rather than accruing to LP positions. This portion is reported as `compounding_fee` in `EvtSwap2`. The remaining claimable portion is reported as `claiming_fee`.
+
+<Note>
+Compounding mode pools use a constant-product formula with no concentrated liquidity range.
+</Note>
+
 ## Official SDKs
 
 <CardGroup cols={2}>

@@ -17,7 +17,7 @@ Every DAMM v2 pool has a `collectFeeMode` that determines how trading fees flow 
 
 ## BothToken (mode 0)
 
-Fees accumulate in whichever token the LP provided. When a trader swaps A→B, the fee is taken in token A. When they swap B→A, the fee is taken in token B.
+Fees accumulate in the output token of each swap. When a trader swaps A→B, the fee is taken from the output (token B). When they swap B→A, the fee is taken from the output (token A).
 
 **LP fee claim:** Separate `claimPositionFee` instruction. Both `fee_a_pending` and `fee_b_pending` on the position are claimable.
 
@@ -27,7 +27,7 @@ Fees accumulate in whichever token the LP provided. When a trader swaps A→B, t
 
 ## OnlyB (mode 1)
 
-All fees are collected in token B (the quote token), regardless of swap direction. Fees for A→B swaps are still taken from the input (token A) but immediately converted to the quote token equivalent.
+All fees are collected in token B (the quote token), regardless of swap direction. For A→B swaps, the fee is taken from the output token (token B) directly. For B→A swaps, the fee is taken from the output token (token A) and then converted to the quote token (token B) internally.
 
 **LP fee claim:** Only `fee_b_pending` accumulates. `fee_a_pending` is always 0.
 
@@ -42,9 +42,11 @@ The most distinctive mode. A configurable percentage of each trade's LP fee (`co
 ### How it works
 
 ```
-Trading Fee (LP portion)
-  ├── compoundingFeeBps / 10000 → added to pool token B reserves (grows pool liquidity)
-  └── remainder → fee_b_pending (claimable by LP)
+Total Trading Fee
+  ├── Protocol Fee  (protocol_fee_percent % of total trading fee)
+  └── LP Fee (remainder)
+        ├── compoundingFeeBps / 10000 → added to pool token B reserves (grows pool liquidity)
+        └── remainder → fee_b_pending (claimable by LP)
 ```
 
 `compoundingFeeBps` is a u16 (0–10000). E.g., `5000` = 50% of LP fees compound, 50% claimable.

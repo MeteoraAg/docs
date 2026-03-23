@@ -84,6 +84,25 @@ At Meteora, we’ve developed a `Node.js <> Typescript SDK`, a `Rust SDK` and a 
 
 ---
 
+# Swap Modes
+
+DBC supports two swap instructions:
+
+| Instruction | Modes |
+|---|---|
+| `swap` | ExactIn only |
+| `swap2` | ExactIn (0), PartialFill (1), ExactOut (2) |
+
+`swap2` includes additional information in the `EvtSwap2` event such as `quoteReserveAmount`, `migrationThreshold`, and `includedFeeInputAmount`.
+
+<Note>For pools with Rate Limiter enabled (`baseFeeMode == 2`), the `SYSVAR_INSTRUCTIONS_PUBKEY` must be included in the remaining accounts of the swap instruction.</Note>
+
+# Pool Creator Transfer
+
+Pool creators can transfer their creator rights to a new address using the `transfer_pool_creator` instruction. This transfers all creator privileges including fee claiming rights and surplus withdrawal.
+
+---
+
 # Migration
 
 DBC pools can be migrated to either a DAMM v1 or DAMM v2 pool. The DAMM v1 and DAMM v2 pools are both derived from the `baseMint`, `quoteMint` and `dammConfig`.
@@ -100,12 +119,14 @@ DBC pools can be migrated to either a DAMM v1 or DAMM v2 pool. The DAMM v1 and D
 
 #### Liquidity Vesting (DAMM V2 only)
 
-If `partnerLiquidityVestingInfoParams` or `creatorLiquidityVestingInfoParams` are configured, the migration will also create vesting accounts for the LP positions.
+If `partnerLiquidityVestingInfoParams` or `creatorLiquidityVestingInfoParams` are configured, vesting is handled directly via LP positions during migration. No separate `migration_metadata` account is required.
 
 #### DAMM V2
 
 1. `createLocker` (if the token has locked vesting)
 2. `migrateToDammV2`
+
+<Note>DAMM v2 migration now uses positions directly for vesting, removing the need for a separate `migration_metadata` account. This simplifies the migration flow and reduces the number of accounts and transactions required.</Note>
 
 ## DAMM Fee Config Keys
 
