@@ -1,0 +1,55 @@
+---
+title: Token 2022 Extensions in DAMM v2
+description: DAMM v2 supports SPL Token 2022 mints and common extensions, with special handling for permissioned and unsupported extensions.
+---
+
+## Token 2022 Support
+
+DAMM v2 supports pools and positions using Token 2022 SPL tokens, including those with various Token 2022 extensions. The program automatically detects the mint's owner program and applies correct behaviors for Pool, Swap, and LP reward flows.
+
+### Pool State: Token Program Flags
+
+- The `token_a_flag` and `token_b_flag` fields on the pool state indicate which token program each mint uses:
+  - `0` = SPL Token Program (legacy)
+  - `1` = SPL Token 2022 Program
+
+
+### Permissionlessly Supported Extensions
+
+The following Token 2022 extensions are supported **permissionlessly** (no badge or special registration required):
+
+- **Transfer Fee (TransferFeeConfig)**
+  - Trading and liquidity operations automatically calculate and adjust for transfer fees using both `transfer_fee_included` and `transfer_fee_excluded` logic.
+  - Fees are validated across all swaps, deposits/withdrawals, and farming rewards.
+
+- **Metadata Pointer (MetadataPointer)**
+  - Supported for proper metadata display and integration.
+
+- **Token Metadata (TokenMetadata)**
+  - Token 2022 mints using Token Metadata extension are fully supported.
+
+### Permissioned Extensions
+
+Mints with other Token 2022 extensions **require a token badge** to be supported in DAMM v2 pools. These include, but are not limited to:
+
+- Interest Bearing (InterestBearingConfig)
+- Permanent Delegate (PermanentDelegate)
+- Non-transferable
+- Memo Transfer, etc.
+
+To enable such tokens:
+
+<Note>
+To apply for a token badge, start by completing this [Google Form](https://forms.gle/59n3zDiGS2C6qMfd7) describing your token and any extensions in use. After submitting the form, open a ticket in the [Meteora Discord](https://discord.gg/meteo) to notify the team for review.
+</Note>
+
+### Unsupported Extensions
+
+Some Token 2022 extensions are **not supported** or are only supported in limited form:
+
+- **Transfer Hook (TransferHook)**: Only supported if both the program ID and authority are `None` (no active hook). Otherwise, the mint is treated as unsupported.
+- **Token 2022 Native mint** (`So11111111111111111111111111111111111111112`) is **not supported** (`UnsupportNativeMintToken2022` error).
+
+<Warning>
+If you try to create a pool or position with a Token 2022 mint that is not permissionlessly or permissionedly supported, pool creation will fail.
+</Warning>
