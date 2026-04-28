@@ -1,0 +1,126 @@
+---
+title: "Documentation MCP"
+description: "Search and query Meteora docs and APIs from your AI editor via Model Context Protocol."
+llmsDescription: "Meteora supports the Model Context Protocol (MCP) through Mintlify's native MCP server at https://docs.meteora.ag/mcp. This enables AI tools like Claude Code, Cursor, Windsurf, and other MCP-compatible editors to search and query Meteora documentation and OpenAPI specifications in-context. The MCP server allows AI assistants to look up API endpoints, read documentation guides, and understand API schemas without leaving the editor. It is a read-only documentation server, not a tool for executing API calls or scripts."
+---
+
+Meteora supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) through Mintlify's native integration. This lets AI tools search and query Meteora's documentation and API specifications directly from your editor.
+
+## What is MCP?
+
+MCP is an open protocol that connects AI assistants to external data sources and tools. With Meteora's MCP server, your AI editor can:
+
+- **Search documentation**: find relevant developer guides, and APIs.
+- **Read OpenAPI specs**: access full request/response schemas
+- **Understand API contracts**: look up parameters, response fields, and error codes
+
+<Note>
+This is a read-only documentation server. It helps your AI assistant understand Meteora's APIs, but does not execute API calls. For liquidity provisioning or pool creation via AI tools, see [Meteora CLI](/ai/cli).
+</Note>
+
+## Mintlify Native MCP
+
+Every Mintlify documentation site includes a built-in MCP server. Meteora's is available at:
+
+```
+https://docs.meteora.ag/mcp
+```
+
+This server exposes all Meteora documentation and OpenAPI specifications through the MCP protocol, with no additional setup required.
+
+## What You Get
+
+Once connected, your AI assistant can search and read:
+
+| Resource | Description |
+|:---------|:------------|
+| **Documentation pages** | All guides, tutorials, and reference docs |
+| **OpenAPI specifications** | Complete API schemas for Swap, Tokens, Price, and more |
+| **Error references** | Common error codes and troubleshooting guides |
+
+<Tip>
+Combine MCP with [llms.txt](/ai/llms-txt) for the best results: use MCP for in-editor queries and llms.txt for batch processing or RAG pipelines.
+</Tip>
+
+## Setup
+
+<Tabs>
+  <Tab title="Claude Code">
+  **How to enable Meteora MCP in Claude Code:**
+
+  1. Open your terminal.
+  2. Add Meteora's MCP server by running:
+
+    ```bash
+    claude mcp add --scope user --transport http meteora https://docs.meteora.ag/mcp
+    ```
+  3. Launch Claude Code and start chatting with Meteora.
+
+  **Or add to your project’s `.mcp.json`:**
+  ```json
+  {
+    "mcpServers": {
+      "meteora": {
+        "url": "https://docs.meteora.ag/mcp"
+      }
+    }
+  }
+  ```
+
+  **Verify with:**
+  ```bash
+  claude mcp list
+  ```
+  </Tab>
+
+  <Tab title="Claude">
+  **Setup Meteora MCP in Claude:**
+
+  1. Go to [**Connectors**](https://claude.ai/settings/connectors) in your Claude settings.
+  2. Select **Add custom connector**.
+  3. Set the name to **Meteora** and the URL to **https://docs.meteora.ag/mcp**.
+  4. When chatting, click the attachments button (plus icon) and select the Meteora connector.
+  </Tab>
+
+  <Tab title="Cursor">
+  **Setup Meteora MCP in Cursor:**
+
+  1. Open the command palette with `Cmd + Shift + P` (or `Ctrl + Shift + P` on Windows).
+  2. Search for **Open MCP settings**.
+  3. Add the following to your `mcp.json` file:
+
+    ```json
+    {
+      "mcpServers": {
+        "meteora": {
+          "url": "https://docs.meteora.ag/mcp"
+        }
+      }
+    }
+    ```
+
+  4. Save and reload Cursor.
+  </Tab>
+
+  <Tab title="Windsurf">
+  **Using Meteora MCP in Windsurf:**
+
+  1. Open the command palette with `Cmd + Shift + P` (or `Ctrl + Shift + P` on Windows).
+  2. Search for **Windsurf: Configure MCP Servers**.
+  3. Add the following to your `mcp_config.json` file:
+   ```json
+   {
+     "mcpServers": {
+       "meteora": {
+         "serverUrl": "https://docs.meteora.ag/mcp"
+       }
+     }
+   }
+   ```
+  4. Save and restart Windsurf.
+  </Tab>
+</Tabs>
+
+### Other MCP-Compatible Tools
+
+Any tool that supports the MCP protocol can connect to `https://docs.meteora.ag/mcp` using HTTP transport.
