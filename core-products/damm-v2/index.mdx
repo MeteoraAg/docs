@@ -1,0 +1,183 @@
+---
+title: What is DAMM v2?
+description: "DAMM v2 is Meteora's concentrated-liquidity constant-product AMM. It combines custom price ranges, flexible fee modes including auto-compounding, NFT-backed positions, built-in farming, and liquidity vesting — all in a single on-chain program."
+---
+
+## Overview
+
+DAMM v2 (Dynamic AMM v2) is Meteora's next-generation liquidity protocol on Solana. Built on the **cp-amm** program, it gives token creators and LPs fine-grained control over how pools are configured, how fees are collected, and how liquidity is locked and released.
+
+# Key Features
+
+DAMM v2 comes with the following features.
+
+<CardGroup cols={2}>
+  <Card title="Concentrated Liquidity" icon="chart-line" iconType="solid">
+    LPs concentrate capital in a chosen price range to earn more fees per dollar deployed. Supports full-range (x·y=k) as a special case.
+  </Card>
+  <Card title="Three Fee Modes" icon="coins" iconType="solid">
+    **BothToken** — fees in both tokens. **OnlyB** — fees in quote token only. **Compounding** — a configurable share of fees auto-reinvests back into pool liquidity.
+  </Card>
+  <Card title="NFT-Backed Positions" icon="image" iconType="solid">
+    Each LP position is tied to a position NFT. Positions track unlocked, vested, and permanently locked liquidity separately.
+  </Card>
+  <Card title="Built-in Farming" icon="seedling" iconType="solid">
+    Up to 2 reward tokens per pool. Rewards accrue pro-rata based on total position liquidity — no separate staking contract needed.
+  </Card>
+  <Card title="Liquidity Vesting" icon="lock" iconType="solid">
+    Lock liquidity with cliff + linear vesting schedules, or lock permanently. Both inner vesting (single account) and external vesting accounts supported.
+  </Card>
+  <Card title="Compounding Fee Mode" icon="arrows-rotate" iconType="solid">
+    A percentage of trading fees can be set to auto-compound directly into pool reserves via `compounding_fee_bps`. The pool operates as a standard constant-product AMM in this mode, with no concentrated price range.
+  </Card>
+  <Card title="Anti-Sniper Controls" icon="shield" iconType="solid">
+    Set an activation point (by slot or timestamp) to delay trading. Pair with an Alpha Vault or presale vault for whitelisted early access.
+  </Card>
+  <Card title="Dynamic + Scheduled Fees" icon="sliders" iconType="solid">
+    5 base fee modes: time-decay linear/exponential, market-cap-based linear/exponential, and rate limiter. Combine with volatility-based dynamic fees.
+  </Card>
+  <Card title="Token 2022 Support" icon="certificate" iconType="solid">
+    Permissionless and permissioned support for SPL Token 2022 with extensions.
+  </Card>
+</CardGroup>
+
+# Pool Creation Options
+
+DAMM v2 supports three ways to create a pool, each offering different levels of control:
+
+| Method | Description |
+|---|---|
+| `initialize_pool` | Creates a pool using a pre-defined **static config** created by Meteora. Fee parameters are fixed. |
+| `initialize_pool_with_dynamic_config` | Creates a pool using a **dynamic config**. The pool creator defines all fee parameters during creation. |
+| `initialize_customizable_pool` | Creates a **fully customizable** pool where the pool creator sets all parameters including fee mode, dynamic fees, and compounding settings. |
+
+<Note>All three creation methods support `collect_fee_mode = 2` (Compounding) and `compounding_fee_bps` configuration.</Note>
+
+# Position Features
+
+Each liquidity position in DAMM v2 is represented by an NFT, making positions transferable between wallets.
+
+## Liquidity Locking & Vesting
+
+Positions support three liquidity states:
+
+| State | Description |
+|---|---|
+| **Unlocked** | Can be withdrawn at any time by the position owner. |
+| **Vesting** | Time-locked liquidity that gradually becomes unlocked based on a cliff + periodic release schedule. |
+| **Permanently Locked** | Cannot be withdrawn ever, but still earns trading fees and farming rewards. |
+
+Use `lock_position` or `lock_inner_position` to vest liquidity directly within a position (no separate vesting account required). Use `permanent_lock_position` to permanently lock liquidity. Call `refresh_vesting` to release vested liquidity that has reached its unlock time.
+
+<Note>`lock_inner_position` stores vesting state inside the position itself, enabling better composability with other programs.</Note>
+
+## Position Splitting
+
+Position owners can split a position into two using `split_position` or `split_position2`. The split proportionally divides:
+
+- Unlocked, vested, and permanently locked liquidity
+- Pending trading fees (both tokens)
+- Pending farming rewards
+- Inner vesting state
+
+This is useful for partially transferring or selling a portion of a position.
+
+# Swap Modes
+
+DAMM v2 supports two swap instructions:
+
+| Instruction | Modes |
+|---|---|
+| `swap` | ExactIn only (deprecated) |
+| `swap2` | ExactIn (0), PartialFill (1), ExactOut (2) |
+
+<Warning>The original `swap` instruction and the `EvtSwap`, `EvtRemoveLiquidity`, and `EvtAddLiquidity` events are deprecated. Use `swap2` and `EvtSwap2` / `EvtLiquidityChange` instead.</Warning>
+
+<Note>For pools with Rate Limiter enabled (`baseFeeMode == 2`), the `SYSVAR_INSTRUCTIONS_PUBKEY` must be included in the remaining accounts of the swap instruction.</Note>
+
+# Farming Rewards
+
+DAMM v2 has a built-in farming mechanism (no separate farm program required). Each pool supports up to **2 reward tokens** simultaneously.
+
+- Pool creators can permissionlessly initialize the first reward (index 0) for their own pool
+- Rewards are distributed proportionally based on position liquidity (including unlocked, vesting, and permanently locked)
+- LPs claim rewards via `claim_reward`
+- The `skip_reward` parameter allows claiming even if a reward vault is frozen
+
+# Case Studies
+
+## Program Address
+
+| Network | Address |
+|---------|---------|
+| Mainnet | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
+| Devnet | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
+
+---
+
+## Key Concepts
+
+### Pool Types
+
+A DAMM v2 pool is always a **constant-product** pool (x·y=k within a price range). Two config types exist:
+
+- **Static Config** — Pool parameters (fee, price range, collect fee mode) are fixed at config creation. Pools inherit them.
+- **Dynamic Config** — Pool creator can specify custom parameters at pool creation time (private configs only).
+
+### Positions
+
+Every LP position is an on-chain account backed by a **position NFT**. The NFT is the ownership token — whoever holds it can manage the position. A position tracks three liquidity buckets:
+
+| Bucket | Description |
+|--------|-------------|
+| `unlocked_liquidity` | Available to withdraw freely |
+| `vested_liquidity` | Released on a cliff + periodic schedule |
+| `permanent_locked_liquidity` | Never withdrawable |
+
+### Activation & Trading Gating
+
+Pools can have an **activation point** (a future slot or timestamp) before which trading is disabled. This is used for:
+- Fair launch countdowns
+- Alpha Vault presale windows
+- Coordinated launch times across platforms
+
+---
+
+## Fee Architecture
+
+DAMM v2 fees have three layers:
+
+```
+Total Trading Fee
+  ├── Protocol Fee (fixed %)
+  │     └── Referral Fee (portion of protocol fee, if referral)
+  └── LP Fee (remainder)
+        └── [Compounding only] compoundingFeeBps portion → back into pool reserves
+```
+
+See [Fee Configuration](/overview/products/damm-v2/fee-configuration) and [Collect Fee Modes](/overview/products/damm-v2/collect-fee-modes) for details.
+
+---
+
+## Quick Links
+
+<CardGroup cols={2}>
+  <Card title="Pool Types & Configuration" href="/overview/products/damm-v2/pool-types" icon="gear">
+    Static vs dynamic config, price ranges, pool parameters
+  </Card>
+  <Card title="Collect Fee Modes" href="/overview/products/damm-v2/collect-fee-modes" icon="coins">
+    BothToken, OnlyB, and Compounding explained
+  </Card>
+  <Card title="Fee Configuration" href="/overview/products/damm-v2/fee-configuration" icon="percent">
+    Base fee modes, dynamic fee, protocol fee
+  </Card>
+  <Card title="Position Management" href="/overview/products/damm-v2/position-management" icon="wallet">
+    Creating positions, adding/removing liquidity
+  </Card>
+  <Card title="Liquidity Locking" href="/overview/products/damm-v2/liquidity-locking" icon="lock">
+    Vesting schedules and permanent locks
+  </Card>
+  <Card title="Farming Rewards" href="/overview/products/damm-v2/farming-rewards" icon="seedling">
+    Setting up and claiming in-pool rewards
+  </Card>
+</CardGroup>
