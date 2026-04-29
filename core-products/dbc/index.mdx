@@ -1,0 +1,192 @@
+---
+title: What is Dynamic Bonding Curve?
+description: "DBC is Meteora's permissionless token launch protocol. A configurable multi-segment bonding curve sells tokens until a migration threshold is hit, then automatically graduates the token to a DAMM v1 or DAMM v2 liquidity pool."
+---
+
+## Overview
+
+Dynamic Bonding Curve (DBC) lets anyone launch a token on Solana with a fully on-chain price discovery mechanism. The bonding curve defines a price schedule using up to **16 liquidity distribution points**, and trading happens directly against a virtual pool — no external AMM required until graduation.
+
+<CardGroup cols={2}>
+  <Card title="Configurable Curve" icon="chart-line" iconType="solid">
+    Up to 16 price-liquidity segments define the curve shape. Start steep for early price discovery, flatten out for later supply.
+  </Card>
+  <Card title="Automatic Migration" icon="arrow-right" iconType="solid">
+    Once the quote reserve hits `migration_quote_threshold`, the pool graduates to a DAMM v1 or DAMM v2 liquidity pool automatically.
+  </Card>
+  <Card title="Fee Flexibility" icon="coins" iconType="solid">
+    Configurable trading fees with protocol, partner, and creator fee splits. Optional fee scheduler for dynamic launch fees.
+  </Card>
+  <Card title="Token 2022 Support" icon="certificate" iconType="solid">
+    Launch SPL tokens or Token 2022 tokens. Transfer fee and other extensions handled natively.
+  </Card>
+  <Card title="Fixed or Dynamic Supply" icon="layer-group" iconType="solid">
+    Dynamic supply: tokens are minted as they're bought. Fixed supply: all tokens pre-minted, leftover returned after migration.
+  </Card>
+  <Card title="Creator & Partner Controls" icon="sliders" iconType="solid">
+    Configure LP vesting, liquidity percentages, creator trading fees, and post-migration pool parameters per launch.
+  </Card>
+</CardGroup>
+
+---
+
+## Program Address
+
+| Network | Address |
+|---------|---------|
+| Mainnet | `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN` |
+| Devnet | `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN` |
+
+---
+
+## How It Works
+
+```
+1. Create config key  →  defines curve, fees, migration parameters
+2. Create virtual pool  →  trading begins immediately (or after activation point)
+3. Traders buy base token  →  price moves up the curve
+4. Migration threshold hit  →  pool graduates to DAMM v1 or DAMM v2
+5. Creator/partner claim surplus + LP positions
+```
+
+### Virtual Pool vs Real Pool
+
+DBC uses a **virtual pool** (`VirtualPool` account) during the bonding phase:
+- No real AMM pool exists yet
+- Price is determined by the current position on the bonding curve
+- Both `base_vault` and `quote_vault` hold real tokens. Base tokens are either pre-minted (fixed supply) or minted on buy (dynamic supply). Quote tokens accumulate with each buy.
+- After migration, a real DAMM pool is created and all liquidity moves
+
+---
+
+## Virtual Pool State
+
+| Field | Description |
+|-------|-------------|
+| `config` | The `PoolConfig` this pool was created from |
+| `creator` | Who created this pool |
+| `base_mint` | The token being sold |
+| `base_vault` | Holds base tokens (or is empty for dynamic supply) |
+| `quote_vault` | Holds the accumulated quote token (SOL/USDC) |
+| `base_reserve` | Current base token reserve on the curve |
+| `quote_reserve` | Current quote token reserve (increases with each buy) |
+| `sqrt_price` | Current price on the curve |
+| `migration_progress` | `PreBonding → PostBonding → LockedVesting → CreatedPool` |
+| `finish_curve_timestamp` | When `quote_reserve >= migration_quote_threshold` |
+
+---
+
+## Migration Progress States
+
+```
+PreBondingCurve   → Active trading, price moving up the curve
+      ↓
+PostBondingCurve  → Migration threshold hit (Jupiter lock variant only)
+      ↓
+LockedVesting     → LP positions being distributed, vesting set up
+      ↓
+CreatedPool       → DAMM pool live, bonding phase complete
+```
+
+Most launches go directly `PreBonding → LockedVesting → CreatedPool`. The `PostBonding` state is only used for Jupiter-lock-integrated launches.
+
+---
+
+## Quick Links
+
+<CardGroup cols={2}>
+  <Card title="Curve Configuration" href="/overview/products/dbc/curve-configuration" icon="chart-line">
+    How to define curve segments with LiquidityDistributionParameters
+  </Card>
+  <Card title="Creator Configuration" href="/overview/products/dbc/creator-configuration" icon="gear">
+    All the parameters a creator controls per launch
+  </Card>
+  <Card title="Migration" href="/overview/products/dbc/migration" icon="arrow-right">
+    How pools graduate to DAMM v1/v2 and LP is distributed
+  </Card>
+  <Card title="Fee Configuration" href="/overview/products/dbc/dbc-fee-calculation" icon="percent">
+    Trading fees, protocol split, creator fee, migration fee
+  </Card>
+</CardGroup>
+
+# Anti-Sniper Features
+
+<CardGroup>
+  <Card title="Fee Time Scheduler" icon="clock" iconType="solid">
+    Timestamp-based fees, such as high fees at launch that decrease over time, help deter snipers and protect the pool during the most volatile periods.
+  </Card>
+  <Card title="Rate Limiter" icon="traffic-light" iconType="solid">
+    Amount-based fees that increases with a higher amount per swap, to deter snipers from sniping large amounts of tokens, while protecting smaller retail traders.
+  </Card>
+</CardGroup>
+
+# Other Features
+
+<CardGroup>
+  <Card title="Multiple Quote Token Support" icon="coins" iconType="solid">
+    Supports SOL, USDC, JUP, and other quote tokens for maximum flexibility.
+  </Card>
+  <Card title="SPL Token & Token2022 Support" icon="shield-check" iconType="solid">
+    Compatible with both SPL Token and Token2022 standards for broad token compatibility. Note: a 0.01 SOL pool creation fee applies for Token2022 pools using Output Token fee collection mode.
+  </Card>
+  <Card title="Flexible Fee Collection Modes" icon="wallet" iconType="solid">
+    Choose to collect fees only in the quote token or keep a percentage of all fees generated on the Dynamic Bonding Curve.
+  </Card>
+  <Card title="Customizable Liquidity Distribution" icon="chart-bar" iconType="solid">
+    Configure up to 16 price ranges with different liquidity curves for advanced pool customization.
+  </Card>
+  <Card title="Pool Creation Fee" icon="hand-holding-dollar" iconType="solid">
+    Partners can configure a SOL fee charged to token creators when creating pools. Partners can claim these fees via the SDK.
+  </Card>
+  <Card title="LP Vesting (DAMM v2)" icon="clock" iconType="solid">
+    Configure vesting schedules for partner and creator LP positions after migration to DAMM v2.
+  </Card>
+</CardGroup>
+
+<Warning>
+**Minimum 10% Locked Liquidity Requirement**
+
+All DBC configs require at least 10% of liquidity to remain locked at day 1 (86400 seconds) post-migration. This can be achieved through permanent locked liquidity and/or LP vesting (DAMM v2 only).
+</Warning>
+
+# Customizable Fees
+
+The Dynamic Bonding Curve (DBC) virtual pool collects a trading fee on every trade (buy or sell).
+
+- **Protocol Fee:**  
+  A portion of each trading fee is allocated to the DBC protocol (**20%** of the trading fee).
+
+- **Referral Fee:**  
+  Swap hosts (such as Jupiter, Photon, or trading bots) can include a referral account in the swap transaction to receive a referral fee, which is taken from the protocol fee (**20%** of the protocol fee).
+
+- **Fee Sharing in the Bonding Curve:**
+  The remaining **80%** of the trading fee is split between the partner and the creator based on `creator_trading_fee_percentage`. For example, if `creator_trading_fee_percentage = 20%`, the partner gets 64% and the creator gets 16% of the total trading fee.
+
+- **Fee Distribution After Migration:**
+  Once a token has graduated, the LP tokens are locked for both the partner and the token creator. The ratio of locked LP tokens is determined by the partner’s configuration. Both the partner and the token creator can claim fees from these locked LP tokens on Meteora DAMM v1 or DAMM v2. For DAMM v2 graduated pools, partners can also configure a **compounding fee mode** that reinvests trading fees back into the LP position instead of distributing them as separate claimable fees.
+
+# Migration
+
+### Automatic Migration
+
+If the DBC pool reaches a pre-defined quote token or price threshold, the liquidity is automatically migrated to a DAMM v1 pool or DAMM v2 Pool on Meteora.
+
+We run 2 auto migrator keepers to migrate DBC pools. These 2 keepers have strict migration quote threshold requirements.
+
+Keeper addresses that we are running:
+1. [CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY](https://solscan.io/account/CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY)
+- `pool_config.migration_quote_threshold` requirements:
+  - 10 SOL
+  - 750 USDC
+  - 1500 JUP
+2. [DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW](https://solscan.io/account/DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW)
+- `pool_config.migration_quote_threshold` requirements:
+  - \>= 750 USD (`quote_mint` token)
+
+<Note>The Migration Keepers only runs on Mainnet.</Note>
+
+### Manual Migration
+
+We have built a [manual migration user interface](https://migrator.meteora.ag/) for launchpads building on DBC to easily test the migration process.
+
+<Note>The Manual Migrator supports both Mainnet and Devnet.</Note>
