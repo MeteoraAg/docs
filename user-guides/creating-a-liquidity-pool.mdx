@@ -1,0 +1,380 @@
+---
+title: "How to create a Liquidity Pool "
+sidebarTitle: "Creating a Liquidity Pool"
+description: "Learn how to create DLMM and DAMM v2 Standard or Launch pools on Meteora, including token selection, pool configuration, review, launch settings, and duplicate pool checks."
+llmsDescription: "User guide for creating liquidity pools on Meteora. Covers the DLMM Standard Pool creation flow at https://meteora.ag/create/dlmm/standard, including selecting a base and quote token, configuring initial price, choosing a Base Fee and compatible Bin Step, optionally adding initial liquidity, selecting a distribution strategy, entering token amounts, using Auto-Fill, adjusting min and max price ranges, previewing bin distribution, reviewing pool creation costs, and confirming pool settings. Covers the DLMM Launch Pool flow at https://meteora.ag/create/dlmm/launch, including token selection, duplicate pool checks, Initial Price, Bin Step, Base Fee, Seed Liquidity Mode, Seed Amount, Lock Release Duration, Curve or Single Bin seed configuration, Fee Owner, Trading Start Time, supply details, curve or single-bin preview, and launch review fields such as FDV, max quote secured, position owner, and fee owner. Also covers the DAMM v2 Standard Pool creation flow at https://meteora.ag/create/dammv2/standard, including token eligibility checks, initial price, token amounts, fee collection mode, Quote + Compounding, price range chart, Base Fee Mode, Scheduler Type, Initial Fee, Fee Tier, Dynamic Fee, Start Time, permanent liquidity locking, pool creation costs, and review. Covers the DAMM v2 Launch Pool flow at https://meteora.ag/create/dammv2/launch, including dual-sided or single-sided liquidity distribution, base and quote token amounts, fee collection mode, compounding fee, min and max price range, Fixed, Time Scheduler, Rate Limiter, and Market Cap Scheduler fee modes, Dynamic Fee, Trading Start Time, permanent liquidity locking, price range and fee charts, pool creation costs, and review. Notes that duplicate DLMM and DAMM v2 pools are blocked for matching token pairs and relevant fee or pool configuration."
+---
+
+## DLMM
+
+### Creating a DLMM Standard Pool
+
+Anyone can create a DLMM Standard pool here: https://meteora.ag/create/dlmm/standard
+
+<Steps>
+  <Step title="Select your tokens">
+    Select the trading pair for the DLMM Standard Pool.
+
+    - **Base Token**: The token whose price is being quoted. You can search by token ticker or paste the token contract address.
+    - **Quote Token**: The token used to price the Base token. SOL or stables such as USDC and USDT are usually used as the Quote token.
+    - Use the swap button if you need to switch the Base and Quote token order.
+
+    <Note>If you change or swap tokens after configuring the pool, the pool configuration and initial liquidity inputs will reset so you can review the new pair from the beginning.</Note>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dlmm-standard-pool-step-1.png"
+        alt="create-dlmm-standard-pool-step-1-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+  <Step title="Configure Pool">
+    Set the pool parameters and decide whether to add initial liquidity during pool creation.
+
+    - **Initial Price**: The pool's starting price, shown as Quote token per Base token. This sets the active bin at creation and is used to place your initial liquidity range. If a Jupiter market price is available, you can use it as a reference, but you should still verify the price before continuing.
+    - **Base Fee**: The swap fee tier for the pool. This is the minimum fee charged on swaps through the pool.
+    - **Bin Step**: The price spacing between DLMM bins. You must select the Base Fee first because available Bin Step options depend on the selected Base Fee.
+
+    <Note>After the pool is created, the Base Fee and Bin Step cannot be changed.</Note>
+
+    You can optionally add initial liquidity when creating the pool. If you do not add initial liquidity, Meteora shows the pool creation cost for initializing the pool only.
+
+    If you add initial liquidity:
+
+    - Choose a liquidity distribution strategy: **Spot**, **Curve**, or **Bid Ask**.
+    - Enter the Base token amount and/or Quote token amount. When available, **Auto-Fill** can calculate the other side based on your selected range and strategy.
+    - Adjust the liquidity range with the min and max price controls, percentage offsets, plus/minus buttons, or the bin distribution slider.
+    - Use the bin distribution chart to preview how your liquidity will be placed across price bins.
+    - Review the total number of bins and pool creation cost breakdown before continuing.
+
+    <Note>When creating a DLMM pool and setting the initial pool price, the eventual pool price may deviate slightly from your input. This is because if the bin price cannot be represented exactly by the program, the frontend will round up or down to the closest price. The deviation depends on the Bin Step you selected.</Note>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dlmm-standard-pool-step-2.png"
+        alt="create-dlmm-standard-pool-step-2-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+  <Step title="Review & Create">
+    Review your DLMM Standard Pool settings before launching the pool.
+
+    The review step shows:
+
+    - Pair
+    - Pool Fee
+    - Bin Step
+    - Initial Price
+    - Whether initial liquidity will be added
+    - Base and Quote token amounts, if initial liquidity is added
+    - Min Price, Max Price, and Total Bins, if initial liquidity is added
+    - Pool creation cost, including rent and transaction fees, excluding seeded liquidity
+
+    If you added initial liquidity, you will also see the final bin distribution preview before creating the pool.
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dlmm-standard-pool-step-3.png"
+        alt="create-dlmm-standard-pool-step-3-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+</Steps>
+
+<Warning>To prevent duplicate DLMM pools, for each token pair, there can only be one pool with a specific Bin Step and Base Fee % parameter combination on Meteora. If that pool already exists, you won’t be able to create a new pool with the same parameters. You should deposit liquidity into the existing pool instead.</Warning>
+
+### Creating a DLMM Launch Pool
+
+Anyone can create a DLMM Launch pool here: https://meteora.ag/create/dlmm/launch
+
+<Steps>
+  <Step title="Select your tokens">
+    Select the trading pair for the DLMM Launch Pool.
+
+    - **Base Token**: The token you are launching or seeding into the pool.
+    - **Quote Token**: The token used to price the Base token. SOL or stables such as USDC and USDT are usually used as the Quote token.
+    - Use the swap button if you need to switch the Base and Quote token order.
+
+    <Note>If you change or swap tokens after configuring the pool, the Initial Price, Curve Max Price, and Seed Amount will reset so you can review the new pair from the beginning.</Note>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dlmm-launch-pool-step-1.png"
+        alt="create-dlmm-launch-pool-step-1-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+  <Step title="Configure Pool">
+    Set the launch parameters, seed liquidity model, and trading start time.
+
+    - **Initial Price**: The pool's starting price, shown as Quote token per Base token. This sets the active bin at creation and anchors your seed liquidity range.
+    - **Bin Step**: The price spacing between DLMM bins. Smaller steps give finer price granularity.
+    - **Base Fee**: The swap fee charged on each trade. The allowed fee range depends on the selected Bin Step.
+    - **Seed Liquidity Mode**: Choose **Curve** to spread seeded liquidity across multiple bins, or **Single Bin** to concentrate liquidity at the Initial Price.
+    - **Seed Amount**: Enter the amount of Base token to seed as initial liquidity.
+    - **Lock Release Duration**: Choose how long the seeded liquidity stays locked before it can be withdrawn. You can use presets such as None, 1W, 1M, 3M, 6M, or 1Y, or enter a custom duration in seconds.
+    - **Curve Max Price** and **Liquidity Curvature**: For Curve mode, set the upper price bound and shape of the seed liquidity distribution. Higher curvature concentrates more liquidity near the Initial Price.
+    - **Position Owner**: The connected wallet owns the seeded liquidity position.
+    - **Fee Owner**: The wallet that receives swap fees from the seeded position. You can enter a custom address.
+    - **Trading Start Time**: Pick a future date and time when trading becomes active.
+    - **Supply Details**: Review Total Supply, Initial FDV, Final FDV, Max Quote Secured, and Percentage of Supply in Pool.
+
+    <Warning>If you plan to have a token airdrop, make sure tokens are distributed only after the Trading Start Time. Any user who receives the token before trading starts can create their own pool and markets, which may affect your launch price range.</Warning>
+
+    <Note>Meteora shows a curve or single-bin preview and a pool creation cost breakdown before you continue.</Note>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dlmm-launch-pool-step-2-params.png"
+        alt="create-dlmm-launch-pool-step-2-params-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dlmm-launch-pool-step-2-ilm.png"
+        alt="create-dlmm-launch-pool-step-2-ilm-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dlmm-launch-pool-step-2-tables.png"
+        alt="create-dlmm-launch-pool-step-2-tables-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+  <Step title="Review & Create">
+    Review your DLMM Launch Pool settings before launching the pool.
+
+    The review step shows:
+
+    - Pair
+    - Bin Step
+    - Fee
+    - Dynamic Fee
+    - Initial Price
+    - Start Time
+    - Seed Mode
+    - Seed Amount
+    - Lock Duration
+    - Curve Max Price and Curve Curvature, if using Curve mode
+    - Single Bin Price and rounding, if using Single Bin mode
+    - Total Supply
+    - Percentage of Supply in Pool
+    - Initial FDV and Final FDV
+    - Max Quote Secured
+    - Position Owner and Fee Owner
+    - Pool creation cost, including rent and transaction fees, excluding seeded liquidity
+
+    You will also see the final curve or single-bin preview before creating the pool.
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dlmm-launch-pool-step-3-info.png"
+        alt="create-dlmm-launch-pool-step-3-info-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dlmm-launch-pool-step-3-ilm.png"
+        alt="create-dlmm-launch-pool-step-3-ilm-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dlmm-launch-pool-step-3-tables.png"
+        alt="create-dlmm-launch-pool-step-3-tables-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+</Steps>
+
+<Warning>To prevent duplicate DLMM launch pools, Meteora checks whether a pool already exists for the selected token pair and pool settings. If that pool already exists, you should deposit liquidity into the existing pool instead.</Warning>
+
+## DAMM v2
+
+### Creating a DAMM v2 Standard Pool
+
+Anyone can create a DAMM v2 Standard pool here: https://meteora.ag/create/dammv2/standard
+
+<Steps>
+  <Step title="Select your tokens">
+    Select the trading pair for the DAMM v2 Standard Pool.
+
+    - **Base Token**: The token whose price is being quoted. You can search by token ticker or paste the token contract address.
+    - **Quote Token**: The token used to price the Base token. SOL or stables such as USDC and USDT are usually used as the Quote token.
+    - Use the swap button if you need to switch the Base and Quote token order.
+
+    <Note>If you change or swap tokens after configuring the pool, the initial price, fee tier, and token amount inputs will reset so you can review the new pair from the beginning.</Note>
+
+    <Note>Some Token 2022 tokens or extensions may be unsupported for DAMM v2 pool creation. If a selected token is not eligible, Meteora will show a warning before you continue.</Note>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dammv2-standard-pool-step-1.png"
+        alt="create-dammv2-standard-pool-step-1-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+  <Step title="Configure Pool">
+    Set the pool parameters, deposit amounts, fee behavior, start time, and liquidity lock preference.
+
+    - **Initial Price**: The pool's starting price, shown as Quote token per Base token. If a Jupiter market price is available, you can use it as a reference, but you should still verify the price before continuing.
+    - **Base Token Amount** and **Quote Token Amount**: Enter the liquidity amounts to deposit. When you edit one side, Meteora can calculate the other side from the Initial Price.
+    - **Fee Collection Mode**: Choose whether fees are collected in **Base + Quote**, **Quote**, or **Quote + Compounding**. If you choose Quote + Compounding, select the percentage of trading fees to automatically reinvest into pool liquidity.
+    - **Price Range Chart**: After you enter a valid initial price and both token amounts, use the chart to preview the pool's price range.
+    - **Base Fee Mode**: Choose **Fixed**, **Time Scheduler**, or **Market Cap Scheduler**.
+    - **Scheduler Type**: For scheduled fee modes, choose **Linear** or **Exponential**.
+    - **Initial Fee**: For Time Scheduler, choose the starting fee used by the schedule.
+    - **Fee Tier**: Select a fee tier compatible with your fee mode, scheduler, fee collection mode, and Dynamic Fee setting.
+    - **Dynamic Fee**: Enable or disable the volatility-based fee component.
+    - **Start Time**: Choose **Now** to start trading immediately after creation, or **Custom** to schedule a future start time.
+    - **Permanently lock my liquidity**: Select this only if you want the deposited liquidity to be permanently locked.
+
+    <Warning>If you select “Permanently lock my liquidity”, all tokens you deposit will be permanently locked and you will no longer be able to access or withdraw the underlying assets.</Warning>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dammv2-standard-pool-step-2.png"
+        alt="create-dammv2-standard-pool-step-2-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+  <Step title="Review & Create">
+    Review your DAMM v2 Standard Pool settings before launching the pool.
+
+    The review step shows:
+
+    - Pool pair
+    - Base amount
+    - Quote amount
+    - Initial price
+    - Base Fee Mode
+    - Initial fee, when applicable
+    - Fee tier
+    - Dynamic Fee
+    - Collect Fee Mode
+    - Start time
+    - Lock liquidity setting
+    - Pool creation cost, including rent and transaction fees, excluding deposited liquidity
+
+    You may also see the final price range chart and fee chart so you can verify how the pool and fee configuration will behave before creation.
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dammv2-standard-pool-step-3.png"
+        alt="create-dammv2-standard-pool-step-3-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+</Steps>
+
+<Warning>To prevent duplicate DAMM v2 pools, Meteora checks whether a pool already exists for the selected token pair and fee configuration. If that pool already exists, you won’t be able to create a new pool with the same settings. You should deposit liquidity into the existing pool instead.</Warning>
+
+### Creating a DAMM v2 Launch Pool
+
+Anyone can create a DAMM v2 Launch pool here: https://meteora.ag/create/dammv2/launch
+
+<Steps>
+  <Step title="Select your tokens">
+    Select the trading pair for the DAMM v2 Launch Pool.
+
+    - **Base Token**: The token you are launching or depositing into the pool.
+    - **Quote Token**: The token used to price the Base token. SOL or stables such as USDC and USDT are usually used as the Quote token.
+    - Use the swap button if you need to switch the Base and Quote token order.
+
+    <Note>Some Token 2022 tokens or extensions may be unsupported for DAMM v2 pool creation. If a selected token is not eligible, Meteora will show a warning before you continue.</Note>
+
+    <Note>Meteora also checks whether a DAMM v2 pool with the selected settings already exists. If it does, you should deposit liquidity into the existing pool instead.</Note>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dammv2-launch-pool-step-1.png"
+        alt="create-dammv2-launch-pool-step-1-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+  <Step title="Configure Pool">
+    Set the pool setup, fee configuration, trading start time, and liquidity lock preference.
+
+    - **Initial Price**: The pool's starting price, shown as Quote token per Base token.
+    - **Liquidity Distribution**: Choose **Dual-sided** to deposit both Base and Quote tokens, or **Single-sided** to deposit only the Base token.
+    - **Base Token Amount** and **Quote Token Amount**: Enter the liquidity amounts to deposit. Single-sided pools do not require a Quote token deposit.
+    - **Fee Collection Mode**: Choose **Base + Quote**, **Quote**, or **Quote + Compounding**. Single-sided liquidity is not compatible with Quote + Compounding.
+    - **Compounding Fee %**: If Quote + Compounding is selected, set the percentage of trading fees automatically reinvested into pool liquidity.
+    - **Min Price** and **Max Price**: Configure the price range. For single-sided pools, the lower bound is fixed to the Initial Price and you only set the Max Price.
+    - **Base Fee Mode**: Choose **Fixed**, **Time Scheduler**, **Rate Limiter**, or **Market Cap Scheduler**.
+    - **Scheduler Type**: For Time Scheduler or Market Cap Scheduler, choose **Linear** or **Exponential**.
+    - **Fixed Base Fee**: For Fixed mode, set the constant swap fee charged on every trade.
+    - **Time Scheduler**: Set the Starting Fee, Ending Fee, Total Duration, and Number of Periods.
+    - **Rate Limiter**: Set the Base Fee, Fee Increment, Reference Amount, and Max Duration. Rate Limiter requires Quote-only fee collection.
+    - **Market Cap Scheduler**: Set the Starting Fee, Ending Fee, Price Multiple, Number of Periods, and Expiration Duration.
+    - **Dynamic Fee**: Enable or disable the volatility-based fee component.
+    - **Trading Start Time**: Choose **Now** to start trading immediately after creation, or **Custom** to schedule a future start time.
+    - **Permanently lock my liquidity**: Select this only if you want the deposited liquidity to be permanently locked.
+
+    <Warning>If you select “Permanently lock my liquidity”, all tokens you deposit will be permanently locked and you will no longer be able to access or withdraw the underlying assets.</Warning>
+
+    <Warning>If you plan to have a token airdrop, make sure tokens are distributed only after the Trading Start Time. Any user who receives the token before trading starts can create their own pool and markets, which may affect your launch price range.</Warning>
+
+    <Note>Meteora shows price range and fee previews, plus a pool creation cost breakdown, before you continue.</Note>
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dammv2-launch-pool-step-2.png"
+        alt="create-dammv2-launch-pool-step-2-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+  <Step title="Review & Create">
+    Review your DAMM v2 Launch Pool settings before launching the pool.
+
+    The review step shows:
+
+    - Pair
+    - Liquidity Distribution
+    - Base amount
+    - Quote amount, if dual-sided
+    - Initial price
+    - Total supply
+    - Initial FDV
+    - Max price, or Min / Max price for dual-sided pools
+    - Base Fee Mode
+    - Base fee, when using Fixed mode
+    - Dynamic Fee
+    - Collect Fee Mode
+    - Trading Start time
+    - Lock liquidity setting
+    - Pool creation cost, including rent and transaction fees, excluding deposited liquidity
+
+    You may also see the final price range chart and fee chart so you can verify how the pool and fee configuration will behave before creation.
+
+    <div className="flex justify-center">
+      <img
+        src="/user-guides/assets/create-dammv2-launch-pool-step-3.png"
+        alt="create-dammv2-launch-pool-step-3-png"
+        className="rounded-lg w-full h-auto"
+      />
+    </div>
+  </Step>
+</Steps>
+
+<Warning>To prevent duplicate DAMM v2 launch pools, Meteora checks whether a pool already exists for the selected token pair and fee configuration. If that pool already exists, you should deposit liquidity into the existing pool instead.</Warning>
