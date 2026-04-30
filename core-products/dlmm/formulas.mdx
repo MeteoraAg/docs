@@ -1,0 +1,133 @@
+---
+title: "DLMM Formulas"
+sidebarTitle: "Formulas"
+description: "Understand the product math behind DLMM bin prices, bin liquidity, active price movement, dynamic fees, and per-bin fee distribution."
+llmsDescription: "Product-friendly explanation of DLMM formulas covering bin price calculation, bin step, constant-sum bin liquidity, active bin movement, base fee, volatility-based variable fee, per-bin fee distribution, liquidity shares, and why these formulas matter for LPs, token teams, traders, and integrators."
+---
+
+DLMM's math is built around a simple product idea: each pool is a ladder of price bins, and each bin behaves like its own tiny market at a fixed price. The formulas below explain how prices move from bin to bin, how liquidity is represented inside a bin, and how fees respond to market volatility.
+
+This page keeps the formulas readable for product and strategy understanding. If you are integrating directly with the program, use the SDK and developer guides for implementation details.
+
+## Bin Price
+
+Every DLMM pool has a **bin step**, measured in basis points. The bin step defines the percentage difference between one bin and the next.
+
+```math
+\text{bin price} = \left(1 + \frac{\text{bin step}}{10{,}000}\right)^{\text{bin id}}
+```
+
+**What this means:** if the bin step is `25` basis points, each neighboring bin is approximately `0.25%` apart. When the active bin moves from one bin to the next, the pool price moves by that configured step.
+
+<CardGroup cols={2}>
+  <Card title="Smaller Bin Step" icon="compress" iconType="solid">
+    Creates a tighter price ladder. This is useful for stable pairs or highly liquid pairs where price usually moves in smaller increments.
+  </Card>
+  <Card title="Larger Bin Step" icon="expand" iconType="solid">
+    Creates a wider price ladder. This can be useful for volatile pairs where a position needs to cover a broader market range.
+  </Card>
+</CardGroup>
+
+## Bin Liquidity
+
+Inside a bin, DLMM uses a constant-sum style formula:
+
+```math
+L = P \cdot x + y
+```
+
+Where:
+
+- `L` is the amount of liquidity in the bin
+- `P` is the bin price
+- `x` is the amount of token X
+- `y` is the amount of token Y
+
+This is why trades inside a bin can execute at a fixed price. The bin has a defined exchange rate, and traders swap token X for token Y, or token Y for token X, until one side of the active bin is consumed.
+
+## Active Bin Movement
+
+Only one bin is active at a time. The active bin is the current market price for the pool.
+
+```text
+Price moves left  <-  [ lower bins ][ active bin ][ higher bins ]  ->  Price moves right
+```
+
+If traders keep buying token X with token Y, token X in the active bin is eventually consumed and the price moves to the next higher bin. If traders sell token X for token Y, token Y is consumed and the price moves to the next lower bin.
+
+This is how many fixed-price bins become one continuous market.
+
+## Total Trading Fee
+
+DLMM trading fees have two parts:
+
+```math
+\text{total fee} = \text{base fee} + \text{variable fee}
+```
+
+The **base fee** is the predictable minimum fee for the pool. The **variable fee** is the dynamic part that can increase when the market becomes more volatile.
+
+The program caps total fees at the pool's maximum fee rate, so the final applied fee is:
+
+```math
+\text{applied fee rate} = \min(\text{base fee rate} + \text{variable fee rate}, \text{maximum fee rate})
+```
+
+## Base Fee
+
+The base fee is configured by the pool creator through fee parameters such as the base factor and bin step.
+
+```math
+\text{base fee rate} = \text{base factor} \times \text{bin step} \times 10 \times 10^{\text{base fee power factor}}
+```
+
+**Product intuition:** a pool with a larger bin step often has a higher base fee because each bin represents a larger price movement. A lower base fee can attract more volume, while a higher base fee can earn more per unit of volume.
+
+## Variable Fee
+
+The variable fee is DLMM's volatility-aware fee. It increases when the pool observes more price movement across bins.
+
+```math
+\text{variable fee rate} \propto (\text{volatility accumulator} \times \text{bin step})^2
+```
+
+The **volatility accumulator** rises when swaps cross bins, especially when swaps happen frequently. It decays when the market slows down. This lets DLMM charge more during high-volatility periods without permanently locking the pool into a high fee.
+
+<Info>In product terms, variable fees act like surge pricing for liquidity. When LPs are taking more risk because the market is moving quickly, the pool can charge more for access to that liquidity.</Info>
+
+## Per-Bin Fee Distribution
+
+Fees are calculated per bin as swaps move through the pool. If a large swap crosses multiple bins, each crossed bin calculates its fee based on the amount traded through that bin.
+
+```math
+\text{fee for bin} = \text{swap amount in bin} \times (\text{base fee} + \text{variable fee})
+```
+
+This matters because LPs only earn fees from the bins where they actually provide liquidity. If your liquidity is concentrated in the bins being crossed by traders, your position participates in that fee flow. If the active price moves outside your selected range, your position stops earning fees until the market returns or you rebalance.
+
+## Liquidity Shares
+
+When you add liquidity to a bin, your position receives a share of that bin's total liquidity.
+
+```math
+\text{liquidity share} = \frac{\text{liquidity added} \times \text{existing liquidity shares}}{\text{bin liquidity}}
+```
+
+Those shares determine your proportional claim on fees and rewards earned by that bin.
+
+## Why These Formulas Matter
+
+<CardGroup cols={2}>
+  <Card title="For LPs" icon="wallet" iconType="solid">
+    The formulas explain why bin step, range width, and liquidity shape directly affect fee opportunity and out-of-range risk.
+  </Card>
+  <Card title="For Token Teams" icon="rocket" iconType="solid">
+    The formulas explain how launch liquidity can be designed to support price discovery, volatility fee capture, and efficient routing.
+  </Card>
+  <Card title="For Traders" icon="arrows-rotate" iconType="solid">
+    The formulas explain why swaps can have zero slippage inside a bin but still move price when a bin's liquidity is consumed.
+  </Card>
+  <Card title="For Integrators" icon="plug" iconType="solid">
+    The formulas explain the model, while quote APIs and SDK methods should be used for exact trade and position calculations.
+  </Card>
+</CardGroup>
