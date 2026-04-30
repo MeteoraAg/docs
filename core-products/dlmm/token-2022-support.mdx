@@ -1,0 +1,103 @@
+---
+title: "DLMM Token 2022 Support"
+sidebarTitle: "Token 2022 Support"
+description: "See how DLMM supports SPL Token 2022 assets, permissionless extensions, token badge review, and launch considerations for advanced token designs."
+llmsDescription: "Explains DLMM Token 2022 support, including permissionless supported extensions such as TransferFeeConfig, MetadataPointer, TokenMetadata, and revoked TransferHook, account-level MemoTransfer handling, token badge review for permissioned or sensitive extensions, freeze authority considerations, and why Token 2022 matters for DLMM pools, launches, metadata, transfer-fee tokens, and controlled risk."
+---
+
+DLMM supports SPL Token 2022 assets so teams can create pools for tokens with newer Solana token features. This helps token creators use richer token designs while still accessing Meteora's concentrated liquidity, dynamic fees, limit-order support, and aggregator-ready pool infrastructure.
+
+Token 2022 support is split into two paths:
+
+<CardGroup cols={2}>
+  <Card title="Permissionless Support" icon="unlock" iconType="solid">
+    If your mint only uses supported safe extensions, you can create and use a DLMM pool without additional approval from Meteora.
+  </Card>
+  <Card title="Token Badge Support" icon="badge-check" iconType="solid">
+    If your mint uses more sensitive extensions, Meteora can review it and initialize a token badge so the token can be used in DLMM.
+  </Card>
+</CardGroup>
+
+## Permissionless Extensions
+
+If your Token 2022 mint uses only the following supported extensions, it can be used permissionlessly in DLMM:
+
+- `TransferFeeConfig`
+- `MetadataPointer`
+- `TokenMetadata`
+- `TransferHook`, only when both the hook program and hook authority are revoked
+
+DLMM also handles `MemoTransfer` as an account-level extension for token accounts.
+
+<Note>`MemoTransfer` is not a mint extension. It is applied to individual token accounts rather than the token mint itself.</Note>
+
+## Token Badge Extensions
+
+Some Token 2022 extensions can affect transfers, account states, authority behavior, or user expectations. If your token uses one of these extensions, you need a **token badge** before it can be used seamlessly in DLMM.
+
+Start by completing this [Google Form](https://forms.gle/59n3zDiGS2C6qMfd7) with the extensions your token requires. After submitting the form, open a Discord ticket so the Meteora team can review your request.
+
+Getting a token badge can enable support for Token 2022 extensions such as:
+
+- `Uninitialized`
+- `TransferFeeConfig`
+- `TransferFeeAmount`
+- `MintCloseAuthority`
+- `ConfidentialTransferMint`
+- `ConfidentialTransferAccount`
+- `DefaultAccountState` - All new token accounts must be unfrozen by default
+- `ImmutableOwner`
+- `NonTransferable`
+- `InterestBearingConfig`
+- `CpiGuard`
+- `PermanentDelegate`
+- `NonTransferableAccount`
+- `TransferHook`
+- `TransferHookAccount`
+- `ConfidentialTransferFeeConfig`
+- `ConfidentialTransferFeeAmount`
+- `MetadataPointer`
+- `TokenMetadata`
+- `GroupPointer`
+- `TokenGroup`
+- `GroupMemberPointer`
+- `TokenGroupMember`
+- `ConfidentialMintBurn`
+- `ScaledUiAmount`
+- `Pausable`
+- `PausableAccount`
+
+<Warning>Token 2022 mints with a freeze authority require additional review. DLMM does not permissionlessly accept mints that can freeze accounts.</Warning>
+
+## What This Means For Pool Creators
+
+Token 2022 support gives token teams more flexibility, but each extension changes the user and integration surface of a pool. Before launching a DLMM pool, confirm that wallets, aggregators, trading bots, and analytics tools used by your community can properly display and transfer your token.
+
+<AccordionGroup>
+  <Accordion title="I use standard metadata or transfer fees">
+    Your mint may be eligible for permissionless DLMM support, as long as it only uses permissionless extensions and does not include unsupported authority controls.
+  </Accordion>
+  <Accordion title="I use transfer hooks">
+    Transfer hooks are supported permissionlessly only when both the hook program and hook authority are revoked. If the hook can still execute custom transfer logic, request token badge review.
+  </Accordion>
+  <Accordion title="I use advanced or authority-based extensions">
+    Request a token badge before creating the pool. This gives Meteora a review point for extensions that can affect swaps, LP deposits, withdrawals, or downstream integrations.
+  </Accordion>
+</AccordionGroup>
+
+## Why Token 2022 Support Matters
+
+<CardGroup cols={2}>
+  <Card title="More Launch Flexibility" icon="rocket" iconType="solid">
+    Teams can launch assets with Token 2022 features while still using DLMM's liquidity shapes, dynamic fees, and launch pool infrastructure.
+  </Card>
+  <Card title="Better Token UX" icon="id-card" iconType="solid">
+    Metadata extensions help wallets and interfaces display richer token information.
+  </Card>
+  <Card title="Fee-Aware Tokens" icon="coins" iconType="solid">
+    Transfer-fee tokens can be supported, enabling assets with built-in transfer economics to access DLMM liquidity.
+  </Card>
+  <Card title="Controlled Risk" icon="shield-check" iconType="solid">
+    The token badge path lets Meteora review extensions that could materially affect pool behavior or user safety.
+  </Card>
+</CardGroup>

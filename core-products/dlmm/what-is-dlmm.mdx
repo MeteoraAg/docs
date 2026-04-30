@@ -1,0 +1,119 @@
+---
+title: "What is DLMM?"
+sidebarTitle: "What is DLMM?"
+description: "Learn how Meteora's DLMM uses price bins, concentrated liquidity, position accounts, dynamic fees, limit orders, and launch-ready pool design to power efficient Solana markets."
+llmsDescription: "Overview of Meteora DLMM, explaining Dynamic Liquidity Market Maker pools, bin-based concentrated liquidity, zero-slippage swaps inside each bin, active bin movement, liquidity shapes, DLMM position accounts, dynamic fees, single-sided liquidity, limit order support, dynamic positions, Token 2022 support, and why DLMM is useful for LPs, traders, aggregators, and token launches."
+---
+
+## Overview
+
+DLMM stands for **Dynamic Liquidity Market Maker**. It is Meteora's high-performance concentrated liquidity product for teams and LPs who want more control over where liquidity sits, how fees are captured, and how a pool reacts when the market gets volatile.
+
+Instead of spreading liquidity across every possible price like a traditional AMM, DLMM organizes liquidity into **discrete price bins**. Each bin represents one price point for a token pair. When traders swap inside the active bin, they trade at that bin's fixed price, which creates a smooth zero-slippage experience within the bin. When demand consumes the liquidity in one bin, the market moves to the next bin.
+
+The result is a liquidity engine that can feel simple to traders while giving LPs and token teams a much sharper set of tools: concentrated liquidity, single-sided deposits, dynamic fees, limit-order style strategies, wider dynamic positions, Token 2022 support, and launch-ready liquidity design.
+
+<CardGroup cols={2}>
+  <Card title="Capital Efficiency" icon="chart-line" iconType="solid">
+    Concentrate liquidity around the prices where trading is most likely to happen, so each dollar of liquidity can support more volume than a full-range pool.
+  </Card>
+  <Card title="Zero-Slippage Bins" icon="arrows-left-right" iconType="solid">
+    Trades inside a bin execute at that bin's fixed price. Price only moves when liquidity in the active bin is consumed and the pool shifts to the next bin.
+  </Card>
+  <Card title="Dynamic Fees" icon="bolt" iconType="solid">
+    Fees can rise when volatility increases and cool down when markets are calmer, helping LPs price risk more intelligently.
+  </Card>
+  <Card title="Flexible Liquidity Shapes" icon="sliders" iconType="solid">
+    LPs can choose Spot, Curve, and Bid-Ask shapes to match their market view, from stable pairs to volatile launches.
+  </Card>
+  <Card title="Limit Order Support" icon="list-check" iconType="solid">
+    Users can place liquidity at selected bins to behave like buy or sell orders, while still participating in DLMM's on-chain liquidity system.
+  </Card>
+  <Card title="Launch Pool Ready" icon="rocket" iconType="solid">
+    DLMM powers DLMM Launch Pools, helping new tokens bootstrap liquidity, support Jupiter routing, and capture launch-period volatility.
+  </Card>
+</CardGroup>
+
+<Note>Unlike DAMM pools, DLMM liquidity is not connected to Meteora's Dynamic Vaults for lending yield. DLMM liquidity is used for trading, fee capture, and pool-level incentives where available.</Note>
+
+## Why DLMM Exists
+
+Liquidity is most valuable where trades actually happen. In many AMMs, a large amount of liquidity sits far away from the current price and rarely earns fees. DLMM solves this by letting LPs place liquidity across specific price bins instead of passively covering the entire curve.
+
+For LPs, this means a position can be designed around a thesis: tight and efficient for stable pairs, wider for volatile assets, or one-sided for gradually entering or exiting a token. For token teams, this means launch liquidity can be designed with better price discovery, fee capture, and market depth from day one.
+
+## How DLMM Works
+
+The DLMM market is built from many bins placed side by side.
+
+```text
+Lower price bins      Active bin       Higher price bins
+[ Token Y only ]  [ Token X + Y ]  [ Token X only ]
+```
+
+There is only one **active bin** at a time. That active bin is where the current market price sits and where swaps are happening now. Bins below the active bin hold one side of the pair, and bins above it hold the other side. As swaps consume one token from the active bin, the pool moves left or right through the bin ladder.
+
+Each pool also has a **bin step**, which defines the price gap between neighboring bins. Smaller bin steps create tighter price movement and are often useful for stable or highly liquid pairs. Larger bin steps create wider jumps and can be useful for volatile assets where price can move quickly.
+
+## Liquidity Shapes
+
+When LPs add liquidity, they choose how that liquidity is distributed across bins. This is one of DLMM's biggest product advantages because the same pool can support different strategies at the same time.
+
+<CardGroup cols={3}>
+  <Card title="Spot" icon="chart-column" iconType="solid">
+    A balanced distribution across the selected range. It is straightforward, flexible, and useful when you want broad exposure without over-concentrating in one area.
+  </Card>
+  <Card title="Curve" icon="chart-scatter-bubble" iconType="solid">
+    A concentrated distribution around the middle of the range. It is designed for higher efficiency when you expect trading to stay near the current price.
+  </Card>
+  <Card title="Bid-Ask" icon="chart-waterfall" iconType="solid">
+    A distribution that places more liquidity near the edges of the range. It is useful for capturing volatility or creating DCA-style buy and sell strategies.
+  </Card>
+</CardGroup>
+
+## Dynamic Fees
+
+DLMM fees are designed to adapt to market conditions. Every swap pays a base fee, and pools can also charge a variable fee that responds to volatility.
+
+When swaps cross more bins or happen in quick succession, DLMM treats the market as more volatile. The variable fee can increase during those periods, which helps LPs capture more value when they are taking more risk. When activity slows down, the volatility measurement decays and fees can normalize.
+
+This is especially important during launches, where demand and volatility are often highest. DLMM Launch Pools have Dynamic Fees enabled by default so token teams and LPs can better monetize early trading activity while making aggressive launch-period trading more expensive.
+
+## Who DLMM Is For
+
+<AccordionGroup>
+  <Accordion title="Liquidity providers">
+    DLMM is for LPs who want more control over capital placement, fee capture, and strategy design. You can concentrate liquidity, provide single-sided liquidity, rebalance as the market moves, and claim fees from the bins where your liquidity is active.
+  </Accordion>
+  <Accordion title="Token teams">
+    DLMM is for teams launching or growing token markets. It gives you a flexible liquidity layer for bootstrapping depth, supporting aggregator routing, and capturing fees during high-volume market periods.
+  </Accordion>
+  <Accordion title="Traders and aggregators">
+    DLMM is for traders who need deep liquidity and efficient routing. Bins can deliver zero-slippage execution at a fixed price until the active bin is consumed, while the full market is composed from many bins.
+  </Accordion>
+</AccordionGroup>
+
+## What To Read Next
+
+<CardGroup cols={2}>
+  <Card title="DLMM Formulas" href="/core-products/dlmm/formulas" icon="calculator" iconType="solid">
+    Understand the product math behind bin prices, liquidity, and dynamic fees without going deep into code.
+  </Card>
+  <Card title="DLMM Limit Order" href="/core-products/dlmm/limit-order" icon="list-check" iconType="solid">
+    Learn how selected bins can behave like on-chain buy or sell orders.
+  </Card>
+  <Card title="DLMM Collect Fee Mode" href="/core-products/dlmm/collect-fee-mode" icon="coins" iconType="solid">
+    See how pools choose whether fees are collected from the input token or in token Y.
+  </Card>
+  <Card title="DLMM Dynamic Positions" href="/core-products/dlmm/dynamic-positions" icon="arrows-left-right-to-line" iconType="solid">
+    Learn how position accounts track ownership, bin ranges, liquidity shares, fees, rewards, and resizable ranges.
+  </Card>
+  <Card title="DLMM Token 2022 Support" href="/core-products/dlmm/token-2022-extensions" icon="certificate" iconType="solid">
+    Review which Token 2022 extensions work permissionlessly and which require a token badge.
+  </Card>
+  <Card title="Strategies and Use Cases" href="/core-products/dlmm/strategies-and-use-cases" icon="chess" iconType="solid">
+    Explore common LP strategies such as Curve, Bid-Ask, Spot-Concentrated, and Spot-Wide.
+  </Card>
+</CardGroup>
+
+<Warning>DLMM can be more capital-efficient than traditional AMMs, but it also requires more active position management. If the active price moves outside your selected range, that position stops earning trading fees until the price returns or you rebalance.</Warning>
