@@ -1,0 +1,76 @@
+---
+title: "DAMM v2 Token 2022 Support"
+sidebarTitle: "Token 2022 Support"
+description: "Learn how DAMM v2 supports Token 2022 mints, transfer-fee tokens, metadata extensions, token badges, and reward tokens."
+llmsDescription: "Documentation for DAMM v2 Token 2022 support, covering SPL Token and Token 2022 mint detection, token program flags, permissionless extensions such as TransferFeeConfig, MetadataPointer, and TokenMetadata, TransferHook limitations, token badge requirements for other extensions, Token 2022 reward token support, unsupported Token 2022 native mint behavior, and why review is required for sensitive token extensions."
+---
+
+DAMM v2 supports both standard SPL Token mints and Token 2022 mints. This lets more Solana assets use DAMM v2 pools while preserving safety around extensions that can change token behavior.
+
+Token 2022 is powerful because it allows mints to add features such as transfer fees, metadata, interest-bearing behavior, non-transferability, or hooks. DAMM v2 supports common extensions directly and uses a token badge process for extensions that need additional review.
+
+## How DAMM v2 Detects Token Programs
+
+When a pool is created, DAMM v2 checks whether each mint is owned by the standard SPL Token Program or the Token 2022 Program. The pool stores that information as token flags, so future swaps, liquidity changes, fee claims, and reward flows can use the correct token program.
+
+For users, the benefit is simple: DAMM v2 can handle pools where one or both tokens are Token 2022 mints, as long as their extensions are supported.
+
+## Permissionlessly Supported Extensions
+
+The following Token 2022 extensions are supported without a token badge.
+
+<CardGroup cols={2}>
+  <Card title="Transfer Fee Config" icon="percent" iconType="solid">
+    DAMM v2 accounts for transfer fees when tokens move into or out of pools, including swaps, deposits, withdrawals, and reward flows.
+  </Card>
+  <Card title="Metadata Pointer" icon="tag" iconType="solid">
+    DAMM v2 supports mints that point to metadata through the Token 2022 metadata pointer extension.
+  </Card>
+  <Card title="Token Metadata" icon="file-lines" iconType="solid">
+    DAMM v2 supports mints that use Token 2022 token metadata for display and integration context.
+  </Card>
+  <Card title="Inactive Transfer Hook" icon="link-slash" iconType="solid">
+    Transfer Hook is only supported when the hook program and authority are not active.
+  </Card>
+</CardGroup>
+
+## Token Badge Review
+
+Some Token 2022 extensions can materially change how a token behaves. These tokens require a token badge before they can be used in DAMM v2.
+
+Examples include extensions such as:
+
+- Interest bearing configuration.
+- Permanent delegate.
+- Non-transferable tokens.
+- Memo transfer.
+- Other extensions that are not permissionlessly supported.
+
+The token badge process gives Meteora a way to review the mint and confirm that DAMM v2 can support it safely.
+
+<Note>
+  To apply for a token badge, complete this [Google Form](https://forms.gle/59n3zDiGS2C6qMfd7) with details about the token and its extensions. After submitting, open a ticket in the [Meteora Discord](https://discord.gg/meteo) so the team can review it.
+</Note>
+
+## Reward Tokens
+
+DAMM v2 liquidity mining rewards can also use Token 2022 mints, subject to the same extension support rules. If a reward mint has an unsupported extension, it needs a valid token badge before the reward slot can be initialized.
+
+## Unsupported Cases
+
+Some Token 2022 designs are not supported.
+
+<Warning>
+  The Token 2022 native mint `So11111111111111111111111111111111111111112` is not supported in DAMM v2.
+</Warning>
+
+Active Transfer Hook behavior is also not permissionlessly supported. DAMM v2 only treats Transfer Hook as supported when both the hook program ID and authority are unset.
+
+## Why This Matters
+
+Token 2022 expands what tokens can do, but not every extension is safe for a liquidity pool by default. DAMM v2 balances flexibility with pool safety:
+
+- Simple, common extensions work permissionlessly.
+- Sensitive extensions go through token badge review.
+- Transfer-fee tokens can be supported without forcing users to manually reason about every transfer adjustment.
+- Reward tokens follow the same safety model as pool tokens.

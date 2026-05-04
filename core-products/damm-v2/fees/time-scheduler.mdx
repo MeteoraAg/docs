@@ -1,0 +1,75 @@
+---
+title: "DAMM v2 Time Scheduler Fees"
+sidebarTitle: "Time Scheduler"
+description: "Learn how DAMM v2 time scheduler fees start high and decay over configured time periods using linear or exponential curves."
+llmsDescription: "Explains DAMM v2 time scheduler base fee modes, covering FeeTimeSchedulerLinear, FeeTimeSchedulerExponential, cliff fee, period frequency, number of periods, reduction factor, fixed fee decay, percentage-based fee decay, launch protection, anti-sniper use cases, and how to choose between linear and exponential time scheduling."
+---
+
+DAMM v2 time scheduler fees let a pool start with a higher launch fee and reduce that fee over time. This is useful when a launch needs stronger early protection, but should gradually move toward normal trading conditions.
+
+Time scheduler fees are based on a clock: after trading activates, DAMM v2 counts configured periods and adjusts the fee as each period passes.
+
+## How It Works
+
+A time scheduler uses four core settings:
+
+| Setting | Product Meaning |
+| --- | --- |
+| Cliff fee | Starting fee when the pool opens |
+| Number of periods | How many fee reductions happen |
+| Period frequency | How long each period lasts |
+| Reduction factor | How much the fee changes each period |
+
+DAMM v2 supports two time scheduler curves: linear and exponential.
+
+## Linear Time Scheduler
+
+The linear time scheduler decreases the fee by the same fixed amount each period.
+
+```math
+\text{Fee} = \text{Starting Fee} - (\text{Passed Periods} \times \text{Reduction Amount})
+```
+
+In product terms, the fee walks down a staircase. Every step is the same size, so teams can explain exactly when the fee will drop and by how much.
+
+Use linear time scheduling when you want a simple, predictable launch schedule such as "fees decrease by the same amount every few minutes until the launch window ends."
+
+## Exponential Time Scheduler
+
+The exponential time scheduler reduces the fee by a percentage of its current value each period.
+
+```math
+\text{Fee} = \text{Starting Fee} \times (1 - \text{Reduction Percent})^{\text{Passed Periods}}
+```
+
+In product terms, the fee drops faster early, then slows as it approaches the final fee. This is useful when the earliest trades should carry the highest protection, but trading should become more accessible soon after launch.
+
+## Why Use Time Scheduler Fees
+
+<CardGroup cols={2}>
+  <Card title="Launch Protection" icon="shield" iconType="solid">
+    Early trades can face higher fees when launch sniping risk is often highest.
+  </Card>
+  <Card title="Predictable Decay" icon="clock" iconType="solid">
+    Fees move according to a configured time schedule rather than manual updates.
+  </Card>
+  <Card title="Flexible Curve Choice" icon="chart-line" iconType="solid">
+    Linear decay is easier to communicate, while exponential decay drops faster at the start.
+  </Card>
+  <Card title="Launchpad Friendly" icon="rocket" iconType="solid">
+    Time schedulers work well for repeatable launch templates and public launch windows.
+  </Card>
+</CardGroup>
+
+## Linear vs Exponential
+
+| Curve | Best For | Fee Behavior |
+| --- | --- | --- |
+| Linear | Simple, transparent schedules | Fee decreases by a fixed amount each period |
+| Exponential | Strong early protection with faster early relief | Fee decreases by a percentage each period |
+
+## When To Choose It
+
+Use a time scheduler when the launch plan is time-based. If fees should come down after a fixed number of minutes, slots, or seconds, time scheduling is the clearest choice.
+
+Use [Market Cap Scheduler Fees](/core-products/damm-v2/fees/market-cap-scheduler) instead when fees should decrease only as the pool price grows.
