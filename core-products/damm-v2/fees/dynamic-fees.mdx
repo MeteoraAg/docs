@@ -1,0 +1,70 @@
+---
+title: "DAMM v2 Dynamic Fees"
+sidebarTitle: "Dynamic Fees"
+description: "Learn how DAMM v2 dynamic fees add a volatility-responsive fee layer on top of the selected base fee mode."
+llmsDescription: "Explains DAMM v2 dynamic fees, covering optional volatility-based fees, volatility accumulator, volatility reference, filter period, decay period, reduction factor, max volatility accumulator, variable fee control, bin step, total trading fee calculation, and why dynamic fees help pools respond to volatile markets."
+---
+
+DAMM v2 dynamic fees are an optional fee layer that responds to market volatility. When price movement is higher, the dynamic fee can increase. When the market calms down, the dynamic fee decays.
+
+This gives pools a way to charge more during turbulent periods without permanently raising the base fee.
+
+## How It Fits With Base Fees
+
+Every DAMM v2 pool has one base fee mode. Dynamic fees sit on top of that base fee:
+
+```math
+\text{Total Trading Fee} = \text{Base Fee} + \text{Dynamic Fee}
+```
+
+If dynamic fees are disabled, the dynamic fee is zero.
+
+## How It Works
+
+DAMM v2 tracks recent price movement through a volatility accumulator. The accumulator rises when price changes and decays over time.
+
+Key settings include:
+
+| Setting | Product Meaning |
+| --- | --- |
+| Bin step | Price sensitivity used by the volatility calculation |
+| Filter period | Very short-term window that helps smooth noisy updates |
+| Decay period | Time window after which volatility can decay or reset |
+| Reduction factor | How quickly the volatility reference decays |
+| Max volatility accumulator | Cap that prevents the volatility measure from growing without bound |
+| Variable fee control | How strongly volatility affects the final dynamic fee |
+
+## Why Use Dynamic Fees
+
+<CardGroup cols={2}>
+  <Card title="Volatility Response" icon="wave-pulse" iconType="solid">
+    Fees can increase when market movement becomes more intense.
+  </Card>
+  <Card title="LP Compensation" icon="hand-holding-dollar" iconType="solid">
+    LPs can earn higher fees during periods where price risk may be higher.
+  </Card>
+  <Card title="Temporary Protection" icon="shield" iconType="solid">
+    The fee can decay as volatility settles instead of staying elevated forever.
+  </Card>
+  <Card title="Works With Base Modes" icon="layer-group" iconType="solid">
+    Dynamic fees can be paired with DAMM v2 base fee modes for more adaptive fee design.
+  </Card>
+</CardGroup>
+
+## Product Examples
+
+<AccordionGroup>
+  <Accordion title="Launch With Extra Volatility Protection">
+    A launch pool can use a time scheduler or market cap scheduler as the base fee, then add dynamic fees to react to sudden price movement.
+  </Accordion>
+  <Accordion title="Mature Pool With Adaptive LP Fees">
+    A long-term pool can keep a moderate base fee and let dynamic fees increase only when trading becomes volatile.
+  </Accordion>
+  <Accordion title="Integrator-Controlled Risk Settings">
+    Launchpads can create fee presets with different dynamic fee sensitivity for different token categories.
+  </Accordion>
+</AccordionGroup>
+
+## Important Takeaway
+
+Dynamic fees are not a replacement for the base fee. They are an adaptive layer. The base fee defines the pool's default fee behavior, while the dynamic fee responds to recent market movement.

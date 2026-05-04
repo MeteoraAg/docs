@@ -1,0 +1,61 @@
+---
+title: "DAMM v2 Rate Limiter Fee"
+sidebarTitle: "Rate Limiter"
+description: "Learn how DAMM v2 rate limiter fees increase with buy size to help protect launch pools from oversized early trades."
+llmsDescription: "Explains the DAMM v2 RateLimiter base fee mode, covering reference amount, cliff fee, fee increment, max fee, max limiter duration, quote-token-only behavior, buy-side protection, single swap per transaction validation, and anti-sniper launch use cases."
+---
+
+The DAMM v2 rate limiter is a base fee mode that increases the effective fee as buy size increases. It is designed for launch pools where oversized early buys can distort distribution or create a poor trading experience for the broader market.
+
+Instead of charging every buy the same fee, the rate limiter behaves like a fee slope.
+
+## How It Works
+
+The pool defines a reference amount. Trades up to that amount pay the starting fee. As the input amount grows beyond the reference amount, DAMM v2 applies higher fee tiers until the configured maximum fee is reached.
+
+In product terms, a small buy may pay the base fee, while a much larger buy pays a higher average fee.
+
+## Key Settings
+
+| Setting | Product Meaning |
+| --- | --- |
+| Cliff fee | Starting fee for the first reference amount |
+| Reference amount | Trade size unit used for the fee slope |
+| Fee increment bps | How much the fee increases per step |
+| Max fee bps | Highest fee the limiter can charge |
+| Max limiter duration | How long the limiter is active after launch |
+
+## Requirements
+
+Rate limiter mode has specific product constraints:
+
+- It applies to buy-side behavior in quote-token fee mode.
+- It is designed for `OnlyB` collect fee mode.
+- It lasts only through the configured limiter duration.
+- DAMM v2 validates that rate-limited swaps are not bundled as multiple swaps against the same pool in one transaction.
+- The limiter duration is capped at 12 hours.
+
+<Warning>
+  Rate limiter is mutually exclusive with the time scheduler and market cap scheduler base fee modes. A DAMM v2 pool chooses one base fee mode.
+</Warning>
+
+## Why Use It
+
+<CardGroup cols={2}>
+  <Card title="Discourage Oversized Buys" icon="scale-balanced" iconType="solid">
+    Larger launch buys can pay progressively higher fees.
+  </Card>
+  <Card title="Protect Early Distribution" icon="shield" iconType="solid">
+    The fee slope helps reduce the advantage of very large first movers.
+  </Card>
+  <Card title="Quote Token Fee Capture" icon="coins" iconType="solid">
+    Fees are aligned with quote-token collection, which is common for launches.
+  </Card>
+  <Card title="Short Launch Window" icon="hourglass-half" iconType="solid">
+    The limiter is meant for early trading, not permanent pool behavior.
+  </Card>
+</CardGroup>
+
+## When To Choose Rate Limiter
+
+Use the rate limiter when the main risk is not just early timing, but early trade size. It is best for launches that want to allow public trading while making very large buys increasingly expensive during the first launch window.

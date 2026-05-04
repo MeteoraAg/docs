@@ -1,0 +1,80 @@
+---
+title: "DAMM v2 Market Cap Scheduler Fees"
+sidebarTitle: "Market Cap Scheduler"
+description: "Learn how DAMM v2 market cap scheduler fees decrease as pool price grows, using linear or exponential curves."
+llmsDescription: "Explains DAMM v2 market cap scheduler base fee modes, covering FeeMarketCapSchedulerLinear, FeeMarketCapSchedulerExponential, price-based fee decay, initial sqrt price, sqrt price step bps, scheduler expiration duration, cliff fee, reduction factor, launch protection, market-cap-based fee milestones, and how to choose between linear and exponential market cap scheduling."
+---
+
+DAMM v2 market cap scheduler fees reduce trading fees as the pool price grows. Unlike time scheduler fees, the fee does not drop just because time passes. It drops when the market moves through configured price milestones.
+
+This is useful for launches where fee reductions should follow market growth instead of a countdown.
+
+## How It Works
+
+DAMM v2 compares the current pool price against the initial pool price. Each time the price increases by a configured step, the scheduler advances and lowers the fee.
+
+Key settings include:
+
+| Setting | Product Meaning |
+| --- | --- |
+| Cliff fee | Starting fee when the pool opens |
+| Number of periods | Maximum number of fee reductions |
+| Sqrt price step bps | Price movement needed to trigger each reduction |
+| Scheduler expiration duration | Time after which the scheduler settles at its final fee |
+| Reduction factor | How much the fee changes each step |
+
+DAMM v2 supports two market cap scheduler curves: linear and exponential.
+
+## Linear Market Cap Scheduler
+
+The linear market cap scheduler decreases the fee by the same fixed amount each time the pool price moves through a configured step.
+
+```math
+\text{Fee} = \text{Starting Fee} - (\text{Price Steps Passed} \times \text{Reduction Amount})
+```
+
+In product terms, the fee moves down in predictable price milestones. Each upward price step unlocks the next fee reduction.
+
+Use linear market cap scheduling when you want each price milestone to reduce fees by the same amount.
+
+## Exponential Market Cap Scheduler
+
+The exponential market cap scheduler reduces the fee by a percentage-style factor as price milestones are reached.
+
+```math
+\text{Fee} = \text{Starting Fee} \times (1 - \text{Reduction Percent})^{\text{Price Steps Passed}}
+```
+
+In product terms, fees can drop faster in early price-growth stages, then slow as they approach the final fee.
+
+Use exponential market cap scheduling when you want the launch curve to feel smoother than a fixed step-down schedule.
+
+## Why Use Market Cap Scheduler Fees
+
+<CardGroup cols={2}>
+  <Card title="Price-Based Fee Decay" icon="chart-line" iconType="solid">
+    Fees decrease when price increases, not simply because time passes.
+  </Card>
+  <Card title="Launch Protection" icon="shield" iconType="solid">
+    Fees can remain elevated until the market reaches real price milestones.
+  </Card>
+  <Card title="Market Growth Alignment" icon="arrow-trend-up" iconType="solid">
+    The schedule rewards upward price discovery with lower trading fees.
+  </Card>
+  <Card title="Expiration Fallback" icon="calendar-check" iconType="solid">
+    The scheduler can settle at its final fee after the configured expiration duration.
+  </Card>
+</CardGroup>
+
+## Linear vs Exponential
+
+| Curve | Best For | Fee Behavior |
+| --- | --- | --- |
+| Linear | Clear market-cap milestones | Fee decreases by a fixed amount each price step |
+| Exponential | Smoother price-growth fee curve | Fee decreases by a percentage each price step |
+
+## When To Choose It
+
+Use a market cap scheduler when fees should stay elevated until the pool shows upward price movement. This can be useful for launch markets where the team wants protection to follow market behavior.
+
+Use [Time Scheduler Fees](/core-products/damm-v2/fees/time-scheduler) instead when fees should decrease according to elapsed time.

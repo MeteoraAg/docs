@@ -1,0 +1,87 @@
+---
+title: "DAMM v2 Concentrated Liquidity"
+sidebarTitle: "Concentrated Liquidity"
+description: "Learn how DAMM v2 concentrated liquidity lets pool creators focus liquidity inside a fixed price range for better capital efficiency."
+llmsDescription: "Explains   DAMM v2 concentrated liquidity, covering fixed minimum and maximum price ranges, square-root price bounds, capital efficiency, one-sided liquidity behavior near range edges, price range violations, pool creation choices, and use cases for launches, LPs, and integrators."
+---
+
+DAMM v2 concentrated liquidity lets a pool focus liquidity inside a chosen price range. Instead of spreading capital across every possible price, the pool creator defines where the liquidity should be active.
+
+This makes liquidity more efficient when a market has an expected trading area. More of the deposited capital can sit near the current price, giving traders better depth and giving LPs more fee exposure per dollar deployed.
+
+## How It Works
+
+A concentrated DAMM v2 pool has three important price values:
+
+- **Minimum price**: the lower bound of the pool's active range.
+- **Maximum price**: the upper bound of the pool's active range.
+- **Current price**: the live pool price between those bounds.
+
+When the current price is inside the range, swaps can use the pool's liquidity. If price reaches the lower or upper boundary, the pool has reached the edge of its configured market and cannot keep moving past that boundary.
+
+<Info>
+  DAMM v2 stores these values as square-root prices on-chain, but product users can think of them as the pool's lower price, upper price, and current price.
+</Info>
+
+## Why Concentrate Liquidity
+
+In a full-range pool, liquidity is available across the entire price curve. That is simple, but a large part of the capital may sit far away from where trading actually happens.
+
+Concentrated liquidity narrows the active range, so capital can work harder around the prices that matter.
+
+<CardGroup cols={2}>
+  <Card title="Better Depth Near Target Price" icon="water" iconType="solid">
+    More liquidity can be placed around the expected trading range, improving execution for traders.
+  </Card>
+  <Card title="More Efficient LP Capital" icon="chart-line" iconType="solid">
+    LPs can earn fees from a more focused liquidity range instead of spreading capital thinly.
+  </Card>
+  <Card title="Launch Price Control" icon="rocket" iconType="solid">
+    Token teams can design pool ranges around expected launch, migration, or listing prices.
+  </Card>
+  <Card title="Integrator Flexibility" icon="puzzle-piece" iconType="solid">
+    Launchpads and protocols can create pools with standardized or custom price-range behavior.
+  </Card>
+</CardGroup>
+
+## Deposit Ratios
+
+In a concentrated pool, the current price determines the token ratio needed to add liquidity.
+
+If the current price is closer to the lower side of the range, the pool needs more token A. If the current price is closer to the upper side of the range, the pool needs more token B.
+
+This is not a UI quirk. It is how concentrated liquidity represents exposure across the selected price range.
+
+## Range Selection
+
+Choosing a range is a product decision:
+
+| Range Choice | Product Effect |
+| --- | --- |
+| Narrower range | More capital efficiency near the target price, but less room for price movement |
+| Wider range | More room for trading across price movement, but less concentrated depth |
+| Full range | Most similar to a traditional constant-product pool |
+
+<Warning>
+  In concentrated liquidity mode, the price range is set when the pool is created. It is part of the pool design, not an LP setting that can be changed later for the same pool.
+</Warning>
+
+## Best Use Cases
+
+<AccordionGroup>
+  <Accordion title="Launch Pools With Expected Price Bands">
+    A project can configure liquidity around a launch or migration price so early trading has stronger depth near the expected market.
+  </Accordion>
+  <Accordion title="Stable or Correlated Token Pairs">
+    Pairs that usually trade in a known band can use a tighter range to make liquidity more efficient.
+  </Accordion>
+  <Accordion title="Launchpad Pool Templates">
+    Launchpads can create repeatable configurations for markets that need the same range and fee behavior.
+  </Accordion>
+</AccordionGroup>
+
+## Concentrated vs Compounding
+
+Concentrated liquidity is best when the pool needs a specific price range. Compounding liquidity is best when the pool should behave as a full-range constant-product market where a share of LP fees can automatically grow reserves.
+
+If you need a custom minimum and maximum price, use concentrated liquidity. If you need auto-compounding full-range reserves, use [DAMM v2 Compounding Liquidity](/core-products/damm-v2/compounding-liquidity).

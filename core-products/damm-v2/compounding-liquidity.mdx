@@ -1,0 +1,93 @@
+---
+title: "DAMM v2 Compounding Liquidity"
+sidebarTitle: "Compounding Liquidity"
+description: "Learn how DAMM v2 compounding liquidity automatically reinvests a share of LP fees into full-range pool reserves."
+llmsDescription: "Explains DAMM v2 compounding liquidity, covering CollectFeeMode Compounding, full-range constant-product pools, compoundingFeeBps, claimable versus compounded LP fees, token B fee behavior, reserve growth, balanced liquidity requirements, and best use cases for mature pools and long-term LPs."
+---
+
+DAMM v2 compounding liquidity is a pool mode where a share of LP fees is automatically reinvested back into the pool. Instead of every LP fee waiting to be claimed, the pool can use part of those fees to grow reserves and deepen liquidity over time.
+
+This is useful for long-term pools where LPs want liquidity growth, fewer manual fee actions, and a simpler full-range market design.
+
+## How It Works
+
+Compounding liquidity uses `Compounding` collect fee mode. In this mode:
+
+- The pool behaves like a full-range constant-product AMM.
+- Fees are handled in token B.
+- A configurable share of the LP fee is added back into pool reserves.
+- The remaining LP fee stays claimable by position owners.
+
+```math
+\text{LP Fee} = \text{Compounding Fee} + \text{Claimable Fee}
+```
+
+The compounding share is controlled by `compounding_fee_bps`.
+
+| `compounding_fee_bps` | Product Meaning |
+| --- | --- |
+| `2500` | 25% of LP fees compound, 75% remain claimable |
+| `5000` | 50% of LP fees compound, 50% remain claimable |
+| `10000` | 100% of LP fees compound, no LP fee remains claimable |
+
+<Note>
+  `compounding_fee_bps` must be greater than zero for compounding pools and must be zero for non-compounding pools.
+</Note>
+
+## Full-Range by Design
+
+Compounding pools do not use custom concentrated price ranges. They use a full-range constant-product model:
+
+```math
+\text{token A reserves} \times \text{token B reserves} = k
+```
+
+This makes the pool easier to reason about: reserves grow as compounded fees are added back, and LPs benefit proportionally through their position liquidity.
+
+## What LPs Experience
+
+In a non-compounding pool, LP fees accumulate as claimable balances on the position. In a compounding pool, the LP fee can be split:
+
+- **Compounded portion**: added to pool reserves, increasing pool depth.
+- **Claimable portion**: remains pending on the LP position and can be claimed later.
+
+This lets a pool balance two goals: grow liquidity over time and still provide claimable fee income.
+
+## Why Token B Matters
+
+In compounding mode, fees are always handled in token B. Token B is commonly the quote token, such as SOL or USDC. This makes compounding behavior predictable for launches and long-term pools that want fee accounting centered around the quote asset.
+
+## Product Benefits
+
+<CardGroup cols={2}>
+  <Card title="Automatic Reserve Growth" icon="arrows-rotate" iconType="solid">
+    A share of LP fees goes directly back into the pool, increasing liquidity without a separate reinvest action.
+  </Card>
+  <Card title="Simpler Full-Range Liquidity" icon="infinity" iconType="solid">
+    The pool follows the familiar constant-product model instead of a custom price range.
+  </Card>
+  <Card title="Flexible Fee Split" icon="scissors" iconType="solid">
+    Pool creators can choose how much LP fee compounds and how much remains claimable.
+  </Card>
+  <Card title="Long-Term LP Alignment" icon="handshake" iconType="solid">
+    LPs benefit from deeper pool reserves while still owning their position through an NFT.
+  </Card>
+</CardGroup>
+
+## Best Use Cases
+
+<AccordionGroup>
+  <Accordion title="Mature Trading Pairs">
+    Established markets can use compounding liquidity to grow depth as trading activity generates fees.
+  </Accordion>
+  <Accordion title="Passive LP Strategies">
+    LPs who prefer fewer manual actions can let part of their fee income automatically support the pool.
+  </Accordion>
+  <Accordion title="Treasury or Protocol-Owned Liquidity">
+    Projects can use compounding to reinforce long-term liquidity depth while keeping fee behavior transparent on-chain.
+  </Accordion>
+</AccordionGroup>
+
+## When Not to Use It
+
+Use concentrated liquidity instead if the pool needs a custom minimum and maximum price range. Compounding liquidity is intentionally full-range, so it is not the right fit for a tightly targeted launch range.

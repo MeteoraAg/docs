@@ -1,0 +1,81 @@
+---
+title: "DAMM v2 Fees"
+sidebarTitle: "Fees Overview"
+description: "Understand DAMM v2 fee layers, collect fee modes, base fee modes, dynamic fees, protocol fees, and compounding fee splits."
+llmsDescription: "Overview of DAMM v2 fees, covering total trading fee, base fee modes, dynamic fee, protocol fee, referral fee, LP fee, BothToken collect fee mode, OnlyB collect fee mode, Compounding collect fee mode, compoundingFeeBps, max fee caps, and how DAMM v2 fee design supports launches, LPs, and integrators."
+---
+
+DAMM v2 fees are designed as a product toolkit. A pool can use a predictable base fee, a launch-focused scheduler, a market-cap-based fee decay, a rate limiter for large buys, and optional dynamic fees that respond to volatility.
+
+This makes DAMM v2 useful across different market stages: launch, migration, early price discovery, and mature liquidity.
+
+## Fee Layers
+
+DAMM v2 starts with a trading fee:
+
+```math
+\text{Trading Fee} = \text{Base Fee} + \text{Dynamic Fee}
+```
+
+Then the trading fee is split:
+
+- **Protocol fee**: a percentage of the trading fee that goes to the protocol.
+- **Referral fee**: a share of the protocol fee when a referral is present.
+- **LP fee**: the remaining fee that belongs to liquidity providers.
+- **Compounding fee**: in compounding pools only, a share of the LP fee that goes back into pool reserves.
+
+## Base Fee Modes
+
+DAMM v2 has five base fee modes.
+
+<CardGroup cols={2}>
+  <Card title="Time Scheduler" href="/core-products/damm-v2/fees/time-scheduler" icon="clock">
+    Fee starts high and decays over time using a linear or exponential curve.
+  </Card>
+  <Card title="Market Cap Scheduler" href="/core-products/damm-v2/fees/market-cap-scheduler" icon="chart-line">
+    Fee decreases as price grows, using a linear or exponential curve.
+  </Card>
+  <Card title="Rate Limiter" href="/core-products/damm-v2/fees/rate-limiter" icon="gauge-high">
+    Fee increases with buy size during the configured launch window.
+  </Card>
+  <Card title="Dynamic Fees" href="/core-products/damm-v2/fees/dynamic-fees" icon="wave-pulse">
+    Optional volatility-based fee layer on top of the selected base fee mode.
+  </Card>
+</CardGroup>
+
+<Note>
+  DAMM v2 also supports fixed-fee behavior by using a scheduler configuration that does not decay. Product users usually experience this as a fixed base fee, even though the on-chain base fee modes are the five modes above.
+</Note>
+
+## Collect Fee Modes
+
+Collect fee mode determines how LP fees are collected.
+
+| Mode | Product Behavior | Best Fit |
+| --- | --- | --- |
+| BothToken | LP fees can accrue in token A and token B | Symmetric markets where LPs accept both assets |
+| OnlyB | LP fees accrue in token B | Launches that want fee income in quote token |
+| Compounding | A share of LP fees is reinvested into pool reserves | Long-term full-range pools that want automatic depth growth |
+
+## Fee Caps
+
+DAMM v2 stores fee rates with high precision. The current pool version supports total fee caps up to 99%, while post-update fee changes are more restricted.
+
+For product users, the practical takeaway is that launch configurations can start with high fees for protection, while mature pools can settle into lower fees for ongoing trading.
+
+## Choosing a Fee Design
+
+<AccordionGroup>
+  <Accordion title="I want fees to decay over time after launch">
+    Use a time scheduler. Linear decay is predictable and step-like; exponential decay drops faster early and slows as it approaches the floor.
+  </Accordion>
+  <Accordion title="I want fees to decay only if price grows">
+    Use a market cap scheduler. Fees stay elevated until the market moves upward by configured price steps.
+  </Accordion>
+  <Accordion title="I want large launch buys to pay more">
+    Use the rate limiter. It increases the effective fee as buy size increases during the limiter window.
+  </Accordion>
+  <Accordion title="I want fees to react to volatility">
+    Add dynamic fees. They sit on top of the base fee and rise when recent price movement increases.
+  </Accordion>
+</AccordionGroup>
