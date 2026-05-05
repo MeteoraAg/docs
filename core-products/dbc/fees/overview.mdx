@@ -1,0 +1,132 @@
+---
+title: "DBC Fees"
+sidebarTitle: "Fees Overview"
+description: "Understand DBC fee layers, base fee modes, fixed-fee behavior, dynamic fees, collect fee modes, protocol fees, referral fees, and partner or creator fee sharing."
+llmsDescription: "Overview of DBC fees, covering total trading fee, base fee modes, fixed-fee behavior through non-decaying scheduler configuration, fee scheduler modes, rate limiter, dynamic fee, quote token and output token collect fee modes, protocol fee, referral fee, partner fee, creator fee, trading fee claim timing, migration fee withdrawal after curve completion, pool creation fee claims, protocol liquidity migration fee, and post-migration DAMM fees."
+---
+
+DBC fees are built for launches. A pool can start with simple fixed-fee behavior, high anti-sniper fees that decay over time, buy-size-sensitive rate limiter fees, and optional dynamic fees that respond to volatility.
+
+This gives launchpads and creators a way to shape early trading behavior while still allowing the token to graduate into a long-term DAMM market.
+
+## Fee Layers
+
+Every DBC swap starts with a trading fee.
+
+```math
+\text{Trading Fee} = \text{Base Fee} + \text{Dynamic Fee}
+```
+
+The base fee is required. The dynamic fee is optional.
+
+## Base Fee Modes
+
+DBC has three on-chain base fee modes. Fixed-fee behavior is also important as a product pattern because teams often want a simple non-decaying fee.
+
+<CardGroup cols={2}>
+  <Card title="Fee Scheduler" href="/core-products/dbc/fees/fee-scheduler" icon="chart-line">
+    Use fixed, linear, or exponential scheduler behavior for predictable fee paths.
+  </Card>
+  <Card title="Rate Limiter" href="/core-products/dbc/fees/rate-limiter" icon="gauge-high">
+    Fee increases with buy size during the configured launch window.
+  </Card>
+</CardGroup>
+
+<Note>
+  Fixed-fee behavior is a product pattern. On-chain, it is represented by a scheduler-style configuration that keeps the base fee constant instead of a separate fixed-fee mode.
+</Note>
+
+## Fixed-Fee Behavior
+
+A fixed-fee launch charges one predictable base fee during the bonding curve phase unless optional dynamic fees are enabled.
+
+```math
+\text{Base Fee} = \text{Configured Fee}
+```
+
+If dynamic fees are enabled:
+
+```math
+\text{Total Trading Fee} = \text{Configured Fee} + \text{Dynamic Fee}
+```
+
+This is the simplest design to communicate. It works best when the launch values clarity over aggressive launch protection.
+
+## Dynamic Fee
+
+<CardGroup cols={1}>
+  <Card title="Dynamic Fees" href="/core-products/dbc/fees/dynamic-fees" icon="wave-pulse">
+    Optional volatility-responsive fees can sit on top of the selected base fee mode.
+  </Card>
+</CardGroup>
+
+Dynamic fees are useful when a launch wants fees to increase during volatile periods without permanently raising the base fee.
+
+## Collect Fee Modes
+
+DBC has two bonding-phase collect fee modes.
+
+| Mode | Product Behavior | Best Fit |
+| --- | --- | --- |
+| Quote Token | Fees are collected in the quote token. For buys, fees are taken from the quote input. For sells, fees are taken from the quote output. | Launches that want fee accounting in SOL, USDC, or another quote token. |
+| Output Token | Fees are collected from the token received by the trader. Buys pay fees in base token, sells pay fees in quote token. | Launches that want fee collection to follow trade direction. |
+
+## Fee Bounds
+
+DBC bonding phase trading fees use a 0.25% minimum base fee and a 99% maximum total fee cap. These bounds help keep launch configurations valid while still supporting high early fees for anti-sniper designs.
+
+## Fee Distribution
+
+DBC splits fees into protocol, referral, partner, and creator portions.
+
+| Fee Recipient | Product Meaning |
+| --- | --- |
+| Protocol | Receives 20% of the total trading fee. |
+| Referral | When present, receives 20% of the protocol fee. |
+| Partner | Receives the partner share of the non-protocol trading fee. |
+| Creator | Receives the configured creator share of the non-protocol trading fee. |
+
+The creator share is controlled by `creator_trading_fee_percentage`. If it is set to 0%, the partner receives the full partner and creator fee allocation. If it is set to 20%, the creator receives 20% of that allocation and the partner receives the remaining 80%.
+
+Trading fee balances are tracked on the virtual pool as swaps happen. Partner, creator, and protocol trading fees can be claimed as they accrue; they do not need to wait for migration.
+
+## Pool Creation Fees
+
+Partners can configure a pool creation fee that is paid when the virtual pool is created. This fee is split between protocol and partner.
+
+Pool creation fee claims are separate from trading fees and migration. They can be claimed once after the virtual pool exists, subject to the program's claim flags.
+
+## Migration Fees
+
+DBC also supports a migration fee, which is separate from regular trading fees. This fee is taken from the migration quote amount when the pool graduates.
+
+The migration fee can be split between partner and creator.
+
+Partner and creator migration-fee withdrawals become available after the bonding curve is complete. They do not require the migrated DAMM pool to be fully created first.
+
+<Note>
+  DBC also applies a fixed 0.2% protocol liquidity migration fee during migration. The program tracks this as protocol migration base and quote fees, so it reduces the amount of liquidity that goes into the migrated pool.
+</Note>
+
+## Post-Migration Fees
+
+When a DBC pool graduates, the migrated DAMM pool has its own fee behavior.
+
+For DAMM v2 migration, the config can define the migrated pool collect fee mode, base fee, dynamic fee option, market-cap scheduler settings, and compounding fee behavior. These settings affect the DAMM v2 pool after graduation, not the DBC virtual pool during the bonding phase.
+
+## Choosing a Fee Design
+
+<AccordionGroup>
+  <Accordion title="I want a simple, predictable fee">
+    Use a fixed base fee. It is easiest to explain and works well when the launch does not need extra launch protection.
+  </Accordion>
+  <Accordion title="I want high early fees that decay by time">
+    Use a linear or exponential fee scheduler. Linear is easier to communicate. Exponential drops faster early and slows as it approaches the final fee.
+  </Accordion>
+  <Accordion title="I want large launch buys to pay more">
+    Use the rate limiter. It is designed for early launch windows where oversized buys are the main concern.
+  </Accordion>
+  <Accordion title="I want fees to react to volatility">
+    Add dynamic fees on top of the selected base fee mode.
+  </Accordion>
+</AccordionGroup>
