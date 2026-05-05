@@ -1,0 +1,112 @@
+---
+title: "DBC Fee Scheduler"
+sidebarTitle: "Fee Scheduler"
+description: "Learn how DBC fee schedulers support fixed, linear, and exponential fee behavior during the bonding curve phase."
+llmsDescription: "Explains DBC fee scheduler behavior, including fixed-fee behavior, linear scheduler, exponential scheduler, cliff fee, number of periods, period frequency, reduction factor, activation-based fee decay, minimum and maximum fee bounds, and when to choose each scheduler style."
+---
+
+The DBC fee scheduler controls how the base fee changes after a pool opens.
+
+It can be used in three product ways:
+
+| Scheduler Style | Product Behavior | Best Fit |
+| --- | --- | --- |
+| Fixed | Fee stays constant. | Simple launches with predictable fee messaging. |
+| Linear | Fee decreases by the same amount each period. | Launches that want a clear anti-sniper schedule. |
+| Exponential | Fee decreases by a percentage of the current fee each period. | Launches that want stronger early protection and faster early relief. |
+
+## How Scheduler Settings Work
+
+A scheduler uses four core settings.
+
+| Setting | Product Meaning |
+| --- | --- |
+| Cliff fee | The starting fee when trading opens. |
+| Number of periods | How many fee reductions can happen. |
+| Period frequency | How long each period lasts. |
+| Reduction factor | How much the fee decreases each period. |
+
+The schedule is measured from the pool's activation point. Activation can be based on slot or timestamp, depending on the config.
+
+## Fixed-Fee Behavior
+
+Fixed-fee behavior is the simplest scheduler setup.
+
+```math
+\text{Fee} = \text{Cliff Fee}
+```
+
+In product terms, every trade pays the same base fee unless dynamic fees are enabled. This is useful for launchpads that want broad, easy-to-explain presets.
+
+<Note>
+  Fixed fee is not a separate on-chain base fee mode. It is scheduler behavior where the fee does not decay.
+</Note>
+
+## Linear Scheduling
+
+Linear scheduling reduces the fee by the same amount each period.
+
+```math
+\text{Fee} = \text{Cliff Fee} - (\text{Passed Periods} \times \text{Reduction Factor})
+```
+
+Think of it like a staircase.
+
+```text
+High fee
+   |
+   |____
+        |____
+             |____
+                  |____ Final fee
+```
+
+Linear scheduling is easy to publish because every step is predictable.
+
+## Exponential Scheduling
+
+Exponential scheduling reduces the fee by a percentage-style factor each period.
+
+```math
+\text{Fee} =
+\text{Cliff Fee} \times (1 - \text{Reduction Factor})^\text{Passed Periods}
+```
+
+This usually drops faster early, then tapers.
+
+```text
+High fee
+   |\
+   | \
+   |  \__
+   |     \____ Final fee
+```
+
+Exponential scheduling is useful when the launch wants the strongest protection near opening, but does not want to keep fees elevated for too long.
+
+## Fee Bounds
+
+Scheduler fees must stay within DBC bonding phase fee bounds.
+
+| Bound | Product Meaning |
+| --- | --- |
+| Minimum base fee | 0.25% minimum base fee for bonding phase configurations. |
+| Maximum total fee | 99% maximum fee cap to avoid invalid launch configurations. |
+
+## Choosing a Scheduler
+
+<AccordionGroup>
+  <Accordion title="I want the simplest possible fee">
+    Use fixed-fee behavior. It is easiest for traders to understand and works well when anti-sniper fee decay is not needed.
+  </Accordion>
+  <Accordion title="I want a public fee countdown">
+    Use linear scheduling. It is the easiest decaying-fee model to communicate because each reduction is the same size.
+  </Accordion>
+  <Accordion title="I want high protection only at the beginning">
+    Use exponential scheduling. It front-loads fee protection while making the launch more accessible as early trading settles.
+  </Accordion>
+</AccordionGroup>
+
+## Product Takeaway
+
+The fee scheduler is DBC's predictable base-fee tool. Use fixed behavior for simplicity, linear scheduling for clear step-down rules, and exponential scheduling for stronger early protection that tapers over time.

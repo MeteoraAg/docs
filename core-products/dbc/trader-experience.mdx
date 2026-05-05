@@ -1,0 +1,86 @@
+---
+title: "DBC Trader Experience"
+sidebarTitle: "Trader Experience"
+description: "Understand what traders experience during a DBC launch, including activation, swap modes, fees, referrals, rate limiter behavior, partial fills, and curve completion."
+llmsDescription: "Explains the DBC trader experience, including slot or timestamp activation, virtual pool trading, exact-in swaps, exact-out swaps, partial-fill swaps, quote token and output token fee collection, referral fees, first creator swap with minimum fee, rate limiter single-swap transaction protection, curve completion, stopping normal DBC swaps after the migration threshold, and DAMM trading after migration."
+---
+
+DBC is designed to make launch trading feel transparent to traders while still giving launch teams strong configuration controls.
+
+During the bonding curve phase, traders interact with a virtual pool. The curve determines the price, the fee configuration determines trading cost, and the migration threshold determines when the launch stops being a DBC market and becomes a DAMM market.
+
+## Launch Activation
+
+A DBC pool can open immediately or wait for an activation point.
+
+| Activation Type | Product Meaning |
+| --- | --- |
+| Slot | Trading opens based on Solana slot. |
+| Timestamp | Trading opens based on time. |
+
+Activation lets launchpads prepare a pool before public trading begins.
+
+## Trading on the Curve
+
+When traders buy the launched token, quote tokens enter the pool and the price moves up the curve. When traders sell, base tokens return to the pool and quote tokens leave the pool.
+
+DBC supports common swap behaviors:
+
+| Swap Behavior | Product Meaning |
+| --- | --- |
+| Exact in | The trader specifies how much they want to spend. |
+| Exact out | The trader specifies how much they want to receive. |
+| Partial fill | The swap can fill up to the curve's available amount instead of failing the entire trade when the curve is near completion. |
+
+Partial fills matter near migration because a final buy may push the pool exactly to the migration threshold.
+
+## How Traders Pay Fees
+
+DBC has two collect fee modes during the bonding phase.
+
+| Collect Fee Mode | Trader Experience |
+| --- | --- |
+| Quote Token | Fees are accounted in the quote token. |
+| Output Token | Fees are taken from the token the trader receives. |
+
+The configured base fee mode and optional dynamic fee determine the fee rate.
+
+## Referral Fees
+
+DBC swaps can include referral fee behavior. When a referral is present, the referral receives a share of the protocol fee.
+
+This lets trading terminals, launchpads, and other integrators participate in DBC order flow without changing the launch's core curve design.
+
+## Creator First Swap With Minimum Fee
+
+A config can enable the creator's first bundled swap to use the minimum base fee.
+
+This is useful when the creator creates the pool and performs an initial buy in the same launch flow. It gives the creator a cleaner seeding experience while preserving the configured fee behavior for later traders.
+
+<Note>
+  This only applies to the eligible first creator swap. It is not a general fee discount for all early traders.
+</Note>
+
+## Rate Limiter Experience
+
+When rate limiter mode is active, larger buys can pay progressively higher fees during the limiter window.
+
+The rate limiter is designed to make oversized early buys more expensive, not to block buying entirely.
+
+The program also validates single-swap behavior for rate-limited trades. In product terms, this helps reduce attempts to bypass the limiter by bundling multiple swaps for the same pool in one transaction.
+
+## Curve Completion
+
+The bonding curve is complete when:
+
+```text
+quote_reserve >= migration_quote_threshold
+```
+
+At that point, normal DBC curve trading stops and the pool becomes eligible for migration. Traders then wait for the pool to migrate into DAMM v1 or DAMM v2.
+
+After migration, trading moves to the created DAMM pool instead of the DBC virtual pool.
+
+## Product Takeaway
+
+For traders, DBC provides a clear path: trade on the launch curve first, then trade on the migrated DAMM pool after graduation. For launch teams, the product advantage is that activation, fees, referrals, rate limiting, and migration behavior can all be configured before the launch opens.
