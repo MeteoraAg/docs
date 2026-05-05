@@ -1,0 +1,158 @@
+---
+title: "DBC Workflow"
+sidebarTitle: "Workflow"
+description: "Follow the Dynamic Bonding Curve launch lifecycle from reusable configuration and virtual pool trading to quote-threshold completion, DAMM migration, liquidity distribution, and claim timing."
+llmsDescription: "Explains the DBC workflow: partner config creation, creator virtual pool creation, bonding curve trading, activation, dynamic or fixed supply, migration quote threshold, curve completion, DAMM v1 or DAMM v2 migration, liquidity distribution, locked liquidity requirements, trading fee claims, pool creation fee claims, surplus claims, migration fee withdrawals, leftover withdrawal, DAMM v1 LP-token claims, DAMM v2 position creation and ownership transfer, and mainnet migration keepers."
+---
+
+DBC is designed as a full launch lifecycle, not just a curve. The product starts before the token exists, guides trading through the bonding curve, then graduates the token into long-term Meteora liquidity.
+
+This lets a launchpad or project define the rules up front, then let the market move through the launch in a transparent on-chain sequence.
+
+## Workflow Overview
+
+```text
+Partner creates config
+        |
+Creator launches token pool
+        |
+Traders buy and sell on the DBC curve
+        |
+Quote reserve reaches migration threshold
+        |
+Curve-complete claims and migration become available
+        |
+Pool migrates to DAMM v1 or DAMM v2
+        |
+Post-migration cleanup and liquidity ownership finalize
+```
+
+## Step 1: Partner Creates a DBC Config
+
+A DBC config is the launch template. It defines how every pool created from that config behaves.
+
+The config controls:
+
+- The quote token used for launches, such as SOL or USDC.
+- The curve shape and migration threshold.
+- Trading fee behavior during the bonding phase.
+- Whether the token uses SPL Token or Token 2022.
+- Whether the launch uses dynamic supply or fixed supply.
+- How the migrated pool should be created.
+- How post-migration liquidity is allocated, locked, or vested.
+- How partner and creator economics are split.
+
+This is especially useful for launchpads. A launchpad can create curated presets for different launch styles, then let token creators launch from those presets without rebuilding every parameter from scratch.
+
+## Step 2: Creator Creates a Virtual Pool
+
+The creator launches a token pool from the partner's config. This creates the virtual pool, token mint, base vault, quote vault, and starting price.
+
+At this stage, DBC can support two supply models:
+
+| Supply Model | Product Behavior |
+| --- | --- |
+| Dynamic supply | The launch mints the required initial supply for the virtual pool and can allow mint authority behavior based on the configured token authority option. |
+| Fixed supply | The launch uses a pre-defined supply. Any unused base tokens after migration can be withdrawn as leftover. |
+
+The pool can open immediately or wait until an activation point. Activation can be based on slot or timestamp, depending on the launch configuration.
+
+## Step 3: Traders Trade on the Bonding Curve
+
+During the bonding phase, traders buy and sell against the virtual pool.
+
+When a trader buys the launched token, quote tokens enter the pool and the price moves upward along the curve. When a trader sells, base tokens return to the pool and quote tokens leave the pool, moving the price in the opposite direction.
+
+Trading fees are collected during this phase. Those fees can be designed as fixed-fee behavior, a linear or exponential fee scheduler, a rate limiter, and an optional dynamic fee layer.
+
+<Info>
+  DBC virtual pools can be routed through trading terminals, aggregators, and bots while they are still in the bonding curve phase.
+</Info>
+
+## Step 4: Quote Reserve Hits the Migration Threshold
+
+Every DBC config has a migration quote threshold. This is the amount of quote reserve the virtual pool needs before it can graduate.
+
+```text
+quote_reserve >= migration_quote_threshold
+```
+
+Once the threshold is reached, the bonding curve is complete. Normal curve trading stops and the pool becomes eligible for migration.
+
+Some claims also become available at this point, even before the DAMM pool is fully created. Surplus and partner or creator migration-fee withdrawals are gated on curve completion, not on the final migrated pool state.
+
+## Step 5: Curve-Complete Claims Become Available
+
+After the curve is complete, DBC can account for values that depend on the final quote reserve.
+
+| Claim Type | When It Becomes Available | What It Means |
+| --- | --- | --- |
+| Surplus | After the curve is complete | Partner, creator, and protocol shares of quote reserve above the migration threshold can be claimed. |
+| Migration fees | After the curve is complete | Partner and creator can withdraw configured migration fee shares, when enabled. |
+| Protocol quote surplus | After the curve is complete | The protocol surplus share is claimed through the protocol fee claim path. |
+
+Trading fees and pool creation fees do not need to wait for this step. They can be claimed earlier when balances are available and the relevant one-time claim flags allow it.
+
+## Step 6: Pool Migrates to DAMM
+
+DBC can migrate into either DAMM v1 or DAMM v2.
+
+| Migration Target | Best Fit |
+| --- | --- |
+| DAMM v1 | Simpler constant-product migration for SPL Token launches. |
+| DAMM v2 | More configurable post-migration pool behavior, including collect fee modes, dynamic fees, LP vesting, market-cap fee scheduling, compounding settings, and Token 2022 support. |
+
+During migration, DBC uses the configured quote threshold and base token amount to seed the new pool. The migration price is derived from the curve, so the graduated pool starts from the launch's discovered price.
+
+The program tracks migration through `PreBondingCurve`, `PostBondingCurve`, `LockedVesting`, and `CreatedPool` states. Some launches need a locker step before pool creation, especially when vesting behavior is configured.
+
+<Info>
+  For a deeper breakdown of DAMM v1, DAMM v2, position ownership, locks, vesting, and protocol migration fees, see [DBC Migration and Liquidity](/core-products/dbc/migration-and-liquidity).
+</Info>
+
+## Step 7: Liquidity Is Distributed
+
+After migration, the launched token has real DAMM liquidity. That liquidity can be distributed across partner and creator allocations.
+
+Liquidity can be:
+
+- **Unlocked**, meaning the recipient can manage it according to the migrated pool rules.
+- **Permanently locked**, meaning it stays locked while continuing to support the pool.
+- **Vesting**, meaning it unlocks over time according to the configured schedule.
+
+<Warning>
+  DBC configs require at least 10% liquidity to remain locked at day 1 after migration. This can be satisfied through permanent locked liquidity, vesting liquidity, or both.
+</Warning>
+
+## Step 8: Post-Migration Cleanup Becomes Available
+
+After the migrated pool has been created, DBC can complete actions that depend on the final migration state.
+
+| Action | What It Means |
+| --- | --- |
+| Leftover | Unused fixed-supply base tokens can be returned to the configured leftover receiver. |
+| DAMM v1 LP tokens | Partner and creator can claim migrated LP tokens after the DAMM v1 pool is created. |
+| DAMM v1 LP locks | Locked DAMM v1 LP tokens can be locked after migrated LP tokens exist. |
+| DAMM v2 positions | Migration creates DAMM v2 position NFTs, applies configured locks or vesting, and transfers the position accounts to the partner or creator owners. |
+
+## Claims by Lifecycle Stage
+
+| Lifecycle Stage | Claim Paths |
+| --- | --- |
+| After virtual pool creation | Partner and protocol pool creation fees can be claimed once, when configured. |
+| During bonding curve trading | Partner, creator, and protocol trading fees can be claimed as fees accrue. |
+| After curve completion | Surplus and partner or creator migration fees become available. |
+| After migrated pool creation | Fixed-supply leftover withdrawal, DAMM v1 LP-token claims, and DAMM v2 migrated position ownership are finalized. |
+
+## Mainnet Migration Keepers
+
+Meteora operates migration keepers on mainnet to help eligible DBC pools graduate automatically.
+
+| Keeper | Threshold Requirements |
+| --- | --- |
+| [CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY](https://solscan.io/account/CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY) | 10 SOL, 750 USDC, or 1500 JUP |
+| [DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW](https://solscan.io/account/DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW) | At least 750 USD equivalent in the quote token |
+
+<Note>
+  Migration keepers run on mainnet. For testing or manual flows, use the [manual migrator](https://migrator.meteora.ag/), which supports mainnet and devnet.
+</Note>

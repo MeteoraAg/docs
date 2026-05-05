@@ -1,0 +1,122 @@
+---
+title: "DBC Universal Curve"
+sidebarTitle: "Universal Curve"
+description: "Learn how DBC's universal curve lets launch teams design single-segment or multi-segment bonding curves for flexible on-chain price discovery."
+llmsDescription: "Explains DBC universal curve design, including starting price, curve points, single-segment curves, multi-segment curves, liquidity distribution, curve steepness, migration price, launch strategy examples, increasing price requirements, positive liquidity requirements, reachable migration threshold, and the 16 curve point limit."
+---
+
+The DBC Universal Curve is the pricing engine behind a DBC launch. It lets a launch team decide how price should move as traders buy the token, from the first trade through migration.
+
+The same product can support a simple curve for a straightforward launch or a more deliberate multi-segment curve for teams that want finer control over distribution and price movement.
+
+## What the Curve Controls
+
+The curve answers three product questions:
+
+- What price should the token start at?
+- How quickly should price move as buyers enter?
+- At what price and quote reserve should the token graduate?
+
+DBC represents the curve as a starting price plus up to 16 curve points. Each point defines an upper price boundary and the virtual liquidity for that segment.
+
+```text
+Start price -> Segment 1 -> Segment 2 -> ... -> Migration price
+```
+
+## Single-Segment Curves
+
+A single-segment curve uses one liquidity setting from the starting price to the migration price.
+
+This is the simplest launch design. It is easier to explain, easier to model, and useful when the team wants one consistent price behavior from start to finish.
+
+<CardGroup cols={2}>
+  <Card title="Best For" icon="circle-check" iconType="solid">
+    Simple launches, easy public communication, fast launchpad templates, and teams that do not need multiple pricing phases.
+  </Card>
+  <Card title="Tradeoff" icon="scale-balanced" iconType="solid">
+    A single segment has less room to shape different launch phases, such as early discovery, wider distribution, and final migration.
+  </Card>
+</CardGroup>
+
+## Multi-Segment Curves
+
+A multi-segment curve uses different liquidity settings across different price ranges.
+
+This lets a launch team design distinct phases:
+
+- An early discovery phase.
+- A broader distribution phase.
+- A final migration phase.
+
+Each segment can feel different to traders because each segment can require a different amount of quote token to move price.
+
+```text
+Lower liquidity segment  = price moves faster
+Higher liquidity segment = price moves slower
+```
+
+## How Liquidity Shapes Price Movement
+
+Virtual liquidity is the main curve-shaping lever.
+
+| Segment Liquidity | Product Effect |
+| --- | --- |
+| Lower liquidity | Price moves faster for each unit of quote demand. |
+| Higher liquidity | Price moves slower and requires more quote demand to move through the range. |
+
+This does not mean one is always better than the other. A launch may intentionally use low liquidity early for faster price discovery, then higher liquidity later for a more measured path into migration.
+
+## Example Curve Shapes
+
+<AccordionGroup>
+  <Accordion title="Simple Fair Launch Curve">
+    A single segment or evenly weighted segments can create a straightforward curve. This is useful when the launch wants easy messaging and fewer moving parts.
+  </Accordion>
+  <Accordion title="Early Discovery, Later Depth">
+    A curve can start with lower liquidity so early demand moves price faster, then move into higher liquidity to create a more stable path toward migration.
+  </Accordion>
+  <Accordion title="Gentler Distribution Curve">
+    A launch can use higher liquidity earlier so price moves more gradually while more buyers participate before migration.
+  </Accordion>
+  <Accordion title="Aggressive Launch Curve">
+    A curve with lower liquidity across multiple segments moves price quickly. This can create strong upside movement but may be less friendly for broad distribution.
+  </Accordion>
+</AccordionGroup>
+
+## Migration Price
+
+The migration price is not manually chosen after the launch. It is derived from the curve and the migration quote threshold.
+
+As quote tokens enter the virtual pool, the price moves through the curve. When the quote reserve reaches the threshold, the current curve price becomes the migration price used to initialize the graduated pool.
+
+This is one of DBC's most important product properties: the DAMM pool starts from the price discovered during the bonding phase.
+
+## Curve Constraints
+
+| Constraint | Product Meaning |
+| --- | --- |
+| Up to 16 curve points | The launch can use one segment or multiple segments, but should stay simple enough to explain. |
+| Prices must increase | Each curve point must be above the previous price. |
+| Liquidity must be positive | Every segment needs liquidity so trades can move through it. |
+| Migration threshold must be reachable | The curve needs enough liquidity to reach the configured migration quote threshold. |
+
+<Note>
+  DBC configs can store extra curve capacity internally, but product launches use up to 16 active curve points.
+</Note>
+
+## Choosing a Curve
+
+Use the simplest curve that matches the launch strategy.
+
+<CardGroup cols={2}>
+  <Card title="Use a Single Segment" icon="chart-line" iconType="solid">
+    Choose this when simplicity, speed, and clear user communication matter most.
+  </Card>
+  <Card title="Use Multiple Segments" icon="chart-simple" iconType="solid">
+    Choose this when the launch has distinct phases and needs more control over how price moves.
+  </Card>
+</CardGroup>
+
+<Warning>
+  A more complex curve is not automatically a better curve. The best curve is one that matches the launch goal and can be clearly communicated to traders and creators.
+</Warning>

@@ -1,0 +1,167 @@
+---
+title: "DBC Other Configurations"
+sidebarTitle: "Other Configurations"
+description: "Review important DBC launch configuration options beyond the curve, including activation, migration, supply, token authority, fee claims, liquidity distribution, locks, vesting, and pool creation fees."
+llmsDescription: "Explains DBC other configurations, covering config key, quote mint, activation type, token decimal requirements, token supply model, token authority options, migration option, migration fee option, migrated DAMM v2 pool fee settings, liquidity distribution, permanent locks, vesting, 10 percent day-one locked liquidity requirement, two-year lock duration limit, pool creation fee, first swap with minimum fee, fee claimer, leftover receiver, and quote token support."
+---
+
+DBC is highly configurable. The curve defines price discovery, but the rest of the config defines how the launch opens, how fees work, how tokens are managed, and what happens after migration.
+
+This page summarizes the most important non-curve settings.
+
+## Config Key
+
+A DBC config key is a reusable launch template. It is usually created by a launchpad partner and can be used by creators to launch pools with the same product rules.
+
+The config key controls:
+
+- Quote token.
+- Curve and migration threshold.
+- Bonding phase fees.
+- Token type and supply model.
+- Migration target.
+- Post-migration pool settings.
+- Partner and creator economics.
+- LP allocation, locks, and vesting.
+
+## Quote Token
+
+The quote token is the asset used to buy the launched token during the bonding phase. Common quote assets include SOL, USDC, and other supported tokens.
+
+The quote token also matters for migration because the accumulated quote reserve becomes part of the graduated pool liquidity.
+
+## Activation Type
+
+DBC pools can use a slot-based or timestamp-based activation model.
+
+| Activation Type | Product Meaning |
+| --- | --- |
+| Slot | Trading and schedules are based on Solana slots. |
+| Timestamp | Trading and schedules are based on time. |
+
+Activation lets a launch be created before trading opens. This is useful when a launchpad wants a scheduled public launch.
+
+## Token Supply Model
+
+DBC supports dynamic supply and fixed supply.
+
+| Supply Model | Product Behavior |
+| --- | --- |
+| Dynamic supply | The launch does not predefine a fixed full supply for the DBC flow. |
+| Fixed supply | The launch defines pre-migration and post-migration token supply. Unused base tokens can become leftover. |
+
+Fixed supply is useful for teams with strict tokenomics. Dynamic supply is useful when teams want the DBC flow to manage the token amount needed for curve trading and migration.
+
+## Token Decimals
+
+DBC configs support token decimals from 6 to 9. This range keeps launched tokens compatible with the program's pricing, curve, and migration math.
+
+## Token Authority
+
+DBC supports different token authority options. These determine whether creator, partner, or no party retains certain token authority after launch setup.
+
+Product teams should choose authority settings carefully because they affect trust, governance, and how the token can be managed after launch.
+
+Common product choices include:
+
+- Creator-controlled update authority.
+- Partner-controlled update authority.
+- Immutable authority.
+- Creator or partner mint authority options for advanced use cases.
+
+## Migration Target
+
+DBC can graduate into DAMM v1 or DAMM v2.
+
+| Target | Product Meaning |
+| --- | --- |
+| DAMM v1 | Simpler migration target for SPL Token launches and standard quote tokens. |
+| DAMM v2 | More configurable migration target with advanced fee modes, Token 2022 support, compounding options, market-cap fee scheduling, and LP vesting options. |
+
+DAMM v2 is the more flexible target for modern launches.
+
+## Migration Fee
+
+The config can include a migration fee. This is a one-time fee taken from the migration quote amount when the pool graduates.
+
+The migration fee can be split between partner and creator, giving launchpads and creators another way to align launch economics.
+
+Partner and creator migration-fee withdrawals become available once the bonding curve is complete. They are not limited to the final post-migration state.
+
+<Note>
+  Migration fees are separate from regular bonding phase trading fees.
+</Note>
+
+## Migrated DAMM v2 Pool Settings
+
+When a DBC pool migrates to DAMM v2, the config can define post-migration fee behavior.
+
+| Setting | Product Meaning |
+| --- | --- |
+| Migrated collect fee mode | Controls how the DAMM v2 pool collects fees after migration. |
+| Migrated pool base fee | Sets the base fee for the DAMM v2 pool. |
+| Migrated pool base fee mode | Supports DAMM v2 fee behavior such as fixed-fee behavior or market cap scheduler behavior. |
+| Migrated dynamic fee | Enables or disables DAMM v2 dynamic fees after graduation. |
+| Compounding fee bps | Defines the compounding fee behavior when the migrated DAMM v2 pool uses compounding collect fee mode. |
+
+These settings affect the graduated DAMM v2 pool, not the DBC virtual pool.
+
+Market-cap scheduler settings are post-migration DAMM v2 settings. They do not change the bonding curve fee while the token is still trading in the DBC virtual pool.
+
+## Liquidity Distribution
+
+At migration, the pool's liquidity can be allocated between partner and creator buckets.
+
+Each bucket can include:
+
+- Unlocked liquidity.
+- Permanently locked liquidity.
+- Vesting liquidity.
+
+The full distribution must add up to 100%.
+
+<Warning>
+  DBC requires at least 10% of liquidity to remain locked at day 1 after migration.
+</Warning>
+
+Lock schedules can be permanent or vesting-based. Vesting lock durations are capped at 2 years.
+
+For more detail on migrated DAMM v1 LP tokens, DAMM v2 position NFTs, and liquidity ownership, see [DBC Migration and Liquidity](/core-products/dbc/migration-and-liquidity).
+
+## Pool Creation Fee
+
+Partners can configure a pool creation fee in SOL lamports. This fee is charged when a creator creates a virtual pool from the config.
+
+The pool creation fee is split between protocol and partner:
+
+- 10% goes to the protocol.
+- 90% goes to the partner.
+
+This gives launchpads a direct monetization path for curated launch templates.
+
+Pool creation fees are optional. When configured, they must stay within the program's allowed minimum and maximum SOL-denominated range.
+
+## First Swap With Minimum Fee
+
+DBC can optionally allow the creator's first bundled buy to use the minimum base fee instead of the elevated launch fee.
+
+This is useful when:
+
+- The creator creates the pool and makes an initial buy in one transaction.
+- The launch wants creator seeding behavior without charging the creator the anti-sniper fee.
+- The launch still wants subsequent trades to follow the normal fee schedule.
+
+For more detail on how activation, swaps, referrals, partial fills, and rate limits feel to traders, see [DBC Trader Experience](/core-products/dbc/trader-experience).
+
+## Fee Claimer and Leftover Receiver
+
+Two important addresses should be selected carefully:
+
+| Address | Product Role |
+| --- | --- |
+| Fee claimer | Authorizes partner-side claims such as trading fees, pool creation fees, migration fees, and surplus. |
+| Leftover receiver | Receives unused fixed-supply base tokens after migration. |
+
+## Product Takeaway
+
+DBC configuration is where a launchpad turns a launch strategy into an on-chain template. The curve determines price discovery, while the surrounding configuration determines who earns fees, how liquidity is secured, how migration works, and how the launch behaves after graduation.

@@ -1,0 +1,104 @@
+---
+title: "DBC Token 2022 Support"
+sidebarTitle: "Token 2022 Support"
+description: "Learn how DBC supports Token 2022 launches, metadata handling, supported quote tokens, authority choices, supply models, and DAMM v2 migration behavior."
+llmsDescription: "Explains DBC Token 2022 support, including SPL Token and Token 2022 base token launches, Token 2022 metadata pointer and token metadata handling, DAMM v2 migration, DAMM v1 restrictions, supported Token 2022 quote token extensions, unsupported native Token 2022 mint behavior, token authority options, fixed and dynamic supply, leftover handling, and product considerations."
+---
+
+DBC supports both SPL Token and Token 2022 base token launches.
+
+Token 2022 support helps launch teams use newer Solana token capabilities while still accessing DBC's bonding curve, launch fee controls, and DAMM migration flow.
+
+## SPL Token vs Token 2022
+
+| Token Type | Product Behavior |
+| --- | --- |
+| SPL Token | Standard Solana token launch path. Can migrate to DAMM v1 or DAMM v2 depending on configuration. |
+| Token 2022 | Modern token launch path with Token 2022 metadata handling. Must use DAMM v2 migration in the DBC configuration flow. |
+
+## Token 2022 Base Tokens
+
+When DBC launches a Token 2022 base token, the launch flow initializes the mint with Token 2022 metadata support.
+
+DBC handles:
+
+- Creating the Token 2022 mint.
+- Setting token decimals from the config.
+- Initializing metadata pointer behavior.
+- Initializing token metadata with name, symbol, and URI.
+- Setting update authority according to the configured authority option.
+- Minting the initial base supply into the pool vault.
+
+This lets creators launch a Token 2022 token through the same product flow as a standard DBC launch.
+
+## Migration Target
+
+Token 2022 launches must use DAMM v2 migration in the DBC configuration flow.
+
+DAMM v2 is the modern migration target for Token 2022 support, advanced collect fee modes, dynamic fees, and vesting behavior.
+
+<Warning>
+  DAMM v1 migration is restricted to SPL Token launches. A Token 2022 base-token launch cannot use DAMM v1 migration in DBC config validation.
+</Warning>
+
+## Supported Quote Tokens
+
+DBC can use SPL Token quote assets. It can also support Token 2022 quote assets when the quote mint uses only supported metadata-related extensions.
+
+Supported Token 2022 quote mint extensions include:
+
+- Metadata Pointer.
+- Token Metadata.
+
+If a Token 2022 quote mint uses other extensions, it may not be supported as a quote token for DBC.
+
+This means Token 2022 quote mints with transfer fees or other behavioral extensions should not be assumed compatible with DBC.
+
+<Note>
+  Native Token 2022 mint behavior is not supported as a quote mint.
+</Note>
+
+## Token Authority Choices
+
+Token 2022 launches can use the same product-level authority choices as other DBC launches.
+
+Launch teams can configure whether authority is:
+
+- Held by the creator.
+- Held by the partner.
+- Made immutable.
+- Extended to include mint authority options for advanced configurations.
+
+Authority choices should match the launch's trust model. Immutable settings may be easier for communities to reason about, while retained authority may be useful for managed launchpad flows.
+
+## Fixed and Dynamic Supply
+
+Token 2022 launches can be used with DBC's supply models.
+
+| Supply Model | Product Behavior |
+| --- | --- |
+| Dynamic supply | DBC mints the initial base supply needed by the launch flow. |
+| Fixed supply | DBC uses configured pre-migration and post-migration supply values, with possible leftover after migration. |
+
+For fixed-supply Token 2022 launches, leftover handling works the same product way: unused base tokens can be withdrawn to the configured leftover receiver after migration.
+
+## Product Considerations
+
+<CardGroup cols={2}>
+  <Card title="Modern Token Standard" icon="certificate" iconType="solid">
+    Token 2022 support gives launch teams access to newer token infrastructure.
+  </Card>
+  <Card title="Metadata Included" icon="tags" iconType="solid">
+    DBC initializes token metadata as part of the Token 2022 launch flow.
+  </Card>
+  <Card title="DAMM v2 Alignment" icon="arrow-right" iconType="solid">
+    Token 2022 launches should be designed around DAMM v2 graduation from the start.
+  </Card>
+  <Card title="Quote Token Review" icon="magnifying-glass" iconType="solid">
+    Token 2022 quote assets should be checked for supported extensions before launch.
+  </Card>
+</CardGroup>
+
+## Product Takeaway
+
+DBC Token 2022 support lets launch teams use a newer Solana token standard without giving up the DBC launch experience. The main planning step is to pair Token 2022 launches with the right migration target, authority model, and supported quote token setup.

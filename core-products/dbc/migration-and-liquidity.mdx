@@ -1,0 +1,108 @@
+---
+title: "DBC Migration and Liquidity"
+sidebarTitle: "Migration and Liquidity"
+description: "Learn how DBC graduates a completed bonding curve into DAMM liquidity, including DAMM v1 and DAMM v2 migration, liquidity ownership, locks, vesting, and protocol migration fees."
+llmsDescription: "Explains DBC migration and liquidity behavior, including curve completion, migration progress states, DAMM v1 migration, DAMM v2 migration, locked vesting step, migrated liquidity ownership, DAMM v1 LP token claims, DAMM v2 position NFT creation and ownership transfer, unlocked liquidity, permanently locked liquidity, vesting liquidity, 10 percent day-one locked liquidity requirement, two-year vesting duration cap, dead liquidity, leftover handling, and protocol liquidity migration fee."
+---
+
+DBC migration is the handoff from launch trading to long-term Meteora liquidity.
+
+During the bonding curve phase, traders buy and sell against a DBC virtual pool. When the quote reserve reaches the configured migration threshold, normal curve trading stops and the pool becomes eligible to create a DAMM pool.
+
+```text
+Virtual pool trading -> Curve complete -> Migration steps -> DAMM pool live
+```
+
+## Migration Progress
+
+The program tracks migration as a sequence of states.
+
+| State | Product Meaning |
+| --- | --- |
+| PreBondingCurve | The pool is still trading on the DBC curve. |
+| PostBondingCurve | The curve is complete, and migration can continue. |
+| LockedVesting | Required vesting or locker setup has been completed, and the DAMM pool can be created. |
+| CreatedPool | The migrated DAMM pool has been created. |
+
+Some launches move from curve completion directly into the migration-ready state. Others need the locker step first, especially when creator vesting is configured.
+
+## Migration Targets
+
+DBC supports two migration targets.
+
+| Migration Target | Product Behavior |
+| --- | --- |
+| DAMM v1 | Creates a simpler constant-product DAMM pool and uses LP tokens to represent migrated liquidity. |
+| DAMM v2 | Creates a more configurable migrated pool with position NFTs, advanced fee settings, compounding options, and vesting support. |
+
+DAMM v2 is the more flexible path for modern launches, especially Token 2022 launches and teams that need detailed post-migration liquidity controls.
+
+## What Migrates
+
+At migration, DBC uses:
+
+- The configured quote threshold from the bonding phase.
+- The base token amount allocated for the migrated pool.
+- The migration price discovered by the curve.
+- The configured partner and creator liquidity distribution.
+
+The goal is to start the DAMM pool around the price discovered during the launch, rather than forcing teams to choose a separate post-launch price manually.
+
+## Liquidity Ownership
+
+DBC can split migrated liquidity between partner and creator buckets.
+
+Each bucket can include:
+
+| Liquidity Type | Product Meaning |
+| --- | --- |
+| Unlocked liquidity | The recipient can manage it according to the migrated pool rules. |
+| Permanently locked liquidity | Liquidity remains locked while still supporting the pool. |
+| Vesting liquidity | Liquidity unlocks over time according to the configured schedule. |
+
+The full partner and creator liquidity distribution must add up to 100%.
+
+<Warning>
+  DBC requires at least 10% of liquidity to remain locked at day 1 after migration. Vesting lock durations are capped at 2 years.
+</Warning>
+
+## DAMM v1 Liquidity
+
+For DAMM v1 migration, liquidity is represented through LP tokens.
+
+After the DAMM v1 pool is created, partner and creator LP-token claims can become available according to the configured distribution. If LP tokens need to be locked, the lock step happens after the migrated pool exists.
+
+This path is simpler, but it is also less configurable than DAMM v2.
+
+## DAMM v2 Liquidity
+
+For DAMM v2 migration, DBC creates position NFTs for the migrated liquidity.
+
+The migration flow:
+
+1. Creates the DAMM v2 pool.
+2. Creates migrated liquidity positions.
+3. Applies configured permanent locks or vesting locks.
+4. Transfers position ownership to the partner or creator owner.
+
+This means DAMM v2 migration is not just a pool creation step. It also finalizes who controls the migrated positions and how much of that liquidity is locked.
+
+## Protocol Liquidity Migration Fee
+
+DBC applies a fixed 0.2% protocol liquidity migration fee during migration.
+
+This fee is tracked as protocol migration base and quote amounts. In product terms, it reduces the amount of base and quote liquidity that enters the migrated pool and becomes part of protocol-claimable balances.
+
+<Note>
+  This protocol liquidity migration fee is separate from the configurable partner and creator migration fee.
+</Note>
+
+## Leftover After Migration
+
+For fixed-supply launches, some base tokens may remain in the virtual pool after migration accounting. Those unused tokens are called leftover and can be withdrawn to the configured leftover receiver after the migrated pool reaches the created state.
+
+Leftover is covered in more detail in [DBC Leftover](/core-products/dbc/leftover).
+
+## Product Takeaway
+
+DBC migration turns launch demand into long-term liquidity. The important product decision is not only whether a token migrates, but how liquidity is split, who owns it, which parts are locked, and whether DAMM v1 or DAMM v2 is the right long-term home.

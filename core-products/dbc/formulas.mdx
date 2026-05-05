@@ -1,0 +1,198 @@
+---
+title: "DBC Formulas"
+sidebarTitle: "Formulas"
+description: "Understand the product math behind DBC price movement, universal curve segments, migration thresholds, trading fees, surplus, protocol migration fees, and leftover tokens."
+llmsDescription: "Explains non-technical DBC formulas including constant-product curve segments, virtual liquidity, base token sold, quote token collected, migration quote threshold, migration price, total trading fee, fee scheduler behavior, rate limiter fees, dynamic fee, protocol and referral fees, partner and creator fee split, migration fee, protocol liquidity migration fee, surplus split, and fixed-supply leftover."
+---
+
+DBC uses concentrated-liquidity style math to create a customizable bonding curve. You do not need to understand every implementation detail to use the product, but the formulas below explain the main economic levers behind a launch.
+
+## Curve Segment Formula
+
+Each DBC curve segment behaves like a constant-product price range.
+
+```math
+x \times y = k
+```
+
+In DBC product terms:
+
+- `x` represents the base token side of the curve.
+- `y` represents the quote token side of the curve.
+- `L` represents virtual liquidity.
+- `sqrt_price` represents the square root of the token price.
+
+The curve is built from one or more price ranges. Each range has a lower price, an upper price, and a liquidity value.
+
+## Base Tokens Sold Through a Segment
+
+The amount of base token available across a curve segment is:
+
+```math
+\text{Base Amount} = L \times \left(\frac{1}{\sqrt{P_\text{lower}}} - \frac{1}{\sqrt{P_\text{upper}}}\right)
+```
+
+In product terms, this tells you how much launched token can be sold while the price moves through that segment.
+
+If a segment has more liquidity, more quote tokens are needed to move price through the segment. If it has less liquidity, price moves faster.
+
+## Quote Tokens Collected Through a Segment
+
+The amount of quote token needed to move through a segment is:
+
+```math
+\text{Quote Amount} = L \times (\sqrt{P_\text{upper}} - \sqrt{P_\text{lower}})
+```
+
+In product terms, this tells you how much buying demand is needed to move from one curve price to the next.
+
+## Migration Quote Threshold
+
+The migration quote threshold is the amount of quote reserve needed before the launch can graduate.
+
+For a multi-segment curve, the total quote amount is the sum of the quote amount across each segment up to the migration price:
+
+```math
+\text{Migration Quote Threshold} =
+\sum_i L_i \times (\sqrt{P_i} - \sqrt{P_{i-1}})
+```
+
+The pool becomes migration-ready when:
+
+```math
+\text{Quote Reserve} \ge \text{Migration Quote Threshold}
+```
+
+## Migration Price
+
+The migration price is the price reached when the quote reserve hits the migration threshold. DBC derives this price from the curve and uses it to initialize the migrated DAMM pool.
+
+```math
+\text{Migration Price} = \left(\sqrt{P_\text{migration}}\right)^2
+```
+
+This matters because the post-migration DAMM pool should open around the price discovered by the bonding curve, not an unrelated price chosen after the fact.
+
+## Total Trading Fee
+
+DBC trading fees have two layers:
+
+```math
+\text{Total Trading Fee} = \text{Base Fee} + \text{Dynamic Fee}
+```
+
+The base fee is always present. The dynamic fee is optional and becomes zero when disabled.
+
+## Base Fee
+
+The base fee is the default trading fee behavior. DBC supports fee scheduler and rate limiter behavior:
+
+| Base Fee Mode | Product Meaning |
+| --- | --- |
+| Fee scheduler | Fee can stay fixed, decrease linearly, or decrease exponentially by schedule. |
+| Rate limiter | Fee increases with buy size during the configured launch window. |
+
+A fixed-fee launch can be represented as a scheduler that does not decay.
+
+## Dynamic Fee
+
+The dynamic fee responds to volatility.
+
+```math
+\text{Dynamic Fee} =
+\frac{(\text{Volatility Accumulator} \times \text{Bin Step})^2 \times \text{Variable Fee Control}}{100000000000}
+```
+
+In product terms, the dynamic fee rises when price movement becomes more intense and decays when trading calms down.
+
+## Fee Split
+
+DBC first splits the total trading fee into protocol and non-protocol portions.
+
+```math
+\text{Protocol Fee} = \text{Trading Fee} \times 20\%
+```
+
+If a referral is included, the referral receives a share of the protocol fee.
+
+```math
+\text{Referral Fee} = \text{Protocol Fee} \times 20\%
+```
+
+The remaining trading fee is shared between partner and creator according to the config.
+
+```math
+\text{Creator Fee} = \text{LP Fee} \times \text{Creator Trading Fee Percentage}
+```
+
+```math
+\text{Partner Fee} = \text{LP Fee} - \text{Creator Fee}
+```
+
+## Migration Fee
+
+DBC can take a configured migration fee from the quote reserve at graduation.
+
+```math
+\text{Migration Fee} =
+\text{Migration Quote Threshold} \times \text{Migration Fee Percentage}
+```
+
+That fee can be split between partner and creator.
+
+```math
+\text{Creator Migration Fee} =
+\text{Migration Fee} \times \text{Creator Migration Fee Percentage}
+```
+
+```math
+\text{Partner Migration Fee} =
+\text{Migration Fee} - \text{Creator Migration Fee}
+```
+
+Partner and creator migration-fee withdrawals are available after the curve is complete because the program can then confirm the launch reached its migration quote threshold.
+
+<Note>
+  A fixed 0.2% protocol liquidity migration fee also applies during migration. It is separate from the configurable partner and creator migration fee, and it reduces the base and quote liquidity deposited into the migrated pool.
+</Note>
+
+## Pool Creation Fee
+
+Partners can configure a pool creation fee that is paid when a creator launches from the config.
+
+```math
+\text{Protocol Pool Creation Fee} = \text{Pool Creation Fee} \times 10\%
+```
+
+```math
+\text{Partner Pool Creation Fee} = \text{Pool Creation Fee} - \text{Protocol Pool Creation Fee}
+```
+
+Pool creation fee claims are tied to virtual pool creation, not to curve completion or migration.
+
+## Surplus
+
+Surplus is extra quote reserve above the migration threshold.
+
+```math
+\text{Total Surplus} = \text{Quote Reserve} - \text{Migration Quote Threshold}
+```
+
+DBC allocates 80% of surplus to partner and creator, then splits that share using the creator trading fee percentage. The remaining 20% is protocol surplus.
+
+```math
+\text{Partner and Creator Surplus} = \text{Total Surplus} \times 80\%
+```
+
+## Leftover
+
+Leftover applies to fixed-supply launches.
+
+```math
+\text{Leftover} =
+\text{Remaining Base Vault Amount}
+- \text{Protocol and Trading Base Fees}
+- \text{Protocol Migration Base Fee}
+```
+
+In product terms, leftover is the unused base token supply that remains after the migrated pool is created and claimable base-token fee balances are excluded.

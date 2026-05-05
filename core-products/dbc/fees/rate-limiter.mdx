@@ -1,0 +1,96 @@
+---
+title: "DBC Rate Limiter Fee"
+sidebarTitle: "Rate Limiter"
+description: "Learn how DBC rate limiter fees increase with buy size and single-swap validation to help protect launches from oversized early buys."
+llmsDescription: "Explains DBC rate limiter base fee mode, including reference amount, cliff fee, fee increment bps, max limiter duration, quote-token fee mode requirement, buy-side behavior, single-swap transaction validation, 12 hour duration cap, and when to choose rate limiter fees."
+---
+
+The DBC rate limiter is a base fee mode that increases the fee as buy size increases.
+
+It is designed for launches where the main risk is not only who buys first, but how much they buy. Small buys can pay the starting fee, while larger buys pay a higher average fee during the limiter window.
+
+## How It Works
+
+The rate limiter uses four core settings.
+
+| Setting | Product Meaning |
+| --- | --- |
+| Cliff fee | The starting fee for buys up to the reference amount. |
+| Reference amount | The trade size unit used to calculate fee tiers. |
+| Fee increment bps | How much the fee increases for each additional reference amount. |
+| Max limiter duration | How long the limiter stays active after launch. |
+
+In product terms, the rate limiter behaves like fee brackets.
+
+```text
+Small buy  -> base fee
+Medium buy -> higher average fee
+Large buy  -> even higher average fee
+```
+
+## Example
+
+Assume:
+
+- Reference amount: 1 SOL.
+- Cliff fee: 1%.
+- Fee increment: 1%.
+
+Then:
+
+| Buy Size | Product Behavior |
+| --- | --- |
+| 1 SOL | Pays the starting fee. |
+| 2 SOL | Pays a higher average fee. |
+| 3 SOL | Pays a higher average fee again. |
+
+This does not block large buys. It makes large buys more expensive during the configured launch window.
+
+It also helps protect the fee design at the transaction level. When the limiter is active, the program validates single-swap behavior for the pool so traders cannot easily split one large buy into multiple swaps inside the same transaction.
+
+## Requirements
+
+Rate limiter mode has important constraints.
+
+| Requirement | Product Meaning |
+| --- | --- |
+| Quote Token collect fee mode | Rate limiter is designed for quote-token fee collection. |
+| Buy-side behavior | It applies to quote-to-base buys, not regular sell-side behavior. |
+| One base fee mode | It is mutually exclusive with the fee scheduler modes. |
+| Max duration | The limiter duration is capped at 12 hours. |
+| Fee bounds | The starting fee must stay within DBC's bonding phase fee bounds. |
+| Single-swap validation | Active rate limiter trades are checked so a transaction cannot bundle multiple swaps for the same pool to bypass the limiter. |
+
+<Warning>
+  Rate limiter should be used when the launch specifically wants buy-size-sensitive fees. If the launch only needs time-based fee decay, use a linear or exponential scheduler instead.
+</Warning>
+
+## Why Use Rate Limiter
+
+<CardGroup cols={2}>
+  <Card title="Discourage Oversized Buys" icon="scale-balanced" iconType="solid">
+    Very large launch buys can become progressively more expensive.
+  </Card>
+  <Card title="Protect Early Distribution" icon="shield" iconType="solid">
+    The fee slope can reduce the advantage of a single large first mover.
+  </Card>
+  <Card title="Preserve Small Buyer Access" icon="users" iconType="solid">
+    Smaller buys can still use the starting fee while larger buys move into higher tiers.
+  </Card>
+  <Card title="Short Launch Window" icon="hourglass-half" iconType="solid">
+    The limiter is meant for early launch protection, not permanent pool behavior.
+  </Card>
+</CardGroup>
+
+## When To Choose It
+
+Choose rate limiter when:
+
+- The launch expects aggressive large buys.
+- The goal is to make large buys less attractive without fully preventing them.
+- The launch wants fee protection based on size rather than time.
+- Fees should return to the base level after the limiter window ends.
+
+## Product Takeaway
+
+Rate limiter is DBC's buy-size protection mode. It is best used when distribution quality matters and the launch wants large early buys to pay more than smaller participants.

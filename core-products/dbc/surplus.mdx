@@ -1,0 +1,84 @@
+---
+title: "DBC Surplus"
+sidebarTitle: "Surplus"
+description: "Learn how DBC surplus works when a virtual pool collects more quote tokens than the migration threshold and how surplus is split after curve completion."
+llmsDescription: "Explains DBC surplus, including quote reserve above migration threshold, total surplus formula, 80 percent partner and creator surplus share, protocol surplus, creator trading fee percentage split, partner surplus, creator surplus, one-time claim behavior, and how surplus differs from trading fees and migration fees."
+---
+
+DBC surplus is the extra quote token amount collected above the migration threshold.
+
+The migration threshold defines how much quote reserve is needed to graduate the pool. In active markets, the swap that completes the curve may push the quote reserve above that threshold. The extra amount is surplus.
+
+## Surplus Formula
+
+```math
+\text{Total Surplus} =
+\text{Quote Reserve} - \text{Migration Quote Threshold}
+```
+
+Surplus exists only when the quote reserve is greater than the migration threshold.
+
+## Why Surplus Can Happen
+
+DBC trades happen on-chain and users can submit swaps that move the pool to the end of the curve. Depending on trade size and curve position, the final accepted trade can leave the pool with more quote tokens than the exact threshold.
+
+Rather than ignore that extra value, DBC accounts for it and makes it claimable after the curve is complete, even if the migrated DAMM pool has not been created yet.
+
+## Surplus Split
+
+DBC splits surplus into protocol surplus and partner or creator surplus.
+
+```math
+\text{Partner and Creator Surplus} = \text{Total Surplus} \times 80\%
+```
+
+```math
+\text{Protocol Surplus} = \text{Total Surplus} - \text{Partner and Creator Surplus}
+```
+
+The partner and creator share is then split using the same creator trading fee percentage configured for the launch.
+
+```math
+\text{Creator Surplus} =
+\text{Partner and Creator Surplus} \times \text{Creator Trading Fee Percentage}
+```
+
+```math
+\text{Partner Surplus} =
+\text{Partner and Creator Surplus} - \text{Creator Surplus}
+```
+
+## Example
+
+Assume a DBC pool has:
+
+- Migration quote threshold: 100 SOL.
+- Final quote reserve: 105 SOL.
+- Creator trading fee percentage: 25%.
+
+The total surplus is 5 SOL.
+
+| Recipient | Amount |
+| --- | --- |
+| Partner and creator surplus share | 4 SOL |
+| Protocol surplus share | 1 SOL |
+| Creator surplus | 1 SOL |
+| Partner surplus | 3 SOL |
+
+## When Surplus Can Be Claimed
+
+Surplus can be claimed after the curve is complete. It is not a post-migration-only claim. The virtual pool tracks whether each surplus recipient has already withdrawn, so each claim can happen only once.
+
+| Claimant | Product Behavior |
+| --- | --- |
+| Partner | Claims the partner share of the partner and creator surplus allocation. |
+| Creator | Claims the creator share of the partner and creator surplus allocation. |
+| Protocol | Claims the protocol surplus share through protocol fee claiming. |
+
+## Product Takeaway
+
+Surplus helps DBC launches handle final-trade overfill cleanly. It gives launchpads and creators a transparent way to account for quote tokens collected beyond what was needed to migrate the pool.
+
+<Note>
+  Surplus is different from trading fees and migration fees. It comes from extra quote reserve above the migration threshold.
+</Note>
