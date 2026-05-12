@@ -1,0 +1,198 @@
+---
+title: "Dynamic Fee Sharing Formulas"
+sidebarTitle: "Formulas"
+description: "Understand the product math behind Dynamic Fee Sharing shares, funded fees, fee-per-share accounting, claimable amounts, and transfer-fee handling."
+llmsDescription: "Explains non-technical Dynamic Fee Sharing formulas: total share, recipient percentage, net funded amount after transfer fees, cumulative fee per share, recipient claimable fee using checkpoint deltas, total claimed fee, remaining vault balance, and rounding behavior from high-precision accounting."
+---
+
+Dynamic Fee Sharing uses share-based accounting. Each recipient owns a number of shares, every funding event increases the value of each share, and each claim pays the recipient for the share value they have not claimed yet.
+
+## Key Terms
+
+| Term | Product Meaning |
+| --- | --- |
+| `recipient_share` | The number of shares assigned to one recipient. |
+| `total_share` | Sum of all recipient shares in the vault. |
+| `funded_amount` | Net fee amount added to the vault after token transfer-fee handling. |
+| `fee_per_share` | Cumulative value earned by one share across all funding events. |
+| `checkpoint` | The recipient's last recorded fee-per-share value. |
+| `claimable_fee` | Amount the recipient can claim now. |
+
+## Total Share
+
+The vault adds all recipient shares together.
+
+```math
+\text{Total Share} = \sum_i \text{Recipient Share}_i
+```
+
+A recipient's percentage is:
+
+```math
+\text{Recipient Percentage} = \frac{\text{Recipient Share}}{\text{Total Share}}
+```
+
+Example:
+
+| Recipient | Share | Percentage |
+| --- | --- | --- |
+| Creator | 50 | 50% |
+| Partner | 30 | 30% |
+| Treasury | 20 | 20% |
+
+The total share is 100, so the shares map directly to percentages. The same split could also be represented as 5, 3, and 2 shares.
+
+## Net Funded Amount
+
+When fees are manually funded, the vault accounts for the amount that actually reaches the fee vault after any supported Token 2022 transfer fee.
+
+```math
+\text{Net Funded Amount} = \text{Transfer Amount} - \text{Transfer Fee}
+```
+
+For standard SPL tokens, the transfer fee is zero:
+
+```math
+\text{Net Funded Amount} = \text{Transfer Amount}
+```
+
+For Token 2022 mints with transfer-fee behavior, the vault distributes the net amount received after the token's transfer fee.
+
+<Info>
+  This prevents the vault from promising recipients more tokens than the token vault actually received.
+</Info>
+
+## Fee Per Share
+
+Each time new fees enter the vault, the vault increases the cumulative fee-per-share value.
+
+Simplified product formula:
+
+```math
+\text{Fee Per Share Increase} = \frac{\text{Funded Amount}}{\text{Total Share}}
+```
+
+The vault stores this with high precision:
+
+```math
+\text{Fee Per Share Increase} =
+\frac{\text{Funded Amount} \times 2^{64}}{\text{Total Share}}
+```
+
+Then it updates the cumulative value:
+
+```math
+\text{New Fee Per Share} =
+\text{Previous Fee Per Share} + \text{Fee Per Share Increase}
+```
+
+In product terms, `fee_per_share` is the vault's running record of how much every one share has earned.
+
+## Claimable Fee
+
+Each recipient stores a checkpoint: the fee-per-share value they had already claimed up to.
+
+When the recipient claims, the vault calculates the difference between the current fee-per-share and that recipient's checkpoint.
+
+```math
+\text{Unclaimed Fee Per Share} =
+\text{Current Fee Per Share} - \text{Recipient Checkpoint}
+```
+
+Then the vault multiplies that delta by the recipient's share:
+
+```math
+\text{Claimable Fee} =
+\frac{\text{Recipient Share} \times \text{Unclaimed Fee Per Share}}{2^{64}}
+```
+
+After the claim, the recipient's checkpoint is updated to the current fee-per-share.
+
+```math
+\text{Recipient Checkpoint} = \text{Current Fee Per Share}
+```
+
+This is how the vault prevents double-claiming while still allowing recipients to claim independently.
+
+## Worked Example
+
+Assume a vault has three recipients:
+
+| Recipient | Share |
+| --- | --- |
+| Creator | 50 |
+| Partner | 30 |
+| Treasury | 20 |
+
+Total share:
+
+```math
+50 + 30 + 20 = 100
+```
+
+A funder adds 1,000 USDC into the vault.
+
+The expected distribution is:
+
+```math
+\text{Creator} = 1,000 \times \frac{50}{100} = 500
+```
+
+```math
+\text{Partner} = 1,000 \times \frac{30}{100} = 300
+```
+
+```math
+\text{Treasury} = 1,000 \times \frac{20}{100} = 200
+```
+
+If the creator claims first, the creator receives 500 USDC and the creator's checkpoint updates. The partner and treasury can claim later; their balances remain claimable because their checkpoints have not moved.
+
+## Multiple Funding Events
+
+Dynamic Fee Sharing supports repeated funding.
+
+Example:
+
+| Event | Net Funded Amount |
+| --- | --- |
+| Funding 1 | 1,000 USDC |
+| Funding 2 | 500 USDC |
+| Funding 3 | 250 USDC |
+
+Total funded fee:
+
+```math
+\text{Total Funded Fee} = 1,000 + 500 + 250 = 1,750
+```
+
+A 30% recipient would be entitled to:
+
+```math
+1,750 \times 30\% = 525 \text{ USDC}
+```
+
+If that recipient already claimed 300 USDC after the first funding event, the next claim would be around 225 USDC, subject to integer rounding.
+
+## Remaining Vault Balance
+
+The token vault balance represents funded fees that have not yet been claimed, plus any small rounding dust.
+
+Simplified formula:
+
+```math
+\text{Remaining Vault Balance} =
+\text{Total Funded Fee} - \sum_i \text{Total Claimed By Recipient}_i
+```
+
+Because Solana token amounts are integers, tiny rounding differences can remain when distributions do not divide evenly across shares.
+
+## Rounding and Precision
+
+The program uses high-precision fee-per-share accounting by scaling calculations with `2^64`. This helps preserve precision for small funding amounts and large total-share values.
+
+Even with high precision, token transfers are still integer amounts. If a funded amount cannot be split perfectly between recipients, tiny dust can remain in the vault.
+
+<Note>
+  For product planning, choose share weights that are easy to communicate. Percent-style totals such as 100, 1,000, or 10,000 are usually easier for teams and recipients to reason about.
+</Note>
