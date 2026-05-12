@@ -1,0 +1,223 @@
+---
+title: Presale Vault Workflow
+description: A non-technical walkthrough of how a Presale Vault moves from launch setup to deposits, completion, refunds, claims, and creator withdrawal.
+---
+
+Presale Vault turns a token sale into a structured on-chain flow. The creator defines the sale, buyers deposit during the active window, the vault finalizes the outcome, and buyers claim according to the unlock schedule.
+
+# High-level flow
+
+<Steps>
+  <Step title="Creator configures the sale">
+    The creator chooses the quote token, presale token, sale mode, raise caps, token supply, access model, buyer caps, deposit fees, and unlock schedule.
+  </Step>
+  <Step title="Creator funds the vault with presale tokens">
+    The allocated base tokens are deposited into the Presale Vault so the vault can distribute tokens to buyers after the sale.
+  </Step>
+  <Step title="Buyers create an escrow">
+    Each participant has an escrow account that tracks their deposit, fees, allocation, pending claims, and refund status.
+  </Step>
+  <Step title="Buyers deposit during the sale window">
+    Deposits are accepted only while the presale is ongoing and only within the rules of the selected mode, bucket, whitelist, and buyer cap.
+  </Step>
+  <Step title="The sale completes or fails">
+    If the sale reaches its success threshold, buyers can claim tokens based on the allocation formula. If it does not reach the minimum cap, buyers can withdraw their quote tokens.
+  </Step>
+  <Step title="Claims, refunds, and creator withdrawal happen after completion">
+    Buyers claim unlocked tokens over time. Pro Rata buyers can withdraw unused overflow deposits. The creator can withdraw raised capital and collect deposit fees.
+  </Step>
+</Steps>
+
+# 1. Setup: defining the sale
+
+A Presale Vault starts with a few product decisions.
+
+## Token pair
+
+The creator chooses:
+
+- **Base token**: the token being sold to buyers.
+- **Quote token**: the token buyers use to participate, such as SOL, USDC, USDT, or another SPL token.
+
+Presale Vault supports SPL Token and SPL Token-2022 assets.
+
+## Sale mode
+
+The mode determines how buyer deposits convert into token allocation:
+
+- **Fixed Price**: price is known before the sale starts.
+- **FCFS**: buyers compete for a capped raise; allocation is proportional within each bucket after the sale.
+- **Pro Rata**: buyers can oversubscribe the sale; allocation is proportional and excess deposits are refunded.
+
+For a deeper comparison, see [Presale Vault Modes](/helper-products/presale-vault/presale-vault-modes).
+
+## Raise caps
+
+The creator sets:
+
+- **Minimum cap**: the sale must raise at least this amount to succeed.
+- **Maximum cap**: the target amount the sale is designed to raise.
+
+If the minimum cap is not met, the sale is treated as failed and buyers can withdraw their deposits. If the maximum cap is reached in Fixed Price or FCFS mode, the sale can end early unless that behavior is disabled.
+
+## Presale supply
+
+The creator allocates a fixed amount of base tokens to be sold. If there are multiple buckets, each bucket receives its own portion of the supply.
+
+## Access model
+
+The creator decides whether the sale is public or gated:
+
+- **Permissionless** for open public participation.
+- **Permissioned with authority** for curated, smaller lists where the creator or operator creates buyer escrows.
+- **Permissioned with Merkle proof** for larger allowlists where buyers prove eligibility on-chain.
+
+## Unlock schedule
+
+The creator chooses when purchased tokens become claimable:
+
+- all tokens immediately after completion
+- a portion immediately, with the rest locked and vested
+- all tokens locked first, then vested linearly
+
+# 2. Bucket design: segmenting participants
+
+Presale Vault supports up to 5 participant buckets. A bucket can be used as a distinct sale lane.
+
+Examples:
+
+- **Community round**: lower individual cap, no or low fee, larger number of wallets.
+- **Partner round**: higher individual cap, separate allocation, permissioned access.
+- **Public round**: broader access, standard buyer cap, standard fee.
+- **KYC round**: allowlisted users only, with a compliance-driven eligibility flow.
+
+Each bucket defines:
+
+- token allocation for that bucket
+- buyer minimum deposit
+- buyer maximum deposit
+- deposit fee in basis points
+
+<Note>
+  The program supports up to 5 buckets. Multiple buckets are meant for permissioned sales, so buyers are assigned to the correct bucket rather than freely entering several buckets.
+</Note>
+
+# 3. Buyer escrow: creating the buyer position
+
+Before a buyer can deposit, they need an escrow account. The escrow is the buyer's personal presale position.
+
+It tracks:
+
+- which Presale Vault the buyer is participating in
+- which bucket the buyer belongs to
+- total deposited quote tokens
+- total deposit fees paid
+- maximum personal deposit cap
+- purchased tokens already claimed
+- tokens pending claim
+- whether remaining quote tokens have already been withdrawn
+
+In a permissionless sale, buyers can create their own escrow. In a permissioned sale, the escrow creation path depends on the whitelist model.
+
+# 4. Deposit period: buyers participate
+
+During the active sale window, buyers deposit quote tokens into the vault.
+
+Deposits are checked against:
+
+- whether the sale is currently ongoing
+- the sale mode's remaining capacity rules
+- the buyer's bucket caps
+- the buyer's personal cap, if permissioned
+- any applicable deposit fee
+
+## Deposit fee handling
+
+If a bucket charges a deposit fee, the vault calculates the total amount needed so the buyer's net deposit still counts correctly after fees.
+
+Example: if a buyer wants a 100 USDC net deposit and the bucket has a 5% deposit fee, the buyer sends slightly more than 100 USDC so that 100 USDC counts toward allocation and the fee is tracked separately.
+
+# 5. Withdrawals during the sale
+
+Withdrawal behavior depends on the sale mode.
+
+## Pro Rata
+
+Buyers can withdraw during the active sale window. This gives participants flexibility because the final allocation is only determined after the sale ends.
+
+## Fixed Price
+
+Withdrawals can be enabled or disabled by configuration. If enabled, withdrawals are allowed during the active sale window.
+
+## FCFS
+
+Withdrawals are not supported. FCFS is designed around scarce capacity and committed deposits.
+
+# 6. Completion: deciding the sale outcome
+
+When the sale ends, the vault evaluates the total amount deposited.
+
+## Successful sale
+
+If total deposits are at least the minimum cap, the sale is successful. Buyers can claim according to the selected mode and vesting schedule.
+
+## Failed sale
+
+If total deposits are below the minimum cap, the sale fails. Buyers can withdraw their full remaining deposit and associated refundable fee amounts.
+
+## Early completion
+
+For Fixed Price and FCFS sales, the vault can complete early when the maximum cap is reached. This prevents additional deposits once the sale is full. Creators can disable early completion if they want the sale window to stay open until the configured end time.
+
+<Info>
+  Pro Rata does not end early when the maximum cap is reached, because oversubscription is part of the mode's design.
+</Info>
+
+# 7. Overflow refunds
+
+Overflow refunds apply to successful Pro Rata sales.
+
+If buyers collectively deposit more than the maximum cap, the excess quote tokens are not used for allocation. After the sale, each buyer can withdraw their proportional share of the unused deposit amount.
+
+Example:
+
+- Maximum cap: 1,000,000 USDC
+- Total deposits: 5,000,000 USDC
+- Buyer deposit: 10,000 USDC
+
+Only 20% of deposits are used because the sale is 5x oversubscribed. The buyer's effective deposit is 2,000 USDC and the remaining 8,000 USDC is refundable, before considering any fee-specific calculations.
+
+# 8. Token claims
+
+After the sale succeeds, buyers claim their base tokens from the vault.
+
+Claims follow the unlock schedule:
+
+- the immediate release portion becomes claimable at the configured immediate release time
+- the locked portion stays unavailable until the lock period ends
+- the vested portion unlocks linearly during the vesting period
+
+Buyers can claim multiple times as more tokens unlock.
+
+# 9. Creator withdrawal and fee collection
+
+After completion, the creator can withdraw the raised quote tokens from the vault. Deposit fees are tracked separately and can be collected by the creator.
+
+If the sale has unsold base tokens, the configured unsold token action determines whether those tokens are returned to the creator or burned.
+
+# Product checklist before launch
+
+Before creating a Presale Vault, a project should decide:
+
+- Which token is being sold?
+- Which quote token will buyers use?
+- Is the goal price certainty, urgency, or fair distribution?
+- What are the minimum and maximum raise amounts?
+- Should the sale be public or allowlisted?
+- Is one buyer bucket enough, or are multiple tiers needed?
+- What is the buyer minimum and maximum deposit?
+- Should the launchpad or creator charge a deposit fee?
+- What percentage unlocks immediately?
+- Should the rest be locked and vested?
+- What happens to unsold tokens?
+- Who handles post-sale liquidity deployment?

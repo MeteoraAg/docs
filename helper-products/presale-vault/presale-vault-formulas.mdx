@@ -1,0 +1,311 @@
+---
+title: Presale Vault Formulas
+description: Plain-English formulas for Presale Vault pricing, allocation, refunds, fees, and vesting.
+---
+
+Presale Vault uses transparent formulas to determine how deposits become token allocations, how refunds are calculated, and how tokens unlock over time.
+
+This page explains the logic in product terms. It is not meant to be a developer reference, but it gives creators, launchpads, and buyers enough context to understand how outcomes are produced.
+
+# Key terms
+
+- **Base token**: the token being sold.
+- **Quote token**: the token buyers deposit to participate.
+- **Presale supply**: the amount of base token allocated to the sale or to a specific bucket.
+- **Total deposit**: the total quote token deposited by buyers, excluding deposit fees.
+- **Maximum cap**: the target raise ceiling.
+- **Minimum cap**: the amount required for the sale to succeed.
+- **Bucket**: a participant registry with its own supply, caps, and fee settings.
+- **User deposit**: the buyer's net deposit amount counted toward allocation.
+- **Deposit fee**: an optional fee charged on top of a buyer's net deposit.
+
+# Sale success formula
+
+A sale succeeds when total deposits meet or exceed the minimum cap.
+
+```math
+\text{sale\_successful} = \text{total\_deposit} \ge \text{minimum\_cap}
+```
+
+If this condition is not met when the sale ends, the sale fails and buyers can withdraw their deposited quote tokens.
+
+# Fixed Price formulas
+
+Fixed Price mode uses a price chosen before the sale starts.
+
+```math
+\text{tokens\_bought} = \frac{\text{user\_deposit}}{\text{fixed\_price}}
+```
+
+Where:
+
+- `user_deposit` is the buyer's net quote token deposit.
+- `fixed_price` is the amount of quote token paid per base token.
+
+Example:
+
+- Fixed price: 0.05 USDC per token
+- Buyer deposit: 1,000 USDC
+
+```math
+\text{tokens\_bought} = \frac{1{,}000}{0.05} = 20{,}000
+```
+
+The buyer receives 20,000 base tokens, subject to caps, rounding, and vesting.
+
+## Fixed Price total sold
+
+At the sale level:
+
+```math
+\text{total\_base\_sold} = \frac{\text{total\_deposit}}{\text{fixed\_price}}
+```
+
+If not all allocated base tokens are sold, the remaining base tokens are handled according to the configured unsold token action: refund to creator or burn.
+
+# Dynamic-price formulas
+
+FCFS and Pro Rata are dynamic-price modes. Instead of setting a fixed price before the sale, the final implied price depends on the amount of quote token raised against the base token supply allocated to the bucket.
+
+```math
+\text{implied\_price} = \frac{\text{effective\_quote\_raised}}{\text{base\_token\_supply}}
+```
+
+Where:
+
+- `effective_quote_raised` is the quote amount used for allocation.
+- `base_token_supply` is the base token amount allocated to the bucket.
+
+# FCFS allocation formula
+
+In FCFS mode, the sale accepts deposits until the maximum cap is reached. Each bucket's full presale supply is distributed among buyers in that bucket based on deposit share.
+
+```math
+\text{user\_allocation} = \text{bucket\_supply} \times \frac{\text{user\_deposit}}{\text{bucket\_total\_deposit}}
+```
+
+Example:
+
+- Bucket supply: 10,000,000 tokens
+- Bucket total deposit: 500,000 USDC
+- Buyer deposit: 5,000 USDC
+
+```math
+\text{user\_allocation} = 10{,}000{,}000 \times \frac{5{,}000}{500{,}000} = 100{,}000
+```
+
+The buyer receives 100,000 tokens over the configured unlock schedule.
+
+# Pro Rata allocation formula
+
+Pro Rata uses the same proportional token allocation logic as FCFS, but it allows oversubscription and refunds the unused quote tokens.
+
+```math
+\text{user\_allocation} = \text{bucket\_supply} \times \frac{\text{user\_deposit}}{\text{bucket\_total\_deposit}}
+```
+
+The difference is that total deposits may exceed the maximum cap. The vault calculates how much quote token is unused and returns each buyer's proportional share.
+
+# Pro Rata overflow refund formula
+
+First, calculate the sale's unused quote token amount:
+
+```math
+\text{remaining\_quote} = \max(\text{total\_deposit} - \text{maximum\_cap}, 0)
+```
+
+Then calculate the buyer's proportional refund:
+
+```math
+\text{user\_refund} = \text{remaining\_quote} \times \frac{\text{user\_deposit}}{\text{total\_deposit}}
+```
+
+Example:
+
+- Maximum cap: 1,000,000 USDC
+- Total deposits: 4,000,000 USDC
+- Buyer deposit: 10,000 USDC
+
+```math
+\text{remaining\_quote} = 4{,}000{,}000 - 1{,}000{,}000 = 3{,}000{,}000
+```
+
+```math
+\text{user\_refund} = 3{,}000{,}000 \times \frac{10{,}000}{4{,}000{,}000} = 7{,}500
+```
+
+The buyer's effective used deposit is 2,500 USDC, and 7,500 USDC is refundable.
+
+# Failed sale refund formula
+
+If the sale fails because it does not meet the minimum cap, each buyer can withdraw their full deposit.
+
+```math
+\text{failed\_sale\_refund} = \text{user\_deposit}
+```
+
+Any refundable deposit fee amount is also returned according to the vault's fee accounting.
+
+# Deposit fee formula
+
+Deposit fees are configured per bucket in basis points.
+
+A basis point is 0.01%. For example:
+
+- 100 bps = 1%
+- 500 bps = 5%
+- 5,000 bps = 50%
+
+Presale Vault calculates fees so the buyer's net deposit is preserved for allocation.
+
+```math
+\text{gross\_amount} = \frac{\text{net\_deposit}}{1 - \text{fee\_rate}}
+```
+
+```math
+\text{fee} = \text{gross\_amount} - \text{net\_deposit}
+```
+
+Example:
+
+- Net deposit: 1,000 USDC
+- Deposit fee: 5%
+
+```math
+\text{gross\_amount} = \frac{1{,}000}{0.95} = 1{,}052.6316
+```
+
+```math
+\text{fee} = 1{,}052.6316 - 1{,}000 = 52.6316
+```
+
+In practice, token decimals and rounding rules determine the exact smallest-unit amount.
+
+<Note>
+  Deposit fees are capped at 5,000 bps, or 50%.
+</Note>
+
+# Immediate release formula
+
+Creators can release a portion of purchased tokens immediately.
+
+```math
+\text{immediate\_tokens} = \text{total\_allocation} \times \frac{\text{immediate\_release\_bps}}{10{,}000}
+```
+
+Example:
+
+- Buyer allocation: 100,000 tokens
+- Immediate release: 2,500 bps, or 25%
+
+```math
+\text{immediate\_tokens} = 100{,}000 \times \frac{2{,}500}{10{,}000} = 25{,}000
+```
+
+The buyer can claim 25,000 tokens at the configured immediate release time.
+
+# Vested amount formula
+
+The rest of the allocation becomes the vested amount.
+
+```math
+\text{vested\_amount} = \text{total\_allocation} - \text{immediate\_tokens}
+```
+
+Using the previous example:
+
+```math
+\text{vested\_amount} = 100{,}000 - 25{,}000 = 75{,}000
+```
+
+# Linear vesting formula
+
+After the lock period ends, tokens vest linearly over the vesting duration.
+
+```math
+\text{vested\_claimable} = \text{vested\_amount} \times \frac{\text{elapsed\_vesting\_time}}{\text{vesting\_duration}}
+```
+
+The elapsed time is capped at the vesting duration. Once the vesting period is complete, all vested tokens are claimable.
+
+Example:
+
+- Vested amount: 75,000 tokens
+- Vesting duration: 180 days
+- Elapsed vesting time: 60 days
+
+```math
+\text{vested\_claimable} = 75{,}000 \times \frac{60}{180} = 25{,}000
+```
+
+# Total claimable formula
+
+A buyer's cumulative claimable amount is the immediate release amount plus the vested amount that has unlocked so far.
+
+```math
+\text{cumulative\_claimable} = \text{immediate\_claimable} + \text{vested\_claimable}
+```
+
+The amount available in the next claim is:
+
+```math
+\text{next\_claim} = \text{cumulative\_claimable} - \text{already\_claimed}
+```
+
+# Worked example: Pro Rata with vesting
+
+Assume:
+
+- Maximum cap: 1,000,000 USDC
+- Total deposits: 2,000,000 USDC
+- Bucket supply: 20,000,000 tokens
+- Buyer deposit: 10,000 USDC
+- Immediate release: 20%
+- Vesting duration: 100 days
+- Buyer claims after 25 vesting days
+
+## Allocation
+
+```math
+\text{user\_allocation} = 20{,}000{,}000 \times \frac{10{,}000}{2{,}000{,}000} = 100{,}000
+```
+
+## Refund
+
+```math
+\text{remaining\_quote} = 2{,}000{,}000 - 1{,}000{,}000 = 1{,}000{,}000
+```
+
+```math
+\text{user\_refund} = 1{,}000{,}000 \times \frac{10{,}000}{2{,}000{,}000} = 5{,}000
+```
+
+The buyer's effective used deposit is 5,000 USDC.
+
+## Immediate release
+
+```math
+\text{immediate\_tokens} = 100{,}000 \times 20\% = 20{,}000
+```
+
+## Vesting
+
+```math
+\text{vested\_amount} = 100{,}000 - 20{,}000 = 80{,}000
+```
+
+```math
+\text{vested\_claimable} = 80{,}000 \times \frac{25}{100} = 20{,}000
+```
+
+## Total claimable
+
+```math
+\text{cumulative\_claimable} = 20{,}000 + 20{,}000 = 40{,}000
+```
+
+At that point, the buyer can claim 40,000 tokens, minus anything already claimed.
+
+# Rounding note
+
+On-chain programs operate in the smallest token units, not display decimals. Small rounding differences can happen when prices, fees, token decimals, or proportional shares do not divide perfectly. Presale Vault handles this deterministically on-chain so every buyer in the same bucket is treated consistently.
