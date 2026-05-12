@@ -1,0 +1,174 @@
+---
+title: "Zap Workflow"
+sidebarTitle: "Workflow"
+description: "Understand how Meteora Zap coordinates swaps, ledgers, deposits, exits, and rebalances across supported Meteora AMM flows."
+llmsDescription: "Explains the Zap product workflow: choose intent, quote or prepare swaps, initialize a temporary user ledger for zap-in flows, set ledger balances from direct deposits or post-swap balance changes, zap into DAMM v2 or DLMM positions, zap out by detecting token balance increases and swapping a selected percentage, rebalance existing DLMM positions, close ledger accounts, and apply slippage controls."
+---
+
+Zap is designed around user intent. The user chooses what they want to end with, and Zap helps coordinate the steps needed to get there.
+
+The three common intents are:
+
+- **Zap In**: move from available tokens into a liquidity position.
+- **Zap Out**: move from claimed or withdrawn tokens into a preferred output token.
+- **Rebalance**: move an existing DLMM position into a better range around the current market.
+
+## Workflow Overview
+
+```text
+User chooses intent
+        |
+Frontend prepares swaps and position action
+        |
+Zap tracks balance changes where needed
+        |
+Supported AMM or Jupiter route executes
+        |
+Position is created, updated, rebalanced, or exited
+```
+
+## Zap In Workflow
+
+Zap In helps a user enter a supported liquidity position after converting their starting asset into the assets required by the pool.
+
+<Steps>
+  <Step title="Choose the target position">
+    The user selects the pool or position they want to add liquidity to. For DAMM v2, this is a position in a DAMM v2 pool. For DLMM, this can be a new position or an existing position.
+  </Step>
+  <Step title="Prepare the token mix">
+    The frontend prepares the required swaps. For example, if a user has only SOL but wants to add liquidity to SOL-USDC, part of the SOL can be swapped into USDC.
+  </Step>
+  <Step title="Open a temporary ledger">
+    Zap uses a user ledger to track token A and token B balances during the flow. This helps the final deposit action know how much of each token is available after swaps.
+  </Step>
+  <Step title="Record token balances">
+    If a token is already available, the balance can be recorded directly. If a token comes from a swap, Zap records the post-swap balance change.
+  </Step>
+  <Step title="Add liquidity through the supported product">
+    Zap deposits the tracked amounts into DAMM v2 or DLMM. If the token mix is not ideal, the flow can perform an additional supported swap before the final deposit.
+  </Step>
+  <Step title="Close the temporary ledger">
+    After the zap-in flow is complete, the temporary ledger can be closed. The user keeps the resulting liquidity position, not the ledger.
+  </Step>
+</Steps>
+
+## Example: Zap Into DAMM v2 With One Starting Token
+
+A user has 1 SOL and wants to add liquidity to a SOL-USDC DAMM v2 pool.
+
+```text
+Start: 1 SOL
+   |
+Swap part of SOL into USDC
+   |
+Ledger tracks SOL side and USDC side
+   |
+Zap adds liquidity into DAMM v2
+   |
+End: DAMM v2 liquidity position
+```
+
+For a pool where the user starts with neither pool token, the frontend can prepare two swaps: one into token A and one into token B. Zap then tracks both received amounts and deposits them into the position.
+
+## Example: Zap Into a New DLMM Position
+
+A user wants to create a new DLMM position around the current price.
+
+```text
+Prepare token X and token Y
+   |
+Create a temporary ledger
+   |
+Choose bin range and liquidity strategy
+   |
+Zap initializes the DLMM position
+   |
+Zap deposits into the selected bin range
+   |
+Close temporary ledger
+```
+
+For DLMM, the user chooses a range relative to the pool's active bin. The range and strategy determine how liquidity is distributed across bins.
+
+## DLMM Rebalance Workflow
+
+Zap can also help rebalance an existing DLMM position.
+
+A common flow:
+
+<Steps>
+  <Step title="Withdraw from the old position">
+    The user withdraws liquidity from the existing position. This returns token X, token Y, or a mix depending on where the position sits relative to the current price.
+  </Step>
+  <Step title="Convert the token mix if needed">
+    If the withdrawn tokens are not balanced for the new range, Zap can coordinate swaps so the user has the right mix for the new deposit.
+  </Step>
+  <Step title="Track updated balances">
+    The ledger records the token balances available after withdrawal and swap activity.
+  </Step>
+  <Step title="Deposit into the new range">
+    Zap calls the DLMM rebalance flow and deposits liquidity into the selected range around the active bin.
+  </Step>
+</Steps>
+
+This is useful when a DLMM position is out of range and the user wants to move liquidity back toward the market.
+
+<Info>
+  DLMM Zap In supports both uninitialized positions, where Zap creates the position, and initialized positions, where Zap deposits into an existing position.
+</Info>
+
+## Zap Out Workflow
+
+Zap Out is usually paired with a preceding action such as removing liquidity, claiming fees, or claiming rewards.
+
+<Steps>
+  <Step title="Record the user's pre-action token balance">
+    Zap needs to know the user's balance before the preceding action so it can detect how many tokens were newly received.
+  </Step>
+  <Step title="Complete the preceding action">
+    The user removes liquidity, claims fees, claims rewards, or performs another action that sends tokens into the user's token account.
+  </Step>
+  <Step title="Calculate the new token amount">
+    Zap compares the user's post-action balance against the pre-action balance. The difference is the amount available to zap out.
+  </Step>
+  <Step title="Apply the zap-out percentage">
+    The user can zap out a selected percentage of the newly received amount. The program supports percentages from 1% to 100%.
+  </Step>
+  <Step title="Swap through a supported route">
+    Zap updates the swap payload with the calculated amount and invokes a supported route such as DAMM v2, DLMM, or Jupiter v6.
+  </Step>
+</Steps>
+
+## Example: Claim and Convert Fees
+
+A user claims position fees and wants to convert the claimed token into USDC.
+
+```text
+Record pre-claim token balance
+   |
+Claim fees from position
+   |
+Zap detects newly received amount
+   |
+Zap applies selected percentage
+   |
+Swap through supported route
+   |
+End: preferred output token
+```
+
+## User Protection Controls
+
+Zap flows include several controls that help keep outcomes bounded.
+
+| Control | Product Meaning |
+| --- | --- |
+| Zap-out percentage | Choose how much of the newly received amount should be swapped. |
+| Max swap amount | Cap the amount that can be swapped in a zap-out flow. |
+| Max active-bin slippage | Bound how far the DLMM active bin can move for a DLMM zap-in flow. |
+| Max sqrt-price change | Bound DAMM v2 price movement during a zap-in flow. |
+| Whitelisted swap programs | Zap-out routes must use supported AMM or Jupiter instructions. |
+
+<Warning>
+  Zap coordinates supported actions, but it does not remove market risk. Users should still review route quotes, price impact, slippage settings, and token behavior before confirming.
+</Warning>
