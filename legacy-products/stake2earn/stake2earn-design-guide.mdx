@@ -1,0 +1,279 @@
+---
+title: "Stake2Earn Design Guide"
+sidebarTitle: "Design Guide"
+description: "Choose Stake2Earn parameters for top-staker count, fee drip duration, reward start time, unstake cooldown, and community messaging."
+llmsDescription: "Product design guide for Stake2Earn, covering launchpad and creator decisions around DAMM v1 pool readiness, locked liquidity, supported quote tokens, top-staker count, fee distribution start time, fee drip duration, unstake cooldown, leaderboard visibility, reward messaging, risks, and practical launch configuration patterns."
+---
+
+Stake2Earn works best when the rules are easy for the community to understand: stake the project token, reach the leaderboard, earn your share of fee rewards, and keep enough stake active to stay eligible.
+
+This guide explains the product decisions a creator or launchpad should make before using Stake2Earn.
+
+## What You Are Designing
+
+A Stake2Earn deployment defines a staking arena around one DAMM v1 pool.
+
+The core design choices are:
+
+- Which DAMM v1 pool feeds rewards.
+- How many top stakers are eligible.
+- When fee distribution starts.
+- How quickly collected fees drip to stakers.
+- How long users wait before withdrawn stake can leave the vault.
+- How the leaderboard, rewards, and cooldowns are shown to users.
+
+<Info>
+  Stake2Earn is not a generic rewards vault. Its rewards are tied to fees from locked DAMM v1 liquidity for the configured pool.
+</Info>
+
+## Pool and Token Requirements
+
+Before configuring Stake2Earn, confirm the pool design matches the product.
+
+### DAMM v1 constant-product pool
+
+Stake2Earn is built around DAMM v1 constant-product pools. It is not a general staking layer for every pool type.
+
+### Project token as stake token
+
+The stake token should be the project token, not SOL or USDC. Production validation expects the stake mint to be the non-quote side of the pair.
+
+### Supported quote token
+
+The quote side is expected to be a supported quote mint. In production, the supported quote assets are SOL and USDC.
+
+### Locked liquidity as reward source
+
+The DAMM v1 locked liquidity position is what generates the fees distributed through Stake2Earn. If there is no meaningful locked liquidity or no trading volume, the reward stream will be limited.
+
+## Choose the Top-Staker Count
+
+The top-staker count determines how exclusive the reward arena is.
+
+Production range:
+
+```math
+5 \leq \text{Top Staker Count} \leq 1{,}000
+```
+
+### Smaller top list
+
+Use a smaller top-staker list when you want:
+
+- A more competitive, high-conviction staking race.
+- Larger average rewards for each eligible staker.
+- A stronger incentive to accumulate and hold a meaningful stake.
+- A leaderboard that feels prestigious.
+
+Tradeoff: smaller lists can feel exclusionary if the community is large.
+
+### Larger top list
+
+Use a larger top-staker list when you want:
+
+- Broader community participation.
+- More wallets receiving rewards.
+- Less aggressive competition for the final eligible slot.
+- A staking program that feels more inclusive.
+
+Tradeoff: rewards are spread across more stakers, so each user's share may feel smaller unless pool volume is strong.
+
+### Practical framing
+
+<CardGroup cols={3}>
+  <Card title="Top 25-50" icon="trophy" iconType="solid">
+    High-intensity competition for smaller or highly speculative communities.
+  </Card>
+  <Card title="Top 100-250" icon="users" iconType="solid">
+    Balanced competition for active launches with a visible core holder base.
+  </Card>
+  <Card title="Top 500-1,000" icon="people-group" iconType="solid">
+    Broader participation for larger communities that want rewards to reach more wallets.
+  </Card>
+</CardGroup>
+
+## Choose the Fee Distribution Start Time
+
+The fee distribution start time controls when collected fees begin releasing to stakers.
+
+You can start immediately or schedule a delayed start.
+
+### Start immediately
+
+Use immediate distribution when:
+
+- Staking opens at the same time as the campaign.
+- You want users to see rewards begin as soon as fees are available.
+- There is no separate join window or launch event.
+
+### Delay the start
+
+Use a delayed start when:
+
+- You want to give holders time to stake before rewards begin.
+- You are coordinating a launchpad campaign or community announcement.
+- You want to avoid the first staker receiving an outsized early reward before others join.
+
+Production deployments cap the future join window at 31 days.
+
+<Note>
+  A delayed start is a product communication tool. It lets you say, "staking is open now, rewards begin at this time," which is easier for communities to understand than silently rewarding the first few wallets immediately.
+</Note>
+
+## Choose the Fee Drip Duration
+
+The fee drip duration controls how quickly newly collected fees become claimable by eligible stakers.
+
+Production range:
+
+```math
+6 \text{ hours} \leq \text{Fee Drip Duration} \leq 31 \text{ days}
+```
+
+### Shorter drip duration
+
+Use a shorter drip when you want:
+
+- Faster reward feedback.
+- More visible claimable rewards after fee collection.
+- A high-energy leaderboard experience.
+
+Tradeoff: rewards can feel more bursty, and timing around leaderboard changes may matter more.
+
+### Longer drip duration
+
+Use a longer drip when you want:
+
+- Smoother reward release.
+- Less winner-takes-moment behavior.
+- More time for the community to compete for ongoing rewards.
+
+Tradeoff: users may need more education because collected fees do not become fully claimable immediately.
+
+## Choose the Unstake Cooldown
+
+The unstake cooldown controls how long users wait after requesting an unstake before they can withdraw tokens.
+
+Production range:
+
+```math
+6 \text{ hours} \leq \text{Unstake Cooldown} \leq 31 \text{ days}
+```
+
+### Shorter cooldown
+
+Use a shorter cooldown when:
+
+- You want staking to feel flexible.
+- You expect users to be sensitive to exit restrictions.
+- You are running a lighter community incentive rather than a high-commitment campaign.
+
+### Longer cooldown
+
+Use a longer cooldown when:
+
+- You want stronger holder alignment.
+- You want to reduce fast in-and-out reward farming.
+- You want the leaderboard to reflect committed stakers rather than temporary opportunists.
+
+Tradeoff: longer cooldowns require clearer communication. Users should know before staking that exits are delayed.
+
+<Warning>
+  Unstake requests remove tokens from active stake immediately. A user does not keep earning with those tokens during the cooldown.
+</Warning>
+
+## Design the User Experience
+
+Stake2Earn is most powerful when users can see the competition clearly.
+
+A good Stake2Earn interface should show:
+
+- The user's active staked amount.
+- Whether the user is currently in the eligible top-staker list.
+- The minimum stake currently needed to enter or remain in the leaderboard.
+- The configured top-staker count.
+- Total active stake and effective top-list stake.
+- Pending quote rewards.
+- Compounded base-token rewards.
+- Unstake cooldown status and withdrawal time.
+- Fee distribution start time and drip duration.
+
+## Suggested Product Messaging
+
+Use direct, concrete messaging:
+
+- "Stake the project token to compete for pool fee rewards."
+- "Only the top 100 stakers earn newly released rewards."
+- "Your reward share is based on your stake share inside the top-staker list."
+- "SOL or USDC rewards are claimable. Project-token rewards compound into your stake."
+- "Unstaking starts a cooldown and removes that amount from active stake immediately."
+
+Avoid vague promises:
+
+- Do not promise a fixed APY unless you calculate it from actual observed fees and state the assumptions.
+- Do not imply every staker earns rewards if only top stakers are eligible.
+- Do not imply rewards are guaranteed; they depend on trading volume, fee collection, and leaderboard position.
+
+## Example Configurations
+
+### Competitive memecoin launch
+
+Use this when the goal is to make staking feel like a high-energy leaderboard game.
+
+- Top-staker count: 25-100.
+- Fee drip duration: 6-24 hours.
+- Unstake cooldown: 1-7 days.
+- Distribution start: delayed until the campaign announcement or shortly after pool launch.
+- Messaging: "Compete for the top ranks. Stake more to earn a larger share."
+
+### Broader community rewards
+
+Use this when the goal is to let more community members participate.
+
+- Top-staker count: 250-1,000.
+- Fee drip duration: 3-14 days.
+- Unstake cooldown: 6 hours-3 days.
+- Distribution start: immediate or after a short join window.
+- Messaging: "Stake to join the eligible set and earn based on your share."
+
+### Long-term holder alignment
+
+Use this when the goal is to reward conviction over a longer period.
+
+- Top-staker count: 100-500.
+- Fee drip duration: 7-31 days.
+- Unstake cooldown: 7-31 days.
+- Distribution start: delayed to give holders time to stake.
+- Messaging: "Rewards release over time and favor sustained active stake."
+
+## Pre-Launch Checklist
+
+Before announcing Stake2Earn, confirm:
+
+- The DAMM v1 pool uses the intended project token and quote token.
+- Locked liquidity is set up correctly and intended to feed the Stake2Earn vault.
+- The top-staker count matches community size and reward budget expectations.
+- The fee drip duration is easy to explain.
+- The unstake cooldown is visible before users stake.
+- The leaderboard UI clearly shows eligibility and rank thresholds.
+- The claim UI separates claimable quote rewards from compounded base-token rewards.
+- The team has messaging for low-volume periods, where fee rewards may be limited.
+- Users understand that only top stakers earn newly released rewards.
+
+## Success Metrics
+
+A Stake2Earn campaign should be evaluated by more than headline TVL.
+
+Useful metrics include:
+
+- Total active stake.
+- Number of active stakers.
+- Competition around the final eligible rank.
+- Percentage of supply actively staked.
+- Fee rewards collected from locked liquidity.
+- Quote rewards claimed.
+- Base-token rewards compounded.
+- Retention of top stakers over time.
+- Trading volume in the underlying DAMM v1 pool.
+
+Stake2Earn is strongest when the community sees a clear loop: trading generates fees, fees reward the most committed stakers, and the leaderboard gives holders a reason to keep competing.
