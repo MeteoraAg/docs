@@ -1,0 +1,321 @@
+---
+title: Presale Vault Configuration Guide
+description: The main product decisions creators and launchpads should make before creating a Presale Vault.
+---
+
+A strong Presale Vault launch starts before the vault is created. This page helps teams think through the key product settings: sale mode, caps, buckets, whitelist design, fees, vesting, and unsold token handling.
+
+# 1. Choose the sale objective
+
+Start with the launch outcome you want.
+
+## Price certainty
+
+If you want buyers to know the exact token price before depositing, use **Fixed Price**.
+
+Best for:
+
+- clear valuation messaging
+- strategic or community sales
+- launches where buyers expect a simple token-per-dollar calculation
+
+## Urgency and hard-cap demand
+
+If you want a capped sale that fills as buyers arrive, use **FCFS**.
+
+Best for:
+
+- high-energy campaigns
+- simple public sales
+- launches where scarcity is part of the experience
+
+## Fair allocation under high demand
+
+If you expect demand to exceed supply and want eligible buyers to have time to participate, use **Pro Rata**.
+
+Best for:
+
+- community-first launches
+- heavily anticipated tokens
+- allowlisted rounds where fairness matters
+
+# 2. Select the quote token
+
+The quote token is what buyers deposit.
+
+Common choices:
+
+- SOL for native Solana audiences
+- USDC or USDT for stable unit-of-account fundraising
+- a partner or ecosystem token for community-specific sales
+
+A stable quote token makes marketing and cap communication easier. A volatile quote token can add market risk between deposit, completion, and liquidity deployment.
+
+# 3. Set the raise caps
+
+Every sale needs a minimum and maximum cap.
+
+## Minimum cap
+
+The minimum cap is the amount needed for the sale to succeed. If the sale raises less than this amount, buyers can withdraw their deposits.
+
+Use the minimum cap to answer: "What is the smallest raise that still makes this launch worth completing?"
+
+## Maximum cap
+
+The maximum cap is the target raise ceiling.
+
+Use the maximum cap to answer: "How much capital do we want to accept before the sale is considered full?"
+
+## Practical guidance
+
+- Set the minimum cap low enough that the sale can realistically succeed.
+- Set the maximum cap based on token supply, launch valuation, and post-sale liquidity plans.
+- For Pro Rata, remember that deposits can exceed the maximum cap, but unused quote tokens are refundable.
+- For Fixed Price and FCFS, reaching the maximum cap can end the sale early unless disabled.
+
+# 4. Allocate presale supply
+
+The presale supply is the base token amount available to buyers.
+
+When choosing presale supply, consider:
+
+- launch valuation
+- circulating supply at token generation
+- expected community size
+- vesting and lock schedule
+- liquidity deployment after the sale
+- partner, team, treasury, or ecosystem allocations outside the presale
+
+In Fixed Price mode, the price determines how much of the allocated supply gets sold. In FCFS and Pro Rata modes, the allocated supply for a participating bucket is distributed proportionally by deposit share.
+
+# 5. Decide whether to use buckets
+
+Buckets let you create separate lanes inside the same Presale Vault.
+
+Each bucket has its own:
+
+- token allocation
+- buyer minimum deposit
+- buyer maximum deposit
+- deposit fee
+
+Use buckets when different audiences need different sale terms.
+
+## Example bucket design
+
+<CardGroup cols={2}>
+  <Card title="Community bucket" icon="people-group" iconType="solid">
+    Lower buyer cap, broad whitelist, lower fee, designed for wide distribution.
+  </Card>
+  <Card title="VIP bucket" icon="star" iconType="solid">
+    Higher buyer cap, smaller whitelist, dedicated allocation for strategic supporters.
+  </Card>
+  <Card title="Public bucket" icon="globe" iconType="solid">
+    Standard cap and standard fee, designed for wider participation.
+  </Card>
+  <Card title="Partner bucket" icon="handshake" iconType="solid">
+    Custom allocation and terms for ecosystem partners or launchpad users.
+  </Card>
+</CardGroup>
+
+<Note>
+  Presale Vault supports up to 5 buckets. Multiple buckets require a permissioned access model.
+</Note>
+
+# 6. Set buyer caps
+
+Buyer caps shape distribution.
+
+## Minimum deposit
+
+The minimum deposit prevents dust participation and keeps the sale meaningful for each buyer.
+
+Use a higher minimum when:
+
+- the sale targets serious participants
+- buyer count is expected to be manageable
+- the claim and vesting experience should avoid tiny allocations
+
+Use a lower minimum when:
+
+- broad community access matters
+- the token has a large retail audience
+- the project wants many smaller holders
+
+## Maximum deposit
+
+The maximum deposit limits concentration.
+
+Use a lower maximum when:
+
+- fairness and decentralization matter
+- the launch has strong demand
+- whales could dominate allocation
+
+Use a higher maximum when:
+
+- the sale targets fewer strategic buyers
+- the project needs larger commitments
+- the audience has already been curated through a whitelist
+
+# 7. Choose the access model
+
+## Permissionless
+
+Anyone can participate.
+
+Best for:
+
+- public launches
+- simple campaigns
+- broad discovery
+
+Tradeoff: less control over who gets allocation.
+
+## Permissioned with authority
+
+The creator or approved operator controls escrow creation for buyers.
+
+Best for:
+
+- smaller curated lists
+- partner rounds
+- private sales
+- cases where the team wants operational control
+
+Tradeoff: more coordination from the creator or launchpad.
+
+## Permissioned with Merkle proof
+
+Buyers prove they are allowlisted using a Merkle proof.
+
+Best for:
+
+- large whitelists
+- token-gated communities
+- NFT holder lists
+- campaigns where thousands of eligible wallets need scalable access
+
+Tradeoff: the allowlist and proof distribution must be prepared before deposits open.
+
+# 8. Decide on deposit fees
+
+Deposit fees can be configured per bucket.
+
+This is useful for launchpads that want to monetize sale infrastructure or creators that want different fee treatment across participant groups.
+
+Examples:
+
+- 0 bps for early supporters
+- 100 bps for a partner platform
+- 500 bps for a public sale bucket
+- different fees for different launchpad tiers
+
+<Info>
+  Deposit fees are expressed in basis points and can be configured up to 5,000 bps, or 50%.
+</Info>
+
+# 9. Design the unlock schedule
+
+Unlock design is one of the most important product decisions. It affects buyer expectations, post-launch sell pressure, and community alignment.
+
+## 100% immediate release
+
+Best for:
+
+- simple public sales
+- tokens designed for immediate trading
+- launches where buyers expect full liquidity
+
+Tradeoff: higher potential sell pressure after claims open.
+
+## Partial immediate release with vesting
+
+Best for:
+
+- rewarding early buyers while reducing instant supply shock
+- serious community rounds
+- launches where long-term alignment matters
+
+Example: 20% claimable at launch, 80% vested over 180 days.
+
+## Full lock then vesting
+
+Best for:
+
+- strategic rounds
+- partner allocations
+- campaigns where buyers are expected to commit long term
+
+Example: 0% immediate release, 30-day lock, then 180-day linear vesting.
+
+# 10. Choose the unsold token action
+
+If the sale does not sell all allocated base tokens, the creator chooses what happens to the unsold amount.
+
+## Refund to creator
+
+Use this when unsold tokens should return to treasury, future incentives, liquidity, or another allocation plan.
+
+## Burn
+
+Use this when the project wants the sale outcome to reduce supply if demand is lower than expected.
+
+Burning can be easier to message as a supply-discipline decision, but it should be consistent with the project's tokenomics.
+
+# 11. Plan post-sale operations
+
+Presale Vault does not automatically deploy liquidity. After the sale completes, the creator should be ready to:
+
+- withdraw raised quote tokens
+- collect deposit fees, if any
+- handle unsold base tokens
+- deploy liquidity to the intended Meteora pool or launch venue
+- communicate claim timing and vesting details to buyers
+- provide instructions for refunds if the sale was Pro Rata or failed
+
+# Recommended launch templates
+
+## Fair community launch
+
+- Mode: Pro Rata
+- Access: Merkle-proof whitelist
+- Buckets: community bucket plus optional partner bucket
+- Buyer cap: moderate
+- Unlock: partial immediate release with vesting
+- Unsold tokens: refund to creator or burn depending on tokenomics
+
+## Fast public sale
+
+- Mode: FCFS
+- Access: permissionless or whitelist
+- Buckets: one public bucket
+- Buyer cap: strict enough to prevent concentration
+- Unlock: immediate or short vesting
+- Unsold tokens: refund to creator
+
+## Strategic presale
+
+- Mode: Fixed Price
+- Access: permissioned with authority
+- Buckets: partner or VIP buckets
+- Buyer cap: higher, based on negotiated allocation
+- Unlock: lock plus linear vesting
+- Unsold tokens: refund to creator
+
+# Pre-launch QA checklist
+
+Before deposits open, confirm:
+
+- the quote token and base token are correct
+- the sale start and end times are correct
+- the minimum and maximum caps match the launch plan
+- the selected mode matches the campaign's allocation strategy
+- bucket supplies add up to the intended presale allocation
+- buyer caps are appropriate for each bucket
+- whitelist data is ready, if using a permissioned sale
+- deposit fees are intentional and clearly communicated
+- unlock and vesting dates are communicated to buyers
+- unsold token handling is aligned with tokenomics
+- the team has a plan for raised capital and liquidity deployment
