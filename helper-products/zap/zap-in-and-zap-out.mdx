@@ -1,0 +1,163 @@
+---
+title: "Zap In and Zap Out"
+sidebarTitle: "Zap In and Zap Out"
+description: "Compare Meteora Zap's main product modes: zap in, zap out, and DLMM rebalancing."
+llmsDescription: "Explains Zap's main product modes in non-technical language: Zap In for DAMM v2 positions and DLMM positions, Zap Out for converting newly received tokens after claims, rewards, or liquidity removal, and DLMM rebalancing for moving existing positions into a new bin range. Covers user experience, best use cases, supported routes, and decision guidance."
+---
+
+Zap is best understood as a set of position shortcuts. Each shortcut starts from a user intent and coordinates the necessary token and position actions behind that intent.
+
+## Mode Overview
+
+| Mode | User Intent | Typical Outcome |
+| --- | --- | --- |
+| Zap In | "I have tokens and want a position." | User ends with a DAMM v2 or DLMM liquidity position. |
+| Zap Out | "I received tokens and want another token." | User swaps newly received tokens into a preferred output token. |
+| DLMM Rebalance | "My position needs to move." | User deposits liquidity into a new DLMM range around the market. |
+
+## Zap In
+
+Zap In is for entering a liquidity position with less manual work.
+
+A user may start with:
+
+- Only one side of the pool.
+- A token that is not part of the target pool.
+- A partially balanced token mix.
+- Tokens received from another action.
+
+Zap helps convert the starting asset or assets into the pool's required token mix, then deposits into the supported Meteora position flow.
+
+<CardGroup cols={2}>
+  <Card title="DAMM v2 Zap In" icon="calculator" iconType="solid">
+    Add liquidity to a DAMM v2 position after preparing token A and token B balances.
+  </Card>
+  <Card title="DLMM New Position Zap In" icon="plus" iconType="solid">
+    Create a new DLMM position and add liquidity into the selected bin range.
+  </Card>
+  <Card title="DLMM Existing Position Zap In" icon="arrows-down-to-line" iconType="solid">
+    Add liquidity into an existing DLMM position using the selected range and strategy.
+  </Card>
+  <Card title="Token Mix Optimization" icon="shuffle" iconType="solid">
+    Use swaps and ledger accounting to move closer to the token mix needed by the target position.
+  </Card>
+</CardGroup>
+
+### When to Use Zap In
+
+Use Zap In when:
+
+- You want to add liquidity but hold only one asset.
+- You want to enter a pair without manually calculating both deposit sides.
+- You are building a frontend action like "Add with SOL" or "Add with USDC".
+- You want to create a DLMM position and deposit into it in one guided flow.
+- You want to reduce the number of manual steps users need to understand.
+
+### User Experience
+
+```text
+User chooses pool or position
+        |
+User chooses input token and amount
+        |
+Frontend prepares swaps
+        |
+Zap tracks resulting balances
+        |
+User receives or updates liquidity position
+```
+
+## Zap Out
+
+Zap Out is for converting tokens that were just received from another action.
+
+The preceding action can be anything that increases the user's token balance, such as:
+
+- Removing liquidity.
+- Claiming trading fees.
+- Claiming rewards.
+- Withdrawing from a position flow.
+
+Zap detects the balance increase, applies the user's selected percentage, and swaps that amount through a supported route.
+
+### When to Use Zap Out
+
+Use Zap Out when:
+
+- A user wants to exit into one preferred token.
+- A user claims fees in one token but wants another token.
+- A frontend wants to offer "claim and convert" or "remove and convert".
+- A user only wants to convert part of the newly received tokens.
+
+### Zap-Out Percentage
+
+Zap Out supports percentage-based conversion.
+
+Examples:
+
+| Percentage | Meaning |
+| --- | --- |
+| 25% | Swap one quarter of the newly received amount. |
+| 50% | Swap half of the newly received amount. |
+| 100% | Swap all of the newly received amount. |
+
+The program also supports a max swap amount, which caps how much can be swapped even if the detected balance change is larger.
+
+<Info>
+  Zap Out calculates from the new balance received during the flow, not from the user's entire historical token balance.
+</Info>
+
+## DLMM Rebalance
+
+DLMM positions can move out of range when the market moves. Once a position is out of range, it may stop earning trading fees until the active price returns or the user repositions liquidity.
+
+Zap supports rebalance-style flows where liquidity can be moved into a new range around the current active bin.
+
+### When to Use DLMM Rebalance
+
+Use this when:
+
+- A DLMM position is out of range.
+- A user wants to tighten liquidity around the current market.
+- A user wants to shift from one DLMM strategy to another.
+- A frontend wants to offer one-click position maintenance.
+
+### Strategy Selection
+
+DLMM Zap In uses DLMM strategy types to shape the liquidity distribution across bins. Product-wise, this means the user can choose how liquidity should sit inside the selected range.
+
+Common strategy language matches DLMM:
+
+- **Spot**: balanced distribution across the range.
+- **Curve**: more concentration near the center of the range.
+- **Bid-Ask**: more liquidity near range edges.
+
+## Choosing the Right Mode
+
+<CardGroup cols={2}>
+  <Card title="Use Zap In" icon="right-to-bracket" iconType="solid">
+    When the user wants to enter or add to a DAMM v2 or DLMM position from an available token balance.
+  </Card>
+  <Card title="Use Zap Out" icon="right-from-bracket" iconType="solid">
+    When the user has just received tokens from a position action and wants to convert some or all of them.
+  </Card>
+  <Card title="Use DLMM Rebalance" icon="arrows-rotate" iconType="solid">
+    When the user already has a DLMM position and wants to move liquidity closer to the active market.
+  </Card>
+  <Card title="Use Manual Flow" icon="hand" iconType="solid">
+    When the target AMM, swap route, token behavior, or position action is not supported by Zap.
+  </Card>
+</CardGroup>
+
+## What Zap Does Not Decide For the User
+
+Zap coordinates actions, but the user or frontend still decides:
+
+- Which pool or position to use.
+- Which input token and amount to start with.
+- Which output token is preferred.
+- Which swap quote or route to use.
+- Which DLMM range and strategy to deposit into.
+- Which slippage limits are acceptable.
+
+That separation is important: Zap simplifies execution, while the product or frontend remains responsible for presenting good choices.

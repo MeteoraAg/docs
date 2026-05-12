@@ -1,0 +1,136 @@
+---
+title: "Zap Compatibilities"
+sidebarTitle: "Compatibilities"
+description: "Review which Meteora products, swap routes, position flows, token behaviors, and constraints are compatible with Zap."
+llmsDescription: "Explains Zap compatibility in product terms: program ID zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz, supports Zap Out through DAMM v2 swap, DLMM swap2, Jupiter v6 route, and Jupiter v6 shared-account route; supports Zap In for DAMM v2, DLMM uninitialized positions, and DLMM initialized positions; uses user ledgers for zap-in accounting; supports transfer-fee-aware calculations where relevant; includes percentage and slippage controls; and lists not-fit cases."
+---
+
+Zap is a helper product with a defined compatibility surface. It is not a universal router for every Solana protocol. It supports specific Meteora AMM flows and selected Jupiter routes so users can enter, exit, and rebalance positions more easily.
+
+## Compatibility Overview
+
+| Area | Supported |
+| --- | --- |
+| Program | Zap program `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz` |
+| Zap In products | DAMM v2 and DLMM |
+| Zap Out routes | DAMM v2, DLMM, Jupiter v6 route, Jupiter v6 shared-account route |
+| DLMM position flows | New position, existing position, rebalance-style deposit |
+| DAMM v2 position flows | Add liquidity with token balancing support |
+| Zap-out percentage | 1% to 100% of newly received tokens |
+| Ledger accounting | Temporary user ledger for zap-in token balance tracking |
+| Token behavior | Transfer-fee-aware amount handling where supported by the underlying flow |
+
+## Product Compatibility
+
+### DAMM v2
+
+Zap supports DAMM v2 in two ways:
+
+- Zap into a DAMM v2 position.
+- Zap out through a DAMM v2 swap route.
+
+For Zap In, the flow can add liquidity first, evaluate the remaining token balance, swap the surplus side if needed, then add liquidity again. This helps move the user's deposit closer to the pool's required token mix.
+
+For Zap Out, DAMM v2 can be used as the swap path for converting newly received tokens.
+
+### DLMM
+
+Zap supports DLMM in several position workflows:
+
+- Create a new DLMM position and deposit into it.
+- Deposit into an existing DLMM position.
+- Rebalance liquidity into a chosen bin range.
+- Zap out through a DLMM swap route.
+
+For DLMM Zap In, users choose a range around the active bin and a strategy for how liquidity should be distributed across that range.
+
+### Jupiter v6
+
+Zap Out can use Jupiter v6 routes for token conversion.
+
+Supported Jupiter route types include:
+
+- Jupiter v6 route.
+- Jupiter v6 shared-account route.
+
+This is useful when the best exit path is not a direct DAMM v2 or DLMM swap.
+
+<Note>
+  Jupiter support in Zap refers to supported Jupiter v6 swap route instructions used inside Zap Out. Zap In examples may use Jupiter or direct AMM swaps to prepare token balances before the final Meteora deposit action.
+</Note>
+
+## Zap In Compatibility
+
+| Zap In Flow | Supported Product Outcome |
+| --- | --- |
+| DAMM v2 Zap In | Add liquidity into a DAMM v2 position. |
+| DLMM Zap In for new position | Initialize a DLMM position and add liquidity. |
+| DLMM Zap In for existing position | Add liquidity to an existing DLMM position. |
+| DLMM rebalance-style Zap In | Deposit into a new selected range around the active bin. |
+
+Zap In relies on a temporary ledger account to track token A/token B or token X/token Y amounts. This is especially useful when swaps happen before the deposit, because the ledger records the actual amount received from those swaps.
+
+## Zap Out Compatibility
+
+Zap Out supports whitelisted swap instructions from:
+
+| Route | Product Meaning |
+| --- | --- |
+| DAMM v2 swap | Convert newly received tokens through a DAMM v2 pool. |
+| DLMM swap2 | Convert newly received tokens through a DLMM pool. |
+| Jupiter v6 route | Convert newly received tokens through a Jupiter v6 route. |
+| Jupiter v6 shared-account route | Convert newly received tokens through a Jupiter v6 shared-account route. |
+
+Zap Out is designed for tokens received during the current flow. The program compares the user's pre-action and post-action token balances, then swaps a chosen percentage of the increase.
+
+## Token Compatibility
+
+Zap inherits much of its token behavior from the underlying products and routes it calls.
+
+Product-level guidance:
+
+- If the underlying DAMM v2, DLMM, or Jupiter route supports the token behavior, Zap may be able to coordinate the flow.
+- Zap In includes transfer-fee-aware calculations for flows where the program needs to reason about net received token amounts.
+- Token 2022 behavior can still require care because extensions may affect transfers, balances, and supported routes.
+
+<Warning>
+  Do not assume every Token 2022 mint or custom token behavior is compatible with every Zap flow. Check the underlying pool, route, and frontend quote before presenting the action to users.
+</Warning>
+
+## Slippage and Safety Compatibility
+
+Zap exposes safety controls for supported flows.
+
+| Control | Applies To | Product Purpose |
+| --- | --- | --- |
+| Zap-out percentage | Zap Out | Lets users convert only part of a newly received amount. |
+| Max swap amount | Zap Out | Caps how many tokens can be swapped. |
+| Whitelisted AMM programs | Zap Out | Restricts Zap Out to supported swap instruction types. |
+| Max active-bin slippage | DLMM Zap In | Helps bound active-bin movement during the flow. |
+| Max sqrt-price change | DAMM v2 Zap In | Helps bound pool price movement during the flow. |
+
+These controls help make Zap more predictable, but they do not guarantee a specific final output. Liquidity, route quality, price movement, and token behavior still matter.
+
+## Compatibility by Use Case
+
+| Use Case | Recommended Zap Path |
+| --- | --- |
+| Add liquidity to DAMM v2 with one starting token | Zap In to DAMM v2 after preparing the other side through a swap. |
+| Create a DLMM position around current price | Zap In for uninitialized DLMM position. |
+| Add to an existing DLMM position | Zap In for initialized DLMM position. |
+| Move an out-of-range DLMM position | Withdraw, prepare token mix, then Zap In/rebalance into a new range. |
+| Claim fees and convert to preferred token | Zap Out through DAMM v2, DLMM, or Jupiter v6. |
+| Remove liquidity and exit into one token | Pre-action balance tracking plus Zap Out route. |
+
+## What Is Not a Fit
+
+Zap may not be the right product when:
+
+- The target AMM is not DAMM v2 or DLMM.
+- The desired Zap Out route is not one of the whitelisted route types.
+- The token behavior is unsupported by the underlying product or route.
+- The user needs complex conditional execution beyond a prepared zap flow.
+- The position action requires unsupported custom account handling.
+- The user wants guaranteed output without accepting route, slippage, or AMM price risk.
+
+For those cases, use the underlying AMM, Jupiter route, or a custom integration directly.

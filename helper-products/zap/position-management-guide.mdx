@@ -1,0 +1,196 @@
+---
+title: "Position Management Guide"
+sidebarTitle: "Position Management Guide"
+description: "Use Zap to design smoother position entry, exit, claim, conversion, and rebalance experiences for Meteora AMM users."
+llmsDescription: "Product guide for using Zap in position management UX: choose user intent, select starting and target assets, choose direct Meteora route or Jupiter route, design zap-in flows for DAMM v2 and DLMM, design zap-out flows after claims or withdrawals, manage DLMM out-of-range positions, configure slippage controls, communicate risks, and avoid unsupported routes or token behavior."
+---
+
+Zap is most powerful when it is presented as a clear position-management action, not as a raw program interaction. The user should understand the outcome: enter, exit, claim and convert, or rebalance.
+
+## Start With User Intent
+
+Every Zap flow should begin with a simple user question:
+
+- "What token do you have?"
+- "What position do you want?"
+- "What token do you want to end with?"
+- "How much do you want to convert?"
+- "What range or strategy should your liquidity use?"
+
+Once the intent is clear, the frontend or integrator can choose the right Zap flow.
+
+<CardGroup cols={2}>
+  <Card title="Enter" icon="right-to-bracket" iconType="solid">
+    Help users move from a starting token into a supported DAMM v2 or DLMM position.
+  </Card>
+  <Card title="Exit" icon="right-from-bracket" iconType="solid">
+    Help users remove liquidity or claim outputs, then convert to a preferred token.
+  </Card>
+  <Card title="Claim and Convert" icon="coins" iconType="solid">
+    Help users claim fees or rewards and immediately swap some or all of the newly received amount.
+  </Card>
+  <Card title="Rebalance" icon="arrows-rotate" iconType="solid">
+    Help DLMM LPs move liquidity into a better range when the market has moved.
+  </Card>
+</CardGroup>
+
+## Design a Zap In Experience
+
+A good Zap In experience hides unnecessary mechanics while showing the decisions that matter.
+
+Show users:
+
+- The pool or position they are entering.
+- The starting token and input amount.
+- The expected swap or swaps needed before deposit.
+- The expected token mix used for liquidity.
+- The position type and range.
+- Slippage or price-change settings.
+- The final position outcome.
+
+Avoid making users reason about temporary ledger mechanics. The ledger is useful infrastructure, not the product story.
+
+## Design a Zap Out Experience
+
+Zap Out is best shown as an action attached to another position operation.
+
+Examples:
+
+- "Remove liquidity and convert to USDC"
+- "Claim fees and convert to SOL"
+- "Claim rewards and swap 50%"
+- "Exit position to one token"
+
+Show users:
+
+- The token expected from the preceding action.
+- The token they want to receive.
+- The percentage being converted.
+- The max amount that can be swapped.
+- The route provider: DAMM v2, DLMM, or Jupiter.
+- Estimated output and price impact where available.
+
+<Info>
+  Zap Out is percentage-based on the newly received amount in the flow. This makes it useful for claim-and-convert experiences because it does not need to swap the user's full wallet balance.
+</Info>
+
+## Design a DLMM Rebalance Experience
+
+DLMM rebalancing is one of the strongest Zap use cases because position maintenance can be tedious.
+
+A rebalance experience should show:
+
+- Current position range.
+- Current active bin or market area.
+- Proposed new range.
+- Strategy: Spot, Curve, or Bid-Ask.
+- Expected token mix after withdrawal and swaps.
+- Slippage settings.
+- Any remaining token amounts after redeposit.
+
+For users, the story is simple: move liquidity from where it is no longer useful to where trading is happening now.
+
+## Route Selection Guidance
+
+Zap supports direct Meteora routes and Jupiter routes for Zap Out.
+
+| Route Choice | Use When |
+| --- | --- |
+| DAMM v2 | The desired swap can route efficiently through a DAMM v2 pool. |
+| DLMM | The desired swap can route efficiently through a DLMM pool. |
+| Jupiter v6 | The best available path may require aggregator routing. |
+| Jupiter v6 shared-account route | The frontend or route builder specifically uses Jupiter's supported shared-account route. |
+
+For most user experiences, route selection should be quote-driven. Show the route when it matters, but lead with the user's final outcome.
+
+## Recommended UX Patterns
+
+### Add With One Token
+
+Best for users who do not want to manually acquire both sides of a pool.
+
+```text
+Input token: SOL
+Target: SOL-USDC liquidity position
+Flow: swap part of SOL to USDC, then deposit both sides
+```
+
+### Claim and Convert
+
+Best for users who earn fees or rewards in a token they do not want to hold.
+
+```text
+Claim: position fees
+Convert: 100% of newly claimed token to USDC
+Flow: claim, detect received amount, swap through supported route
+```
+
+### Exit to Preferred Token
+
+Best for users closing or reducing a position.
+
+```text
+Remove liquidity
+Convert one or both output tokens
+End with user's preferred token
+```
+
+### Recenter DLMM Position
+
+Best for active DLMM LPs.
+
+```text
+Withdraw old range
+Prepare token mix
+Deposit into new range around active bin
+```
+
+## Communicate the Important Risks
+
+Zap reduces workflow complexity, but it cannot remove market mechanics.
+
+Users should understand:
+
+- Swap quotes can change before execution.
+- AMM price can move during the flow.
+- Slippage settings can cause the flow to fail or execute with a wider range of outcomes.
+- Token 2022 behavior may affect net received amounts.
+- Some routes or tokens may not be supported.
+- Remaining dust can happen when token amounts do not perfectly match deposit requirements.
+
+<Warning>
+  Product copy should not imply that Zap always gives the "best" output. Zap can coordinate supported routes, but route quality depends on liquidity, quotes, slippage, and market movement.
+</Warning>
+
+## Pre-Launch Checklist for Integrators
+
+Before exposing a Zap flow, confirm:
+
+- The target product is supported: DAMM v2 or DLMM.
+- The target route is supported for Zap Out.
+- The token mints work with the underlying pool or route.
+- The frontend has quote data for any required swaps.
+- Slippage settings are visible and reasonable.
+- The user can preview the expected final position or output token.
+- The flow handles remaining token amounts or dust gracefully.
+- The flow explains what happens if a route fails.
+- The temporary ledger lifecycle is handled cleanly for Zap In flows.
+
+## Good Product Copy
+
+Use outcome-first language:
+
+- "Add liquidity with SOL"
+- "Exit to USDC"
+- "Claim and convert"
+- "Rebalance around current price"
+- "Move liquidity back in range"
+
+Avoid implementation-first language:
+
+- "Initialize ledger account"
+- "Update post-swap delta balance"
+- "Modify payload amount offset"
+- "Invoke remaining accounts"
+
+Those details belong in developer documentation. Product documentation should help users understand why the flow exists and when to use it.
