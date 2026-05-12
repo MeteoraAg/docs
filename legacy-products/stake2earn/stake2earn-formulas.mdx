@@ -1,0 +1,280 @@
+---
+title: "Stake2Earn Formulas"
+sidebarTitle: "Formulas"
+description: "Understand the product math behind Stake2Earn leaderboard eligibility, fee drips, fee-per-stake accounting, pending rewards, claims, and cooldowns."
+llmsDescription: "Explains non-technical Stake2Earn formulas: top-staker eligibility, effective stake amount, fee drip release, cumulative fee per stake using 2^64 precision, pending user rewards, quote-token claim amount, base-token restake amount, total active stake, unstake cooldown release time, and rounding behavior."
+---
+
+Stake2Earn uses stake-weighted fee accounting. The core idea is simple: fees released during a period are shared only by the current top stakers, and each eligible staker earns according to their share of the total eligible stake.
+
+The formulas below explain the product mechanics without requiring users to understand the on-chain account structure.
+
+## Key Terms
+
+| Term | Product Meaning |
+| --- | --- |
+| `stake_amount` | The amount of project token a user has actively staked. |
+| `top_list_length` | The configured number of stakers eligible for rewards, from 5 to 1,000 in production. |
+| `effective_stake_amount` | Total active stake held by the current top-staker list. |
+| `locked_fee` | Collected fees that have not fully dripped to stakers yet. |
+| `seconds_to_full_unlock` | The configured duration for collected fees to fully release to stakers. |
+| `fee_per_stake` | Cumulative fee value earned by one unit of eligible stake. |
+| `checkpoint` | The user's last recorded fee-per-stake value. |
+| `pending_fee` | Rewards already accrued to the user but not fully claimed yet. |
+| `unstake_lock_duration` | The cooldown duration before requested unstake amounts can be withdrawn. |
+
+## Top-Staker Eligibility
+
+A staker earns newly released fees only when they are inside the configured top-staker list.
+
+```math
+\text{Eligible Stakers} = \text{Top } N \text{ stakers by active stake}
+```
+
+Where:
+
+```math
+N = \text{top\_list\_length}
+```
+
+Production deployments support:
+
+```math
+5 \leq N \leq 1{,}000
+```
+
+If a vault is configured for the top 100 stakers, the 100 largest active staking balances are eligible. Everyone else may still be staked, but they do not earn newly released fees until they enter the top 100.
+
+## Effective Stake Amount
+
+The reward pool only considers the stake inside the current top-staker list.
+
+```math
+\text{Effective Stake Amount} = \sum_{i \in \text{Top Stakers}} \text{Stake Amount}_i
+```
+
+Example:
+
+| Staker | Active Stake | In Top List? |
+| --- | ---: | --- |
+| A | 1,000,000 | Yes |
+| B | 750,000 | Yes |
+| C | 250,000 | Yes |
+| D | 100,000 | No |
+
+If the vault is configured for top 3 stakers:
+
+```math
+\text{Effective Stake Amount} = 1{,}000{,}000 + 750{,}000 + 250{,}000 = 2{,}000{,}000
+```
+
+Staker D is staked, but does not affect reward splitting until they enter the top list.
+
+## User Reward Share
+
+Within the eligible group, a user's reward share is their active stake divided by total eligible stake.
+
+```math
+\text{User Reward Share} =
+\frac{\text{User Active Stake}}{\text{Effective Stake Amount}}
+```
+
+Using the previous example, Staker B has 750,000 active stake and the effective stake amount is 2,000,000:
+
+```math
+\text{Staker B Share} = \frac{750{,}000}{2{,}000{,}000} = 37.5\%
+```
+
+If 1,000 USDC is released while Staker B is eligible, Staker B earns approximately:
+
+```math
+1{,}000 \times 37.5\% = 375 \text{ USDC}
+```
+
+## Fee Drip Release
+
+When the vault collects DAMM v1 lock-escrow fees, those fees are added to the locked fee balance. The locked balance releases gradually over the configured fee drip duration.
+
+If the elapsed time is greater than or equal to the full unlock duration, all remaining locked fees are released:
+
+```math
+\text{Released Fee} = \text{Locked Fee}
+```
+
+Otherwise, the released amount is proportional to elapsed time:
+
+```math
+\text{Released Fee} =
+\text{Locked Fee} \times
+\frac{\text{Seconds Elapsed}}{\text{Seconds To Full Unlock}}
+```
+
+The remaining locked fee is then:
+
+```math
+\text{Remaining Locked Fee} =
+\text{Previous Locked Fee} - \text{Released Fee}
+```
+
+### Drip Example
+
+Assume 10,000 USDC is locked for distribution and the fee drip duration is 10 days.
+
+After 2 days:
+
+```math
+10{,}000 \times \frac{2}{10} = 2{,}000 \text{ USDC released}
+```
+
+The remaining locked balance is:
+
+```math
+10{,}000 - 2{,}000 = 8{,}000 \text{ USDC}
+```
+
+<Info>
+  Production deployments require `seconds_to_full_unlock` to be at least 6 hours and at most 31 days.
+</Info>
+
+## Fee Per Stake
+
+Stake2Earn stores rewards using cumulative fee-per-stake accounting. Each release increases the cumulative value earned by one unit of eligible stake.
+
+Simplified formula:
+
+```math
+\text{Fee Per Stake Increase} =
+\frac{\text{Released Fee}}{\text{Effective Stake Amount}}
+```
+
+On-chain, the value is scaled by `2^64` to preserve precision:
+
+```math
+\text{Fee Per Stake Increase} =
+\frac{\text{Released Fee} \times 2^{64}}{\text{Effective Stake Amount}}
+```
+
+Then the cumulative value updates:
+
+```math
+\text{New Cumulative Fee Per Stake} =
+\text{Previous Cumulative Fee Per Stake} + \text{Fee Per Stake Increase}
+```
+
+Stake2Earn tracks this separately for both tokens in the DAMM v1 pair.
+
+## Pending User Rewards
+
+Each staker stores a checkpoint for the last cumulative fee-per-stake value they have already accounted for. When the user's rewards are updated, Stake2Earn calculates the new fee-per-stake delta and multiplies it by the user's active stake.
+
+```math
+\text{Unaccounted Fee Per Stake} =
+\text{Current Cumulative Fee Per Stake} - \text{User Checkpoint}
+```
+
+```math
+\text{New Pending Fee} =
+\frac{\text{User Active Stake} \times \text{Unaccounted Fee Per Stake}}{2^{64}}
+```
+
+Then the user's pending fee increases:
+
+```math
+\text{User Pending Fee} =
+\text{Previous Pending Fee} + \text{New Pending Fee}
+```
+
+And the checkpoint moves forward:
+
+```math
+\text{User Checkpoint} = \text{Current Cumulative Fee Per Stake}
+```
+
+This lets each user claim independently without affecting other users' reward accounting.
+
+## Quote Claim and Base Restake
+
+DAMM v1 fees can accrue in both tokens from the pool pair. Stake2Earn separates those into a claimable quote-token outcome and a compounding base-token outcome.
+
+If token A is the project token:
+
+```math
+\text{Base Restake Amount} = \text{Pending Token A Fee}
+```
+
+```math
+\text{Quote Claim Amount} = \min(\text{Pending Token B Fee}, \text{Max Fee Requested})
+```
+
+If token B is the project token:
+
+```math
+\text{Base Restake Amount} = \text{Pending Token B Fee}
+```
+
+```math
+\text{Quote Claim Amount} = \min(\text{Pending Token A Fee}, \text{Max Fee Requested})
+```
+
+After claim:
+
+```math
+\text{New Active Stake} =
+\text{Previous Active Stake} + \text{Base Restake Amount}
+```
+
+This is why claiming can also strengthen a user's leaderboard position: the base-token reward is compounded into active stake.
+
+## Total Active Stake
+
+The vault's total active stake is the sum of active staked balances. Amounts requested for unstake are removed from active stake immediately.
+
+```math
+\text{Total Active Stake} =
+\sum_i \text{Active Stake}_i
+```
+
+When a user stakes:
+
+```math
+\text{Total Active Stake}_{new} =
+\text{Total Active Stake}_{old} + \text{Stake Amount}
+```
+
+When a user requests an unstake:
+
+```math
+\text{Total Active Stake}_{new} =
+\text{Total Active Stake}_{old} - \text{Unstake Amount}
+```
+
+## Unstake Cooldown
+
+A requested unstake has a release time.
+
+```math
+\text{Release Time} =
+\text{Request Time} + \text{Unstake Lock Duration}
+```
+
+The user can withdraw only when:
+
+```math
+\text{Current Time} \geq \text{Release Time}
+```
+
+Production deployments require:
+
+```math
+6 \text{ hours} \leq \text{Unstake Lock Duration} \leq 31 \text{ days}
+```
+
+<Warning>
+  Requested unstake amounts stop counting as active stake immediately. A user may lose leaderboard eligibility during the cooldown even though the tokens have not been withdrawn yet.
+</Warning>
+
+## Rounding and Precision
+
+Stake2Earn uses high-precision `2^64` scaling for fee-per-stake accounting, but Solana token balances are still integer amounts. Small rounding differences can happen when released fees do not divide evenly across all eligible stake.
+
+For product planning, communicate rewards as estimates until claimed. The exact amount depends on fee collection timing, drip timing, leaderboard membership, active stake, token decimals, and integer rounding.
