@@ -1,0 +1,128 @@
+---
+title: "Whitelist and Access Control"
+sidebarTitle: "Whitelist and Access"
+description: "Understand Alpha Vault permissionless deposits, Merkle proof whitelists, authority-managed whitelists, wallet caps, and when to use each access model."
+llmsDescription: "Explains Alpha Vault whitelist and access control in product terms: permissionless deposits, permission with Merkle proof, permission with authority, user escrows, max caps, individual caps, when to use allowlists, community allocations, small curated lists, larger whitelist campaigns, and launch communication best practices."
+---
+
+Alpha Vault can be open to everyone or restricted to selected wallets. This lets teams decide whether the vault is a public early-access window, a curated allowlist round, or a tightly controlled partner allocation.
+
+## Access Models
+
+Alpha Vault supports three access models.
+
+| Access Model | Product Meaning | Best Fit |
+| --- | --- | --- |
+| Permissionless | Anyone can create an escrow and deposit while the vault is open. | Public community access and simple launches. |
+| Permission with Merkle proof | Only wallets in a whitelist can deposit, usually with wallet-specific caps. | Larger allowlists, community campaigns, NFT holders, points users, or partner lists. |
+| Permission with authority | The vault authority creates escrows for selected wallets. | Smaller curated lists where the team wants direct control. |
+
+## Permissionless Access
+
+Permissionless mode is the simplest version of Alpha Vault.
+
+Any wallet can create an escrow and deposit while the deposit window is open. Distribution is then handled by the selected vault mode:
+
+- In Pro Rata, everyone shares the vault result proportionally.
+- In FCFS, capacity goes to users who deposit before the cap is filled.
+
+Permissionless access is best when the project wants fewer operational steps and a more open community launch.
+
+<Info>
+  Permissionless FCFS launches should think carefully about individual caps. Without them, one wallet can potentially fill the entire vault.
+</Info>
+
+## Permission with Merkle Proof
+
+Merkle proof mode is designed for larger whitelists.
+
+The project prepares a whitelist of wallet addresses and, optionally, max caps for those wallets. The list is converted into a Merkle root. When a user deposits, they prove that their wallet belongs to the approved list without putting the entire whitelist on-chain.
+
+Product-wise, this gives teams a scalable allowlist design:
+
+- Wallets can be approved before deposits open.
+- Each wallet can have a defined max cap.
+- Large lists are cheaper and easier to manage than creating every escrow manually.
+- The UI can verify whether a connected wallet is eligible.
+
+### Common Uses
+
+Merkle proof access is useful for:
+
+- Community allowlists.
+- NFT holder campaigns.
+- Points or loyalty tiers.
+- Partner or ecosystem allocations.
+- Launchpad user lists.
+- Regional or compliance-based participation filters, where applicable.
+
+<Warning>
+  For Merkle proof launches, the whitelist data and proof hosting should be ready before deposits open. Otherwise eligible users may not be able to deposit even if the vault itself is live.
+</Warning>
+
+## Permission with Authority
+
+Authority-managed access is designed for smaller curated lists.
+
+Instead of asking each user to create their own escrow through a Merkle proof, the vault authority creates permissioned escrows for selected wallets. Each escrow can include a max cap.
+
+This model is operationally simple for small lists but does not scale as well as Merkle proof mode because the authority needs to create escrows for the approved wallets.
+
+It is best for:
+
+- Strategic partner allocations.
+- Small VIP or contributor lists.
+- Internal allocations.
+- Cases where the team wants direct control over every eligible wallet.
+
+## Wallet Caps
+
+Wallet caps define how much a specific wallet can deposit.
+
+Caps are especially important for FCFS launches, where capacity can disappear quickly. A cap prevents a single wallet from taking too much of the vault.
+
+| Cap Type | Product Meaning |
+| --- | --- |
+| Vault cap | The overall amount the vault can use or accept. |
+| Individual cap | The maximum amount one wallet can deposit. |
+| Whitelist cap | A wallet-specific cap included in the whitelist or permissioned escrow. |
+
+In Pro Rata mode, caps are mainly about shaping allocation and deposit behavior. In FCFS mode, caps are often essential for distribution quality.
+
+## Choosing an Access Model
+
+Use **permissionless** when:
+
+- The team wants a public launch.
+- The deposit rules are simple.
+- The team is comfortable with open participation.
+- Pro Rata is used to smooth out demand.
+
+Use **Merkle proof whitelist** when:
+
+- The team has a large eligible user list.
+- Different wallets may need different caps.
+- The campaign needs a scalable allowlist.
+- The UI should show whether a wallet is eligible.
+
+Use **authority-managed access** when:
+
+- The eligible list is small.
+- The team wants direct control over each wallet's escrow.
+- The launch does not need a large proof-based campaign.
+
+## Communication Checklist
+
+Before opening deposits, teams should tell users:
+
+- Which wallets are eligible.
+- Which quote token is accepted.
+- Whether the vault is Pro Rata or FCFS.
+- The vault cap and any wallet cap.
+- When deposits open and close.
+- Whether users can withdraw before deposits close.
+- When token claims begin.
+- Whether tokens vest over time.
+- When and how refunds can be claimed.
+
+Good access design is not just about who can deposit. It is about making sure users understand the rules before they commit funds.

@@ -1,0 +1,158 @@
+---
+title: "Alpha Vault Workflow"
+sidebarTitle: "Workflow"
+description: "Follow the Alpha Vault product lifecycle from Launch Pool setup and deposits to protected pre-activation buying, vesting claims, and quote refunds."
+llmsDescription: "Explains the Alpha Vault workflow: create a Meteora Launch Pool and Alpha Vault, configure Pro Rata or FCFS mode, choose permissionless or whitelisted access, open the deposit window, create user escrows, deposit SOL or USDC, close deposits at the last join point, let the vault buy from DLMM, DAMM v1, or DAMM v2 during pre-activation, distribute bought tokens, support vesting claims, withdraw overflow or remaining quote, and close user escrows after claims and refunds are complete."
+---
+
+Alpha Vault turns a chaotic launch moment into a managed sequence. The product collects demand before launch, executes the vault buy during the protected pre-activation window, then lets participants claim tokens and any unused quote based on the vault rules.
+
+## Workflow Overview
+
+```text
+Project configures Launch Pool + Alpha Vault
+        |
+Deposit window opens
+        |
+Users create escrows and deposit quote token
+        |
+Deposit window closes at the pool's last join point
+        |
+Vault buys from the pool during pre-activation
+        |
+Users claim bought tokens through lock or vesting rules
+        |
+Users withdraw any refundable quote, if applicable
+```
+
+## Step 1: Project Creates the Launch Pool
+
+Alpha Vault is created around a specific Meteora Launch Pool. The pool defines the token pair, activation timing, and the protected pre-activation window.
+
+Alpha Vault can connect to:
+
+- **DLMM Launch Pools**
+- **DAMM v1 Launch Pools**
+- **DAMM v2 Launch Pools**
+
+The pool stores which Alpha Vault is allowed to buy before public trading starts. This is what gives the vault its protected early-access role.
+
+## Step 2: Project Configures the Alpha Vault
+
+The Alpha Vault configuration defines the launch experience for participants.
+
+Common settings include:
+
+- **Vault mode:** Pro Rata or FCFS.
+- **Quote token:** the asset users deposit, such as SOL or USDC.
+- **Max buy cap or max deposit cap:** how much buying power the vault can use or accept.
+- **Individual deposit cap:** optional per-wallet deposit limit, mainly relevant for FCFS-style launches.
+- **Deposit window:** when users can join.
+- **Start vesting point:** when token claiming begins.
+- **End vesting point:** when all purchased tokens are fully claimable.
+- **Whitelist mode:** permissionless, Merkle proof whitelist, or authority-managed whitelist.
+- **Escrow fee:** optional fee for opening a user escrow in permissionless vaults, capped by the program.
+
+<Info>
+  Alpha Vault timing can be based on either slots or timestamps, matching the activation type used by the connected pool.
+</Info>
+
+## Step 3: Deposit Window Opens
+
+When the deposit window opens, users can create a vault escrow and deposit the accepted quote token.
+
+A user escrow is the user's personal accounting record inside the vault. It tracks the user's total deposit, claimed tokens, and refund state. Product-wise, it is how the vault knows what each participant contributed and what they are entitled to claim later.
+
+Deposit behavior depends on the selected mode:
+
+- In **Pro Rata**, users can deposit during the window and can withdraw before the window closes.
+- In **FCFS**, deposits are accepted until the deposit cap is reached, and users cannot withdraw after depositing.
+
+## Step 4: Deposit Window Closes
+
+The deposit window closes at the pool's last join point. After this point, users can no longer join the vault.
+
+This matters because the vault needs a fixed set of deposits before it starts buying. Once deposits are locked in, the vault can calculate how much quote is available and how much of it is eligible to be used during the pre-activation buy.
+
+For Pro Rata launches, there may be more quote deposited than the vault can use. That overflow becomes refundable according to each user's share.
+
+For FCFS launches, deposits stop at the configured cap, so the vault is designed to use all accepted deposits.
+
+## Step 5: Vault Buys During Pre-Activation
+
+After the deposit window closes, the pool enters the protected buying period before public trading activation.
+
+During this period, the Alpha Vault can buy launch tokens from the connected pool. The vault supports fills against DLMM, DAMM v1, and DAMM v2 pool types.
+
+The buy works like a pool swap:
+
+- Quote token leaves the Alpha Vault and enters the pool.
+- Launch token leaves the pool and enters the Alpha Vault.
+- The pool price moves according to the pool's liquidity and launch design.
+- The vault records how much quote was spent and how many tokens were bought.
+
+<Note>
+  Meteora typically runs keepers to crank the vault buy. If automation fails, the vault can still be filled manually by an eligible cranker during the allowed buying window.
+</Note>
+
+## Step 6: Token Claiming Begins
+
+Once the configured claim start point arrives, users can claim purchased tokens.
+
+Token claiming is proportional. A user does not receive a separate fill price based on when they deposited. Instead, the vault calculates the user's share from their deposit size and the total vault deposits.
+
+If vesting is configured, not all tokens are claimable immediately. The vault releases claimable tokens linearly from the start vesting point to the end vesting point.
+
+```text
+Before claim start: no token claims
+During vesting: tokens unlock gradually
+After vesting ends: full token allocation is claimable
+```
+
+## Step 7: Quote Refunds Become Available
+
+Users may be able to withdraw unused quote token after the vault buy.
+
+Refunds can come from two sources:
+
+| Refund Source | When It Happens | Product Meaning |
+| --- | --- | --- |
+| Deposit overflow | Mainly Pro Rata mode | Total deposits exceeded the vault's max buy cap, so the excess deposit is returned proportionally. |
+| Remaining quote | After buying ends | The vault had quote left because not every eligible quote token was successfully swapped. |
+
+For Pro Rata mode, overflow refunds can be withdrawn after deposits close and before or after the buy depending on the exact lifecycle stage. Any remaining quote after the buying window can also be withdrawn.
+
+For FCFS mode, overflow is not expected because deposits are capped at the vault's max deposit amount. Remaining quote can still exist if the vault does not spend every accepted quote token during the buying window.
+
+## Step 8: Escrow Cleanup
+
+After a user has completed token claims and required refunds, their escrow can be closed when it is safe to do so.
+
+The escrow is generally ready for cleanup when:
+
+- The user's deposit is zero, or
+- The vesting period has ended and tokens have been claimed, and
+- Any required quote refunds have been withdrawn.
+
+## Lifecycle by Participant
+
+| Stage | What the User Does | What the Vault Does |
+| --- | --- | --- |
+| Deposit window | Creates escrow and deposits quote token | Records deposit and updates total deposits |
+| Before deposit close | May withdraw in Pro Rata mode | Updates user deposit and vault deposit totals |
+| Pre-activation | Waits for vault fill | Buys launch token from the pool |
+| Claim period | Claims available token allocation | Releases bought tokens according to vesting |
+| Refund period | Withdraws unused quote, if any | Returns overflow or remaining quote |
+
+## What Makes the Workflow Different From a Public Swap
+
+In a normal public pool launch, every wallet competes at activation. Faster bots, higher priority fees, and better infrastructure can dominate the first trades.
+
+Alpha Vault changes that experience by separating commitment from execution:
+
+- Users commit during the deposit window.
+- The vault executes during the protected pre-activation period.
+- Distribution follows the configured vault mode.
+- Claiming can be aligned with vesting instead of instant sell pressure.
+
+That is the product value: a launch flow that feels more deliberate for teams and more accessible for real supporters.
