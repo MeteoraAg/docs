@@ -1,0 +1,150 @@
+---
+title: "Dynamic Fee Sharing Workflow"
+sidebarTitle: "Workflow"
+description: "Follow the Dynamic Fee Sharing lifecycle from fee vault creation and funding to recipient claims and ongoing operations."
+llmsDescription: "Explains the Dynamic Fee Sharing workflow: choose vault type, select SPL or supported Token 2022 mint, configure 2 to 5 recipients and shares, create token vault, fund fees manually or by claiming from compatible DAMM v2 and DBC actions, update fee-per-share accounting, recipients claim fees by index, and dashboards track funded and claimed fee events."
+---
+
+Dynamic Fee Sharing turns fee distribution into a repeatable on-chain workflow. A team creates a vault, defines who should receive fees, routes fees into the vault, and lets recipients claim their own share over time.
+
+## Workflow Overview
+
+```text
+Choose fee-sharing design
+        |
+Create fee vault and token vault
+        |
+Fund fees into the vault
+        |
+Vault updates fee-per-share accounting
+        |
+Recipients claim their available fees
+        |
+Repeat funding and claiming over time
+```
+
+## Step 1: Choose the Fee-Sharing Design
+
+Before creating a vault, the team decides what the vault is meant to distribute.
+
+Key decisions include:
+
+- Which fee token the vault will hold.
+- Whether the vault should be standalone or tied to a base account.
+- Which wallets should receive fees.
+- How many shares each recipient receives.
+- Whether fees will be deposited manually or claimed from a compatible source program.
+
+A Dynamic Fee Sharing vault supports **2 to 5 recipients**. Each recipient must have a non-zero share.
+
+<Info>
+  Shares are relative weights. A recipient with 40 shares and a recipient with 60 shares receive 40% and 60% if the total share is 100. The same split would work with 4 and 6 shares.
+</Info>
+
+## Step 2: Create the Fee Vault
+
+The team creates a fee vault for one token mint. The vault stores the recipient list, each recipient's share, total share amount, token mint, token vault address, and accounting checkpoints.
+
+Dynamic Fee Sharing supports two creation paths:
+
+| Vault Type | How It Is Created | Best Fit |
+| --- | --- | --- |
+| Non-PDA fee vault | Created from an externally generated fee vault account. | Standalone fee-sharing arrangements. |
+| PDA fee vault | Derived from a base account and token mint. | Protocol integrations and deterministic vault discovery. |
+
+Both vault types create a token vault controlled by the Dynamic Fee Sharing program. That token vault is where fee tokens are held before recipients claim them.
+
+## Step 3: Fund Fees Into the Vault
+
+Fees can enter the vault in two ways.
+
+### Manual Funding
+
+Manual funding transfers the fee token from a funder's token account into the fee vault's token vault.
+
+Use manual funding when:
+
+- Fees are collected elsewhere first.
+- The team wants to top up a vault from treasury or operations wallets.
+- The fee source is not one of the supported claim-by-integration actions.
+
+### Funding by Claiming Fees
+
+For PDA fee vaults, Dynamic Fee Sharing can call supported fee-claim actions from compatible Meteora programs. The claimed tokens land directly in the fee vault's token vault, then become distributable to recipients.
+
+Use funding by claiming fees when:
+
+- The vault is tied to a compatible fee source.
+- Fees are already claimable by a PDA fee vault.
+- The team wants fee collection and sharing to happen through one flow.
+
+<Note>
+  Funding by claiming fees is restricted to whitelisted source programs and whitelisted actions. This protects the vault from arbitrary cross-program calls.
+</Note>
+
+## Step 4: Vault Updates Fee Accounting
+
+When fees are funded, the vault updates a cumulative fee-per-share value.
+
+Product-wise, this means the vault does not need to loop through every recipient every time fees arrive. It records how much value each share should receive, then calculates each user's claim when that user claims.
+
+This is useful because:
+
+- Funding can happen repeatedly.
+- Recipients can claim at different times.
+- The vault can prevent double-claiming through each recipient's checkpoint.
+- Small fee amounts retain precision through high-precision accounting.
+
+## Step 5: Recipients Claim Fees
+
+Each recipient claims with their configured recipient index. The vault checks that the signer matches the wallet stored at that index, calculates the recipient's claimable amount, updates the checkpoint, and transfers tokens from the fee vault to the recipient's token account.
+
+A claim can happen whenever fees are available. Recipients do not need to coordinate with each other.
+
+```text
+Recipient signs claim
+        |
+Vault verifies recipient index and wallet
+        |
+Vault calculates unclaimed fees
+        |
+Vault updates recipient checkpoint
+        |
+Tokens transfer to recipient
+```
+
+## Step 6: Repeat as Fees Accrue
+
+Dynamic Fee Sharing is designed for recurring fee streams. A vault can be funded many times, and recipients can claim many times.
+
+Examples:
+
+- A DBC launch accumulates claimable trading fees or surplus over time.
+- A DAMM v2 position earns fees or rewards.
+- A treasury periodically funds the vault from off-chain or operational revenue.
+- A campaign routes a token budget into the vault in batches.
+
+## Operational Responsibilities
+
+Dynamic Fee Sharing reduces payout overhead, but teams still need good operational hygiene.
+
+| Responsibility | Why It Matters |
+| --- | --- |
+| Pick the correct token mint | A fee vault is tied to one token mint. Fees in another token need another vault. |
+| Confirm recipient wallets | Recipient addresses are stored in the vault and used for claim verification. |
+| Confirm share weights | Share weights determine every future distribution for that vault. |
+| Track funding transactions | Funding events show when new fees entered the distribution pool. |
+| Communicate claim flow | Recipients need to know which vault, token, and index to claim from. |
+
+## Recipient Experience
+
+From a recipient's point of view, Dynamic Fee Sharing is simple:
+
+1. The recipient is added to a fee vault at creation.
+2. Fees are funded into the vault over time.
+3. The recipient claims when they want.
+4. Their claim amount is based on their share and any fees funded since their last checkpoint.
+
+<Warning>
+  Recipients must claim with the wallet configured in the vault. If the wrong wallet signs for a recipient index, the claim fails.
+</Warning>
