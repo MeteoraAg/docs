@@ -1,0 +1,178 @@
+---
+title: "Fee Vault Design Guide"
+sidebarTitle: "Fee Vault Design Guide"
+description: "Choose the right Dynamic Fee Sharing vault type, recipients, shares, token mint, and funding method before creating a fee vault."
+llmsDescription: "Product guide for designing Dynamic Fee Sharing fee vaults, including choosing fee-sharing objective, choosing Non-PDA or PDA vault type, selecting one token mint per vault, configuring 2 to 5 recipients, setting share weights, deciding manual funding or claim-by-integration funding, operational communication, and common mistakes to avoid."
+---
+
+Dynamic Fee Sharing is simple once a vault exists, but the important product decisions happen before creation. A team should decide who receives fees, how the split is represented, what token is being distributed, and how fees will enter the vault.
+
+## Start With the Revenue Stream
+
+Before configuring a vault, identify the fee stream you want to split.
+
+Ask:
+
+- What product or campaign generates the fees?
+- Which token mint will the fees be paid in?
+- Who should receive the fees?
+- Should recipients claim directly, or should an operator manage payouts?
+- Will fees be manually funded or claimed from a compatible Meteora product?
+
+A clear revenue stream makes the vault easier to design and easier for recipients to understand.
+
+## Choose the Vault Type
+
+| Vault Type | Choose This When |
+| --- | --- |
+| Non-PDA fee vault | The vault is standalone, manually funded, or not tied to another on-chain account. |
+| PDA fee vault | The vault should be deterministic, tied to a base account, or used with supported claim-by-integration funding. |
+
+### Non-PDA Default
+
+Use a Non-PDA fee vault when you want a straightforward shared payout account. It is usually the cleaner choice for manual funding, treasury payments, campaign splits, or one-off partner arrangements.
+
+### PDA Default
+
+Use a PDA fee vault when the fee split is part of a product integration. If the vault needs to claim supported DAMM v2 or DBC fees directly, use a PDA vault.
+
+<Info>
+  If you are unsure and only need to transfer tokens into the vault manually, a Non-PDA fee vault is usually simpler.
+</Info>
+
+## Choose the Token Mint
+
+A fee vault distributes one token mint.
+
+If your revenue stream has multiple tokens, create separate vaults. For example:
+
+- One vault for USDC fees.
+- One vault for SOL fees.
+- One vault for a reward token.
+
+This keeps each vault's accounting clear and avoids mixing assets with different decimals, transfer behavior, or recipient expectations.
+
+## Choose Recipients
+
+Dynamic Fee Sharing supports 2 to 5 recipients.
+
+Good recipient groups include:
+
+- Creator wallet
+- Launchpad wallet
+- Treasury wallet
+- Strategy operator wallet
+- Campaign partner wallet
+- Contributor multisig
+
+Because the recipient list is fixed at creation, use durable wallets. For teams, a multisig or treasury-controlled wallet is usually better than a personal hot wallet.
+
+## Choose Shares
+
+Shares are relative weights. They do not need to add up to 100, but percent-style totals are easier to communicate.
+
+Common share patterns:
+
+| Split | Share Setup |
+| --- | --- |
+| 50/50 | 50 and 50 |
+| 70/30 | 70 and 30 |
+| 80/15/5 | 80, 15, and 5 |
+| Basis points style | Total shares add to 10,000 |
+
+Use basis-points style shares when you want more precise allocations, such as 12.5% or 2.75%.
+
+```text
+12.5% = 1,250 shares out of 10,000
+2.75% = 275 shares out of 10,000
+```
+
+<Note>
+  The product uses relative shares, so 70/30 and 700/300 represent the same split. Choose the representation that your team and recipients can audit easily.
+</Note>
+
+## Choose the Funding Method
+
+### Manual Funding
+
+Manual funding is best when fees are collected outside the Dynamic Fee Sharing program or need to be batched before distribution.
+
+Use manual funding for:
+
+- Treasury distributions.
+- Partner payouts.
+- Revenue that arrives from off-chain operations.
+- Unsupported fee sources.
+- Campaign budgets.
+
+### Funding by Claiming Fees
+
+Funding by claiming fees is best when a PDA fee vault is integrated with a supported Meteora product action.
+
+Use this path for:
+
+- Supported DAMM v2 fee or reward claims.
+- Supported DBC fee, surplus, or migration-fee claims.
+- Product-native revenue sharing where the fee vault should receive claimable fees directly.
+
+## Communicate the Vault Clearly
+
+Before recipients rely on a fee vault, share the key details:
+
+```text
+Fee vault address:
+Token mint:
+Vault type: Non-PDA / PDA
+Recipient list:
+Recipient shares:
+Funding method: Manual / supported claim action
+Claim instructions:
+Expected funding cadence:
+```
+
+For public or partner-facing setups, a simple table of recipients and shares is usually enough.
+
+## Avoid Common Mistakes
+
+<AccordionGroup>
+  <Accordion title="Using one vault for multiple tokens">
+    A fee vault is tied to one token mint. Create separate vaults for separate fee tokens.
+  </Accordion>
+  <Accordion title="Choosing personal wallets for long-term splits">
+    Recipient addresses are fixed. Prefer durable wallets such as treasuries or multisigs for long-lived revenue streams.
+  </Accordion>
+  <Accordion title="Using too many recipients">
+    Dynamic Fee Sharing supports up to 5 recipients. If your payout design needs a large recipient set, use a different distribution approach.
+  </Accordion>
+  <Accordion title="Assuming all Token 2022 mints are supported">
+    The program supports a limited set of Token 2022 extensions. Check compatibility before creating the vault.
+  </Accordion>
+  <Accordion title="Expecting unsupported products to claim directly">
+    Claim-by-integration funding only works for whitelisted actions. Other revenue can still use manual funding.
+  </Accordion>
+</AccordionGroup>
+
+## Recommended Designs
+
+| Scenario | Recommended Design |
+| --- | --- |
+| Simple partner split | Non-PDA vault, 2 recipients, manual funding. |
+| Creator and launchpad revenue | PDA vault if integrated with DBC, otherwise Non-PDA vault with manual funding. |
+| Strategy operator payout | Non-PDA vault with operator, owner, and treasury recipients. |
+| DAMM v2 fee sharing | PDA vault tied to the relevant base account and token mint. |
+| Reward token sharing | Separate vault for the reward token mint. |
+
+## Pre-Launch Checklist
+
+Before creating a fee vault, confirm:
+
+- The token mint is correct.
+- The token standard is supported.
+- There are 2 to 5 recipients.
+- Every recipient wallet is correct.
+- Every share is non-zero.
+- The share split matches the agreement.
+- The vault type matches the funding method.
+- Recipients know how and when to claim.
+
+Once those are true, the vault can become the on-chain source of truth for that fee split.

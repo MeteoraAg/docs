@@ -1,0 +1,151 @@
+---
+title: "What is Dynamic Fee Sharing?"
+sidebarTitle: "What is Dynamic Fee Sharing?"
+description: "Learn how Meteora Dynamic Fee Sharing lets teams route collected fees into an on-chain vault and split them across multiple recipients by configurable shares."
+llmsDescription: "Product overview of Meteora Dynamic Fee Sharing, explaining fee vaults, token vaults, recipient shares, manual fee funding, funding by claiming supported DAMM v2 and DBC fees, proportional fee claims, PDA and non-PDA vault types, SPL Token and supported Token 2022 compatibility, and use cases for teams, launchpads, protocols, partners, and contributors."
+---
+
+Dynamic Fee Sharing is Meteora's on-chain fee distribution product. It lets a project route fees into a shared fee vault, define who should receive those fees, and let each recipient claim their portion directly on-chain.
+
+Instead of collecting fees into one wallet and manually paying partners, creators, contributors, or communities later, Dynamic Fee Sharing turns the split into transparent vault logic. Fees enter the vault, the vault tracks each recipient's share, and recipients claim based on the share allocation configured at vault creation.
+
+<Info>
+  Dynamic Fee Sharing runs on the mainnet program `dfsdo2UqvwfN8DuUVrMRNfQe11VaiNoKcMqLHVvDPzh`.
+</Info>
+
+<Note>
+  Dynamic Fee Sharing is not a trading fee model by itself. It is the distribution layer that can receive supported fee tokens and split them between multiple recipients.
+</Note>
+
+## Why Dynamic Fee Sharing Exists
+
+Many on-chain products create revenue that needs to be shared: pool fees, rewards, launch fees, creator fees, partner fees, surplus, or ecosystem incentives. Without a dedicated distribution layer, teams usually have to choose between operational overhead and trust assumptions.
+
+Dynamic Fee Sharing gives teams a cleaner model:
+
+- Define the recipients once.
+- Define each recipient's share once.
+- Route fees into a shared vault.
+- Let recipients claim their own allocation whenever fees are available.
+
+<CardGroup cols={2}>
+  <Card title="Transparent Revenue Splits" icon="chart-pie" iconType="solid">
+    Share allocations are stored on-chain, so recipients can verify how fees are split instead of relying on off-chain spreadsheets.
+  </Card>
+  <Card title="Multi-Recipient Claims" icon="users" iconType="solid">
+    A fee vault can support 2 to 5 recipients, each with their own claim tracking and share allocation.
+  </Card>
+  <Card title="Protocol-Native Funding" icon="link" iconType="solid">
+    PDA fee vaults can claim supported fees directly from compatible Meteora products, then distribute those fees through the vault.
+  </Card>
+  <Card title="Flexible Funding" icon="coins" iconType="solid">
+    Fees can be deposited manually into a vault or funded through supported claim actions from integrated source programs.
+  </Card>
+  <Card title="SPL and Token 2022 Support" icon="certificate" iconType="solid">
+    Fee vaults can hold SPL tokens and supported Token 2022 mints, including supported transfer-fee token behavior.
+  </Card>
+  <Card title="Self-Serve Recipient Claims" icon="hand-holding-dollar" iconType="solid">
+    Recipients claim their own available fees when they want, while the vault prevents double-claiming through checkpoints.
+  </Card>
+</CardGroup>
+
+## How Dynamic Fee Sharing Works
+
+A Dynamic Fee Sharing setup has three core objects.
+
+| Component | Product Meaning |
+| --- | --- |
+| Fee vault | The main on-chain account that stores the recipient list, shares, funded fee accounting, and claim checkpoints. |
+| Token vault | The token account that actually holds the fee token waiting to be claimed. |
+| Recipients | The wallets that receive fees according to their configured shares. |
+
+A typical lifecycle looks like this:
+
+```text
+Create fee vault
+        |
+Configure 2-5 recipients and shares
+        |
+Fund fees into the vault
+        |
+Recipients claim their share over time
+```
+
+## Fee Vault Types
+
+Dynamic Fee Sharing supports two fee vault types.
+
+### Non-PDA Fee Vault
+
+A Non-PDA fee vault is created from an externally generated fee vault account. It is useful for standalone fee-sharing arrangements where the vault does not need to be tied to another on-chain entity.
+
+Use this when:
+
+- You want a simple standalone fee split.
+- The vault is independent from a pool, launch, or position.
+- You may want multiple vaults for the same token mint and owner.
+
+### PDA Fee Vault
+
+A PDA fee vault is deterministically derived from a base account and a token mint. It is useful when the fee split should be tied to another protocol object, such as a pool, launch, or fee-earning account.
+
+Use this when:
+
+- The vault should be discoverable from a base account and token mint.
+- The vault is part of a product integration.
+- The vault needs to claim fees from compatible source programs.
+
+<Info>
+  Both vault types use the same fee-sharing math after creation. The difference is how the vault address is created and whether it can act as a PDA signer for supported fee-claim integrations.
+</Info>
+
+## Product Building Blocks
+
+<CardGroup cols={2}>
+  <Card title="Workflow" href="/helper-products/dynamic-fee-sharing/workflow" icon="diagram-project" iconType="solid">
+    Follow the full lifecycle from vault creation and fee funding to recipient claims.
+  </Card>
+  <Card title="Formulas" href="/helper-products/dynamic-fee-sharing/dynamic-fee-sharing-formulas" icon="calculator" iconType="solid">
+    Understand the product math behind total shares, fee-per-share accounting, claimable fees, and transfer-fee handling.
+  </Card>
+  <Card title="Compatibilities" href="/helper-products/dynamic-fee-sharing/compatibilities" icon="plug" iconType="solid">
+    Review supported vault types, token types, source programs, and fee-claim actions.
+  </Card>
+  <Card title="Fee Vault Design Guide" href="/helper-products/dynamic-fee-sharing/fee-vault-design-guide" icon="sliders" iconType="solid">
+    Choose recipients, shares, vault type, funding method, and operational rules before creating a fee vault.
+  </Card>
+</CardGroup>
+
+## Who Dynamic Fee Sharing Is For
+
+<AccordionGroup>
+  <Accordion title="Protocol teams">
+    Protocol teams can route revenue into a fee vault and distribute it to contributors, treasuries, integrations, or strategic partners without manual payout operations.
+  </Accordion>
+  <Accordion title="Launchpads and creators">
+    Launchpads and creators can use Dynamic Fee Sharing to split eligible launch revenue between creator, partner, protocol, or campaign wallets.
+  </Accordion>
+  <Accordion title="Ecosystem partners">
+    Partners can receive their share directly from a vault instead of waiting for a centralized operator to reconcile and send payouts.
+  </Accordion>
+  <Accordion title="Integrators and dashboards">
+    Integrators can track funded fees, claim events, recipient allocations, and vault balances as a clear on-chain revenue stream.
+  </Accordion>
+</AccordionGroup>
+
+## What Dynamic Fee Sharing Is Best For
+
+Dynamic Fee Sharing is best when fees need to be split between a small, known group of recipients.
+
+Good use cases include:
+
+- Protocol fee sharing between a creator and launchpad.
+- Pool fee sharing between strategy operators and owners.
+- Reward sharing between partners or contributors.
+- Campaign revenue splits.
+- Treasury and contributor revenue distribution.
+- On-chain payout transparency for recurring revenue streams.
+
+<Warning>
+  Recipient shares are configured when the fee vault is initialized. Teams should confirm recipients and share amounts before creating a vault, because the program does not provide a general recipient-edit flow.
+</Warning>
