@@ -1,24 +1,115 @@
 ---
 title: "Additional Yield From Dynamic Vaults"
-description: "How DAMM v1 earns additional yield by deploying idle liquidity to Dynamic Vaults, which allocate capital across lending protocols to maximize returns."
+sidebarTitle: "Dynamic Vault Yield"
+description: "Learn how DAMM v1 pools can earn additional yield by routing eligible idle liquidity through Meteora Dynamic Vaults."
+llmsDescription: "Product documentation for DAMM v1 Dynamic Vault yield, explaining vault-backed pool liquidity, idle liquidity allocation, strategies, reserve liquidity, LP share value, virtual price, locked profit, vault risk, and why vault yield complements swap fees and farming rewards."
 ---
 
-# What are Dynamic Vaults?
+One of DAMM v1's defining features is that pool liquidity can sit on top of Dynamic Vaults. Instead of leaving every token idle inside a standard pool account, eligible DAMM v1 assets can be connected to vaults that allocate unused liquidity into supported external strategies.
 
-[Dynamic Vaults](/overview/other-products/dynamic-vault/what-is-dynamic-vault) operate as a lending aggregator that allocates capital across multiple lending protocols on Solana. We utilize an off-chain keeper called [Hermes](/overview/other-products/dynamic-vault/what-is-hermes) which constantly monitors all lending pools every minute and rebalances allocations to optimize yields and reduce risk.
+For LPs, this creates an additional return layer. A DAMM v1 pool can earn swap fees from trading activity while eligible idle assets may also earn lending yield through the Dynamic Vault layer.
 
-While there is risk in lending, our Dynamic Vaults [mitigate that risk](/overview/other-products/dynamic-vault/risk-management) by constantly monitoring lending pool utilization rates and automatically withdrawing funds whenever risk thresholds are hit. Additionally, only a maximum of 30% is ever allocated to any single protocol.
+## What Dynamic Vaults do
 
-And our Dynamic Vaults have already been battle-tested with several real-life events: The USDC depeg in early March and the USDH exploit late last year. In both cases, Hermes was able to automatically detect and withdraw all funds safely.
+Dynamic Vaults are Meteora's capital allocation layer. A vault holds a supported token, keeps part of the liquidity available in reserve, and can allocate part of the liquidity into approved strategies.
 
-# Additional Yield
+A vault tracks:
 
-For DAMM v1 Pools paired with USDC/SOL/USDT, a portion of unused USDC/SOL/USDT liquidity gets dynamically loaned out to external lending platforms (e.g. Kamino, Marginfi, Save (Solend)) to generate extra yield for LPs, via our Dynamic Vaults. 
+- The token it supports.
+- The total amount of that token controlled by the vault.
+- The reserve token account available for immediate liquidity.
+- Approved strategies that can receive allocations.
+- Vault LP supply, which represents shares of the vault.
+- Locked profit accounting, which smooths newly reported gains over time.
 
-This benefit applies to all Dynamic AMM Pools on Meteora that have USDC/SOL/USDT in the pair.
+DAMM v1 pools use vault LP positions to represent the pool's ownership of each token-side vault.
 
-- As such, a portion of USDC/SOL/USDT liquidity may be utilized in external lending platforms, while the rest remain in the Dynamic Vault Reserve to support sudden withdrawals by LPs. This can be viewed in the "Shared Vault Balance" of the pool account.
+## How this connects to DAMM v1
 
-- In an event where LPs have a liquidity position that is much larger than what is in the Dynamic Vault Reserve, and want to immediately withdraw all liquidity (that has USDC/SOL/USDT), they can withdraw liquidity in smaller sizes a few times or reach out to the team.
+A DAMM v1 pool has two token sides. Each side points to a Dynamic Vault. When the pool needs to understand its balances, it converts its vault LP holdings back into the current underlying token amounts.
 
-- Yield earned from Dynamic Vaults is shown on the Dynamic AMM Pool UI as "24h Yield".
+That means the AMM can continue to price swaps, deposits, withdrawals, and LP share value while the vault layer manages eligible idle liquidity behind the scenes.
+
+<Info>
+  In DAMM v1 source, the pool stores vault accounts and vault LP token accounts for both token sides. This is the core reason DAMM v1 is described as an AMM built on Dynamic Vault infrastructure.
+</Info>
+
+## Why this creates additional yield
+
+In a normal AMM, unused liquidity simply waits for the next trade. In a DAMM v1 pool with supported vault assets, a portion of idle liquidity can be allocated to external yield sources.
+
+The return stack becomes:
+
+1. Traders pay swap fees.
+2. LP token value can rise as fees remain in the pool.
+3. Eligible vault assets may earn strategy yield.
+4. Vault yield can increase the value backing the pool's vault LP positions.
+5. LPs benefit through pool share value and virtual price growth.
+
+This helps reduce reliance on constant liquidity mining emissions. A pool can be more attractive to LPs even when trading volume is uneven or reward campaigns are not active.
+
+## Reserve liquidity and withdrawals
+
+Dynamic Vaults do not send every token into a strategy. A portion of liquidity can remain in the vault reserve to support normal pool operations.
+
+This reserve matters because DAMM v1 pools still need liquidity for:
+
+- Swaps.
+- Balanced withdrawals.
+- Single-sided withdrawals where supported.
+- LP operations and pool accounting.
+
+If a very large withdrawal exceeds immediately available reserve liquidity for a vault-backed asset, the user experience may require smaller withdrawals or operational support while liquidity is moved back from strategies.
+
+<Warning>
+  Vault-backed yield improves capital productivity, but it is not the same as instant idle cash. Strategy allocations can affect how much liquidity is immediately available in the reserve at a given moment.
+</Warning>
+
+## Locked profit and smoother share value
+
+Dynamic Vaults use locked profit accounting. When a vault reports gains, those gains are not necessarily made fully available to new deposits immediately. Instead, profit can unlock over time.
+
+The product reason is fairness. Without smoothing, someone could deposit immediately before a gain is reported and withdraw after capturing value they did not help earn. Locked profit helps reduce that kind of timing advantage.
+
+For LPs, this means vault yield may show up as gradual share value improvement rather than an instant jump.
+
+## Where LPs see the impact
+
+DAMM v1 LPs typically experience vault yield through pool performance metrics, such as virtual price growth or displayed yield metrics. The exact UI label can vary, but the product idea is consistent: vault yield increases the underlying value backing pool shares when strategies perform positively.
+
+A simplified virtual price view is:
+
+```math
+\text{virtual price} = \frac{\text{total pool value}}{\text{LP token supply}}
+```
+
+If pool value rises from fees or vault yield while LP supply stays the same, virtual price increases.
+
+## Eligible assets
+
+Dynamic Vault yield depends on vault support. Historically, DAMM v1 vault yield has been most relevant for major liquid assets such as USDC, USDT, and SOL, where external lending or liquidity strategies exist.
+
+Not every token pair can earn vault yield. A long-tail token may still use DAMM v1's AMM design, but the additional vault yield layer depends on whether the token side has a supported Dynamic Vault strategy.
+
+## Risk considerations
+
+Dynamic Vault yield introduces additional risk considerations beyond basic AMM liquidity:
+
+- External strategy risk.
+- Lending market risk.
+- Smart contract risk.
+- Liquidity availability risk.
+- Operational and keeper risk.
+- Changes in external yield rates.
+
+Meteora's vault design includes controls such as approved strategy lists, reserve management, operators, and rebalancing, but LPs should still treat vault yield as a DeFi strategy exposure.
+
+## How to think about vault yield
+
+Dynamic Vault yield is best understood as a baseline capital productivity layer. It does not replace trading volume, and it does not replace farms. Instead, it makes DAMM v1 pools more durable by giving eligible idle assets something productive to do between trades.
+
+For a strong DAMM v1 pool, the ideal return mix is:
+
+- **Organic fees** from useful trading volume.
+- **Vault yield** from eligible idle assets.
+- **Targeted farms** for strategic growth periods.

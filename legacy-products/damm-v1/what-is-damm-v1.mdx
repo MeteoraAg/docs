@@ -1,35 +1,106 @@
 ---
-title: "What's DAMM v1?"
-description: "DAMM v1 is Meteora's constant-product AMM (x·y=k) that earns LPs both swap fees and additional yield from idle liquidity deployed to lending protocols via Dynamic Vaults."
+title: "What is DAMM v1?"
+sidebarTitle: "What is DAMM v1?"
+description: "Learn how Meteora DAMM v1 combines full-range AMM liquidity, stable pools, LST pools, farms, liquidity locks, and Dynamic Vault yield into one legacy liquidity product."
+llmsDescription: "Product overview of Meteora DAMM v1, explaining the Dynamic AMM as a legacy Solana AMM built on constant-product and stable-swap curves, with vault-backed liquidity, LP tokens, farming rewards, Dynamic Vault yield, LST support, stable pools, protocol and partner fees, launch activation controls, and liquidity locks."
 ---
 
-Meteora's Dynamic AMM Pools are similar to constant product pools that support token prices from 0 to infinity. LPs on Dynamic AMM Pools earn both swap fees and yield from lending platforms.
+DAMM v1 is Meteora's original Dynamic AMM on Solana. It is a legacy liquidity product for teams and liquidity providers that want simple, full-range market making with extra yield layers built around the pool.
 
-The price of your token in a Dynamic AMM (Volatile) Pool is based on the formula: 
-```math
-x*y = k
-```
+At the surface, a DAMM v1 pool feels familiar: two tokens, shared liquidity, LP tokens, swaps, trading fees, and pool ownership represented by LP shares. Under the hood, DAMM v1 routes each side of the pool through Meteora's Dynamic Vault infrastructure, so eligible assets can earn external lending yield while still supporting swaps and withdrawals.
 
-- x and y are the quantities of the two tokens in the pool (e.g. MET and USDC).
-- k is a constant. As trades occur, the product of the amounts of the two tokens must remain the same.
-- If someone buys MET with USDC from your pool, the amount of MET in your pool decreases, and the amount of USDC increases. The DAMM v1 Pool adjusts the price based on the new token balances in the pool.
+<Info>
+  DAMM v1 runs on the mainnet program `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`.
+</Info>
 
-# Earn additional yield by utilizing lending sources
+## Why DAMM v1 matters
 
-DAMM v1 Pools have a unique yield infrastructure where pools are built on top of the capital allocation layer.
+DAMM v1 was built for a simple problem: liquidity is expensive to attract and even more expensive to keep.
 
-To the user, DAMM v1 Pools look similar to standard AMMs that uses the proven SPL-token swap. But underneath the hood, assets in the pools will be deposited directly into the Dynamic Vaults in the yield layer and USDC/SOL/USDT tokens get dynamically allocated to external lending protocols to generate yield and rewards, reducing the reliance on liquidity mining to attract liquidity.
+Traditional AMMs usually rely on two sources of LP return: swap fees and token incentives. That can work during periods of high volume or large farming campaigns, but it often becomes fragile when trading slows down or rewards end. DAMM v1 adds a third source of return by connecting idle eligible assets to Dynamic Vaults, helping LPs earn additional yield without actively moving capital themselves.
 
-Overreliance on liquidity mining to attract LPs is unsustainable and can cause issues such as token inflation and short-term liquidity when LPs lose interest after the rewards end. Our Dynamic AMM Pools avoid this through effective capital allocation mechanisms of the idle assets to earn yield for the LPs.
+That makes DAMM v1 especially useful for:
 
-This allows LPs to receive yield from a few different places — the lending interest, the liquidity mining rewards collected from the platforms, the AMM trading fees, and Meteora liquidity mining rewards (when available).
+- **Long-tail token markets** that need dependable full-range liquidity.
+- **Stable asset pairs** that need low-slippage swaps near a target peg.
+- **LST markets** where the staking token appreciates against SOL over time.
+- **Partner-incentivized pools** where projects want to add farms on top of AMM fees.
+- **Community confidence pools** where teams want to lock liquidity while fees continue to accrue.
 
-# Permanently lock liquidity and claim fees from locked liquidity
+## Product pillars
 
-Moreover, LPs can choose to permanently lock their liquidity on Dynamic AMM Pool to raise community confidence, while continuing to earn and claim fees from this locked liquidity.
+<CardGroup cols={2}>
+  <Card title="Full-Range AMM Liquidity" icon="infinity" iconType="solid">
+    DAMM v1 supports classic full-range AMM liquidity for assets that can trade across a wide price range.
+  </Card>
+  <Card title="Stable Pools" icon="scale-balanced" iconType="solid">
+    Stable pools use a StableSwap-style curve to create deeper liquidity around assets expected to trade close to each other.
+  </Card>
+  <Card title="LST Pools" icon="leaf" iconType="solid">
+    LST pools account for staking-token appreciation by using a depeg-aware stable pool design for SOL/LST pairs.
+  </Card>
+  <Card title="Dynamic Vault Yield" icon="vault" iconType="solid">
+    Eligible pool assets can sit inside Dynamic Vaults, where idle liquidity may be allocated to supported lending strategies.
+  </Card>
+  <Card title="Pools With Farms" icon="seedling" iconType="solid">
+    Projects can add external farming rewards so LPs earn incentive tokens on top of pool fees and eligible vault yield.
+  </Card>
+  <Card title="Liquidity Locks" icon="lock" iconType="solid">
+    LP tokens can be locked to signal long-term commitment while the locked liquidity remains part of the pool.
+  </Card>
+</CardGroup>
 
-This helps to create a more sustainable and long-term liquidity provision for the ecosystem that prioritizes value creation and attracts committed LPs.
+## How DAMM v1 works
 
-To cater to memecoin launches, Memecoin Pools (a subset of Dynamic AMM Pools) have a dynamic fee, which ranges from 0.15%-15% and is set by the protocol. This fee may be changed by the protocol over time to optimize for different launches and market conditions. Memecoin Pool LPs also earn lending yield from the locked SOL and USDC liquidity in the pool.
+A DAMM v1 pool has two token sides: token A and token B. When LPs deposit both assets, they receive LP tokens that represent their share of the pool. Traders swap against the pool, and the pool updates its reserves according to the curve selected for that market.
 
-**Additional info:** Compare between DLMM, DAMM v1, and DAMM v2 [here](https://docs.google.com/spreadsheets/d/1-W2KE2PT18lmWKF6kB-7aolUBk2e5QvETL3D7g3F_VE/edit?usp=sharing).
+DAMM v1 supports two major curve families:
+
+- **Constant-product pools** use the familiar `x × y = k` model. They are best for volatile assets where the price can move freely across a wide range.
+- **Stable pools** use an amplified StableSwap curve. They are best for assets that should trade close together, such as stablecoins or certain SOL/LST pairs.
+
+The pool itself does not simply hold raw token balances. Each side points to a Dynamic Vault. The DAMM v1 program tracks the pool's vault LP position and converts it back into total token value when swaps, deposits, withdrawals, and locks happen. This is why a DAMM v1 LP can earn from more than one source: swap activity can increase pool value, and eligible vault assets can earn external yield.
+
+## LP return stack
+
+DAMM v1 LPs can earn from multiple layers depending on the pool configuration:
+
+1. **Trading fees** from swaps through the pool.
+2. **Dynamic Vault yield** when eligible assets such as USDC, USDT, or SOL are routed through supported vault strategies.
+3. **Farming rewards** when a project or partner funds an external reward pool for DAMM v1 LP tokens.
+4. **Partner or campaign incentives** when additional programs route incentives to the pool.
+
+<Note>
+  Not every DAMM v1 pool has every yield source. A volatile pool without a farm is different from a stable pool with Dynamic Vault yield and partner incentives. Always evaluate the specific pool's fee, farm, vault, and risk profile.
+</Note>
+
+## DAMM v1 vs DAMM v2
+
+DAMM v1 is a legacy product. It remains important because many pools and integrations were built around its LP-token model, Dynamic Vault composition, stable pool design, and farming program.
+
+DAMM v2 is the newer configurable AMM. It adds modern product controls such as NFT positions, concentrated liquidity options, launch-ready fee modes, built-in liquidity mining, Token 2022 support, and more granular pool configuration.
+
+Use DAMM v1 documentation when you are trying to understand existing legacy pools, stable pools, LST pools, old farm structures, or vault-backed liquidity behavior. Use DAMM v2 documentation when you are designing a new pool that needs the latest Meteora product surface.
+
+## Explore DAMM v1
+
+<CardGroup cols={2}>
+  <Card title="DAMM v1 Formulas" href="/legacy-products/damm-v1/damm-v1-formulas" icon="calculator">
+    Understand constant-product pricing, StableSwap behavior, LP share value, fees, and rewards in plain English.
+  </Card>
+  <Card title="Stable Pools" href="/legacy-products/damm-v1/stable-pools" icon="scale-balanced">
+    Learn why stable pools are optimized for assets that should trade close to a target price.
+  </Card>
+  <Card title="LST Pools" href="/legacy-products/damm-v1/lst-pools" icon="leaf">
+    See how DAMM v1 supports SOL/LST liquidity while accounting for staking-token appreciation.
+  </Card>
+  <Card title="Pools With Farms" href="/legacy-products/damm-v1/pools-with-farms" icon="seedling">
+    Learn how external reward pools add token incentives for LPs.
+  </Card>
+  <Card title="Dynamic Vault Yield" href="/legacy-products/damm-v1/additional-yield-from-dynamic-vaults" icon="vault">
+    Understand how eligible idle liquidity can earn additional lending yield.
+  </Card>
+  <Card title="Pool Design Guide" href="/legacy-products/damm-v1/pool-design-guide" icon="sliders">
+    Choose the right DAMM v1 pool type, fee setup, reward design, and LP experience.
+  </Card>
+</CardGroup>

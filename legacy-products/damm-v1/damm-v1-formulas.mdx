@@ -1,51 +1,217 @@
 ---
-title: DAMM v1 Formulas
-description: "Mathematical formulas for the DAMM v1 constant-product AMM: price impact, liquidity provision, and fee calculations."
+title: "DAMM v1 Formulas"
+sidebarTitle: "Formulas"
+description: "Understand the product math behind DAMM v1 constant-product pools, stable pools, fees, LP shares, virtual price, vault yield, and farming rewards."
+llmsDescription: "Explains DAMM v1 formulas in non-technical product language, covering constant-product x*y=k, StableSwap amplification, depeg-aware LST pools, LP share minting, virtual price, trading fee, protocol fee, Dynamic Vault share value, APY, farm APR, and reward-per-token distribution."
 ---
 
-DAMM v1 is a traditional full-range liquidity AMM with multiple curve support.
+DAMM v1 is a full-range AMM with two main curve designs: constant-product pools for volatile assets, and stable-swap pools for assets that should trade close together. The formulas below explain how the product behaves without turning this page into an integration guide.
 
-# Constant Product Curve (xy = k)
+## Constant-product pools
 
-The constant product formula maintains liquidity invariance through the following relationships:
-
-## Invariant Formula
-```math
-k = \text{token}_a \times \text{token}_b
-```
-
-## Liquidity Invariant (D)
-```math
-D = \sqrt{\text{token}_a \times \text{token}_b}
-```
-
-## Stable Swap Curve (StableSwap)
-
-Implements Curve Finance's StableSwap algorithm via Saber StableSwap.
-
-## Core StableSwap Invariant
+The basic volatile-pool formula is:
 
 ```math
-A \cdot n^n \cdot \sum_{i} x_i + D = A \cdot n^n \cdot D + \frac{D^{n+1}}{n^n \cdot \prod_{i} x_i}
+x \times y = k
 ```
 
-**Where:**
-- `A` = amplification coefficient
-- `n` = number of tokens (2 for pairs)
-- `x_i` = token amounts
-- `D` = invariant
+Where:
 
----
+- `x` is the amount of token A in the pool.
+- `y` is the amount of token B in the pool.
+- `k` is the pool invariant.
 
-# Fee Calculation Formulas
+When a trader adds token A and removes token B, `x` rises and `y` falls. The pool reprices the trade so the relationship between both reserves stays balanced.
 
-## Trading Fees
+For users, this means:
 
-### Base Trading Fee
+- Larger pools usually create lower price impact.
+- Larger trades move price more than smaller trades.
+- The pool supports a continuous price range from very low to very high prices.
+
+## Constant-product swap output
+
+Before fees, a simplified output calculation looks like this:
 
 ```math
-\text{fee} = \frac{\text{token\_amount} \times \text{fee\_numerator}}{\text{fee\_denominator}}
+\text{new source reserve} = \text{source reserve} + \text{input amount}
 ```
 
-**Where:**
-- `fee_denominator` = 100,000
+```math
+\text{new destination reserve} = \frac{k}{\text{new source reserve}}
+```
+
+```math
+\text{output amount} = \text{destination reserve} - \text{new destination reserve}
+```
+
+DAMM v1 uses safe on-chain integer math, so tiny rounding differences can happen at the smallest token unit. Product-wise, the idea is straightforward: every buy makes the bought token scarcer in the pool, which raises its price for the next trade.
+
+## Stable pools
+
+Stable pools are designed for assets that should trade near a target relationship, such as USDC/USDT or SOL/LST markets. Instead of using only `x × y = k`, DAMM v1 stable pools use a StableSwap-style invariant with an amplification factor.
+
+A simplified StableSwap invariant can be represented as:
+
+```math
+A \cdot n^n \cdot \sum x_i + D = A \cdot n^n \cdot D + \frac{D^{n+1}}{n^n \cdot \prod x_i}
+```
+
+Where:
+
+- `A` is the amplification factor.
+- `n` is the number of assets in the pool. DAMM v1 pools are two-token pools.
+- `x_i` represents normalized token balances.
+- `D` is the stable pool invariant.
+
+In plain English: amplification makes the pool behave as if it has deeper liquidity near the target price. That helps reduce slippage when both assets are close to their expected relationship.
+
+<Note>
+  A higher amplification factor concentrates more liquidity near the target relationship, but it also makes the pool less forgiving when the assets move far away from that relationship.
+</Note>
+
+## Token normalization
+
+Stable pools normalize token amounts before applying the curve. This matters when two tokens have different decimals.
+
+```math
+\text{normalized amount} = \text{raw amount} \times \text{token multiplier}
+```
+
+The goal is to compare both assets on a consistent precision scale before calculating swaps, deposits, and withdrawals.
+
+## LST depeg adjustment
+
+For supported LST pools, DAMM v1 can account for the changing value of the staking token relative to SOL. The program stores and updates a base virtual price for the LST side of the pool.
+
+Conceptually:
+
+```math
+\text{pegged LST amount} = \text{LST amount} \times \text{LST virtual price}
+```
+
+This lets the pool reason about an LST's value instead of treating one LST as always equal to one SOL. That is important because LSTs generally increase in SOL terms as staking rewards accrue.
+
+## LP share ownership
+
+LP tokens represent a share of the pool. A simplified LP ownership formula is:
+
+```math
+\text{LP ownership share} = \frac{\text{LP tokens held}}{\text{total LP token supply}}
+```
+
+The value of that share depends on the pool's underlying token value:
+
+```math
+\text{LP share value} = \text{ownership share} \times \text{total pool value}
+```
+
+DAMM v1 pools route token balances through Dynamic Vaults. That means the pool often measures its token A and token B totals by converting vault LP balances back into underlying token amounts.
+
+## Virtual price
+
+Virtual price is a useful way to understand whether a pool share is becoming more valuable over time.
+
+```math
+\text{virtual price} = \frac{\text{total pool value}}{\text{LP token supply}}
+```
+
+Virtual price can rise when:
+
+- Swaps generate fees that remain in the pool.
+- Eligible vault assets earn yield.
+- Rewards or yield increase the underlying value backing pool shares.
+
+For LPs, virtual price is the bridge between pool activity and share value.
+
+## Trading fees
+
+DAMM v1 charges trading fees on swaps. A simplified fee calculation is:
+
+```math
+\text{trading fee} = \text{input amount} \times \frac{\text{trade fee numerator}}{\text{trade fee denominator}}
+```
+
+DAMM v1 also supports protocol fees:
+
+```math
+\text{protocol fee} = \text{input amount} \times \frac{\text{protocol fee numerator}}{\text{protocol fee denominator}}
+```
+
+The remaining fee value benefits LPs because it stays with the pool and increases the value backing LP tokens.
+
+<Info>
+  DAMM v1's fee math has a minimum-fee behavior for non-zero trades when the calculated fee would otherwise round down to zero. This prevents tiny trades from bypassing fees entirely.
+</Info>
+
+## Base APY from virtual price
+
+DAMM v1 APY can be estimated from virtual price growth over a time window:
+
+```math
+\text{base APY} = \left(\left(\frac{\text{Virtual Price}_{2}}{\text{Virtual Price}_{1}}\right)^{\frac{\text{1 year}}{\text{timeframe}}} - 1\right) \times 100
+```
+
+Where:
+
+- `Virtual Price 1` is the earlier virtual price.
+- `Virtual Price 2` is the later virtual price.
+- `timeframe` is the time between the two measurements.
+
+This base APY can include the effect of trading fees and eligible vault yield because both can increase the value backing each LP token.
+
+## 365-day fee over TVL
+
+A simple fee efficiency metric annualizes recent swap fees against pool liquidity:
+
+```math
+\text{365d fee / TVL} = \frac{\text{24h fees} \times 365}{\text{pool TVL}}
+```
+
+This helps LPs compare how much fee activity a pool is generating relative to the amount of liquidity supplied.
+
+## Farm rewards
+
+DAMM v1 farms distribute reward tokens to staked LP tokens over time. A simplified reward rate is:
+
+```math
+\text{reward rate} = \frac{\text{funded reward amount}}{\text{reward duration}}
+```
+
+Reward per staked LP token grows as time passes:
+
+```math
+\text{reward per token} = \text{previous reward per token} + \frac{\text{elapsed time} \times \text{reward rate}}{\text{total staked LP tokens}}
+```
+
+A user's pending reward is based on their staked balance:
+
+```math
+\text{user reward} = \text{staked LP tokens} \times \text{reward per token since last update}
+```
+
+DAMM v1 farms can support up to two reward tokens. If the pool has no staked LP tokens during part of a reward period, reward accounting waits until there is active stake instead of distributing to nobody.
+
+## LM APR
+
+Liquidity mining APR estimates the annualized value of farm emissions relative to farm TVL:
+
+```math
+\text{LM APR} = \left(\left(1 + \frac{\text{farm reward per day}}{\text{farm TVL}}\right)^{365} - 1\right) \times 100
+```
+
+Where:
+
+- `farm reward per day` is the daily token emission value in USD.
+- `farm TVL` is the value of LP tokens staked in the farm.
+- `pool TVL` is the value of all token A and token B liquidity in the pool.
+
+## The product takeaway
+
+DAMM v1 is not just one formula. It is a stack:
+
+- Curve math determines how swaps price trades.
+- Fee math determines how value is captured from volume.
+- Vault math determines how eligible idle assets can earn yield.
+- Farm math determines how external incentives are distributed.
+- Virtual price connects those value sources back to LP share value.

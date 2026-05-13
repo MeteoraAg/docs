@@ -1,0 +1,95 @@
+---
+title: "Liquidity Locks"
+description: "Understand how DAMM v1 liquidity locks let LP tokens be locked while the underlying liquidity remains in the pool."
+llmsDescription: "Product documentation for DAMM v1 liquidity locks, explaining LP token escrow, total locked LP, community confidence, fee and vault yield exposure, locked liquidity tradeoffs, and how lock signals differ from risk removal."
+---
+
+DAMM v1 supports liquidity locks. A liquidity lock moves LP tokens into an escrow account so the liquidity remains committed to the pool instead of being freely withdrawable by the owner.
+
+For projects and communities, locked liquidity is a trust signal. It shows that a portion of the pool's liquidity is intended to stay in place, supporting trading depth and reducing concerns that liquidity will be suddenly removed.
+
+## What gets locked?
+
+In DAMM v1, LP tokens represent ownership of the pool. Locking liquidity means locking those LP tokens.
+
+The underlying pool assets remain inside the DAMM v1 pool and its connected vault accounts. Traders can still swap against the liquidity. The pool can still earn fees. Eligible assets can still participate in Dynamic Vault behavior where supported.
+
+The lock is on the owner's ability to freely redeem those LP tokens for underlying assets.
+
+## Why projects lock liquidity
+
+Projects use locked liquidity to send a clear market signal:
+
+- The team is committing pool depth for the long term.
+- Traders can see that liquidity is less likely to disappear suddenly.
+- The community has more confidence in the pool's durability.
+- Launch partners can verify that a liquidity commitment exists.
+
+This is especially important for long-tail tokens and community markets where trust is part of the product experience.
+
+## What LPs still earn
+
+Locked LP tokens still represent pool ownership. Because the liquidity remains in the pool, it can continue to participate in the pool's economics.
+
+Depending on pool configuration, locked liquidity can remain exposed to:
+
+- Trading fee value accrual.
+- Dynamic Vault yield on eligible assets.
+- Pool value changes caused by price movement.
+- Any other pool-level effects that change LP share value.
+
+<Note>
+  A lock does not make liquidity risk-free. It changes withdrawal control. The locked LP position still has exposure to the underlying pool assets and DeFi risks.
+</Note>
+
+## How the lock works conceptually
+
+<Steps>
+  <Step title="LP provides liquidity">
+    The LP deposits assets into a DAMM v1 pool and receives LP tokens.
+  </Step>
+  <Step title="LP tokens are moved to escrow">
+    The lock action transfers LP tokens into a lock escrow account and records the locked amount.
+  </Step>
+  <Step title="Pool tracks locked LP supply">
+    DAMM v1 tracks total locked LP tokens for the pool, making locked liquidity visible at the pool level.
+  </Step>
+  <Step title="Liquidity remains active">
+    The underlying liquidity continues supporting swaps because the pool assets were not withdrawn.
+  </Step>
+</Steps>
+
+## Locked liquidity vs farmed liquidity
+
+Locked liquidity and farmed liquidity are different.
+
+- **Locked liquidity** is about commitment. LP tokens are escrowed to restrict withdrawal.
+- **Farmed liquidity** is about incentives. LP tokens are staked to earn reward emissions.
+
+A pool can have both, but they serve different product goals. Locking builds confidence. Farming attracts or retains liquidity through rewards.
+
+## What locks do not solve
+
+Liquidity locks are useful, but they are not a complete safety guarantee.
+
+They do not remove:
+
+- Token price risk.
+- Smart contract risk.
+- Dynamic Vault strategy risk.
+- Depeg risk for stable or LST pairs.
+- The possibility that unlocked liquidity leaves.
+- The need to evaluate token ownership and supply distribution.
+
+A lock is one positive signal among many. Users should still evaluate the full pool and project context.
+
+## When to use a lock
+
+A DAMM v1 liquidity lock is useful when:
+
+- A project wants to show long-term liquidity commitment.
+- A launch pool needs stronger community confidence.
+- A partner or community expects liquidity to remain available.
+- The team wants pool depth to continue supporting trading even after launch.
+
+For mature pools, locks can also help distinguish strategic liquidity from short-term mercenary liquidity.

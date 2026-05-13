@@ -1,46 +1,114 @@
 ---
-title: "Pools with Farms"
-description: "How farming works on DAMM v1 pools — LPs can stake their LP tokens to earn additional token rewards on top of swap fees and vault yield."
+title: "Pools With Farms"
+description: "Understand how DAMM v1 farms let LPs stake LP tokens to earn partner reward tokens on top of trading fees and eligible vault yield."
+llmsDescription: "Product documentation for DAMM v1 pools with farms, explaining LP-token staking, dual reward tokens, reward duration, reward rate, staking and claiming flow, APR display, campaign design, permissioned farm creation, and how farms complement fees and Dynamic Vault yield."
 ---
 
-Our farming program for Dynamic AMM (DAMM v1) Pools allows Liquidity Providers, who deposit in Meteora pools, to stake LP token to earn rewards.
+DAMM v1 pools can be paired with external farms. A farm lets LPs stake their DAMM v1 LP tokens and earn additional reward tokens funded by a project, partner, or campaign sponsor.
 
-Rewards come from partners with a maximum of 2 reward tokens for a farming pool.
+This gives teams a way to incentivize liquidity without changing the underlying AMM pool. The pool continues to support swaps and earn trading fees. The farm adds a separate reward layer on top.
 
-There can be multiple farming pools for a Meteora pool. Farmers should notice on APR and Expiration before staking LP token to a farming pool.
+## Why add a farm?
 
-Here are steps to integrate with the farming program:
+Liquidity is a marketplace. LPs compare expected return, token risk, depth, duration, and opportunity cost. A farm helps a project make its pool more attractive by adding explicit token incentives.
 
-<CardGroup cols={2}>
-  <Card title="Stake" icon="steak" iconType="solid">
-    Deposit into a Meteora pool to receive LP tokens, which represent your share in the pool. Then, stake your LP tokens in a farming pool to start earning rewards.
-  </Card>
-  <Card title="Claim" icon="gift" iconType="solid">
-    If you have staked LP tokens in a farming pool, you can claim up to two different reward tokens provided by the pool at any time.
-  </Card>
-  <Card title="Unstake" icon="unlock" iconType="solid">
-    To withdraw from a Meteora pool, first unstake your LP tokens from the farming pool. Once unstaked, you can withdraw your liquidity from the Meteora pool as usual.
-  </Card>
-</CardGroup>
+Farms are useful when a project wants to:
 
-# How do I create a new farm?
+- Bootstrap liquidity for a new or strategic market.
+- Retain LPs during an important launch or campaign window.
+- Compete for routing volume on aggregators.
+- Reward early liquidity supporters.
+- Add incentives while the pool's organic trading fee revenue is still growing.
 
-<Danger>Farms are permissioned.</Danger>
+## How DAMM v1 farms work
+
+The DAMM v1 farm model is simple:
 
 <Steps>
-  <Step title="Open a Discord Ticket">
-    Head to Meteora's [discord](https://discord.gg/meteora) and open a ticket.
+  <Step title="LP deposits into the DAMM v1 pool">
+    The LP adds liquidity to a DAMM v1 pool and receives LP tokens representing their pool share.
   </Step>
-  <Step title="Provide Pool Information">
-    Provide the following information:
-    - DAMM v1 pool address or Link to the pool you want to create a farm for
-    - Reward A token mint address 
-    - Reward B token mint address (optional)
-    - Reward Duration (in seconds) - We recommend 4 weeks
-    <Note>Whenever you add rewards it resets the farm duration.</Note>
-    <Warning>Once rewards are added into the farm, they cannot be removed.  Sometimes, at the end of the farm period, there could be spare rewards remaining due to 0 LP stakers in the farm during the farm period. These remaining rewards can be linearly distributed again if you extend the farm period.</Warning>
+  <Step title="LP stakes LP tokens in the farm">
+    The LP deposits those LP tokens into the farming program. While staked, the LP tokens earn rewards based on their share of total staked LP tokens.
   </Step>
-  <Step title="Seed the Pool with Rewards">
-    Head to our [rewards admin dashboard](https://meteora-admin.vercel.app/) to seed the pool with the rewards or seed the rewards via the [farming ts-sdk](/developer-guide/guides/damm-v1/farming-sdk/getting-started).
+  <Step title="Rewards accrue over time">
+    The farm distributes funded rewards linearly across the configured reward duration. DAMM v1 farms can support up to two reward tokens.
+  </Step>
+  <Step title="LP claims or unstakes">
+    The LP can claim earned rewards. To withdraw pool liquidity, the LP first unstakes LP tokens, then removes liquidity from the DAMM v1 pool.
   </Step>
 </Steps>
+
+## Reward distribution
+
+DAMM v1 farms distribute rewards based on staked LP token share.
+
+```math
+\text{reward rate} = \frac{\text{funded reward amount}}{\text{reward duration}}
+```
+
+```math
+\text{user reward} = \text{user staked share} \times \text{rewards emitted during the period}
+```
+
+If a user stakes 10% of all LP tokens in the farm, they earn roughly 10% of the emitted rewards during the period they remain staked, subject to exact on-chain accounting and timing.
+
+## What LPs can earn
+
+A DAMM v1 pool with a farm can have several return layers:
+
+- **Swap fees** from trading activity in the AMM pool.
+- **Dynamic Vault yield** if eligible pool assets are connected to Dynamic Vault strategies.
+- **Farm rewards** from the reward pool.
+- **Partner incentives** when a campaign adds additional reward sources.
+
+<Note>
+  Farming rewards are not the same as pool fees. LPs must stake their LP tokens in the farm to earn farm rewards. Holding LP tokens outside the farm still represents pool ownership, but it may not receive farming incentives.
+</Note>
+
+## Farm design choices
+
+A good farm campaign should answer five product questions:
+
+### What behavior are you incentivizing?
+
+Most farms incentivize liquidity depth. The project wants LPs to keep capital in the pool so traders get better execution.
+
+### Which reward token should be used?
+
+Reward tokens should be meaningful to the LP audience. Many campaigns use a project token, partner token, or strategic ecosystem incentive.
+
+### How long should rewards last?
+
+Short campaigns can bootstrap attention, but they may attract mercenary liquidity. Longer campaigns can support stability but require larger budgets. A common starting point is a multi-week campaign.
+
+### How much liquidity is needed?
+
+The reward budget should match the target pool depth. Overpaying can waste emissions. Underpaying may fail to move liquidity.
+
+### What happens when rewards end?
+
+A farm is healthiest when it bridges a pool toward organic sustainability: trading volume, vault yield, integrations, and stronger user demand.
+
+## Permissioned farm creation
+
+DAMM v1 farm creation is permissioned. If you need a farm for a DAMM v1 pool, prepare the following information before contacting Meteora:
+
+- DAMM v1 pool address or pool link.
+- Reward token A mint address.
+- Reward token B mint address, if using a second reward token.
+- Reward duration in seconds.
+- Intended campaign objective and expected start timing.
+
+<Warning>
+  Once rewards are funded into a farm, they should be treated as committed campaign budget. If a campaign is extended, remaining rewards can be rolled into the new rate, but teams should plan funding carefully before launch.
+</Warning>
+
+## Farms vs Dynamic Vault yield
+
+Farms and Dynamic Vault yield solve different problems.
+
+- **Farms** are explicit incentives funded by a project or partner. They are great for targeted campaigns but depend on a finite reward budget.
+- **Dynamic Vault yield** comes from eligible idle liquidity being allocated to external strategies. It can support a pool's baseline return profile but depends on available lending yield and strategy risk.
+
+The strongest DAMM v1 pools often combine both: vault yield for ongoing capital productivity, farms for strategic growth moments, and swap fees for organic demand.
