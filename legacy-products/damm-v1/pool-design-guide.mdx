@@ -1,0 +1,180 @@
+---
+title: "DAMM v1 Pool Design Guide"
+sidebarTitle: "Pool Design Guide"
+description: "Choose the right DAMM v1 pool type, yield layers, farm setup, fee interpretation, and liquidity commitment for a legacy Meteora pool."
+llmsDescription: "Non-technical design guide for DAMM v1 pools, helping teams choose between constant-product, stable, and LST pools; decide whether to use farms, Dynamic Vault yield, liquidity locks, fee and APY metrics, and launch or maintenance considerations."
+---
+
+DAMM v1 is a legacy product, but many teams still need to understand how to evaluate or maintain an existing DAMM v1 pool. This guide helps you think like a product owner: what kind of market are you creating, what LP behavior do you want, and what return stack supports that behavior?
+
+## Step 1: Choose the pool curve
+
+### Use a constant-product pool for volatile markets
+
+Choose a constant-product DAMM v1 pool when the token pair needs open-ended price discovery.
+
+Good fit:
+
+- Project token paired with SOL or USDC.
+- Long-tail assets.
+- Markets where price can move significantly.
+- Liquidity that should cover a wide price range.
+
+Product tradeoff: liquidity is spread across the full curve, so it is simple and robust, but not as capital efficient around a narrow price band.
+
+### Use a stable pool for pegged or correlated assets
+
+Choose a stable pool when both assets should trade close to a target relationship.
+
+Good fit:
+
+- Stablecoin pairs.
+- Correlated assets.
+- Assets where low slippage near a peg is more important than wide price discovery.
+
+Product tradeoff: stable pools are efficient near the target relationship, but they are not designed for assets that can freely reprice against each other.
+
+### Use an LST pool for supported SOL/LST markets
+
+Choose an LST pool when one side is SOL and the other is a supported liquid staking token.
+
+Good fit:
+
+- LST protocols building liquidity.
+- SOL/LST swap routes.
+- Markets where the LST appreciates against SOL over time.
+
+Product tradeoff: LST pools improve the fit for staking-token markets, but teams still need to account for LST protocol risk and depeg risk.
+
+## Step 2: Understand the LP return stack
+
+DAMM v1 LP returns can come from several layers:
+
+<CardGroup cols={2}>
+  <Card title="Swap Fees" icon="percent" iconType="solid">
+    Organic trading demand pays fees that can increase the value backing LP tokens.
+  </Card>
+  <Card title="Dynamic Vault Yield" icon="vault" iconType="solid">
+    Eligible idle assets may earn external strategy yield through Dynamic Vaults.
+  </Card>
+  <Card title="Farm Rewards" icon="seedling" iconType="solid">
+    Partner-funded farms can distribute up to two reward tokens to staked LP tokens.
+  </Card>
+  <Card title="Liquidity Commitment" icon="lock" iconType="solid">
+    Locked LP tokens can signal long-term support and improve market confidence.
+  </Card>
+</CardGroup>
+
+A strong pool does not need every layer, but it should have a clear reason for why LPs will stay.
+
+## Step 3: Decide whether the pool needs a farm
+
+A farm is useful when organic fees and vault yield are not enough to attract the target depth.
+
+Use a farm when:
+
+- The market is new and needs bootstrapping.
+- The project wants to compete for aggregator routing.
+- A partner wants to reward LPs for supporting strategic liquidity.
+- The pool needs a campaign window around launch, migration, or growth.
+
+Avoid relying only on farms when:
+
+- The reward budget is too small to change LP behavior.
+- There is no plan for liquidity after incentives end.
+- The reward token is highly volatile and could distort displayed APR.
+- The pool has no expected trading demand.
+
+## Step 4: Evaluate Dynamic Vault fit
+
+Dynamic Vault yield is valuable when the pool contains supported assets such as major stablecoins or SOL. It is less relevant when a token side has no supported vault strategy.
+
+Ask:
+
+- Does one side or both sides of the pool have Dynamic Vault support?
+- How much of the return expectation comes from vault yield?
+- What external strategy risks does the vault introduce?
+- How important is immediate withdrawal liquidity for this LP audience?
+
+Vault yield is best used as a durability layer, not as the only reason to LP.
+
+## Step 5: Decide whether to lock liquidity
+
+Liquidity locks are useful when trust and continuity matter.
+
+Consider a lock when:
+
+- The project wants to demonstrate long-term liquidity commitment.
+- The pool is part of a token launch or migration.
+- Community members are concerned about sudden liquidity removal.
+- A partner or launchpad requires a visible commitment.
+
+A lock improves confidence, but it does not eliminate market risk. Locked LP tokens are still exposed to the pool's assets and the pool's underlying mechanics.
+
+## Step 6: Read APY as components, not one number
+
+When reviewing a DAMM v1 pool, split the displayed return into parts:
+
+- **Base APY** from virtual price growth.
+- **Fee-over-TVL** from recent trading fees.
+- **Vault yield** from eligible Dynamic Vault strategies.
+- **Farm APR** from reward emissions.
+
+This prevents a common mistake: treating a temporary farm APR as if it were permanent pool yield.
+
+## Step 7: Match the pool to the audience
+
+### Traders
+
+Traders care about execution quality: depth, slippage, reliability, and routing.
+
+### LPs
+
+LPs care about return, risk, ease of withdrawal, asset exposure, and incentive duration.
+
+### Projects
+
+Projects care about liquidity depth, market confidence, token distribution, and sustainability after campaigns end.
+
+### Integrators
+
+Integrators care about predictable pool behavior, existing liquidity, and whether the market is still maintained.
+
+A good DAMM v1 pool design aligns all four groups.
+
+## Recommended DAMM v1 patterns
+
+### Stablecoin pool
+
+- Use a stable pool.
+- Prioritize low slippage and routing volume.
+- Use Dynamic Vault yield where supported.
+- Add farms only when you need extra campaign depth.
+
+### SOL/LST pool
+
+- Use an LST-aware stable pool when supported.
+- Emphasize virtual price tracking and reduced staking-token mismatch.
+- Consider partner rewards during early liquidity growth.
+- Educate LPs on LST and depeg risk.
+
+### Long-tail token pool
+
+- Use a constant-product pool.
+- Consider a liquidity lock for trust.
+- Use farms for launch or migration windows.
+- Be realistic about organic volume after incentives end.
+
+## Final checklist
+
+Before promoting or maintaining a DAMM v1 pool, answer:
+
+- What curve does this market need: constant-product, stable, or LST?
+- What assets are in the pool, and what risks do they introduce?
+- Does the pool have eligible Dynamic Vault yield?
+- Is there an active farm, and when does it end?
+- How are fees and APY displayed to LPs?
+- Is any liquidity locked?
+- What is the plan after incentives decline?
+
+The best DAMM v1 pools are not just high-APR pools. They are pools with a clear market purpose, sustainable LP reasons, and transparent tradeoffs.

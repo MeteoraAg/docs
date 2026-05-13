@@ -1,26 +1,87 @@
 ---
 title: "Stable Pools"
-description: "DAMM v1 stable pools use a StableSwap invariant optimized for pegged assets (stablecoins, LSTs), offering lower slippage than constant-product pools."
+description: "Understand DAMM v1 stable pools, the StableSwap-style design used for pegged assets, and why amplification helps create lower-slippage liquidity around a target price."
+llmsDescription: "Product documentation for DAMM v1 stable pools, explaining StableSwap curves, amplification, token normalization, supported use cases such as stablecoins and correlated assets, LP benefits, risks, and how stable pools differ from constant-product pools."
 ---
 
-# How do DAMM v1 Stable Pools work?
+DAMM v1 stable pools are designed for token pairs that are expected to trade close to a known relationship. The common examples are stablecoin pairs such as USDC/USDT, but the same product idea can apply to other correlated assets.
 
-Meteora's Dynamic AMM Stable Pools are AMMs utilizing the stable curve that support token prices from 0 to infinity.
+Instead of spreading liquidity evenly across every possible price like a volatile constant-product pool, a stable pool concentrates more of its effective liquidity near the target relationship. The result is a smoother trading experience for assets that should not move far apart.
 
-Stable Pools are suitable if both of your tokens are stable coins i.e. USDC-USDT, USDS-USDC. Using a Stable Pool helps ensure that the liquidity ratio between the token pair remains at 1:1.
+## What stable pools are best for
 
-Stable Pools also share similar benefits with the volatile Dynamic AMM Pools. For example, Stable Pools compose on top of [Dynamic Vaults](/overview/other-products/dynamic-vault/what-is-dynamic-vault) lending aggregator that rebalances funds (e.g. USDC/USDT/SOL) every minute across various external lending protocols e.g. Kamino, Save (Solend), and Marginfi to optimize yield and reduce risk. 
+Use a DAMM v1 stable pool when the pair has a strong reason to trade close together:
 
-This added yield helps drive sustainable liquidity, as it is attractive for LPs to contribute liquidity in the pool even if trading fees are lower than usual or there is a lack of LM rewards.
+- **Stablecoin pairs** such as USDC/USDT or other dollar-denominated assets.
+- **Closely correlated assets** where traders expect a tight exchange rate.
+- **Yield-bearing or receipt-style assets** when the pool can account for their value relationship.
+- **High-volume routing pairs** where low slippage matters more than supporting a wide speculative price range.
 
-- Dynamic Stable Pools are concentrated, so they capture a lot more trading volume and fees.
+A stable pool is not the right fit for a volatile token launch or a pair where the price can move freely. For those markets, a constant-product pool is usually more appropriate.
 
-- Dynamic Stable Pools earn from lending the idle liquidity out to external lending protocols. 
+## How stable pools work
 
-- Dynamic Stable Pools do not require active LP management. You can set and forget it.
+DAMM v1 stable pools use a StableSwap-style curve. Product-wise, the curve has two behaviors:
 
-<Note>Dynamic Stable Pools have the Stable tag on the UI.</Note>
+- Near the expected relationship, it behaves like the pool has deeper liquidity, so trades can happen with lower slippage.
+- Far away from the expected relationship, it becomes more expensive to push the pool further out of balance.
 
-# What is AMP in a DAMM v1 Stable Pool?
+This creates a natural incentive for the pool to support efficient swaps near the target while still protecting LPs when one side becomes scarce.
 
-The AMP (amplification) factor controls how concentrated the liquidity is in the stable pool, which relates to how far the ratio of 1:1 the assets will go before it starts to charge more for trades that further unbalance the ratio and charge less for trades that move the ratio of assets back to 1:1.
+## The role of amplification
+
+The amplification factor, often called `AMP`, controls how concentrated the pool's liquidity feels around the target relationship.
+
+- **Higher AMP** means tighter pricing and lower slippage near the target.
+- **Lower AMP** means the pool behaves more like a normal AMM and is more tolerant of imbalance.
+
+<Note>
+  In DAMM v1 permissionless stable pools, the program uses a standard amplification setting. More specialized configurations may use permissioned pool setup.
+</Note>
+
+Think of AMP as the pool's confidence in the relationship between the two assets. If the assets are genuinely stable relative to each other, more amplification can improve the trading experience. If the relationship is uncertain, too much amplification can make the pool brittle when the pair moves away from the target.
+
+## Why stable pools help LPs
+
+Stable pools are built to make LP capital more productive around the prices where trades are expected to happen.
+
+For LPs, that can mean:
+
+- More efficient use of liquidity around the target relationship.
+- Better volume capture from routers and aggregators looking for low-slippage paths.
+- Less need for active position management compared with concentrated liquidity systems.
+- Additional potential yield when eligible assets are connected to Dynamic Vaults.
+
+DAMM v1 stable pools are still passive LP positions. LPs deposit assets, receive LP tokens, and hold a share of the pool. They do not need to manually rebalance a custom price range.
+
+## Dynamic Vault composition
+
+Stable pools can compose with Dynamic Vaults when the assets are supported by the vault layer. That means some idle pool liquidity can be allocated into external lending strategies while the pool continues serving swaps and withdrawals.
+
+This matters because stable pairs can sometimes have lower trading fees than volatile pairs. Vault yield can help improve the LP return profile during quieter trading periods.
+
+<Warning>
+  Dynamic Vault yield is an additional source of return, not a guarantee. Lending strategies introduce their own risks, and pool liquidity must still support withdrawals and swaps.
+</Warning>
+
+## Stable pools vs constant-product pools
+
+Choose a **stable pool** when:
+
+- The assets should trade close to a target value.
+- Low slippage near the peg is the main goal.
+- LPs want passive liquidity without setting active ranges.
+- The market is more about efficient routing than price discovery.
+
+Choose a **constant-product pool** when:
+
+- The assets can move significantly against each other.
+- The market needs full-range price discovery.
+- The pair includes a volatile token.
+- You do not want the pool optimized around a specific relationship.
+
+## Example: stablecoin liquidity
+
+Suppose a USDC/USDT pool has deep liquidity and both tokens are expected to trade close to $1. A stable pool can offer tight pricing for users swapping between the two assets. Traders get lower slippage, aggregators can route more volume through the pool, and LPs earn fees from that activity.
+
+If the pool's assets are supported by Dynamic Vaults, idle liquidity may also earn additional lending yield, improving the pool's appeal even when swap volume fluctuates.
