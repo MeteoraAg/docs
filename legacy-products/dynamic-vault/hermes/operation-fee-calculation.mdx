@@ -1,88 +1,74 @@
 ---
 title: "Operation Fee Calculation"
+sidebarTitle: "Operation Fee"
+description: "How Dynamic Vault collects a performance fee on profitable rebalances by minting vault LP tokens to the fee vault."
+llmsDescription: "Dynamic Vault operation fee documentation explaining 5% performance fee on rebalance profit, fee vault LP token minting, virtual price preservation, fee unlock handling, and why underlying liquidity stays in the vault."
 ---
 
-When an operator submits a `deposit_strategy` or `withdraw_strategy` transaction (i.e., when assets are rebalanced between lending protocols), we call this the **rebalance crank**.
+Dynamic Vault charges an operation fee when a rebalance produces profit. This is best understood as a performance fee: the vault only charges when strategy activity increases vault value.
 
-A fee is collected to the [fee_vault](https://solscan.io/account/9kZeN47U2dubGbbzMrzzoRAUvpuxVLRcjW9XiFpYjUo4#splTransfers) every time the operator sends a rebalance crank. This fee is paid in vault LP SPL tokens and can be seen at the fee_vault address.
+<Info>
+  The on-chain program constant charges a 5% performance fee on rebalance profit.
+</Info>
 
-Currently, we charge **5% of profit** as the operation (performance) fee.
+## Why The Fee Is Paid In LP Tokens
 
----
+The vault may not always have spare underlying tokens sitting idle in the reserve when profit is realized. Much of the vault's liquidity may be deployed into strategies.
 
-# Variables
+Instead of forcing an underlying token transfer, the program mints additional vault LP tokens to the fee vault. This lets the fee vault own a proportional claim on vault value while keeping the underlying asset inside the vault system.
 
-**Before rebalance:**
+## Fee Flow
 
-- `vault.total_amount`: $t_1$
-- `lp_mint.total_supply`: $p_1$
-- **Virtual price** (value of LP token): $v_1 = t_1 / p_1$
+<Steps>
+  <Step title="A rebalance reports profit">
+    Hermes submits a rebalance crank. The vault compares before and after liquidity and detects a gain.
+  </Step>
+  <Step title="The vault calculates the fee">
+    The operation fee is calculated as 5% of the profit.
+  </Step>
+  <Step title="The vault mints LP tokens to the fee vault">
+    Instead of sending underlying tokens out, the vault mints the correct LP token amount to represent the fee value.
+  </Step>
+  <Step title="Locked profit is adjusted">
+    The fee-related unlocked portion is handled so share accounting stays consistent after fee minting.
+  </Step>
+</Steps>
 
-**After rebalance:**
-
-- `vault.total_amount`: $t_2$
-- `lp_mint.total_supply`: $p_1$
-- **Virtual price**: $v_2 = t_2 / p_1$
-
----
-
-# Fee Calculation
-
-We charge an operation fee:
-
-```math
-fee = 0.05 \times (t_2 - t_1)
-```
-
----
-
-# Adjusting Virtual Price After Fee
-
-After deducting the fee, the virtual price becomes:
+## Fee Formula
 
 ```math
-v_{21} = (t_2 - fee) / p_1
+fee = profit \times 5\%
 ```
 
-However, the vault does **not** send tokens directly to the treasury token account (since it may not have enough liquidity). Instead, the vault **mints additional LP tokens** for the fee_vault.
+The implementation calculates how many LP tokens should be minted to the fee vault using:
 
-Let $\delta$ be the number of new LP tokens minted for the fee. The new virtual price is:
+- `profit`: gain reported from the rebalance
+- `unlockedAmount`: vault value currently available for share calculations
+- `lpSupply`: LP token supply before the fee mint
+
+At a product level:
 
 ```math
-v_{22} = t_2 / (p_1 + \delta)
+feeLpTokens = feeValue \times lpSupply / unlockedAmount
 ```
 
-We want the virtual price after fee to remain the same, so set $v_{21} = v_{22}$:
+## Why This Design Matters
 
-```math
-(t_2 - fee) / p_1 = t_2 / (p_1 + \delta)
-```
+<CardGroup cols={2}>
+  <Card title="No Forced Reserve Drain" icon="water" iconType="solid">
+    Fees do not require the vault to pull underlying tokens out of reserve liquidity at the moment of rebalance.
+  </Card>
+  <Card title="Aligned With Vault Shares" icon="receipt" iconType="solid">
+    The fee vault receives LP tokens, meaning its fee claim rises and falls with the same vault share accounting as other LP tokens.
+  </Card>
+  <Card title="Only On Profit" icon="chart-line" iconType="solid">
+    The fee is charged when the rebalance creates a gain, not simply because Hermes submitted an operation.
+  </Card>
+  <Card title="On-Chain Enforcement" icon="lock" iconType="solid">
+    The fee logic is enforced by the vault program rather than being an off-chain accounting promise.
+  </Card>
+</CardGroup>
 
----
-
-# Solving for $\delta$
-
-Rearranging the equation above, we get:
-
-```math
-\delta = (p_1 \times fee) / (t_2 - fee)
-```
-
-Or, substituting $fee = 0.05 \times (t_2 - t_1)$:
-
-```math
-\delta = (p_1 \times 0.05 \times (t_2 - t_1)) / (t_2 - 0.05 \times (t_2 - t_1))
-```
-
-Which simplifies to:
-
-```math
-\delta = (p_1 \times 0.05 \times (t_2 - t_1)) / (0.95 \times t_2 + 0.05 \times t_1)
-```
-
----
-
-**Summary:**  
-- The operation fee is 5% of the profit from each rebalance crank.
-- The fee is paid by minting new LP tokens to the fee_vault, not by transferring underlying assets.
-- The number of LP tokens minted is calculated to ensure the virtual price for LP holders remains consistent after the fee is taken.
+<Note>
+  The fee vault is owned by the treasury address. The fee claim is represented by vault LP tokens, not by an immediate transfer of the underlying deposited asset.
+</Note>

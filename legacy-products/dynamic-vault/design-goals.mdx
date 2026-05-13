@@ -1,42 +1,106 @@
 ---
 title: "Design Goals"
+sidebarTitle: "Design Goals"
+description: "The product principles behind Dynamic Vault: safe principal handling, high liquidity, dynamic yield, simple integrations, and transparent accounting."
+llmsDescription: "Dynamic Vault design goals for non-technical product documentation, covering principal safety, liquidity, yield optimization, ease of integration, transparent accounting, and composable Solana infrastructure."
 ---
 
-The goal of Meteora Dynamic vaults is to solve the key challenges of optimizing funds for yield generation while keeping funds safe and accessible for users and protocols alike. In this section, we will discuss the design goals of our vaults.
+Dynamic Vault was designed to be a shared yield layer for Solana applications. The product is not just a vault where users deposit assets. It is infrastructure that protocols can plug into when they want idle single-token liquidity to become productive.
 
-# Security and Safety of Principals
+The design goals reflect that role: protect principal, keep liquidity accessible, optimize yield dynamically, and make integration simple enough for wallets, AMMs, treasuries, and applications to adopt.
 
-- **Principals are always safe:** Funds can only be deposited into trusted and decentralized protocols for yield generation.
-- **Separation of concerns:** The keeper program only contains logic to find optimal yield allocations and to limit fund flows from the vaults to the protocols. It cannot access or claim principals.
-- **Decentralized governance:** We aim to upgrade authority for decisions around lending protocol integrations and allocations to a decentralized Autonomous Organization (DAO).
+## 1. Protect Principal First
 
----
+Dynamic Vault should never chase yield at the expense of basic fund safety.
 
-# Full Liquidity at All Times
+<CardGroup cols={2}>
+  <Card title="Approved Strategies Only" icon="list-check" iconType="solid">
+    Vault liquidity can only be routed into strategies that have been initialized, reviewed, and added to the vault's strategy list.
+  </Card>
+  <Card title="Constrained Operator" icon="lock" iconType="solid">
+    Hermes can operate the vault, but its power is limited to approved rebalance and reward actions. It cannot transfer principal to arbitrary wallets.
+  </Card>
+  <Card title="On-Chain Share Accounting" icon="calculator" iconType="solid">
+    LP minting, burning, total amount updates, locked profit, and fee handling are enforced by the vault program.
+  </Card>
+  <Card title="Admin-Controlled Strategy Management" icon="user-shield" iconType="solid">
+    Strategy additions, removals, operator changes, and vault configuration updates are controlled by vault admin permissions.
+  </Card>
+</CardGroup>
 
-- **Instant access:** Deposited assets remain liquid and accessible at all times, allowing users to withdraw funds at will.
-- **Liquidity checks:** The vault’s total deposit amount is always checked against the reserves left in the lending platform.
-- **Automatic withdrawals:** If the liquidity reserve in a pool drops below a predetermined threshold, the vault will withdraw from the pool to ensure sufficient liquidity for user withdrawals.
+## 2. Keep Liquidity Accessible
 
----
+Yield is useful only if users and protocols can still access liquidity when they need it.
 
-# Optimized Yield Returns
+Dynamic Vault keeps a token reserve inside the vault and allows withdrawals from strategies when the reserve is not enough. Hermes also monitors reserve conditions in connected lending markets so the vault can avoid overexposure to illiquid pools.
 
-- **Dynamic allocation:** The vault program monitors and calculates yield variations across all connected lending platforms, dynamically allocating and rebalancing assets to those with the highest returns.
-- **APR awareness:** The annual percentage rate (APR) of a lending pool depends on factors such as borrowing amount, deposit amount, and the interest rate model. Deposit APR decreases as more is deposited, since borrowing interest is shared among depositors.
-- **Optimal allocation algorithm:** The algorithm must compare and find the best APR among platforms for a given deposit sum.
+<Steps>
+  <Step title="Maintain vault reserve liquidity">
+    Not every token needs to be deployed at all times. Keeping reserve liquidity supports smoother user withdrawals.
+  </Step>
+  <Step title="Monitor lending market reserves">
+    Hermes tracks whether connected strategies still have enough available liquidity to support withdrawals.
+  </Step>
+  <Step title="Withdraw from strategies when needed">
+    If the vault reserve is short, the withdrawal flow can pull liquidity from an approved strategy before sending tokens to the user.
+  </Step>
+</Steps>
 
----
+## 3. Optimize Yield Dynamically
 
-# Ease of Integration and Usage
+The vault should be able to respond when market conditions change.
 
-- **User-friendly design:** Vaults and SDKs are designed to be straightforward and easy for any user or protocol to utilize and build applications on top of.
-- **Comprehensive resources:** We provide full guides, code examples, and an API to help anyone connect to the vaults and access all integrated lending reserves.
-- **Ecosystem vision:** Our goal is to make the vaults the yield infrastructure for all of Solana.
+Lending APYs are a function of deposits, borrows, utilization, and each protocol's interest rate model. A pool with the highest visible APY may not remain the best destination after the vault deposits more capital.
 
----
+Hermes is designed to evaluate yield incrementally and rebalance when the target allocation meaningfully changes.
 
-# Event Monitoring and Tracking
+<CardGroup cols={2}>
+  <Card title="APY-Aware Allocation" icon="percent" iconType="solid">
+    Hermes compares connected strategies and accounts for how additional liquidity may change expected APY.
+  </Card>
+  <Card title="Rebalance When Useful" icon="arrows-rotate" iconType="solid">
+    The vault is not meant to churn liquidity constantly. Rebalances should happen when the expected allocation improvement is meaningful.
+  </Card>
+</CardGroup>
 
-- **Continuous monitoring:** Lending pool APY, utilization rates, and reserve levels are continuously monitored for better yield opportunities and risk management.
-- **On-chain advantages:** Solana’s composability, speed, and low transaction fees enable on-chain event monitoring that surpasses other blockchains, helping us achieve these design principles.
+## 4. Make Integration Simple
+
+Dynamic Vault is intended to be reusable infrastructure. A protocol should not need to rebuild lending integrations, keeper logic, LP accounting, and risk monitoring from scratch.
+
+For integrators, the mental model is straightforward:
+
+```text
+Deposit one token -> Receive vault LP token -> Let the vault manage yield -> Withdraw underlying token when needed
+```
+
+This model can support multiple product surfaces:
+
+- AMM reserves that earn lending yield when idle
+- wallet yield products
+- treasury management tools
+- protocol-controlled liquidity strategies
+- dashboards and analytics built around vault LP tokens
+
+## 5. Separate Strategy Logic From Vault Accounting
+
+Dynamic Vault separates concerns between vault accounting and strategy-specific behavior.
+
+The vault knows who owns shares, how much total liquidity exists, which strategies are approved, and how fees and locked profit should be handled. Strategy handlers know how to deposit into or withdraw from a specific connected lending market.
+
+This separation makes the product more extensible. New strategies can be added without changing the core user promise of the vault.
+
+## 6. Release Profit Fairly
+
+A vault that realizes yield through rebalances can be vulnerable to timing games. If profit is made withdrawable instantly, a user may try to enter right before a rebalance and exit right after it.
+
+Dynamic Vault uses locked profit to release gains gradually. This design favors users who provide liquidity through time instead of users who only show up for a single rebalance event.
+
+<Info>
+  Locked profit is a fairness mechanism. It does not hide yield; it controls when newly realized yield becomes part of the withdrawable vault value.
+</Info>
+
+## 7. Build For Solana Composability
+
+Dynamic Vault is useful because Solana applications can compose with it. A vault LP token can represent a yield-bearing position. Protocols can integrate deposits and withdrawals. Hermes can operate frequently because Solana transactions are fast and low cost.
+
+The long-term goal is to make Dynamic Vault feel like a native yield layer for single-token liquidity across the ecosystem.
