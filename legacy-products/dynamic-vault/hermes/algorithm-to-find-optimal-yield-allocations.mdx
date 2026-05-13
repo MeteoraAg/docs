@@ -1,74 +1,95 @@
 ---
 title: "Algorithm to Find Optimal Yield Allocations"
+sidebarTitle: "Optimal Allocations"
+description: "How Hermes decides where Dynamic Vault liquidity should be allocated across connected lending strategies."
+llmsDescription: "Non-technical explanation of Hermes allocation algorithm for Dynamic Vault, including APR simulation, liquidity portions, utilization, deposit caps, risk filters, target allocation, and rebalance thresholds."
 ---
 
-Hermes is our off-chain yield optimizer (keeper) program, designed to dynamically allocate liquidity across lending platforms for optimal yield while managing risk. Below, we break down its algorithmic approach and the rationale behind each step.
+Hermes is designed to allocate vault liquidity where it can earn the strongest available yield without ignoring liquidity and risk constraints.
 
----
+The important product insight is that lending yield is not static. Adding more liquidity to a pool can lower deposit APR because the same borrower interest is shared across more suppliers. That means Hermes cannot simply choose the pool with the highest displayed APY. It needs to simulate what happens after the vault deposits there.
 
-# How Hermes Optimizes Yield
+## Inputs Hermes Considers
 
-<Callout type="info" emoji="⚡">
-**Hermes** continuously monitors lending pools and simulates allocations to maximize yield for vault depositors.
-</Callout>
-
-## Key Factors Affecting APR
-
-<CardGroup>
-  <Card title="Amount Borrowed" icon="inbox-in" iconType="solid">
-    Higher utilization (more borrowed) increases APR for depositors.
+<CardGroup cols={2}>
+  <Card title="Available Vault Liquidity" icon="vault" iconType="solid">
+    The amount of liquidity that can be allocated from the vault reserve or moved from existing strategies.
   </Card>
-  <Card title="Amount Deposited" icon="paper-plane-top" iconType="solid">
-    More deposits dilute the APR, as interest is shared among more depositors.
+  <Card title="Current Strategy Allocation" icon="pie-chart" iconType="solid">
+    Where the vault's liquidity is already deployed before the next rebalance.
   </Card>
-  <Card title="Interest Rate Model" icon="chart-line" iconType="solid">
-    Each platform’s model determines how APR changes with utilization.
+  <Card title="Projected APR" icon="chart-line" iconType="solid">
+    The expected lending APR after a simulated deposit amount is added to a strategy.
+  </Card>
+  <Card title="Utilization and Reserves" icon="water" iconType="solid">
+    Liquidity health metrics that affect whether a strategy is attractive enough to receive capital.
+  </Card>
+  <Card title="Deposit Limits" icon="block-brick" iconType="solid">
+    Strategy-level or protocol-level caps that prevent over-allocation into a single destination.
+  </Card>
+  <Card title="Risk Limits" icon="shield" iconType="solid">
+    Maximum allocations and safety rules that can reduce or block exposure even when APY is high.
   </Card>
 </CardGroup>
 
----
+## The Allocation Method
 
-## Step-by-Step: Optimal Allocation Algorithm
+Hermes uses an incremental allocation approach.
 
 <Steps>
-  <Step title="1. Divide Liquidity into Portions">
-    Liquidity is split into small portions (e.g., 100+), configurable by admin.
+  <Step title="Split vault liquidity into portions">
+    Hermes divides allocatable liquidity into many smaller chunks. Smaller chunks let Hermes model how APY changes as more capital enters a strategy.
   </Step>
-  <Step title="2. Simulate Deposits Across Platforms">
-    For each portion, simulate depositing it into every lending platform and calculate the resulting APR.
+  <Step title="Simulate each portion across strategies">
+    For each chunk, Hermes estimates the resulting APR if that chunk were deposited into each connected strategy.
   </Step>
-  <Step title="3. Select Highest APR">
-    Assign the portion to the platform offering the highest simulated APR.
+  <Step title="Choose the best eligible strategy">
+    Hermes assigns the chunk to the strategy with the best projected yield after applying risk, utilization, reserve, and cap checks.
   </Step>
-  <Step title="4. Update Simulated Allocations">
-    Update the simulated allocation and repeat until all liquidity is distributed.
+  <Step title="Update the simulated state">
+    The selected strategy's simulated deposit balance is updated, which may change its projected APR for the next chunk.
   </Step>
-  <Step title="5. Compare to Previous Allocation">
-    If the new allocation differs from the previous by more than 0.1%, trigger a rebalance.
+  <Step title="Repeat until liquidity is allocated">
+    Hermes repeats the process until all simulated portions have been assigned.
+  </Step>
+  <Step title="Compare target allocation against current allocation">
+    If the difference is large enough, Hermes submits one or more rebalance cranks to move toward the target.
   </Step>
 </Steps>
 
----
+## Simplified Pseudocode
 
-## Pseudocode
+```text
+Split vault liquidity into portions
+For each portion:
+  For each approved strategy:
+    Estimate APR after this portion is deposited
+    Apply utilization, reserve, cap, and risk checks
+  Assign the portion to the best eligible strategy
+  Update simulated balances
+Compare new target allocation against current allocation
+If the difference is meaningful, submit a rebalance crank
+```
 
-```
-#Off chain simulation
-portion ← x #x is minimally 100, set by admin
-deposit_amount ← vault.total_amount / portion
-last_allocation[] ← current allocation of vault.total_amount in each lending platform
-allocation[] ← track allocation after simulation to each lending platform
-FOR each portion
-    FOR each platform
-        Simulate deposit_amount to platform
-        APR[platform] ← APR of platform after simulated deposit
-    ENDFOR
-    highest_APR_platform ← Select platform with the highest APR in APR[platform]
-    allocation[highest_APR_platform] ← deposit_amount + allocation[highest_APR_platform]
-    Update deposit_amount to platform
-ENDFOR
-#On Chain Rebalance crank
-IF diff(allocation[], last_allocation[]) > 0.1% THEN
-    Send rebalance crank to allocate funds according to allocation[]
-ENDIF
-```
+## Why Hermes Uses Simulation
+
+Displayed APY can be misleading when a vault is moving meaningful liquidity. If a small pool shows a high APY, depositing a large amount into it can dilute the rate quickly. Simulation helps Hermes avoid overfilling a high-APY opportunity until it becomes average.
+
+This creates a more balanced allocation process:
+
+- high APY attracts capital
+- additional capital can lower projected APY
+- Hermes keeps routing the next portion to the best remaining opportunity
+- final allocation reflects the shape of the full market, not just the top quoted number
+
+## Rebalance Threshold
+
+Hermes does not need to rebalance for every tiny allocation change. Rebalancing has operational cost and can create unnecessary churn. The product target is to rebalance when the new allocation is meaningfully different from the current allocation.
+
+<Note>
+  Earlier Dynamic Vault documentation references a 0.1% allocation difference as the threshold for triggering a rebalance. Actual operation can depend on vault configuration, strategy availability, and market conditions.
+</Note>
+
+## Product Outcome
+
+The algorithm gives Dynamic Vault a practical operating model: move liquidity when the opportunity is worth it, diversify across eligible strategies, and avoid chasing surface-level APY without understanding the impact of the vault's own deposits.

@@ -1,91 +1,138 @@
 ---
 title: "Risk Management"
+sidebarTitle: "Risk Management"
+description: "How Dynamic Vault manages operational risk, lending risk, keeper constraints, strategy exposure, and rebalance timing risk."
+llmsDescription: "Non-technical Dynamic Vault risk management documentation covering operational risk, lending risk, strategy allowlists, maximum allocation framework, Hermes constraints, utilization and reserve monitoring, locked profit, and withdrawal behavior."
 ---
 
-This section outlines the security measures implemented to mitigate various risk factors.
+Dynamic Vault is built to improve capital efficiency, but yield always comes with risk. The product manages risk through a combination of on-chain constraints, off-chain monitoring, strategy selection, allocation limits, and profit-unlocking mechanics.
 
-In addition to executing the algorithm for optimal yield allocations, our keeper program must also assess and address certain risks before determining the final allocation.
+The goal is not to claim that vault yield is risk-free. The goal is to make risks visible, bounded where possible, and actively monitored.
 
-Risks are generally categorized into two main types:
+## Risk Categories
 
-- **Operational Risk**
-- **Lending Risk**
+Dynamic Vault focuses on four main risk categories.
 
----
-
-# Operation Risk
-
-Risks that are related to source code such as when a partner protocol or team has a program update, or when lending platforms are not well audited. In minor cases, the source code changes break the integration, users are unable to perform any vault withdrawals or deposits. In major cases, the vault program or lending protocols may be exploited, losing the tokens in the vaults. 
-
-We implement a maximum allocation mechanism that the vault can deposit into each lending pool to mitigate this risk. 
-
-All lending protocols' maximum allocation starts at 100%. We will assess them across a set of criteria which includes the existence of audits, open-source code, insurance funds, main token pools, program multi-sig / verified & non-updatable status as well as the length of integration with Meteora. This set of criteria will eventually be governed by the DAO.
-
-For every criterion not met, we will reduce the maximum allocation allowed to the protocol according to this matrix:
-
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Criteria</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Maximum Allocation Reduction</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Audit</strong></td>
-        <td className="py-3 px-4">20</td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Open-source</strong></td>
-        <td className="py-3 px-4">30</td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Official Insurance Funds?</strong></td>
-        <td className="py-3 px-4">20</td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Main Pool</strong></td>
-        <td className="py-3 px-4">10</td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Existing integration &gt; 1 month</strong></td>
-        <td className="py-3 px-4">10</td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Program multi-sig / or Verified &amp; Non-Updatable</strong></td>
-        <td className="py-3 px-4">20</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-**Example:** Lending Protocol Xyz (with Audited, Open-sourced, Main Pool, and Program multi-sig)
-
-The score for allocation will be 100-20 (No official insurance funds) - 10 (Existing integration < 1 month) = 70.
-
-The maximum allocation for Xyz will be 70% of total liquidity.
-
-We also limit max allocation in each lending as 30% of total liquidity.
-
-Hermes is not allowed to withdraw funds from the lending protocols to external wallets. In the event that Hermes is hacked, the hackers will only be able to control the flow of funds to and from between the vaults and lending protocols; the principals are still safe in either of them.
-
----
-
-# Lending Risk
-
-This risk occurs when depositors are unable to withdraw their funds from the lending pools. This is caused when utilization rates of the reserves reach full capacity at 100% where borrowed amount equals the deposited amount, or when the amount of reserves remaining in the lending pools is less than the vault deposits. When this happens, depositors are unable to withdraw funds on demand.
-
-To avoid lending risks, we have developed the following mechanisms to protect principals:
-
-<CardGroup>
-  <Card title="Diversified Allocations" icon="layer-group" iconType="solid">
-    Allocations are stretched across multiple lending protocols to diversify and manage risk, reducing exposure to any single platform.
+<CardGroup cols={2}>
+  <Card title="Operational Risk" icon="code" iconType="solid">
+    Risk from program upgrades, integration bugs, unaudited code, strategy failures, or incorrect account configuration.
   </Card>
-  <Card title="Active Utilization Monitoring" icon="eye" iconType="solid">
-    Hermes continuously monitors the utilization rates of each lending pool. If utilization exceeds the 80% threshold, Hermes is ready to withdraw funds, ensuring a buffer for timely action even in high-demand pools.
+  <Card title="Lending Risk" icon="building-columns" iconType="solid">
+    Risk that a connected lending market becomes too utilized or too illiquid for timely withdrawals.
   </Card>
-  <Card title="Lending Reserve Buffer" icon="shield-halved" iconType="solid">
-    Vaults always maintain a buffer in the lending reserve, providing Hermes with additional time to react to liquidity movements and protect principal.
+  <Card title="Keeper Risk" icon="robot" iconType="solid">
+    Risk that the off-chain operator is delayed, misconfigured, or compromised.
+  </Card>
+  <Card title="Timing Risk" icon="clock" iconType="solid">
+    Risk that users attempt to exploit rebalance timing to capture profit unfairly.
   </Card>
 </CardGroup>
+
+## Operational Risk
+
+Operational risk comes from the systems Dynamic Vault connects to and the operational controls around them. A lending protocol may upgrade its program, change behavior, hit an integration issue, or expose a bug.
+
+Dynamic Vault reduces this risk with approved strategy management and allocation discipline.
+
+### Strategy Approval
+
+The vault can only deploy liquidity into strategies that are initialized and added to the vault. This prevents Hermes from routing funds into arbitrary destinations.
+
+### Maximum Allocation Framework
+
+Dynamic Vault documentation historically uses an allocation scoring framework to reduce exposure when a lending protocol does not meet certain criteria.
+
+Criteria can include:
+
+- whether the protocol has audits
+- whether the code is open source
+- whether an insurance fund exists
+- whether the market is a main, liquid pool
+- whether the integration has operated for enough time
+- whether the program is controlled by multisig or is verified and non-upgradable
+
+If a criterion is missing, the maximum allocation to that protocol can be reduced. The intent is simple: a newer, less transparent, or less battle-tested venue should not receive the same exposure as a more mature one.
+
+<Note>
+  Earlier Dynamic Vault documentation references a maximum allocation framework that starts from 100% and applies deductions across risk criteria, with an additional per-lending-platform cap. Specific parameters can be refined over time by Meteora governance and operators.
+</Note>
+
+## Lending Risk
+
+Lending risk appears when supplied assets cannot be withdrawn quickly because borrowers are using most of the pool.
+
+High utilization can be attractive because it often increases deposit APY. But high utilization also means there may be less reserve liquidity available for withdrawals.
+
+Hermes monitors these conditions so the vault does not allocate based on APY alone.
+
+<CardGroup cols={2}>
+  <Card title="Utilization Monitoring" icon="wave-pulse" iconType="solid">
+    Hermes tracks how much of a lending pool is borrowed relative to supplied assets.
+  </Card>
+  <Card title="Reserve Monitoring" icon="water" iconType="solid">
+    Hermes watches how much liquidity remains available for withdrawals.
+  </Card>
+  <Card title="Diversified Allocation" icon="layer-group" iconType="solid">
+    Liquidity can be spread across multiple strategies to reduce dependence on a single market.
+  </Card>
+  <Card title="Withdraw-To-Reserve Actions" icon="arrow-right-arrow-left" iconType="solid">
+    Hermes can withdraw from strategies back into the vault reserve when a market becomes less attractive or less liquid.
+  </Card>
+</CardGroup>
+
+## Keeper Risk
+
+Hermes is powerful operational infrastructure, but it is not given unlimited authority.
+
+The on-chain program constrains what the operator can do:
+
+- operator actions must satisfy vault account constraints
+- strategy deposits and withdrawals must use strategies tied to the vault
+- reward claims go to treasury-controlled reward accounts
+- principal cannot be sent to arbitrary external wallets through Hermes
+- admins can transfer operator authority or disable vault deposits when needed
+
+This means a compromised or malfunctioning keeper is limited to program-approved flows. It may cause bad allocation or missed opportunity, but it should not have unrestricted custody over vault principal.
+
+## Timing Risk And Locked Profit
+
+Dynamic Vault rebalances can realize profit. If that profit became withdrawable immediately, a user could try to enter right before a rebalance and leave right after it.
+
+The locked profit mechanism reduces this risk.
+
+<Steps>
+  <Step title="Profit is reported during rebalance">
+    The vault compares before and after liquidity and records the gain.
+  </Step>
+  <Step title="Profit is added to locked profit">
+    Newly realized gain is not fully included in the withdrawable unlocked amount immediately.
+  </Step>
+  <Step title="Locked profit unlocks over time">
+    The vault gradually releases the profit into the unlocked amount used for deposits and withdrawals.
+  </Step>
+</Steps>
+
+This makes rebalance profit harder to capture through short-term timing and better aligned with longer-term LP participation.
+
+## User-Facing Risk Disclosures
+
+Dynamic Vault users and integrators should understand the following.
+
+<AccordionGroup>
+  <Accordion title="Yield is variable">
+    Returns depend on connected lending markets, utilization, borrowing demand, strategy availability, and rebalance timing.
+  </Accordion>
+  <Accordion title="Withdrawals depend on liquidity">
+    The vault is designed for accessibility, but connected lending market reserves can affect withdrawal behavior during stressed conditions.
+  </Accordion>
+  <Accordion title="Strategies carry protocol risk">
+    Liquidity deployed to lending strategies is exposed to the risks of those underlying protocols.
+  </Accordion>
+  <Accordion title="Keeper operations matter">
+    Hermes monitoring and rebalance execution are part of the product's live operation. Delays or misconfiguration can affect allocation quality.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  Dynamic Vault risk controls are designed to reduce and manage risk. They do not eliminate smart contract risk, lending market risk, liquidity risk, or operational risk.
+</Warning>

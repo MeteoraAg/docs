@@ -1,68 +1,116 @@
 ---
-title: "What's Dynamic Vault?"
-description: Dynamic Vault is DeFi's first dynamic yield infrastructure.
+title: "What is Dynamic Vault?"
+sidebarTitle: "What is Dynamic Vault?"
+description: "Learn how Meteora Dynamic Vault turns idle single-token liquidity into a programmable yield layer for users, AMMs, wallets, and protocols."
+llmsDescription: "Product overview of Meteora Dynamic Vault, explaining single-asset vault deposits, LP share tokens, Hermes keeper rebalancing, lending strategies, locked profit, performance fees, risk controls, and how Dynamic Vault supports yield-bearing liquidity across Solana applications."
 ---
 
-Meteora's Dynamic Vaults are DeFi’s first dynamic yield infrastructure, where the vaults rebalance every minute across lending platforms to find the best possible yield while prioritizing keeping user funds as accessible as possible.
+Dynamic Vault is Meteora's single-asset yield infrastructure for Solana. It lets users and protocols deposit one token, receive a vault LP token that represents their share of the vault, and have the underlying liquidity dynamically allocated across approved yield strategies.
 
+The product was built around a simple idea: **idle liquidity should not stay idle**. Wallet balances, AMM reserves, protocol treasuries, and user deposits can all sit in the same asset vault and earn lending yield while remaining withdrawable.
 
-<Steps>
-  <Step title="Calculate yields across lending platforms">
-    Our off-chain yield optimizer keeper program will calculate the yield across all the lending platforms.
-  </Step>
-  <Step title="Monitor key metrics">
-    Every few minutes, the off-chain keeper will constantly monitor the key metrics within each lending pool/protocol.
-  </Step>
-  <Step title="Select highest APY">
-    The keeper will pick the highest APY based on the keeper calculation and deposit to the respective lending pools.
-  </Step>
-  <Step title="Rebalance when necessary">
-    As the lending pools fluctuate based on its usage, a rebalance would occur every few minutes if necessary.
-  </Step>
-</Steps>
+<Info>
+  Dynamic Vault runs on the mainnet program `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi`.
+</Info>
 
-<Note>Key metrics include: Total Deposit, Deposit Limits, Pool Utilization Rate, APY, and more.</Note>
+## Why Dynamic Vault Exists
 
-Having a trusted capital allocation layer is important to help allocate liquidity to where it is needed the most, while mitigating risks that come along when depositing to these lending protocols. By providing a trusted and optimized way for users to participate in DeFi lending, we will attract more capital and participants to the ecosystem, driving innovation, and growth.
+Most DeFi liquidity is productive only when it is actively deployed. A USDC balance sitting inside a wallet or protocol reserve is liquid, but it is not earning. A lending position can earn, but it creates operational overhead: integrations, monitoring, risk parameters, liquidity checks, APY comparisons, and rebalancing.
 
-The vaults prioritize safety by monitoring utilization rates and reserve levels, and withdrawing funds if thresholds are reached. To ensure secure yields, we have maximum allocation measures based on factors like audit, open-source code, and insurance coverage of lending platforms. These measures will be consistently refined with the community.
-
-# How does it work?
-
-Meteora Dynamic Vaults allow users and integrated protocols to deposit and/or withdraw assets from the vault program at any time. Deposited assets are distributed to various lending protocols like Solend and Tulip, with maximum allocation based on a combination of yield percentages and risk mitigation strategies around protocol audit, insurance coverage, and open source status. 
+Dynamic Vault packages those responsibilities into a shared vault layer.
 
 <Frame>
   <img src="/images/overview/other-products/dynamic-vault/dynamic-vault.png" />
 </Frame>
 
-# Core Components
+Instead of every application building its own lending allocator, applications can plug into Dynamic Vault. Users deposit into a vault for a specific token, Hermes monitors connected strategies, and the vault program records shares, strategy balances, fees, and profit unlocking on-chain.
 
-## Core Components
+## What Dynamic Vault Does
 
-### 1. Vault
-
-Each Vault in the infrastructure layer stores single token assets (e.g., USDC or SOL), with the majority of assets allocated to various lending protocols to earn yield. Common tokens used across connecting protocols, AMMs, or wallets are stored in a single vault. For example, USDC from an AMM and wallet holdings are consolidated in the USDC vault. Users and protocols can deposit liquidity directly to each Vault through a simple interface.
-
-### 2. Keeper - Hermes
-
-We've created an off-chain keeper called **Hermes** to manage complex logic and operations, including lending protocol monitoring and calculating optimal liquidity allocation across lending platforms.
-
-For now, there are **3 main operations** handled by Hermes:
-
-<CardGroup>
-  <Card title="Yield Optimizer" icon="chart-line" iconType="solid">
-    Hermes calculates the optimal liquidity allocation across lending platforms to generate the highest overall APY for the vault. The calculation requires key data from various lending platforms including deposit APY, utilization rate, and pool liquidity. This process repeats every few minutes, and if there's a delta between the new allocation and the current one, a rebalance crank is sent to the vault to trigger deposits and withdrawals to/from lending platforms.
+<CardGroup cols={2}>
+  <Card title="Single-Asset Deposits" icon="vault" iconType="solid">
+    Each vault is created for one token mint, such as USDC or SOL. Depositors enter with that asset and receive vault LP tokens that represent their proportional ownership.
   </Card>
-  <Card title="Key Metrics Tracker" icon="chart-bar" iconType="solid">
-    The tracker consistently monitors, tracks, and stores key data such as deposit APY and pool liquidity from lending platforms. This information is used for calculations and future references, and is also exposed to potential integrators for UI display or custom calculations.
+  <Card title="Dynamic Yield Allocation" icon="chart-line" iconType="solid">
+    Liquidity can be routed into approved lending strategies, then moved again when yield or risk conditions change.
   </Card>
-  <Card title="Risk Monitoring" icon="shield" iconType="solid">
-    Hermes runs a risk monitoring service to track utilization rates and reserve levels of lending protocols, safeguarding user assets by withdrawing liquidity when thresholds are reached. For example, if a lending pool's utilization rate exceeds 80%, Hermes triggers a full liquidity withdrawal and stops deposits for 12 hours.
+  <Card title="Protocol-Friendly Liquidity" icon="plug" iconType="solid">
+    AMMs, wallets, treasuries, and other applications can integrate the vault layer instead of managing separate lending positions.
+  </Card>
+  <Card title="On-Chain Accounting" icon="calculator" iconType="solid">
+    Deposits, withdrawals, LP share minting, strategy balances, profit updates, and performance fees are enforced by the vault program.
+  </Card>
+  <Card title="Hermes Keeper Operations" icon="robot" iconType="solid">
+    Hermes is the off-chain operator layer that watches lending markets and submits rebalance cranks to the vault program.
+  </Card>
+  <Card title="Risk-Aware Design" icon="shield" iconType="solid">
+    Strategies are approved by admins, operator permissions are constrained, withdrawals can pull from strategies when needed, and profits unlock gradually to reduce timing attacks.
   </Card>
 </CardGroup>
 
-### 3. SDK Module - Integration APIs
+## How Dynamic Vault Works
 
-To facilitate easy integration for DApps and protocols like AMMs and wallets with our Dynamic Yield Layer, we've created a straightforward SDK and are building an entire library of pre-built modules and code samples for rapid app development and plug-and-play functionality.
+A Dynamic Vault has three core layers.
 
-The liquidity in protocols can be deposited into or withdrawn from vaults directly via simple API calls. The vaults' yield can be distributed back to the LPs of integrated protocols.
+<Steps>
+  <Step title="Users or protocols deposit a supported token">
+    A depositor sends the underlying asset into the vault. The vault mints LP tokens based on the depositor's proportional share of the currently unlocked vault value.
+  </Step>
+  <Step title="The vault keeps liquid reserves and tracks strategies">
+    The token vault holds available liquidity. Approved strategies hold deployed liquidity. The vault tracks the total amount across both places.
+  </Step>
+  <Step title="Hermes evaluates lending opportunities">
+    Hermes monitors connected lending venues, available liquidity, APY, utilization, reserve depth, and risk thresholds.
+  </Step>
+  <Step title="Rebalance cranks move liquidity">
+    When a rebalance is needed, Hermes submits a deposit or withdrawal strategy transaction. The vault updates total liquidity, strategy balances, profit, loss, and fees.
+  </Step>
+  <Step title="Users withdraw by burning LP tokens">
+    Withdrawals burn vault LP tokens and return the user's share of the unlocked vault value. If the vault reserve does not hold enough liquidity, the program can withdraw directly from an approved strategy first.
+  </Step>
+</Steps>
+
+```text
+Deposit token -> Receive vault LP token -> Hermes allocates liquidity -> Yield accrues -> Withdraw by burning LP token
+```
+
+## Product Building Blocks
+
+<CardGroup cols={2}>
+  <Card title="Workflow" href="/legacy-products/dynamic-vault/workflow" icon="diagram-project">
+    Follow the full product lifecycle from vault creation to deposits, strategy allocation, rebalancing, and withdrawals.
+  </Card>
+  <Card title="Hermes" href="/legacy-products/dynamic-vault/hermes/what-is-hermes" icon="robot">
+    Learn how the keeper layer monitors lending markets and submits rebalance actions.
+  </Card>
+  <Card title="Dynamic Vault Formulas" href="/legacy-products/dynamic-vault/dynamic-vault-formulas" icon="calculator">
+    Understand the product math behind LP shares, withdrawals, locked profit, and performance fees.
+  </Card>
+  <Card title="Design Goals" href="/legacy-products/dynamic-vault/design-goals" icon="bullseye">
+    See the principles behind Dynamic Vault: safety, liquidity, yield optimization, and easy integration.
+  </Card>
+  <Card title="Risk Management" href="/legacy-products/dynamic-vault/risk-management" icon="shield">
+    Review the operational and lending risk controls built into the vault design.
+  </Card>
+</CardGroup>
+
+## Who Dynamic Vault Is For
+
+<AccordionGroup>
+  <Accordion title="Liquidity providers">
+    LPs can deposit a single asset into a vault and receive a share token that tracks their ownership of the vault's unlocked value.
+  </Accordion>
+  <Accordion title="AMMs and trading products">
+    Protocols can connect reserve liquidity to Dynamic Vault so assets can earn yield when they are not actively needed for swaps.
+  </Accordion>
+  <Accordion title="Wallets and frontends">
+    Consumer apps can offer a simple yield experience without building lending allocation infrastructure from scratch.
+  </Accordion>
+  <Accordion title="Treasuries and ecosystem teams">
+    Teams with idle single-token balances can route liquidity through a controlled vault layer instead of manually managing lending positions.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  Dynamic Vault is a legacy product and depends on approved strategies, operator configuration, connected lending markets, and real-time liquidity conditions. Yield is not fixed, and risk controls reduce risk rather than remove it.
+</Warning>

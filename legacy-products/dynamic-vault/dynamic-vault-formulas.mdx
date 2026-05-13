@@ -1,0 +1,168 @@
+---
+title: "Dynamic Vault Formulas"
+sidebarTitle: "Formulas"
+description: "A product-friendly explanation of Dynamic Vault math: LP shares, unlocked amount, withdrawals, locked profit, rebalances, and performance fees."
+llmsDescription: "Dynamic Vault formulas for deposit LP minting, withdrawal amount, unlocked vault amount, locked profit degradation, rebalance profit and loss, and 5% performance fee LP minting."
+---
+
+Dynamic Vault accounting is built around one principle: every LP token should represent a proportional share of the vault's **unlocked** value.
+
+The vault's total value includes two places where liquidity can sit:
+
+- liquidity inside the vault reserve
+- liquidity deployed into approved strategies
+
+However, not all newly realized profit is immediately available for share calculations. Profit can be locked and released over time to protect existing LPs from rebalance timing attacks.
+
+## Core Terms
+
+- `total_amount`: total vault liquidity, including the vault reserve and strategy liquidity
+- `token_vault.amount`: underlying token liquidity sitting directly in the vault reserve
+- `strategy.current_liquidity`: liquidity tracked inside a strategy
+- `lp_mint.total_supply`: total vault LP token supply
+- `last_updated_locked_profit`: locked profit recorded after the latest rebalance
+- `last_report`: timestamp of the latest locked profit update
+- `locked_profit_degradation`: rate at which locked profit unlocks over time
+
+## Unlocked Amount
+
+The unlocked amount is the vault value used for deposit and withdrawal share calculations.
+
+```math
+unlockedAmount = totalAmount - lockedProfit
+```
+
+Locked profit decays over time.
+
+```math
+duration = currentTime - lastReport
+```
+
+```math
+lockedFundRatio = duration \times lockedProfitDegradation
+```
+
+```math
+lockedProfit = lastUpdatedLockedProfit \times (1 - lockedFundRatio)
+```
+
+Once the locked fund ratio reaches 100%, locked profit becomes zero and the full vault value is unlocked.
+
+<Info>
+  In the on-chain program default configuration, locked profit fully unlocks over 6 hours.
+</Info>
+
+## Deposit LP Tokens
+
+When a user deposits into an existing vault, the vault mints LP tokens based on the user's deposit amount relative to the unlocked vault value.
+
+```math
+lpTokensMinted = depositAmount \times totalLpSupply / unlockedAmount
+```
+
+If the vault is empty, the depositor receives LP tokens against the initial unlocked value after their deposit.
+
+### Product Meaning
+
+The depositor receives a fair share of the vault based on value that is already unlocked. Locked profit is excluded so new deposits cannot instantly capture yield that was earned before they joined.
+
+## Withdrawal Amount
+
+When a user withdraws, they burn LP tokens and receive their proportional share of unlocked vault value.
+
+```math
+withdrawAmount = lpTokensBurned \times unlockedAmount / totalLpSupply
+```
+
+### Product Meaning
+
+Withdrawals are share-based. A user who owns 10% of the LP token supply can withdraw roughly 10% of the unlocked vault value, subject to rounding, slippage settings, and available liquidity.
+
+## Rebalance Profit or Loss
+
+A rebalance compares vault and strategy liquidity before and after a strategy action.
+
+Before rebalance:
+
+```math
+beforeValue = tokenVaultBefore + strategyLiquidityBefore
+```
+
+After rebalance:
+
+```math
+afterValue = tokenVaultAfter + strategyLiquidityAfter
+```
+
+Profit or loss:
+
+```math
+profit = max(afterValue - beforeValue, 0)
+```
+
+```math
+loss = max(beforeValue - afterValue, 0)
+```
+
+The vault then updates `total_amount` based on the new combined value.
+
+```math
+newTotalAmount = oldTotalAmount + afterValue - beforeValue
+```
+
+## Locked Profit Update
+
+If a rebalance produces profit, the profit is added to locked profit. If it produces loss, that loss reduces locked profit first.
+
+```math
+newLockedProfit = remainingLockedProfit + gain - loss
+```
+
+If loss is larger than remaining locked profit, locked profit becomes zero.
+
+### Why This Matters
+
+This turns yield realization into a controlled release rather than a one-block windfall. It helps align vault LPs around sustained participation instead of rebalance sniping.
+
+## Performance Fee
+
+Dynamic Vault charges a performance fee on rebalance profit. The program constant is 5%.
+
+```math
+fee = profit \times 5\%
+```
+
+Instead of transferring underlying tokens out of the vault, the program mints additional vault LP tokens to the fee vault.
+
+The minted LP amount is calculated so the fee vault receives the fee value while existing LP accounting remains consistent.
+
+```math
+feeLpTokens = feeUnlockedValue \times totalLpSupply / unlockedAmount
+```
+
+The implementation derives the fee LP amount from three values:
+
+- profit from the rebalance
+- current unlocked amount before the update
+- original LP token supply
+
+<Note>
+  Fee minting keeps the underlying asset inside the vault. The fee is represented by newly minted vault LP tokens owned by the fee vault.
+</Note>
+
+## Why The Formulas Matter
+
+<CardGroup cols={2}>
+  <Card title="Fair Entry" icon="door-open" iconType="solid">
+    New deposits receive shares based on unlocked value, not freshly realized locked profit.
+  </Card>
+  <Card title="Fair Exit" icon="door-closed" iconType="solid">
+    Withdrawals burn LP tokens for a proportional share of the vault's unlocked value.
+  </Card>
+  <Card title="Rebalance Protection" icon="shield" iconType="solid">
+    Locked profit reduces the incentive to deposit right before a rebalance and withdraw right after.
+  </Card>
+  <Card title="Clean Fee Accounting" icon="receipt" iconType="solid">
+    Performance fees are collected through LP token minting rather than draining reserve liquidity.
+  </Card>
+</CardGroup>

@@ -1,0 +1,129 @@
+---
+title: "Workflow"
+sidebarTitle: "Workflow"
+description: "Understand the Dynamic Vault lifecycle from vault creation and deposits to Hermes rebalancing, profit unlocking, fees, and withdrawals."
+llmsDescription: "Non-technical workflow for Meteora Dynamic Vault covering vault initialization, user deposits, LP token minting, approved strategies, Hermes monitoring, rebalance cranks, locked profit, performance fees, and withdrawal paths."
+---
+
+Dynamic Vault turns a single asset into a managed liquidity layer. The user experience is simple, but the product flow has several coordinated parts: vault creation, deposits, strategy allocation, rebalancing, profit accounting, and withdrawals.
+
+## 1. Vault Creation
+
+Each Dynamic Vault is created for a specific token mint. A vault has its own token reserve, LP mint, admin, operator, fee vault, and strategy list.
+
+<CardGroup cols={2}>
+  <Card title="Token Vault" icon="box" iconType="solid">
+    Holds the underlying token liquidity that is immediately available inside the vault reserve.
+  </Card>
+  <Card title="LP Mint" icon="receipt" iconType="solid">
+    Mints vault LP tokens to users. These LP tokens represent ownership of the vault's unlocked value.
+  </Card>
+  <Card title="Strategy List" icon="list-check" iconType="solid">
+    Stores the approved destinations where vault liquidity can be deployed.
+  </Card>
+  <Card title="Fee Vault" icon="percent" iconType="solid">
+    Receives performance fees as vault LP tokens when profitable rebalances occur.
+  </Card>
+</CardGroup>
+
+<Note>
+  The on-chain program supports up to 30 strategies per vault. Strategies must be initialized and approved before vault liquidity can be routed into them.
+</Note>
+
+## 2. User Deposit
+
+When a user deposits, they send the vault's underlying token into the token vault and receive vault LP tokens.
+
+The LP amount is based on the depositor's share of the vault's **unlocked value**. This matters because profits from strategy rebalances are not always released immediately. A portion can remain locked and drip into the vault value over time.
+
+<Steps>
+  <Step title="User chooses deposit amount">
+    The user selects how much of the vault's token they want to deposit.
+  </Step>
+  <Step title="Vault calculates LP shares">
+    If the vault is empty, the first depositor receives LP tokens against the initial unlocked amount. If the vault already has supply, LP tokens are minted proportionally.
+  </Step>
+  <Step title="Vault checks slippage protection">
+    The deposit includes a minimum LP token amount. If the received LP amount is lower than expected, the transaction fails.
+  </Step>
+  <Step title="LP tokens are minted to the user">
+    The user now owns a proportional share of the vault.
+  </Step>
+</Steps>
+
+## 3. Strategy Allocation
+
+Once liquidity is inside the vault, Hermes can allocate part of it to approved strategies. A strategy represents a connected yield destination, such as a lending reserve.
+
+Hermes cannot send funds anywhere it wants. It can only interact with strategies that the vault recognizes. This keeps the product flexible without turning the keeper into a custody risk.
+
+```text
+Vault reserve -> Approved strategy -> Lending position -> Strategy balance tracked by vault
+```
+
+## 4. Hermes Monitoring
+
+Hermes continuously watches market conditions across connected strategies. It evaluates data such as APY, total deposits, deposit caps, utilization, and available reserves.
+
+When the best allocation changes enough to justify movement, Hermes prepares a rebalance.
+
+<CardGroup cols={2}>
+  <Card title="Yield Signal" icon="chart-simple" iconType="solid">
+    Which strategy is currently paying attractive lending yield after accounting for deposit size.
+  </Card>
+  <Card title="Liquidity Signal" icon="water" iconType="solid">
+    Whether a strategy has enough reserve liquidity to support future withdrawals.
+  </Card>
+  <Card title="Risk Signal" icon="shield" iconType="solid">
+    Whether utilization, caps, or operational criteria suggest reducing exposure.
+  </Card>
+  <Card title="Rebalance Signal" icon="arrows-rotate" iconType="solid">
+    Whether the new target allocation is different enough from the current one to submit a crank.
+  </Card>
+</CardGroup>
+
+## 5. Rebalance Crank
+
+A rebalance crank is the transaction that moves liquidity between the vault reserve and a strategy.
+
+There are two common directions:
+
+- **Deposit strategy:** move available vault liquidity into an approved strategy.
+- **Withdraw strategy:** pull liquidity from a strategy back into the vault reserve.
+
+After the strategy action, the vault compares liquidity before and after the rebalance. If the vault gained value, that gain is treated as profit. If it lost value, that loss is reflected in total vault value.
+
+## 6. Profit Unlocking
+
+When a rebalance realizes profit, the vault does not instantly make all profit withdrawable. Instead, profit is recorded in the locked profit tracker and unlocks gradually.
+
+This creates a fairer experience for long-term depositors. Without profit unlocking, a user could deposit immediately before a profitable rebalance and withdraw right after it to capture yield they did not help earn.
+
+<Info>
+  The default locked profit degradation in the on-chain program fully releases locked profit over 6 hours. Admins can update this parameter for the vault.
+</Info>
+
+## 7. Performance Fee
+
+When a rebalance produces profit, the vault can charge a performance fee. Instead of transferring underlying tokens out of the vault, the program mints additional vault LP tokens to the fee vault.
+
+This keeps underlying liquidity inside the vault while still giving the protocol its fee share.
+
+## 8. User Withdrawal
+
+Users exit by burning vault LP tokens. The vault calculates the user's share of the unlocked vault value and returns the underlying token.
+
+There are two withdrawal paths.
+
+<CardGroup cols={2}>
+  <Card title="Withdraw from Vault Reserve" icon="box-open" iconType="solid">
+    If the vault reserve has enough liquidity, the user receives tokens directly from the token vault.
+  </Card>
+  <Card title="Withdraw from Strategy First" icon="arrow-right-arrow-left" iconType="solid">
+    If the reserve is short, the vault can withdraw from an approved strategy before completing the user withdrawal.
+  </Card>
+</CardGroup>
+
+<Warning>
+  Withdrawals depend on available vault and strategy liquidity. Dynamic Vault is designed to keep liquidity accessible, but connected lending markets can still affect the speed and amount that can be withdrawn at a given moment.
+</Warning>
