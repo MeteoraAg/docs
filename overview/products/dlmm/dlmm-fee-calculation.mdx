@@ -206,10 +206,20 @@ You can see that the volatility accumulator is decreasing despite high frequency
 
 Protocol Fee is a percentage of the total swap fee (base + variable fee).
 
-- Protocol Fee is **5%** of the total swap fee for all standard DLMM pools.
-- Protocol Fee is **20%** of the total swap fee for DLMM Launch Pools.
+## Market-maker (MM) positions
 
-Protocol fees are configured via the `protocol_share` parameter on each pool's preset parameters (measured in basis points, max 2500 = 25%).
+- **Standard Pools:** **10%** Protocol Fee, **90%** LP Fee
+- **Launch Pools:** **20%** Protocol Fee, **80%** LP Fee
+
+## Limit orders
+
+- **50%** Protocol Fee, **50%** LO Fee
+
+## Swaps
+
+Swap hosts (such as Jupiter, Photon, or trading bots) can include a referral account in the swap transaction to receive a **Host Fee** equal to **20%** of the protocol fee.
+
+Protocol fees are configured via the `protocol_share` parameter on each pool's preset parameters (measured in basis points of the total swap fee, max 2500 = 25%).
 
 <Warning>
 **Breaking change in v0.11.0:** Bin state no longer stores `amount_x_in` and `amount_y_in` fields. The `reward_per_token_stored` fields have been renamed to `function_bytes`. Integrations that index bin state directly must update their deserialization logic.
