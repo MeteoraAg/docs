@@ -1,0 +1,102 @@
+---
+title: "Rebalance Crank"
+sidebarTitle: "Rebalance Crank"
+description: "How Hermes moves Dynamic Vault liquidity between the vault reserve and approved strategies while the vault updates profit, loss, fees, and locked profit."
+llmsDescription: "Product documentation for Dynamic Vault rebalance cranks, covering deposit_strategy, withdraw_strategy, before and after liquidity checks, profit and loss accounting, locked profit, performance fees, and sandwich attack prevention."
+---
+
+A rebalance crank is the transaction that changes where vault liquidity sits.
+
+When Hermes decides that liquidity should move, it submits one of the vault's strategy actions:
+
+- `deposit_strategy`: move liquidity from the vault reserve into an approved strategy
+- `withdraw_strategy`: move liquidity from an approved strategy back into the vault reserve
+
+The on-chain program then recalculates the vault's total liquidity and applies profit, loss, locked profit, and fee logic.
+
+<Frame>
+  <img src="/images/overview/other-products/dynamic-vault/rebalance-crank.png" />
+</Frame>
+
+## What Happens During a Rebalance
+
+<Steps>
+  <Step title="Hermes selects an action">
+    Hermes decides whether the vault should deposit into a strategy or withdraw from one based on yield and risk signals.
+  </Step>
+  <Step title="The vault checks permissions">
+    The transaction must come from the admin or configured operator, and the strategy must match the vault's approved strategy records.
+  </Step>
+  <Step title="Liquidity moves through the strategy handler">
+    The strategy handler performs the actual lending deposit or withdrawal through the connected protocol.
+  </Step>
+  <Step title="The vault compares before and after balances">
+    The program measures liquidity in the vault reserve and strategy before and after the action.
+  </Step>
+  <Step title="Profit, loss, and fees are applied">
+    Gains are added to locked profit and can trigger a performance fee. Losses reduce vault value and locked profit.
+  </Step>
+</Steps>
+
+## Rebalance Accounting
+
+Before the rebalance:
+
+```math
+beforeValue = tokenVaultBefore + strategyLiquidityBefore
+```
+
+After the rebalance:
+
+```math
+afterValue = tokenVaultAfter + strategyLiquidityAfter
+```
+
+The vault's total amount is updated by the difference.
+
+```math
+newTotalAmount = oldTotalAmount + afterValue - beforeValue
+```
+
+If the value increased, the rebalance created a gain. If the value decreased, the rebalance recorded a loss.
+
+## Why Profit Is Locked
+
+If all rebalance profit became withdrawable immediately, a user could attempt to deposit right before a known profitable rebalance and withdraw right after it. That user would capture yield that was earned by existing vault LPs.
+
+Dynamic Vault reduces this timing attack by locking newly reported profit and releasing it gradually.
+
+<Frame>
+  <img src="/images/overview/other-products/dynamic-vault/sandwich-attack-scenario.png" />
+</Frame>
+
+## How Profit Unlocking Works
+
+When profit is realized, the vault adds it to `last_updated_locked_profit`. Over time, the locked amount degrades until it becomes fully available in the vault's unlocked value.
+
+```math
+unlockedAmount = totalAmount - lockedProfit
+```
+
+The unlocked amount is used for deposit and withdrawal share calculations.
+
+<Frame>
+  <img src="/images/overview/other-products/dynamic-vault/drip-duration-example.png" />
+</Frame>
+
+## Product Benefit
+
+<CardGroup cols={2}>
+  <Card title="Protects Existing LPs" icon="shield" iconType="solid">
+    Profit unlocking makes it harder for opportunistic deposits to capture yield immediately after a rebalance.
+  </Card>
+  <Card title="Keeps Accounting On-Chain" icon="calculator" iconType="solid">
+    The vault program updates total amount, strategy liquidity, LP supply effects, and locked profit directly on-chain.
+  </Card>
+  <Card title="Allows Active Allocation" icon="arrows-rotate" iconType="solid">
+    Hermes can still move liquidity as markets change without requiring users to manually manage lending positions.
+  </Card>
+  <Card title="Constrains Operator Power" icon="lock" iconType="solid">
+    Rebalance cranks can only interact with approved vault strategies and must satisfy program account constraints.
+  </Card>
+</CardGroup>

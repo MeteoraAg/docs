@@ -1,0 +1,99 @@
+---
+title: "What is Hermes?"
+sidebarTitle: "What is Hermes?"
+description: "Learn how Hermes powers Dynamic Vault as the off-chain keeper that monitors yield, risk, and liquidity before submitting rebalance cranks."
+llmsDescription: "Product documentation for Hermes, the Dynamic Vault keeper that monitors lending pools, APY, deposit limits, utilization, reserve levels, and risk thresholds, then submits constrained rebalance cranks to approved vault strategies."
+---
+
+Hermes is the keeper layer for Dynamic Vault. It is an off-chain service that watches lending markets, evaluates yield opportunities, monitors risk signals, and submits rebalance transactions to the on-chain vault program.
+
+Hermes does not replace the vault program. It complements it.
+
+- The **vault program** owns the accounting, LP token minting and burning, strategy allowlist, fee logic, and permission checks.
+- **Hermes** handles market observation, allocation decisions, and operational timing.
+
+This separation lets Dynamic Vault react to changing market conditions without giving an off-chain service unrestricted control over user funds.
+
+<Note>
+  Hermes can only move vault liquidity through approved strategy instructions. It cannot arbitrarily transfer principal to an external wallet.
+</Note>
+
+## Why Hermes Exists
+
+Yield changes constantly. Lending APYs move as borrowers enter and exit. Utilization can spike. Deposit caps can be reached. A pool that was attractive an hour ago can become less attractive or less liquid.
+
+Dynamic Vault needs an operator that can keep watching those conditions and act when the vault should rebalance. That operator is Hermes.
+
+<CardGroup cols={2}>
+  <Card title="Yield Optimizer" icon="chart-line" iconType="solid">
+    Hermes compares connected strategies and identifies where vault liquidity can earn stronger risk-adjusted yield.
+  </Card>
+  <Card title="Risk Monitor" icon="shield" iconType="solid">
+    Hermes watches utilization, reserves, deposit caps, and strategy health so allocation decisions do not chase APY blindly.
+  </Card>
+  <Card title="Rebalance Operator" icon="arrows-rotate" iconType="solid">
+    Hermes submits deposit and withdrawal strategy transactions when the target allocation changes enough to justify movement.
+  </Card>
+  <Card title="Metrics Tracker" icon="chart-bar" iconType="solid">
+    Hermes collects and stores market data that can support dashboards, internal decisions, and integrator displays.
+  </Card>
+</CardGroup>
+
+## What Hermes Monitors
+
+Hermes evaluates several market and vault-level signals before submitting a rebalance.
+
+<CardGroup cols={2}>
+  <Card title="APY" icon="percent" iconType="solid">
+    The yield available from each connected lending market after considering how additional deposits may affect the rate.
+  </Card>
+  <Card title="Total Deposits" icon="building-columns" iconType="solid">
+    The size of the lending market and the amount of assets already supplied.
+  </Card>
+  <Card title="Deposit Limits" icon="block-brick" iconType="solid">
+    The maximum amount a strategy can safely or practically accept.
+  </Card>
+  <Card title="Utilization Rate" icon="wave-pulse" iconType="solid">
+    The share of supplied assets that has been borrowed. High utilization can mean higher yield, but also less available liquidity.
+  </Card>
+  <Card title="Reserve Levels" icon="piggy-bank" iconType="solid">
+    The amount of token liquidity available for withdrawals from the lending market.
+  </Card>
+  <Card title="Current Vault Allocation" icon="pie-chart" iconType="solid">
+    The vault's existing liquidity split across reserve balance and approved strategies.
+  </Card>
+</CardGroup>
+
+## What Hermes Can Do
+
+Hermes submits a limited set of operational actions.
+
+<Steps>
+  <Step title="Deposit into an approved strategy">
+    If a lending strategy is attractive and safe within configured limits, Hermes can move vault reserve liquidity into that strategy.
+  </Step>
+  <Step title="Withdraw from an approved strategy">
+    If a strategy becomes less attractive, too utilized, too illiquid, or needed for user withdrawals, Hermes can pull liquidity back into the vault reserve.
+  </Step>
+  <Step title="Claim supported strategy rewards">
+    If a strategy emits rewards, Hermes can trigger reward collection to a treasury-controlled reward account.
+  </Step>
+</Steps>
+
+## What Hermes Cannot Do
+
+Hermes is intentionally constrained.
+
+- It cannot withdraw principal to an arbitrary wallet.
+- It cannot route liquidity into strategies that the vault has not approved.
+- It cannot bypass vault LP accounting.
+- It cannot mint user LP shares outside the vault's deposit logic.
+- It cannot ignore on-chain permission checks on admin, operator, strategy, reserve, and fee accounts.
+
+## Hermes in the Dynamic Vault Stack
+
+```text
+Lending markets -> Hermes monitoring -> Allocation decision -> Rebalance crank -> Vault accounting update
+```
+
+Hermes makes Dynamic Vault feel dynamic. The on-chain vault protects the accounting. Together, they create a yield layer that can move with the market while keeping capital flows bounded by the program's rules.

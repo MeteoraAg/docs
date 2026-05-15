@@ -1,0 +1,79 @@
+---
+title: "DBC Leftover"
+sidebarTitle: "Leftover"
+description: "Learn what DBC leftover means, when fixed-supply launches create leftover base tokens, and how unused tokens are handled after migration."
+llmsDescription: "Explains DBC leftover for fixed-supply launches, including pre-migration token supply, post-migration token supply, tokens sold on the curve, base vault remainder, protocol and trading base fees, protocol migration base fees, leftover receiver, one-time withdrawal timing, and why dynamic-supply launches generally do not use leftover."
+---
+
+DBC leftover is the unused base token amount from a fixed-supply launch after the token has migrated.
+
+It exists because fixed-supply launches predefine the total token amount before trading begins. Not every token in that initial supply is necessarily sold through the bonding curve or needed for the migrated DAMM pool. The unused amount is called leftover.
+
+## When Leftover Applies
+
+Leftover applies to **fixed-supply** DBC launches.
+
+| Supply Model | Leftover Behavior |
+| --- | --- |
+| Dynamic supply | Usually no leftover. The launch mints the supply needed for the curve and migration flow. |
+| Fixed supply | Leftover may exist because the launch starts from a pre-defined supply. |
+
+For fixed-supply launches, the config includes:
+
+- `pre_migration_token_supply`: the fixed supply available before migration.
+- `post_migration_token_supply`: the supply expected after migration.
+- `leftover_receiver`: the address that receives unused base tokens.
+
+## Leftover Formula
+
+```math
+\text{Leftover} =
+\text{Remaining Base Vault Amount}
+- \text{Protocol and Trading Base Fees}
+- \text{Protocol Migration Base Fee}
+```
+
+In product terms, leftover is the part of the fixed launch supply that remains in the virtual pool after migration accounting and after base-token fee balances are reserved.
+
+This is more precise than simply subtracting tokens sold from the initial supply. The program withdraws leftover from the base vault only after excluding claimable base fees and protocol migration base fees.
+
+## Why Leftover Exists
+
+Fixed-supply launches need room for precision, curve math, and migration requirements. The launch may reserve more tokens than the exact amount ultimately used by the curve and the migrated pool.
+
+Leftover gives teams a clean way to recover the unused portion after migration instead of leaving it trapped in the virtual pool.
+
+<CardGroup cols={2}>
+  <Card title="Cleaner Supply Management" icon="box-open" iconType="solid">
+    Fixed-supply teams can account for unused tokens after the launch is complete.
+  </Card>
+  <Card title="Explicit Receiver" icon="wallet" iconType="solid">
+    The config defines the leftover receiver so the destination is known before launch.
+  </Card>
+</CardGroup>
+
+## When Leftover Can Be Withdrawn
+
+Leftover can be withdrawn only after the DBC pool has migrated and the graduated pool has been created.
+
+This matters because the program must first know how many base tokens were sold, how many were needed for migration, and how many remain in the virtual pool after fee and migration accounting.
+
+Leftover can only be withdrawn once, and it is sent to the configured leftover receiver.
+
+## Practical Example
+
+Imagine a fixed-supply launch sets aside 1 billion tokens for the DBC flow.
+
+- 650 million tokens are sold through the bonding curve.
+- 300 million tokens are needed for the migrated pool and post-migration allocations.
+- 50 million tokens remain unused.
+
+The 50 million unused tokens are leftover and can be withdrawn to the configured leftover receiver after migration.
+
+## Product Takeaway
+
+Leftover is a fixed-supply cleanup mechanism. It does not change the curve during active trading, but it matters for tokenomics because it defines what happens to unused base tokens after graduation.
+
+<Note>
+  For dynamic-supply launches, teams usually focus on the curve supply and migrated pool supply rather than leftover recovery.
+</Note>

@@ -1,0 +1,149 @@
+---
+title: "DLMM Strategies and Use Cases"
+sidebarTitle: "Strategies and Use Cases"
+description: "Choose DLMM liquidity shapes for stable pairs, volatile assets, DCA strategies, launch liquidity, and different capital-efficiency goals."
+llmsDescription: "Explains DLMM strategies and use cases for LPs, including Spot, Curve, Bid-Ask, Spot-Concentrated, Spot-Spread, and Spot-Wide liquidity shapes. Covers when to use each shape, tradeoffs between capital efficiency and out-of-range risk, bin step selection, base fee considerations, stable pair strategies, volatile pair strategies, single-sided DCA entry and exit, and token launch liquidity design."
+---
+
+DLMM gives LPs control over **where** liquidity is placed and **how** it is distributed across price bins. This turns liquidity provision into a strategy decision: you can optimize for capital efficiency, wider market coverage, volatility capture, or gradual buying and selling.
+
+The right strategy depends on your market view. A narrow position can earn more when price stays in range, but it can also go inactive faster. A wider position can survive more price movement, but each dollar of liquidity is spread across more bins.
+
+<Warning>DLMM strategies can improve capital efficiency, but they do not remove impermanent loss or out-of-range risk. Monitor positions and rebalance when market conditions change.</Warning>
+
+## Liquidity Shapes
+
+<CardGroup cols={3}>
+  <Card title="Spot" icon="chart-column" iconType="solid">
+    A uniform distribution across your selected bins. It is the most straightforward shape and works well when you want balanced exposure across a range.
+  </Card>
+  <Card title="Curve" icon="chart-scatter-bubble" iconType="solid">
+    A concentrated distribution around the middle of your range. It is designed for higher fee capture when price stays near the current market.
+  </Card>
+  <Card title="Bid-Ask" icon="chart-waterfall" iconType="solid">
+    An inverse Curve distribution with more liquidity near the edges. It is useful for volatile markets and DCA-style entry or exit strategies.
+  </Card>
+</CardGroup>
+
+## Strategy Comparison
+
+<div className="overflow-x-auto">
+  <table className="w-full border-collapse">
+    <thead>
+      <tr className="border-b border-gray-300 dark:border-gray-600">
+        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Strategy</th>
+        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Best For</th>
+        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Strength</th>
+        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Watch Out For</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+        <td className="py-3 px-4">
+        <div className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">Curve</div>
+        <div align="center">
+          <img src="/core-products/dlmm/assets/curve.png" alt="Curve" style={{maxWidth: '200px', height: 'auto'}} />
+        </div>
+        </td>
+        <td className="py-3 px-4">Stable pairs, pegged assets, and calm markets where price is expected to stay near the current range.</td>
+        <td className="py-3 px-4">High capital efficiency because more liquidity sits near the active price.</td>
+        <td className="py-3 px-4">Higher out-of-range risk if price moves away from the center. Rebalance more often when volatility rises.</td>
+      </tr>
+      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+        <td className="py-3 px-4">
+        <div className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">Bid-Ask</div>
+        <div align="center">
+          <img src="/core-products/dlmm/assets/bid-ask.png" alt="Bid-Ask" style={{maxWidth: '200px', height: 'auto'}} />
+        </div>
+        </td>
+        <td className="py-3 px-4">Volatile markets, DCA entries, DCA exits, and strategies that expect price to move away from the current level.</td>
+        <td className="py-3 px-4">Places liquidity where larger price swings may happen, helping users buy lower or sell higher across bins.</td>
+        <td className="py-3 px-4">More advanced than Spot. It may sit away from the active price until the market moves into the edge bins.</td>
+      </tr>
+      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+        <td className="py-3 px-4">
+        <div className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">Spot-Concentrated</div>
+        <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Liquidity equally deposited between 1-3 bins</div>
+        <div align="center">
+          <img src="/core-products/dlmm/assets/spot-concentrated.png" alt="Spot-Concentrated" style={{maxWidth: '200px', height: 'auto'}} />
+        </div>
+        </td>
+        <td className="py-3 px-4">Very tight stablecoin or pegged-pair strategies.</td>
+        <td className="py-3 px-4">Maximum capital concentration around the active price.</td>
+        <td className="py-3 px-4">Highest out-of-range risk. This strategy needs close monitoring, especially on volatile pairs.</td>
+      </tr>
+      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+        <td className="py-3 px-4">
+        <div className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">Spot-Spread</div>
+        <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Liquidity equally deposited between 20-30 bins</div>
+        <div align="center">
+          <img src="/core-products/dlmm/assets/spot-spread.png" alt="Spot-Spread" style={{maxWidth: '200px', height: 'auto'}} />
+        </div>
+        </td>
+        <td className="py-3 px-4">Markets with moderate daily movement where you still want meaningful capital efficiency.</td>
+        <td className="py-3 px-4">Balances fee capture with more breathing room than a very tight range.</td>
+        <td className="py-3 px-4">Can still go out of range during strong trends. Review the position frequently.</td>
+      </tr>
+      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+        <td className="py-3 px-4">
+        <div className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">Spot-Wide</div>
+        <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Liquidity equally deposited between 50 bins</div>
+        <div align="center">
+          <img src="/core-products/dlmm/assets/spot-wide.png" alt="Spot-Wide" style={{maxWidth: '200px', height: 'auto'}} />
+        </div>
+        </td>
+        <td className="py-3 px-4">LPs who want a more resilient range and do not want to rebalance as often.</td>
+        <td className="py-3 px-4">More durable coverage across price movement.</td>
+        <td className="py-3 px-4">Lower fee capture per dollar than tighter strategies because liquidity is spread across more bins.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+## Choosing Your Bin Step
+
+Each bin represents a single price point, and the difference between two neighboring bins is the **bin step**. You can think of bin step like tick size: a smaller bin step creates tighter price intervals, while a larger bin step creates wider jumps between bins.
+
+For example, if SOL is $20 and the bin step is 25 basis points, the next bins would be approximately $20.05, then $20.10, and so on.
+
+<CardGroup cols={2}>
+  <Card title="Smaller Bin Step" icon="arrow-down" iconType="solid">
+    Creates a tighter price ladder and can capture more continuous trading activity. This is generally better suited for stable pairs and highly liquid markets.
+  </Card>
+  <Card title="Larger Bin Step" icon="arrow-up" iconType="solid">
+    Lets a position cover a wider market range with fewer bins. This is often better suited for volatile pairs where price can move quickly.
+  </Card>
+</CardGroup>
+
+<Note>For wider range design, see [DLMM Dynamic Positions](/core-products/dlmm/dynamic-positions).</Note>
+
+## How Bin Step Affects Fees
+
+The base fee is the minimum trading fee charged by a pool. In DLMM, the bin step is one of the inputs used to determine that base fee.
+
+- Lower base fees may attract more volume.
+- Higher base fees earn more per unit of volume.
+- Smaller bin steps are usually paired with tighter, more active markets.
+- Larger bin steps are usually paired with wider, more volatile markets.
+
+DLMM also supports dynamic fees, so the total fee can increase when volatility rises. This means LPs and pool creators should think about both the baseline fee and the expected volatility profile of the pair.
+
+## Common Use Cases
+
+<AccordionGroup>
+  <Accordion title="Stable pairs">
+    Use a smaller bin step and a Curve or Spot-Concentrated strategy when you expect price to stay close to the peg. This maximizes capital efficiency but needs monitoring if the peg weakens.
+  </Accordion>
+  <Accordion title="Volatile pairs">
+    Use a larger bin step or wider Spot range to reduce the chance of going out of range immediately. Bid-Ask can be useful if you want to capture movement toward the edges.
+  </Accordion>
+  <Accordion title="DCA into a token">
+    Deposit quote token single-sided and use Bid-Ask or selected bins below the current price. As price moves down, your quote token can gradually convert into the base token.
+  </Accordion>
+  <Accordion title="DCA out of a token">
+    Deposit base token single-sided and place liquidity above the current price. As price moves up, your base token can gradually convert into quote token.
+  </Accordion>
+  <Accordion title="Token launches">
+    Use DLMM to bootstrap liquidity with a shape that matches expected launch volatility. Wider ranges can support price discovery, while dynamic fees help capture more value when trading demand is high.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,94 @@
+---
+title: "LST Pools"
+description: "Learn how DAMM v1 LST pools support SOL/LST liquidity with stable-pool pricing, depeg-aware value tracking, and additional yield opportunities."
+llmsDescription: "Product documentation for DAMM v1 LST pools, covering SOL/LST pool design, LST virtual price tracking, depeg-aware stable pools, LP benefits, LST protocol benefits, Dynamic Vault yield, and when LST pools are useful."
+---
+
+DAMM v1 LST pools are stable-style pools built for liquid staking token markets. They help users swap between SOL and supported LSTs while giving LST protocols a way to build deeper, more sustainable liquidity.
+
+An LST, or liquid staking token, represents staked SOL plus accumulated staking rewards. Because staking rewards accrue over time, many LSTs are designed to become worth slightly more SOL over time. That makes a simple 1:1 pool incomplete: the pool needs to understand that the LST side may appreciate.
+
+## Why LST pools exist
+
+Solana has a large amount of directly staked SOL. Liquid staking helps make that capital usable across DeFi, but LST adoption depends on liquidity. Users need to enter and exit LSTs with low slippage. Protocols need enough market depth for their token to be useful across wallets, aggregators, lending markets, and structured products.
+
+DAMM v1 LST pools were built to support that market structure:
+
+- Users get a swap venue between SOL and LSTs.
+- LPs can provide passive liquidity without managing active ranges.
+- LST protocols can grow liquidity without relying only on emissions.
+- Eligible assets can earn additional yield through Dynamic Vaults.
+
+## The core problem: LSTs appreciate
+
+In a standard AMM, a SOL/LST pool can create impermanent loss for LPs if the LST reliably appreciates against SOL. The pool may treat the assets as if they should remain 1:1 even though staking rewards gradually change the fair relationship.
+
+DAMM v1 addresses this with a depeg-aware stable pool design. The pool can update a base virtual price for the LST side and use that value when calculating stable-swap balances.
+
+Conceptually:
+
+```math
+\text{LST value used by the pool} = \text{LST amount} \times \text{LST virtual price}
+```
+
+This lets the pool price swaps based on the LST's underlying value rather than assuming one LST is always equal to one SOL.
+
+<Info>
+  DAMM v1 includes depeg handling for supported LST designs, including integrations around staking-pool style virtual price data.
+</Info>
+
+## How DAMM v1 LST pools work
+
+A DAMM v1 LST pool combines three ideas:
+
+1. **Stable-pool pricing** concentrates liquidity around the expected SOL/LST relationship.
+2. **Virtual price tracking** accounts for the LST's changing value over time.
+3. **Vault-backed liquidity** allows eligible idle assets to participate in Dynamic Vault yield where supported.
+
+The user experience stays simple. Users swap between SOL and the LST. LPs deposit liquidity and receive LP tokens. The pool handles the value adjustment internally.
+
+## Benefits for LPs
+
+DAMM v1 LST pools are designed to make LP participation more passive and more durable.
+
+LPs can benefit from:
+
+- **Lower-slippage routing volume** because stable-style liquidity is efficient near the expected exchange rate.
+- **Reduced LST appreciation mismatch** because the pool can account for the staking token's virtual price.
+- **Swap fee income** from users entering and exiting LST exposure.
+- **Additional vault yield** where eligible liquidity is routed through Dynamic Vaults.
+- **Farming rewards** if the LST protocol or partner funds a reward pool for LP tokens.
+
+## Benefits for LST protocols
+
+For an LST protocol, liquidity is distribution. A strong SOL/LST pool can make the token easier to buy, easier to exit, easier to integrate, and more attractive to DeFi users.
+
+DAMM v1 LST pools help protocols:
+
+- Build liquidity around the natural SOL/LST relationship.
+- Improve aggregator routing and execution quality.
+- Reduce dependence on short-term token emissions.
+- Offer LPs multiple potential return sources.
+- Support early liquidity growth while the LST is still building adoption.
+
+## Dynamic Vault yield for LST pools
+
+Some DAMM v1 LST pool assets can connect to Dynamic Vaults. When supported, idle SOL or stablecoin-side liquidity may be allocated into external lending strategies while the pool remains available for swaps and withdrawals.
+
+This matters because LST liquidity can be strategic and long-lived. Vault yield can help keep LPs engaged during periods when swap volume is not enough on its own.
+
+<Warning>
+  LST pools still carry risk. LPs should understand LST protocol risk, smart contract risk, liquidity risk, depeg risk, lending strategy risk, and the possibility that incentives change over time.
+</Warning>
+
+## When to use an LST pool
+
+A DAMM v1 LST pool is useful when:
+
+- The pair is SOL and a supported liquid staking token.
+- The LST has a reliable way to determine virtual price or staking value.
+- The goal is low-slippage routing, not wide price discovery.
+- The protocol wants passive liquidity that can remain productive over time.
+- LPs need more than short-term farming rewards to justify liquidity.
+
+For volatile token launches or pairs without a stable relationship, use a constant-product design instead.

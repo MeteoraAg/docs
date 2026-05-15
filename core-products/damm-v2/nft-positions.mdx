@@ -1,0 +1,106 @@
+---
+title: "DAMM v2 NFT Positions"
+sidebarTitle: "NFT Positions"
+description: "Learn how DAMM v2 uses NFT-backed positions to represent LP liquidity, pending fees, liquidity mining rewards, vesting locks, and permanent locks."
+llmsDescription: "Documentation for DAMM v2 NFT positions, covering position NFT ownership, transferable LP positions, position account state, unlocked liquidity, vesting liquidity, permanently locked liquidity, pending trading fees, liquidity mining rewards, splitting positions, claiming fees, closing positions, and product use cases."
+---
+
+Every DAMM v2 LP position is represented by a unique position NFT. The NFT is the ownership handle for the liquidity position: whoever holds the position NFT controls the position.
+
+This turns liquidity into a portable on-chain asset. A position can be transferred between wallets, separated into multiple positions, tracked by marketplaces or dashboards, and composed by other protocols.
+
+## What a Position Represents
+
+A DAMM v2 position tracks the liquidity and rewards tied to one position NFT.
+
+<CardGroup cols={2}>
+  <Card title="Liquidity Ownership" icon="wallet" iconType="solid">
+    The position records how much liquidity belongs to the NFT holder.
+  </Card>
+  <Card title="Pending Fees" icon="coins" iconType="solid">
+    Trading fees accrue to the position until the owner claims them.
+  </Card>
+  <Card title="Liquidity Mining Rewards" icon="seedling" iconType="solid">
+    Built-in reward campaigns accrue to each position based on total liquidity.
+  </Card>
+  <Card title="Locks and Vesting" icon="lock" iconType="solid">
+    A position can contain unlocked, vesting, and permanently locked liquidity.
+  </Card>
+</CardGroup>
+
+## Liquidity Buckets
+
+DAMM v2 positions separate liquidity into three buckets:
+
+| Bucket | Product Meaning |
+| --- | --- |
+| Unlocked liquidity | Liquidity that can be withdrawn by the position owner |
+| Vesting liquidity | Liquidity that unlocks over time according to a schedule |
+| Permanently locked liquidity | Liquidity that cannot be withdrawn, but still supports the pool |
+
+Locked liquidity still earns. DAMM v2 uses total position liquidity when tracking trading fees and liquidity mining rewards, so vesting and permanently locked liquidity can continue participating while withdrawal is restricted.
+
+## Position NFTs
+
+Position NFTs are Token 2022 NFTs created by the DAMM v2 program. They are minted with zero decimals and tied to the pool's position account.
+
+For product users, the important behavior is simple:
+
+- Holding the NFT gives control over the position.
+- Transferring the NFT transfers control of the position.
+- The NFT makes the position discoverable and composable.
+
+<Info>
+  DAMM v2 uses the pool as the freeze authority for position NFTs so positions can be associated with the pool they belong to.
+</Info>
+
+## Fees and Rewards
+
+Position fees are separate from liquidity removal. A position can hold pending token A fees, pending token B fees, and pending rewards from up to two liquidity mining reward slots.
+
+The exact fee tokens depend on the pool's collect fee mode:
+
+| Mode | What LPs Claim |
+| --- | --- |
+| BothToken | Fees can accrue in both token A and token B |
+| OnlyB | Fees accrue in token B |
+| Compounding | Fees accrue in token B, with a configurable share automatically reinvested into pool reserves |
+
+## Splitting Positions
+
+DAMM v2 positions can be split. This lets one position become two positions while dividing liquidity, fees, rewards, and supported inner vesting state.
+
+This is useful when you want to:
+
+- Transfer only part of a position.
+- Separate treasury, market maker, or community allocations.
+- Split vesting tranches before distributing position ownership.
+- Sell or custody part of an LP position without exiting the rest.
+
+## Liquidity Locks
+
+DAMM v2 supports two lock styles:
+
+- **Vesting lock**: liquidity unlocks on a schedule, such as a cliff followed by periodic releases.
+- **Permanent lock**: liquidity cannot be withdrawn, creating a durable liquidity commitment.
+
+This gives token teams a way to show long-term alignment while keeping fee and reward participation active.
+
+<Note>
+  Inner vesting stores the vesting schedule inside the position itself. For multiple tranches, a position can be split before applying separate schedules.
+</Note>
+
+## Closing a Position
+
+A position can only be closed after it is empty. That means liquidity has been removed where allowed, pending fees have been claimed, and pending liquidity mining rewards have been claimed.
+
+This protects users from accidentally closing a position that still contains value.
+
+## Why NFT Positions Matter
+
+NFT positions make DAMM v2 liquidity easier to reason about as a product:
+
+- LP ownership is represented by a familiar token object.
+- Transfers are simple because ownership follows the NFT.
+- Positions can contain complex state without making the user manage separate farm or lock accounts.
+- Integrators can build dashboards, custody flows, marketplaces, and collateral products around the NFT.

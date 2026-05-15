@@ -1,0 +1,215 @@
+---
+title: "Alpha Vault Formulas"
+sidebarTitle: "Formulas"
+description: "Understand the product math behind Alpha Vault deposits, vault buying power, proportional token allocation, quote refunds, and linear vesting claims."
+llmsDescription: "Explains non-technical Alpha Vault formulas: max swappable amount in Pro Rata and FCFS mode, effective used deposit, user allocation share, bought token allocation, linear vesting claimable tokens, user claimable tokens after already claimed amount, deposit overflow refund, remaining quote refund, and same average vault buy price."
+---
+
+Alpha Vault's product math is built around one idea: the vault buys as one participant, then distributes the result back to users based on the vault rules.
+
+You do not need to understand the implementation to use Alpha Vault, but the formulas below explain how allocation, refunds, and claims are calculated.
+
+## Key Terms
+
+| Term | Product Meaning |
+| --- | --- |
+| `total_deposit` | Total quote token deposited into the Alpha Vault by all users. |
+| `user_deposit` | The amount of quote token deposited by a specific user. |
+| `max_buying_cap` | Maximum quote amount the vault can use to buy in Pro Rata mode. |
+| `max_depositing_cap` | Maximum quote amount the vault accepts in FCFS mode. |
+| `swapped_amount` | Quote token actually used by the vault to buy from the pool. |
+| `bought_token` | Launch token bought by the vault. |
+| `claimed_token` | Launch token already claimed by a user. |
+
+## Max Swappable Amount
+
+The max swappable amount is the most quote token the vault is allowed to use for buying.
+
+### Pro Rata Mode
+
+```math
+\text{Max Swappable Amount} = \min(\text{Total Deposit}, \text{Max Buying Cap})
+```
+
+In product terms, Pro Rata accepts demand first, then caps how much of that demand can actually be used to buy.
+
+If total deposits are below the max buying cap, the vault can use all deposits. If total deposits exceed the max buying cap, the vault only uses the capped amount and refunds the overflow proportionally.
+
+### FCFS Mode
+
+```math
+\text{Max Swappable Amount} = \text{Total Deposit}
+```
+
+In FCFS mode, total deposits are already capped at the max depositing cap. Because the vault does not accept overflow deposits, all accepted deposits are intended to be usable for buying.
+
+## User Allocation Share
+
+A user's share of the vault is based on their deposit compared with total vault deposits.
+
+```math
+\text{User Share} = \frac{\text{User Deposit}}{\text{Total Deposit}}
+```
+
+This share is used for token allocation and quote refunds.
+
+<Note>
+  In Alpha Vault, users share the vault's final average buy result. The product does not assign each user a separate price based on deposit time.
+</Note>
+
+## Effective Used Deposit
+
+The effective used deposit is the portion of a user's deposit that actually participates in the vault buy.
+
+```math
+\text{User Effective Used Deposit} =
+\text{User Deposit} \times \frac{\text{Swapped Amount}}{\text{Total Deposit}}
+```
+
+If the vault uses all deposits, the user's effective used deposit equals their full deposit.
+
+If the vault uses only part of total deposits, each user participates proportionally and receives the rest back as refund.
+
+## Bought Token Allocation
+
+After the vault buys launch tokens, each user's total token allocation is:
+
+```math
+\text{User Token Allocation} =
+\text{Bought Token} \times \frac{\text{User Deposit}}{\text{Total Deposit}}
+```
+
+In product terms, if a user contributed 1% of total deposits, they are entitled to 1% of the tokens bought by the vault, before accounting for vesting and already-claimed amounts.
+
+## Same Average Vault Buy Price
+
+The vault's average buy price is:
+
+```math
+\text{Average Vault Buy Price} =
+\frac{\text{Swapped Amount}}{\text{Bought Token}}
+```
+
+Every participant in the same vault receives exposure at this same average vault buy price.
+
+This is one of Alpha Vault's biggest product benefits. Supporters do not need to race each other for a slightly earlier fill inside the vault. The vault buys as one launch mechanism, then distributes the result proportionally.
+
+## Linear Vesting Formula
+
+Alpha Vault can release bought tokens over time. The total amount of bought tokens that have unlocked so far is:
+
+```math
+\text{Total Unlocked Tokens} =
+\text{Bought Token} \times
+\frac{\text{Current Point} - \text{Start Vesting Point} + 1}{\text{End Vesting Point} - \text{Start Vesting Point} + 1}
+```
+
+Where the current point is capped at the end vesting point.
+
+In product terms:
+
+- Before the start vesting point, users cannot claim tokens.
+- During vesting, tokens unlock gradually.
+- At or after the end vesting point, all bought tokens are unlocked.
+
+## User Claimable Token Formula
+
+A user's currently claimable amount is their share of unlocked tokens minus what they have already claimed.
+
+```math
+\text{User Claimable Token} =
+\left(
+\text{Total Unlocked Tokens} \times
+\frac{\text{User Deposit}}{\text{Total Deposit}}
+\right)
+- \text{User Already Claimed Token}
+```
+
+This prevents double-claiming while allowing users to come back multiple times during vesting.
+
+## Deposit Overflow Refund
+
+Deposit overflow happens mainly in Pro Rata mode when total deposits exceed the vault's max buying cap.
+
+```math
+\text{Deposit Overflow} =
+\text{Total Deposit} - \text{Max Swappable Amount}
+```
+
+Each user's overflow refund is proportional to their deposit share:
+
+```math
+\text{User Overflow Refund} =
+\text{Deposit Overflow} \times
+\frac{\text{User Deposit}}{\text{Total Deposit}}
+```
+
+### Example
+
+Assume:
+
+- Total deposits: 10,000,000 USDC
+- Max buy cap: 1,000,000 USDC
+- User deposit: 100 USDC
+
+```math
+\text{Deposit Overflow} = 10,000,000 - 1,000,000 = 9,000,000
+```
+
+```math
+\text{User Overflow Refund} = 9,000,000 \times \frac{100}{10,000,000} = 90
+```
+
+The user receives 90 USDC back as overflow refund. The remaining 10 USDC is the user's effective participation in the vault buy.
+
+## Remaining Quote Refund
+
+Remaining quote is quote token left in the vault after the buying period. This can happen if the vault does not spend every eligible quote token during fills.
+
+```math
+\text{Remaining Quote} =
+\text{Total Deposit} - \text{Swapped Amount}
+```
+
+Each user's proportional remaining quote amount is:
+
+```math
+\text{User Remaining Quote Refund} =
+\text{Remaining Quote} \times
+\frac{\text{User Deposit}}{\text{Total Deposit}}
+```
+
+If the user already withdrew an overflow refund earlier, that withdrawn amount is subtracted from the final remaining quote withdrawal so the user does not receive the same refund twice.
+
+## FCFS Capacity Formula
+
+In FCFS mode, the vault tracks remaining capacity while users deposit.
+
+```math
+\text{Remaining Capacity} =
+\text{Max Depositing Cap} - \text{Total Deposit}
+```
+
+A user's accepted deposit is limited by both remaining vault capacity and any user-specific cap.
+
+```math
+\text{Accepted Deposit} =
+\min(\text{Requested Deposit}, \text{Remaining Capacity}, \text{User Remaining Cap})
+```
+
+Once remaining capacity reaches zero, the vault is full.
+
+## Individual Cap Formula
+
+When an individual cap is active, a user's remaining quota is:
+
+```math
+\text{User Remaining Cap} =
+\text{User Max Cap} - \text{User Current Deposit}
+```
+
+For whitelisted vaults, the user's max cap can come from the whitelist configuration. For permissionless FCFS vaults, it can come from the vault's configured individual deposit cap.
+
+<Warning>
+  Formula examples are simplified for product understanding. Exact on-chain values also account for token decimals, supported token program behavior, transfer fees where applicable, and safe integer rounding.
+</Warning>

@@ -1,0 +1,95 @@
+---
+title: "Algorithm to Find Optimal Yield Allocations"
+sidebarTitle: "Optimal Allocations"
+description: "How Hermes decides where Dynamic Vault liquidity should be allocated across connected lending strategies."
+llmsDescription: "Non-technical explanation of Hermes allocation algorithm for Dynamic Vault, including APR simulation, liquidity portions, utilization, deposit caps, risk filters, target allocation, and rebalance thresholds."
+---
+
+Hermes is designed to allocate vault liquidity where it can earn the strongest available yield without ignoring liquidity and risk constraints.
+
+The important product insight is that lending yield is not static. Adding more liquidity to a pool can lower deposit APR because the same borrower interest is shared across more suppliers. That means Hermes cannot simply choose the pool with the highest displayed APY. It needs to simulate what happens after the vault deposits there.
+
+## Inputs Hermes Considers
+
+<CardGroup cols={2}>
+  <Card title="Available Vault Liquidity" icon="vault" iconType="solid">
+    The amount of liquidity that can be allocated from the vault reserve or moved from existing strategies.
+  </Card>
+  <Card title="Current Strategy Allocation" icon="pie-chart" iconType="solid">
+    Where the vault's liquidity is already deployed before the next rebalance.
+  </Card>
+  <Card title="Projected APR" icon="chart-line" iconType="solid">
+    The expected lending APR after a simulated deposit amount is added to a strategy.
+  </Card>
+  <Card title="Utilization and Reserves" icon="water" iconType="solid">
+    Liquidity health metrics that affect whether a strategy is attractive enough to receive capital.
+  </Card>
+  <Card title="Deposit Limits" icon="block-brick" iconType="solid">
+    Strategy-level or protocol-level caps that prevent over-allocation into a single destination.
+  </Card>
+  <Card title="Risk Limits" icon="shield" iconType="solid">
+    Maximum allocations and safety rules that can reduce or block exposure even when APY is high.
+  </Card>
+</CardGroup>
+
+## The Allocation Method
+
+Hermes uses an incremental allocation approach.
+
+<Steps>
+  <Step title="Split vault liquidity into portions">
+    Hermes divides allocatable liquidity into many smaller chunks. Smaller chunks let Hermes model how APY changes as more capital enters a strategy.
+  </Step>
+  <Step title="Simulate each portion across strategies">
+    For each chunk, Hermes estimates the resulting APR if that chunk were deposited into each connected strategy.
+  </Step>
+  <Step title="Choose the best eligible strategy">
+    Hermes assigns the chunk to the strategy with the best projected yield after applying risk, utilization, reserve, and cap checks.
+  </Step>
+  <Step title="Update the simulated state">
+    The selected strategy's simulated deposit balance is updated, which may change its projected APR for the next chunk.
+  </Step>
+  <Step title="Repeat until liquidity is allocated">
+    Hermes repeats the process until all simulated portions have been assigned.
+  </Step>
+  <Step title="Compare target allocation against current allocation">
+    If the difference is large enough, Hermes submits one or more rebalance cranks to move toward the target.
+  </Step>
+</Steps>
+
+## Simplified Pseudocode
+
+```text
+Split vault liquidity into portions
+For each portion:
+  For each approved strategy:
+    Estimate APR after this portion is deposited
+    Apply utilization, reserve, cap, and risk checks
+  Assign the portion to the best eligible strategy
+  Update simulated balances
+Compare new target allocation against current allocation
+If the difference is meaningful, submit a rebalance crank
+```
+
+## Why Hermes Uses Simulation
+
+Displayed APY can be misleading when a vault is moving meaningful liquidity. If a small pool shows a high APY, depositing a large amount into it can dilute the rate quickly. Simulation helps Hermes avoid overfilling a high-APY opportunity until it becomes average.
+
+This creates a more balanced allocation process:
+
+- high APY attracts capital
+- additional capital can lower projected APY
+- Hermes keeps routing the next portion to the best remaining opportunity
+- final allocation reflects the shape of the full market, not just the top quoted number
+
+## Rebalance Threshold
+
+Hermes does not need to rebalance for every tiny allocation change. Rebalancing has operational cost and can create unnecessary churn. The product target is to rebalance when the new allocation is meaningfully different from the current allocation.
+
+<Note>
+  Earlier Dynamic Vault documentation references a 0.1% allocation difference as the threshold for triggering a rebalance. Actual operation can depend on vault configuration, strategy availability, and market conditions.
+</Note>
+
+## Product Outcome
+
+The algorithm gives Dynamic Vault a practical operating model: move liquidity when the opportunity is worth it, diversify across eligible strategies, and avoid chasing surface-level APY without understanding the impact of the vault's own deposits.

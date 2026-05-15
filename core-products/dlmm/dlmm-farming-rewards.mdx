@@ -1,0 +1,101 @@
+---
+title: "DLMM Liquidity Mining"
+sidebarTitle: "Liquidity Mining"
+description: "Learn how DLMM Liquidity Mining incentivizes active liquidity, how rewards are distributed across bins, and how LPs claim eligible rewards."
+llmsDescription: "Explains DLMM Liquidity Mining as the token reward mechanism for active DLMM liquidity, matching the lb_clmm program's LiquidityMining function type and is_support_liquidity_mining behavior. Covers why liquidity mining matters, who earns rewards, how active bins and crossed bins receive rewards, pro-rata distribution by liquidity share, fixed reward emission over time, examples of reward allocation, manual claiming, non-compounding rewards, what happens when there is no active liquidity, and product takeaways for LPs, token teams, and traders."
+---
+
+DLMM Liquidity Mining is the token reward mechanism for LPs who provide useful, active liquidity in a DLMM pool. In the `lb_clmm` program, this feature is represented by the `LiquidityMining` function type and liquidity mining support checks.
+
+Rewards are designed to flow to liquidity where trading is actually happening, not liquidity that sits far away from the market price.
+
+Rewards accrue through your [DLMM Dynamic Position](/core-products/dlmm/dynamic-positions) when your liquidity is in the active bin or in bins crossed by swaps.
+
+## Why Liquidity Mining Matters
+
+<CardGroup cols={2}>
+  <Card title="Incentivize Useful Liquidity" icon="seedling" iconType="solid">
+    Rewards flow to bins that support active trading, helping pools deepen liquidity where traders need it most.
+  </Card>
+  <Card title="Boost LP Returns" icon="coins" iconType="solid">
+    LPs can earn farming rewards in addition to trading fees when their position is active and eligible.
+  </Card>
+  <Card title="Support Launch Growth" icon="rocket" iconType="solid">
+    Token teams can use rewards to attract liquidity during important launch or growth periods.
+  </Card>
+  <Card title="Align With DLMM Design" icon="arrows-to-circle" iconType="solid">
+    Rewards follow DLMM's bin model, so incentive distribution stays tied to the same liquidity that powers swaps.
+  </Card>
+</CardGroup>
+
+## Who Earns Rewards
+
+Rewards are distributed to positions with liquidity in the **active bin**. If a swap moves the active price across multiple bins, rewards can be distributed across the bins crossed during that move.
+
+Your reward share depends on your share of liquidity in the eligible bin or bins.
+
+```text
+Your reward share = your liquidity in eligible bins / total liquidity in eligible bins
+```
+
+If your position is out of range, it does not earn farming rewards because it is not supporting active trading. If a bin has no liquidity, no LP receives rewards from that bin.
+
+<Note>In DLMM, the same idea applies to fees and rewards: active liquidity matters. A position that is not in range does not earn trading fees or liquidity mining rewards until price returns or the LP rebalances.</Note>
+
+## How Rewards Are Distributed
+
+Farming rewards are emitted at a fixed rate over the reward period. For example, a pool could distribute 50,000 USDC over four weeks. That budget is streamed over time and allocated to eligible bins.
+
+When the active bin stays in one place, rewards go to liquidity in that active bin. When a swap crosses bins, rewards are split across the crossed bins and then distributed proportionally to LPs in each bin.
+
+```text
+Reward budget over time
+  -> active bin or crossed bins
+  -> LPs in those bins, based on liquidity share
+```
+
+## Example
+
+Suppose a pool distributes `50,000 USDC` over four weeks, equal to about `1,785.71 USDC` per day.
+
+| Moment | What Happens | Who Earns |
+|---|---|---|
+| Position A deposits in bin 0 | Bin 0 is the active bin | Position A earns rewards from bin 0 |
+| Position B joins bin 0 | Bin 0 is still active | Positions A and B share rewards based on liquidity share |
+| Position C adds liquidity in bin 1 | Bin 1 is not active yet | Position C does not earn until bin 1 becomes active or is crossed |
+| A swap moves price from bin 0 to bin 1 | Both bins are crossed | Rewards are allocated across bin 0 and bin 1, then shared by LPs in each bin |
+
+This example shows the core principle: farming rewards follow active market participation.
+
+## Claiming Rewards
+
+DLMM liquidity mining rewards do not auto-compound. They accrue to eligible positions and must be claimed manually.
+
+<CardGroup cols={2}>
+  <Card title="Claimable" icon="hand-holding-dollar" iconType="solid">
+    Rewards accumulate for eligible positions and can be claimed when available.
+  </Card>
+  <Card title="Not Auto-Compounded" icon="circle-xmark" iconType="solid">
+    Rewards are not automatically added back into your DLMM liquidity position.
+  </Card>
+</CardGroup>
+
+## What Happens When There Is No Active Liquidity
+
+If there is no liquidity in the active bin, rewards are not distributed to LPs for that period. They remain undistributed until there is eligible active liquidity based on the pool's reward logic.
+
+This is important for LPs and token teams. If incentives are meant to attract market depth, the best outcome is not just more liquidity overall, but liquidity placed close enough to support trading.
+
+## Product Takeaways
+
+<AccordionGroup>
+  <Accordion title="For LPs">
+    Liquidity mining rewards can improve returns, but only when your liquidity is active. Choose ranges that match your market view and rebalance when price moves away.
+  </Accordion>
+  <Accordion title="For token teams">
+    Liquidity mining can help bootstrap liquidity and keep LPs engaged, but reward design should encourage depth around the prices where trading is expected.
+  </Accordion>
+  <Accordion title="For traders">
+    Liquidity mining can help attract deeper active liquidity, which may improve trading depth and routing quality for the pool.
+  </Accordion>
+</AccordionGroup>

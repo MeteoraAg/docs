@@ -1,0 +1,93 @@
+---
+title: "DAMM v2 Liquidity Mining"
+sidebarTitle: "Liquidity Mining"
+description: "Learn how DAMM v2 distributes built-in liquidity mining rewards directly to LP positions without a separate staking contract."
+llmsDescription: "Documentation for DAMM v2 liquidity mining, covering built-in reward slots, up to two reward tokens per pool, reward duration, reward funder, reward rate, reward-per-liquidity accounting, position reward accrual, claiming rewards, locked liquidity earning rewards, Token 2022 reward support, and use cases for launches and LP incentives."
+---
+
+DAMM v2 has liquidity mining built into the pool program. Projects can fund reward campaigns directly on a pool, and LP positions earn those rewards automatically while they provide liquidity.
+
+There is no separate farm contract, no LP token wrapping, and no extra staking step for LPs. If a position has eligible liquidity, it can accrue rewards.
+
+## How It Works
+
+Each DAMM v2 pool has up to two reward slots. A reward slot defines:
+
+- The reward token mint.
+- The reward vault that holds funded tokens.
+- The funder that can add reward tokens.
+- The reward duration.
+- The reward rate over time.
+
+As time passes, rewards accrue across the pool and are assigned to positions based on each position's share of total liquidity.
+
+```math
+\text{Position Share} = \frac{\text{Position Liquidity}}{\text{Total Pool Liquidity}}
+```
+
+If a position owns 10% of the pool liquidity during a reward period, it earns roughly 10% of the emitted rewards for that period.
+
+## What Counts as Liquidity
+
+DAMM v2 uses total position liquidity for reward accounting. That can include:
+
+- Unlocked liquidity.
+- Vesting liquidity.
+- Permanently locked liquidity.
+
+This is important for launches and treasuries. A team can lock liquidity for commitment and still let that liquidity participate in the same reward campaign as other LP liquidity.
+
+## Reward Campaign Lifecycle
+
+<Steps>
+  <Step title="Initialize a reward slot">
+    A pool creator or authorized operator sets up reward slot 0 or 1 with a reward mint, funder, and duration.
+  </Step>
+  <Step title="Fund the reward vault">
+    The funder sends reward tokens into the vault. DAMM v2 calculates the reward rate over the active duration.
+  </Step>
+  <Step title="LP positions accrue rewards">
+    Positions earn rewards over time based on their share of total liquidity.
+  </Step>
+  <Step title="Position owners claim rewards">
+    Rewards remain pending on the position until the position owner claims them.
+  </Step>
+</Steps>
+
+## Reward Limits
+
+| Feature | DAMM v2 Behavior |
+| --- | --- |
+| Reward slots | Up to 2 per pool |
+| Minimum reward duration | 1 day |
+| Maximum reward duration | 1 year |
+| Reward accounting | Pro-rata by position liquidity |
+| Separate staking contract | Not required |
+| Token 2022 reward tokens | Supported, subject to extension rules |
+
+## Why It Matters
+
+Liquidity mining helps projects bootstrap deeper markets. Instead of asking LPs to provide liquidity only for trading fees, a project can add reward tokens that make participation more attractive during key market phases.
+
+<CardGroup cols={2}>
+  <Card title="Launch Incentives" icon="rocket" iconType="solid">
+    Reward early LPs during the first days or weeks of a new pool.
+  </Card>
+  <Card title="Sticky Liquidity" icon="magnet" iconType="solid">
+    Encourage LPs to keep capital in the pool through important growth periods.
+  </Card>
+  <Card title="No Separate Farm" icon="layer-group" iconType="solid">
+    Rewards accrue directly to DAMM v2 positions, reducing operational complexity.
+  </Card>
+  <Card title="Position-Aware Rewards" icon="image" iconType="solid">
+    Rewards are tied to NFT positions, making incentives easier to track and compose.
+  </Card>
+</CardGroup>
+
+## Empty Liquidity Periods
+
+If a reward campaign is active but the pool has no liquidity, DAMM v2 tracks the empty-liquidity time and carries those undistributed rewards forward. This helps avoid wasting rewards during periods where no LPs are eligible.
+
+## Product Takeaway
+
+DAMM v2 liquidity mining is designed for simple, native LP incentives. Projects can fund reward campaigns, LPs can earn without staking elsewhere, and positions keep trading fees, locks, and rewards under one NFT-backed ownership model.

@@ -1,0 +1,97 @@
+---
+title: "DBC Dynamic Fees"
+sidebarTitle: "Dynamic Fees"
+description: "Learn how DBC dynamic fees add a volatility-responsive fee layer on top of the selected base fee mode."
+llmsDescription: "Explains DBC dynamic fees, including total trading fee, volatility accumulator, volatility reference, bin step, filter period, decay period, reduction factor, max volatility accumulator, variable fee control, and how dynamic fees support volatile launches."
+---
+
+DBC dynamic fees are an optional fee layer that responds to recent price movement.
+
+When the launch becomes more volatile, the dynamic fee can increase. When activity calms down, the dynamic fee decays. This lets a launch price volatility without permanently raising the base fee.
+
+## How Dynamic Fees Fit With Base Fees
+
+Every DBC pool has a base fee mode. Dynamic fees sit on top of that base fee.
+
+```math
+\text{Total Trading Fee} = \text{Base Fee} + \text{Dynamic Fee}
+```
+
+If dynamic fees are disabled, the dynamic fee is zero.
+
+## How It Works
+
+DBC tracks recent price movement with a volatility accumulator.
+
+When swaps move price, the accumulator can increase. As time passes, the volatility reference can decay. The final dynamic fee is calculated from that volatility measurement and the dynamic fee settings.
+
+| Setting | Product Meaning |
+| --- | --- |
+| Bin step | Price sensitivity used to measure movement. |
+| Filter period | A short window that smooths very high-frequency updates. |
+| Decay period | The time window after which volatility can decay or reset. |
+| Reduction factor | Controls how much the volatility reference decays. |
+| Max volatility accumulator | Caps the volatility measurement. |
+| Variable fee control | Controls how strongly volatility affects the fee. |
+
+## Dynamic Fee Formula
+
+```math
+\text{Dynamic Fee} =
+\frac{(\text{Volatility Accumulator} \times \text{Bin Step})^2 \times \text{Variable Fee Control}}{100000000000}
+```
+
+In product terms:
+
+- More recent price movement can increase the fee.
+- The fee is capped by configuration so it does not grow without bound.
+- The fee can cool down as volatility decays.
+
+## Why Use Dynamic Fees
+
+<CardGroup cols={2}>
+  <Card title="Volatility Response" icon="wave-pulse" iconType="solid">
+    Fees can increase when price movement becomes more intense.
+  </Card>
+  <Card title="Launch Protection" icon="shield" iconType="solid">
+    Dynamic fees can add extra cost during sudden demand spikes.
+  </Card>
+  <Card title="LP Compensation" icon="hand-holding-dollar" iconType="solid">
+    Fee capture can increase during moments when the pool is taking more price risk.
+  </Card>
+  <Card title="Works With Base Modes" icon="layer-group" iconType="solid">
+    Dynamic fees can be paired with fixed fees, schedulers, or rate limiter fees.
+  </Card>
+</CardGroup>
+
+## Product Examples
+
+<AccordionGroup>
+  <Accordion title="Fixed Fee + Dynamic Fee">
+    The launch keeps a simple default fee, but the fee can rise during volatile bursts.
+  </Accordion>
+  <Accordion title="Time Scheduler + Dynamic Fee">
+    The launch starts with high time-based fees and adds volatility response on top.
+  </Accordion>
+  <Accordion title="Rate Limiter + Dynamic Fee">
+    Large buys can pay more through the rate limiter, while volatility can add another adaptive layer.
+  </Accordion>
+</AccordionGroup>
+
+## SDK Helper Behavior
+
+When using DBC SDK curve-building helpers with dynamic fees enabled, the helper-generated dynamic fee is designed around a maximum dynamic fee of up to 20% of the base fee.
+
+Example:
+
+| Fee Layer | Example |
+| --- | --- |
+| Base fee | 1.00% |
+| Max dynamic fee from helper | Up to 0.20% |
+| Total fee | Up to 1.20% |
+
+This is a helper-level product convention for common launch configurations. Custom configurations still need to respect the program's dynamic fee validation rules, including the default 1 bps bin step, filter period below decay period, and volatility parameter caps.
+
+## Product Takeaway
+
+Dynamic fees are best used as an adaptive layer. The base fee defines the normal launch fee behavior, while dynamic fees help the launch respond when markets become more volatile.

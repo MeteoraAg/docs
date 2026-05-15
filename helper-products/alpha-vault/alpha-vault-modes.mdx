@@ -1,0 +1,187 @@
+---
+title: "Alpha Vault Modes"
+sidebarTitle: "Modes"
+description: "Compare Alpha Vault Pro Rata and FCFS modes, including deposit behavior, caps, withdrawals, refunds, and best-fit launch goals."
+llmsDescription: "Explains Alpha Vault modes in non-technical product language: Pro Rata mode accepts deposits beyond the max buying cap, allows withdrawals before deposit close, buys up to max buying cap, allocates tokens proportionally, and refunds overflow; FCFS mode accepts deposits until max depositing cap, blocks withdrawals after deposit, can use individual caps and whitelists, buys with all accepted deposits, and has no overflow by design."
+---
+
+Alpha Vault supports two allocation modes: **Pro Rata** and **FCFS**.
+
+Both modes let supporters deposit quote token before a Launch Pool opens for public trading. Both modes let the vault buy before public activation. The difference is how the vault handles demand, caps, withdrawals, and refunds.
+
+## Mode Comparison
+
+| Product Area | Pro Rata Mode | FCFS Mode |
+| --- | --- | --- |
+| Deposit cap behavior | Can accept more deposits than the vault will use | Stops accepting deposits once the cap is filled |
+| Main cap | Max buy cap | Max deposit cap |
+| User withdrawals before close | Allowed | Not allowed |
+| Overflow handling | Excess deposits are refunded proportionally | No deposit overflow by design |
+| Allocation style | Everyone receives proportional exposure | Earlier deposits get capacity first |
+| Best fit | High-demand launches where the team wants broad participation | Scarcity-driven launches where speed and cap discipline matter |
+
+## Pro Rata Mode
+
+Pro Rata mode is designed for launches that want broad participation even when demand is higher than the vault's buying cap.
+
+In this mode, the vault can accept deposits above the max buy cap. When the vault buys from the pool, it only uses up to the configured max buy cap. If users deposited more quote than the vault can use, the unused overflow is returned proportionally.
+
+### How Pro Rata Works
+
+```text
+Users deposit quote token
+        |
+Total deposits may exceed max buy cap
+        |
+Vault buys up to max buy cap
+        |
+Users receive tokens based on their share of total deposits
+        |
+Unused quote is refunded proportionally
+```
+
+### Example
+
+Assume:
+
+- Total deposits: 10,000,000 USDC
+- Vault max buy cap: 1,000,000 USDC
+- Your deposit: 100 USDC
+
+Only 10% of total deposits can be used because the max buy cap is 1,000,000 USDC and total deposits are 10,000,000 USDC.
+
+Your effective used deposit is:
+
+```math
+100 \times \frac{1,000,000}{10,000,000} = 10 \text{ USDC}
+```
+
+The remaining 90 USDC is overflow and can be refunded.
+
+You receive tokens based on your 10 USDC effective participation, and you receive the same average vault buy price as other vault participants.
+
+### User Experience
+
+During the deposit window:
+
+- Users can deposit quote token.
+- Users can withdraw if they change their mind.
+- Total deposits can grow beyond the max buy cap.
+
+After the deposit window closes:
+
+- Users can no longer freely withdraw their deposit.
+- The vault buys up to the max buy cap.
+- Users claim tokens and any refundable quote based on final vault results.
+
+### Why Teams Choose Pro Rata
+
+Pro Rata is useful when a team expects a lot of demand and wants to avoid a race where only the fastest wallets get allocation.
+
+It is especially strong for community-first launches because:
+
+- More users can participate in the deposit window.
+- Allocation is based on proportional demand rather than speed alone.
+- Refunds make oversubscription manageable.
+- The team can cap total vault buying power without rejecting late depositors during the window.
+
+<Info>
+  In Pro Rata mode, a large deposit does not guarantee that the full deposit will be used. It increases the user's proportional share, but the vault still respects the max buy cap.
+</Info>
+
+## FCFS Mode
+
+FCFS means **First Come, First Served**. It is designed for launches that want a hard cap on accepted deposits.
+
+In this mode, the vault accepts quote token until the configured max deposit cap is filled. Once the vault reaches the cap, no more deposits are accepted. The vault then uses the accepted deposits to buy from the pool.
+
+### How FCFS Works
+
+```text
+Users deposit quote token
+        |
+Vault accepts deposits until max deposit cap is filled
+        |
+Deposits stop once the cap is reached
+        |
+Vault buys using accepted deposits
+        |
+Users receive tokens based on their accepted deposit share
+```
+
+### Example
+
+Assume:
+
+- Vault max deposit cap: 1,000,000 USDC
+- Individual deposit cap: none
+- First user deposits: 1,000,000 USDC
+
+The vault reaches its cap immediately. Further users cannot deposit because the vault is already full.
+
+If the project wants to avoid one wallet filling the vault, it can add an individual deposit cap and/or use a whitelist.
+
+### User Experience
+
+During the deposit window:
+
+- Users can deposit only while capacity remains.
+- The vault will not accept more than the configured cap.
+- Deposits cannot be withdrawn after they are made.
+
+After the vault fills or the deposit window closes:
+
+- The vault buys using accepted deposits.
+- Users claim tokens based on their accepted deposit share.
+- There is no overflow refund because the vault did not accept quote above its cap.
+
+### Why Teams Choose FCFS
+
+FCFS is useful when a project wants a simple, scarce, capped allocation.
+
+It is especially strong when:
+
+- The team wants hard control over how much quote enters the vault.
+- The launch wants a clear fill target.
+- The community understands that capacity is limited.
+- The team uses individual caps or a whitelist to shape participation.
+
+<Warning>
+  FCFS without an individual deposit cap can allow one wallet to fill the vault. Teams that want broader distribution should configure wallet caps or whitelist limits.
+</Warning>
+
+## Whitelist Compatibility
+
+Both Pro Rata and FCFS can be used with access controls.
+
+| Whitelist Mode | Product Meaning |
+| --- | --- |
+| Permissionless | Anyone can create an escrow and deposit while the vault is open. |
+| Merkle proof whitelist | Only wallets included in the whitelist can deposit, usually with a configured max cap. |
+| Authority-managed whitelist | The vault authority creates escrows for selected wallets, useful for smaller curated lists. |
+
+Whitelists are useful for partner rounds, community campaigns, NFT holder allocations, loyalty programs, or any launch where the team wants to define who can enter before deposits open.
+
+## Choosing the Right Mode
+
+Use **Pro Rata** when you want:
+
+- Broad participation.
+- Oversubscription support.
+- Less pressure on users to be first.
+- A max buy cap without blocking deposits immediately.
+- A community launch where many wallets should have a chance to receive allocation.
+
+Use **FCFS** when you want:
+
+- A hard deposit cap.
+- Simple scarcity.
+- A launch that fills until capacity is gone.
+- More predictable accepted quote amount.
+- Stronger control through individual caps or whitelists.
+
+## Practical Rule of Thumb
+
+If the project wants the vault to feel like a **fair community allocation**, Pro Rata is usually the cleaner default.
+
+If the project wants the vault to feel like a **limited-cap early access window**, FCFS is usually the cleaner default.

@@ -1,0 +1,109 @@
+---
+title: "What is DBC?"
+sidebarTitle: "What is DBC?"
+description: "Learn how Meteora's Dynamic Bonding Curve helps teams launch tokens with configurable price discovery, launch fees, trader controls, DAMM migration, surplus handling, and Token 2022 support."
+llmsDescription: "Product overview of Meteora Dynamic Bonding Curve, explaining DBC as a permissionless token launch product with a virtual pool, configurable universal curve segments, quote threshold migration, DAMM v1 and DAMM v2 graduation, launch fees, trader experience, creator and partner controls, fixed and dynamic supply, migration liquidity, leftover, surplus, and Token 2022 support."
+---
+
+DBC stands for **Dynamic Bonding Curve**. It is Meteora's permissionless token launch product for teams that want a token to discover its price on-chain before graduating into a live Meteora DAMM liquidity pool.
+
+Instead of asking a creator or launchpad to seed a traditional AMM pool on day one, DBC starts with a **virtual pool**. Traders buy and sell against a configurable bonding curve. Every buy adds quote tokens, such as SOL or USDC, into the pool and moves the token along the curve. When the configured quote threshold is reached, the launch graduates into DAMM v1 or DAMM v2 liquidity.
+
+<Info>
+  DBC runs on the mainnet program `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`.
+</Info>
+
+## Why DBC Exists
+
+Token launches need price discovery, distribution, launch protection, and long-term liquidity. Many launches try to solve those problems with separate tools: one system for the sale, another for anti-sniper fees, another for migration, another for LP locks, and another for post-launch trading.
+
+DBC brings those launch steps into one configurable flow. A launchpad can create repeatable templates, a creator can launch a token from that template, traders can participate immediately, and the token can automatically graduate into Meteora liquidity once the market has contributed enough quote assets.
+
+<CardGroup cols={2}>
+  <Card title="On-Chain Price Discovery" icon="chart-line" iconType="solid">
+    The token price follows a configured curve from launch to migration instead of relying on a manually seeded AMM pool.
+  </Card>
+  <Card title="Universal Curve Design" icon="sliders" iconType="solid">
+    A launch can use a single curve segment or up to 16 segments to shape how price moves as demand grows.
+  </Card>
+  <Card title="Automatic Graduation" icon="arrow-right" iconType="solid">
+    Once the quote reserve reaches the migration threshold, liquidity can move into a DAMM v1 or DAMM v2 pool.
+  </Card>
+  <Card title="Launch-Ready Fees" icon="shield" iconType="solid">
+    Use fixed fees, time schedulers, rate limiter fees, and optional dynamic fees to shape early trading behavior.
+  </Card>
+  <Card title="Partner and Creator Economics" icon="handshake" iconType="solid">
+    Trading fees, migration fees, surplus, pool creation fees, and liquidity allocations can be split between launchpad partners and creators at different lifecycle stages.
+  </Card>
+  <Card title="Token 2022 Support" icon="certificate" iconType="solid">
+    DBC can launch SPL tokens or Token 2022 tokens, with Token 2022 metadata handled by the launch flow.
+  </Card>
+</CardGroup>
+
+## How DBC Works
+
+A DBC launch has two main phases.
+
+During the **bonding curve phase**, the token trades inside the DBC virtual pool. The pool tracks the current price, base reserve, quote reserve, fees, and migration progress. The curve decides how many tokens are available at each price area and how much quote liquidity is needed to move through that area.
+
+During the **graduated pool phase**, the launch becomes a DAMM pool. The quote assets accumulated during the bonding phase and the configured base token amount form the initial liquidity for the migrated pool. From that point on, traders interact with the DAMM v1 or DAMM v2 pool rather than the DBC virtual pool.
+
+```text
+Create config -> Create virtual pool -> Trade on curve -> Reach quote threshold -> Migrate to DAMM
+```
+
+## Product Building Blocks
+
+<CardGroup cols={2}>
+  <Card title="DBC Workflow" href="/core-products/dbc/workflow" icon="diagram-project">
+    Follow the launch from config creation through trading, curve completion, migration, and claim timing.
+  </Card>
+  <Card title="DBC Formulas" href="/core-products/dbc/formulas" icon="calculator">
+    Understand the core product math behind price movement, curve reserves, migration, fees, and surplus.
+  </Card>
+  <Card title="Universal Curve" href="/core-products/dbc/universal-curve" icon="chart-simple">
+    Learn how single-segment and multi-segment curves shape launch price discovery.
+  </Card>
+  <Card title="Migration and Liquidity" href="/core-products/dbc/migration-and-liquidity" icon="arrow-right">
+    See how completed curves graduate into DAMM pools, liquidity ownership, locks, and vesting.
+  </Card>
+  <Card title="Trader Experience" href="/core-products/dbc/trader-experience" icon="users">
+    Understand activation, swap behavior, referrals, rate limits, and curve completion.
+  </Card>
+  <Card title="DBC Fees" href="/core-products/dbc/fees/overview" icon="percent">
+    Compare base fee modes, dynamic fees, fee collection, and fee sharing.
+  </Card>
+  <Card title="Leftover" href="/core-products/dbc/leftover" icon="box-open">
+    See how unused fixed-supply tokens are handled after migration.
+  </Card>
+  <Card title="Surplus" href="/core-products/dbc/surplus" icon="coins">
+    Learn what happens when a pool collects more quote tokens than the migration threshold.
+  </Card>
+  <Card title="Other Configurations" href="/core-products/dbc/other-configurations" icon="gear">
+    Review launch controls such as activation, supply, liquidity locks, migration options, and pool creation fees.
+  </Card>
+  <Card title="Token 2022 Support" href="/core-products/dbc/token-2022-support" icon="certificate">
+    Understand how DBC supports Token 2022 base tokens and supported quote tokens.
+  </Card>
+</CardGroup>
+
+## Who DBC Is For
+
+<AccordionGroup>
+  <Accordion title="Launchpads">
+    DBC is built for launchpads that want repeatable token launch templates. A partner can define the curve, fees, migration target, LP distribution, and creator economics once, then let many creators launch from that configuration.
+  </Accordion>
+  <Accordion title="Token Creators">
+    DBC helps creators launch with built-in price discovery, migration, Token 2022 support, and configurable post-migration liquidity instead of assembling those pieces separately.
+  </Accordion>
+  <Accordion title="Traders">
+    Traders get a transparent on-chain curve during the launch phase and a familiar Meteora DAMM pool after graduation.
+  </Accordion>
+  <Accordion title="Ecosystem Integrators">
+    Aggregators, trading terminals, bots, and dashboards can track a clear launch lifecycle: virtual pool trading first, DAMM pool trading after migration.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  DBC is highly configurable. Launch teams should choose curve shape, fee behavior, migration target, and liquidity distribution carefully because these settings define the economics of the launch.
+</Warning>

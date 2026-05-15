@@ -1,0 +1,139 @@
+---
+title: "DLMM Dynamic Positions"
+sidebarTitle: "Dynamic Positions"
+description: "Learn how DLMM Dynamic Positions track LP ownership, bin ranges, liquidity shares, fees, rewards, operators, and resizable ranges up to 1,400 bins."
+llmsDescription: "Explains DLMM Dynamic Positions based on the lb_clmm PositionV2 and DynamicPosition model. Covers position accounts, why DLMM positions are not LP tokens or NFTs, ownership, operators, fee owner behavior, permissionless operation bits, lower and upper bin IDs, per-bin liquidity shares, pending fees, liquidity mining reward tracking, claimed totals, adding and removing liquidity, locked liquidity, closing rules, dynamic account space, increasing and decreasing position length, rebalancing, shrink modes, and support for up to 1,400 bins."
+---
+
+DLMM Dynamic Positions are the accounts that track a liquidity provider's ownership in a DLMM pool. When you add liquidity, you are not receiving a fungible LP token or a position NFT. You are creating or updating a dedicated position account that records where your liquidity sits, how much of each bin you own, and what fees or rewards are available to claim.
+
+At the program level, this is represented by `PositionV2`. `PositionV2` starts with the default 70-bin layout and can allocate additional per-bin data when the position grows. The maximum supported position length is **1,400 bins**.
+
+## What A Dynamic Position Stores
+
+A Dynamic Position belongs to one pool and one owner. It stores the range of bins covered by the position, plus accounting for liquidity, fees, and liquidity mining rewards inside that range.
+
+<CardGroup cols={2}>
+  <Card title="Pool and Owner" icon="user-lock" iconType="solid">
+    The position records the DLMM pool it belongs to and the wallet that owns it.
+  </Card>
+  <Card title="Bin Range" icon="arrows-left-right-to-line" iconType="solid">
+    Lower and upper bin IDs define where the position can place liquidity.
+  </Card>
+  <Card title="Liquidity Shares" icon="chart-pie" iconType="solid">
+    Per-bin shares determine the LP's proportional claim on fees and eligible rewards.
+  </Card>
+  <Card title="Fees and Rewards" icon="coins" iconType="solid">
+    The position tracks pending fees, liquidity mining rewards, and cumulative claimed totals.
+  </Card>
+</CardGroup>
+
+## Position Range
+
+Every Dynamic Position covers a continuous bin range.
+
+```text
+lower bin ID                       upper bin ID
+     [ bin ][ bin ][ bin ][ bin ][ bin ]
+                 active bin
+```
+
+When the active bin is inside your position range and your liquidity is in bins used by swaps, the position can earn trading fees. If liquidity mining is enabled for the pool, eligible active liquidity can also earn rewards.
+
+When price moves outside your range, the position remains open, but that position is no longer contributing active liquidity until price returns or you rebalance.
+
+## Fees, Rewards, and Claims
+
+Trading fees accrue to positions based on the bins where the position has liquidity and where swaps happen. A position tracks pending fees for both token X and token Y.
+
+Liquidity mining rewards also accrue through the position when its liquidity is active or in bins crossed by swaps. Fees and rewards do not auto-compound into liquidity; they remain claimable until you claim them.
+
+<Note>DLMM Collect Fee Mode affects which token fees are collected in at the pool level. See [DLMM Collect Fee Mode](/core-products/dlmm/collect-fee-mode) for the fee-token behavior.</Note>
+
+## Ownership and Operators
+
+The position owner controls the position. The program also supports an **operator** field, which can allow another address to manage position actions such as modifying liquidity.
+
+Some positions can have a separate **fee owner**, which controls where claimed fees should be sent. DLMM also includes permission bits that can allow specific operations, such as fee claiming, to become permissionless for a position.
+
+<Warning>Only delegate operator permissions to addresses you trust. Operators can perform position-management actions authorized by the program.</Warning>
+
+## Adding, Removing, and Closing
+
+Adding liquidity increases the position's liquidity shares in selected bins. Removing liquidity reduces those shares and returns the corresponding token amounts from the pool.
+
+Before liquidity is changed, the program updates fee and reward accounting so the position's claimable amounts remain accurate.
+
+Positions can also include a `lock_release_point`. If liquidity is still locked, the program prevents liquidity removal until the lock has released. A position can only be closed once all liquidity, fees, and rewards have been cleared.
+
+## Why Dynamic Positions Matter
+
+<CardGroup cols={2}>
+  <Card title="Wider Strategy Ranges" icon="arrows-left-right-to-line" iconType="solid">
+    LPs can cover more price bins in a single position, which is useful for volatile markets or long-running strategies.
+  </Card>
+  <Card title="Dynamic Account Space" icon="database" iconType="solid">
+    The program allocates extra position data only when the position needs to grow beyond the default range.
+  </Card>
+  <Card title="Range Resizing" icon="up-right-and-down-left-from-center" iconType="solid">
+    A position can expand or shrink its bin range instead of always closing and recreating a new account.
+  </Card>
+  <Card title="Rebalance Support" icon="rotate" iconType="solid">
+    Rebalance flows can combine range updates with liquidity changes for more efficient position management.
+  </Card>
+</CardGroup>
+
+## Resizing The Range
+
+Dynamic Positions can be resized without closing the position first. This is useful when the market moves, volatility changes, or an LP wants to refine the position around a new price range.
+
+| Action | Product Meaning |
+|---|---|
+| Increase length | Add bins to the lower side or upper side of the range. |
+| Decrease length | Remove empty bins from the lower side or upper side of the range. |
+| Rebalance liquidity | Combine claim, remove, resize, and add-liquidity actions into a single position-management flow. |
+
+<Info>In practice, this helps LPs move from a narrow high-efficiency strategy to a wider defensive range, or from a wide range back into a tighter strategy when the market stabilizes.</Info>
+
+## Shrink Modes
+
+Rebalance flows can choose how aggressively to shrink the existing range.
+
+| Shrink Mode | Product Meaning |
+|---|---|
+| `ShrinkBoth` | Remove empty bins from both sides when possible. |
+| `NoShrinkLeft` | Keep the lower side and shrink only from the upper side. |
+| `NoShrinkRight` | Keep the upper side and shrink only from the lower side. |
+| `NoShrinkBoth` | Keep both sides and avoid shrinking. |
+
+## When To Use Dynamic Positions
+
+<AccordionGroup>
+  <Accordion title="Stable pair LP">
+    Start with a tight range around the peg for high capital efficiency. If the pair begins moving outside the expected band, expand the position range to keep liquidity active across more bins.
+  </Accordion>
+  <Accordion title="Volatile pair LP">
+    Use a wider position from the beginning so the position can stay relevant through larger price swings. Resize later if volatility cools down.
+  </Accordion>
+  <Accordion title="Launch liquidity">
+    Cover a broader launch range while concentrating meaningful liquidity near the expected trading zone. As price discovery settles, rebalance around the new market level.
+  </Accordion>
+  <Accordion title="DCA strategy">
+    Use a wider set of bins to gradually buy or sell through price movement, then shrink empty bins once part of the strategy is complete.
+  </Accordion>
+</AccordionGroup>
+
+## Dynamic Positions vs Default Position Range
+
+| Feature | Default Range | Dynamic Position Range |
+|---|---|---|
+| Bin coverage | 70 bins | Up to 1,400 bins |
+| Account data | Default position size | Extra per-bin data allocated as needed |
+| Best fit | Tight active strategies | Wide, evolving, or launch-oriented strategies |
+| Management style | Simpler range | More flexible range updates |
+
+## What LPs Should Watch
+
+Dynamic Positions give LPs more range flexibility, but they do not make a strategy automatically better. A wider range can keep liquidity relevant across more prices, but capital spread over many bins may earn less per bin than a tighter range.
+
+<Warning>Dynamic Positions increase flexibility, not guaranteed returns. LPs should still monitor price movement, token composition, and impermanent loss risk.</Warning>

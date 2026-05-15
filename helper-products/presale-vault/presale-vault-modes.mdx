@@ -1,0 +1,182 @@
+---
+title: Presale Vault Modes
+description: Compare Fixed Price, First-Come First-Serve, and Pro Rata modes for Presale Vault launches.
+---
+
+Presale Vault supports three sale modes. Each mode gives projects a different balance of price certainty, urgency, and fairness.
+
+# Mode comparison
+
+## Fixed Price
+
+Fixed Price mode sells tokens at a predetermined price. Buyers know exactly how much base token they can receive for their quote token deposit before they participate.
+
+Use Fixed Price when:
+
+- you want a clear public sale price
+- buyers should understand their allocation before depositing
+- the project wants predictable fundraising math
+- the team has a strong view on valuation before launch
+
+## FCFS
+
+First-Come, First-Serve mode accepts deposits until the maximum cap is filled. Buyers who arrive first get access to the limited deposit capacity. After the sale, each bucket's token supply is distributed to participating buyers based on their share of deposits in that bucket.
+
+Use FCFS when:
+
+- demand is expected to be high
+- you want a simple capped sale
+- urgency and speed are part of the campaign design
+- buyers should commit once they deposit
+
+## Pro Rata
+
+Pro Rata mode accepts deposits even after the maximum cap is exceeded. If the sale is oversubscribed, each buyer receives an allocation proportional to their share of total deposits, and unused quote tokens are refunded.
+
+Use Pro Rata when:
+
+- fairness matters more than speed
+- you expect significant demand
+- you do not want bots or fast wallets to consume the entire sale immediately
+- you want all eligible participants to receive some allocation, subject to demand
+
+# Fixed Price mode
+
+Fixed Price mode is the most straightforward sale format: the creator sets the token price up front.
+
+A buyer's purchased amount is determined by the price, not by how many other buyers participate. If the sale price is 0.05 USDC per token, a 1,000 USDC net deposit buys 20,000 tokens, subject to rounding and supply limits.
+
+## How it works
+
+1. The creator sets a fixed token price.
+2. Buyers deposit quote tokens during the active sale period.
+3. The vault calculates how many base tokens each deposit can buy.
+4. The sale can end early once the maximum cap is reached, unless early completion is disabled.
+5. After completion, buyers claim tokens according to the unlock schedule.
+6. Any unsold base tokens are burned or returned to the creator, based on the configured unsold token action.
+
+## Buyer experience
+
+Fixed Price mode gives buyers the clearest experience. They can evaluate the sale price before joining and understand the expected allocation from their deposit amount.
+
+This mode is strong for teams that want transparency and predictable communication: "The presale price is X, the raise cap is Y, and the claim schedule is Z."
+
+## Creator considerations
+
+Fixed Price requires the creator to set a price that can realistically support the raise target and token allocation. If the price is too high, the sale may not meet the minimum cap. If the price is too low, demand may fill the sale quickly.
+
+Fixed Price also supports optional withdrawal behavior. A creator can allow buyers to withdraw during the sale period or disable withdrawals to make deposits committed.
+
+# FCFS mode
+
+FCFS mode is built for capped launches where speed matters.
+
+The vault accepts deposits until the sale reaches the maximum cap. Once capacity is gone, no more quote tokens can be deposited. This creates a simple scarcity mechanic: eligible buyers need to participate before the sale fills.
+
+## How it works
+
+1. The creator sets the sale's minimum and maximum caps.
+2. Buyers deposit during the active sale period.
+3. Each deposit is checked against remaining global capacity and buyer caps.
+4. The sale can end early when the maximum cap is reached, unless early completion is disabled.
+5. After completion, each bucket's presale supply is distributed by deposit share.
+6. Buyers claim tokens according to the unlock schedule.
+
+## Buyer experience
+
+FCFS rewards early action. Once a buyer successfully deposits, that deposit is committed. The mode does not support withdrawals during the sale.
+
+This makes FCFS easy to understand: if you get in before the cap fills, you participate. If the cap is filled before your transaction lands, you miss the sale.
+
+## Creator considerations
+
+FCFS works best when the project wants a clean cap and is comfortable with speed as part of the allocation mechanism. For highly anticipated launches, consider using whitelists, buyer caps, or multiple buckets to prevent a small number of wallets from consuming the entire sale.
+
+# Pro Rata mode
+
+Pro Rata mode is designed for high-demand launches where fair participation matters more than transaction speed.
+
+The sale can accept deposits beyond the maximum cap. When the sale ends, allocation is calculated proportionally, and unused quote tokens are refundable.
+
+## How it works
+
+1. The creator sets the sale's minimum and maximum caps.
+2. Buyers deposit during the active sale period.
+3. Deposits can exceed the maximum cap, subject to buyer and bucket caps.
+4. The sale does not end early just because the maximum cap is reached.
+5. After the sale ends, the vault calculates the oversubscription ratio.
+6. Buyers receive base tokens proportional to their share of deposits.
+7. Buyers withdraw unused quote tokens if the sale was oversubscribed.
+8. Buyers claim tokens according to the unlock schedule.
+
+## Buyer experience
+
+Pro Rata gives every eligible participant a chance to join during the sale window. The tradeoff is that the final allocation is not known until the sale ends.
+
+Example:
+
+- Maximum cap: 1,000,000 USDC
+- Total deposits: 4,000,000 USDC
+- Buyer deposit: 10,000 USDC
+
+The sale is 4x oversubscribed, so only 25% of each buyer's deposit is effectively used for allocation. The buyer receives the allocation corresponding to 2,500 USDC and can withdraw the remaining 7,500 USDC.
+
+## Creator considerations
+
+Pro Rata is the strongest mode for perceived fairness. It reduces the advantage of being first in line and gives buyers time to participate. It is especially useful for popular launches, community-first rounds, and situations where you want the final distribution to reflect demand across the full sale period.
+
+# Access control by mode
+
+All three modes can be used with the supported access models:
+
+- Permissionless
+- Permissioned with authority
+- Permissioned with Merkle proof
+
+However, multiple buyer buckets are intended for permissioned launches so buyers are mapped to the correct bucket.
+
+# Withdrawal behavior by mode
+
+## Fixed Price
+
+Withdrawals can be enabled or disabled by configuration. If enabled, buyers can withdraw during the active sale window.
+
+## FCFS
+
+Withdrawals are disabled. Deposits are committed once accepted.
+
+## Pro Rata
+
+Withdrawals are enabled during the active sale window. After completion, buyers may also withdraw unused quote tokens from oversubscription.
+
+# How to choose a mode
+
+<CardGroup cols={3}>
+  <Card title="Choose Fixed Price" icon="tag" iconType="solid">
+    Best when the project wants a clear valuation, predictable buyer communication, and a simple token-per-quote-token relationship.
+  </Card>
+  <Card title="Choose FCFS" icon="stopwatch" iconType="solid">
+    Best when the project wants a capped sale with urgency, fast fill dynamics, and committed participation.
+  </Card>
+  <Card title="Choose Pro Rata" icon="scale-balanced" iconType="solid">
+    Best when the project expects high demand and wants fairer allocation with automatic overflow refunds.
+  </Card>
+</CardGroup>
+
+# Practical launch examples
+
+## Community-first launch
+
+A project expects intense demand from a large community and wants to avoid a gas-war-style rush. Pro Rata with a whitelist and buyer caps gives everyone time to join and makes allocation proportional.
+
+## Strategic partner round
+
+A project wants to give selected partners a defined allocation with higher caps and optional vesting. Fixed Price with permissioned access and a dedicated bucket provides clarity and control.
+
+## Public hype launch
+
+A project wants a fast, simple sale with a hard cap. FCFS with sensible per-wallet caps creates urgency while limiting concentration.
+
+## Multi-tier launchpad campaign
+
+A launchpad wants different terms for VIP users, token holders, and public buyers. Multiple permissioned buckets allow each audience to receive a separate allocation, cap, and fee structure.
