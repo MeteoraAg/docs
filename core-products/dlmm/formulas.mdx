@@ -1,44 +1,56 @@
 ---
 title: "DLMM Formulas"
 sidebarTitle: "Formulas"
-description: "Understand the math behind DLMM bin prices, bin liquidity, active price movement, dynamic fees, and per-bin fee distribution."
-llmsDescription: "Explanation of DLMM formulas covering bin price calculation, bin step, constant-sum bin liquidity, active bin movement, base fee, volatility-based variable fee, per-bin fee distribution, liquidity shares, and why these formulas matter for LPs, token teams, traders, and integrators."
+description: "Understand the math behind DLMM bin prices, swap amounts, liquidity shares, dynamic fees, protocol fees, composition fees, and liquidity mining rewards."
+llmsDescription: "Explanation of DLMM formulas based on the lb_clmm program, covering Q64.64 bin prices, bin step, constant-sum bin liquidity, amount-in and amount-out swap formulas, active bin movement, base fee, variable fee, volatility accumulator, total fee cap, included and excluded fee amount formulas, collect fee mode, fee splitting, protocol share, liquidity shares, withdrawal amounts, composition fees for active-bin deposits, and liquidity mining reward-per-token accounting."
 ---
 
-DLMM's math is built around a simple product idea: each pool is a ladder of price bins, and each bin behaves like its own tiny market at a fixed price. The formulas below explain how prices move from bin to bin, how liquidity is represented inside a bin, and how fees respond to market volatility.
+DLMM's math is built around a simple product idea: each pool is a ladder of price bins, and each bin behaves like its own tiny market at a fixed price.
 
-This page keeps the formulas readable for product and strategy understanding. If you are integrating directly with the program, use the SDK and developer guides for implementation details.
+<Note>The program performs integer arithmetic with fixed-point values and explicit rounding. This page shows the conceptual formula first, then calls out the important rounding or unit behavior where it matters.</Note>
+
+## Units
+
+DLMM uses a few important units:
+
+| Value | Program Meaning |
+|---|---|
+| `bin step` | Basis points between neighboring bins. `10,000` basis points = `100%`. |
+| `P` | Bin price in Q64.64 fixed-point form. |
+| `fee rate` | Stored in `1e9` precision. For example, `10,000,000` means `1%`. |
+| `FEE_DENOMINATOR` | `1,000,000,000`. |
+| `MAX_FEE_RATE` | `100,000,000`, or `10%`. |
+| `protocol share` | Basis points of the trading fee retained by the protocol. Max `2,500`, or `25%`. |
 
 ## Bin Price
 
 Every DLMM pool has a **bin step**, measured in basis points. The bin step defines the percentage difference between one bin and the next.
 
 ```math
-\text{bin price} = \left(1 + \frac{\text{bin step}}{10{,}000}\right)^{\text{bin id}}
+P_i = \left(1 + \frac{\text{bin step}}{10{,}000}\right)^i
 ```
 
-**What this means:** if the bin step is `25` basis points, each neighboring bin is approximately `0.25%` apart. When the active bin moves from one bin to the next, the pool price moves by that configured step.
+Where:
 
-<CardGroup cols={2}>
-  <Card title="Smaller Bin Step" icon="compress" iconType="solid">
-    Creates a tighter price ladder. This is useful for stable pairs or highly liquid pairs where price usually moves in smaller increments.
-  </Card>
-  <Card title="Larger Bin Step" icon="expand" iconType="solid">
-    Creates a wider price ladder. This can be useful for volatile pairs where a position needs to cover a broader market range.
-  </Card>
-</CardGroup>
+- `P_i` is the price of bin `i`
+- `i` is the bin ID
+- `bin step` is the pool's configured step size
+
+The program computes this as `get_price_from_id(bin_id, bin_step)` and returns the result in Q64.64 fixed-point form.
+
+**Example:** if the bin step is `25` basis points, each neighboring bin is approximately `0.25%` apart. Moving from bin `0` to bin `1` multiplies the price by `1.0025`.
 
 ## Bin Liquidity
 
 <div className="flex justify-center">
   <img 
     src="/core-products/dlmm/assets/bin-liquidity.png" 
-    alt="wallets-png"
+    alt="DLMM bin liquidity diagram"
     className="rounded-lg w-2/3 h-auto"
   />
 </div>
 
-Inside a bin, DLMM uses a constant-sum style formula:
+Inside a bin, DLMM uses a constant-sum style liquidity value:
 
 ```math
 L = P \cdot x + y
@@ -46,79 +58,482 @@ L = P \cdot x + y
 
 Where:
 
-- `L` is the amount of liquidity in the bin
+- `L` is the bin liquidity value
 - `P` is the bin price
 - `x` is the amount of token X
 - `y` is the amount of token Y
 
-This is why trades inside a bin can execute at a fixed price. The bin has a defined exchange rate, and traders swap token X for token Y, or token Y for token X, until one side of the active bin is consumed.
+This fixed-price bin design is what creates zero price impact inside a single bin. Price changes when the available output liquidity in the active bin is consumed and the swap moves to another bin.
 
-## Active Bin Movement
+## Swap Amounts
 
-Only one bin is active at a time. The active bin is the current market price for the pool.
+For a swap from token X to token Y, the output amount is:
 
-```text
-Price moves left  <-  [ lower bins ][ active bin ][ higher bins ]  ->  Price moves right
+```math
+\text{amount out}_Y = \left\lfloor \text{amount in}_X \cdot P \right\rfloor
 ```
 
-If traders keep buying token X with token Y, token X in the active bin is eventually consumed and the price moves to the next higher bin. If traders sell token X for token Y, token Y is consumed and the price moves to the next lower bin.
+For a swap from token Y to token X, the output amount is:
 
-This is how many fixed-price bins become one continuous market.
+```math
+\text{amount out}_X = \left\lfloor \frac{\text{amount in}_Y}{P} \right\rfloor
+```
+
+The inverse formulas are used when the program needs to know the required input for a desired output:
+
+```math
+\text{amount in}_X = \left\lceil \frac{\text{amount out}_Y}{P} \right\rceil
+```
+
+```math
+\text{amount in}_Y = \left\lceil \text{amount out}_X \cdot P \right\rceil
+```
+
+The program rounds output amounts down and rounds required input amounts according to the swap path. This protects the pool from giving out more token than the bin can support.
 
 ## Total Trading Fee
 
-DLMM trading fees have two parts:
+DLMM trading fees have a base fee and an optional variable fee:
 
 ```math
-\text{total fee} = \text{base fee} + \text{variable fee}
+\text{total fee rate} = \min(\text{base fee rate} + \text{variable fee rate}, \text{MAX\_FEE\_RATE})
 ```
 
-The **base fee** is the predictable minimum fee for the pool. The **variable fee** is the dynamic part that can increase when the market becomes more volatile.
-
-The program caps total fees at the pool's maximum fee rate, so the final applied fee is:
-
-```math
-\text{applied fee rate} = \min(\text{base fee rate} + \text{variable fee rate}, \text{maximum fee rate})
-```
+`MAX_FEE_RATE` is `100,000,000` in `1e9` precision, or `10%`.
 
 ## Base Fee
 
-The base fee is configured by the pool creator through fee parameters such as the base factor and bin step.
+The base fee is configured through pool fee parameters:
 
 ```math
-\text{base fee rate} = \text{base factor} \times \text{bin step} \times 10 \times 10^{\text{base fee power factor}}
+\text{base fee rate} =
+\text{base factor}
+\times
+\text{bin step}
+\times
+10
+\times
+10^{\text{base fee power factor}}
 ```
 
-**Product intuition:** a pool with a larger bin step often has a higher base fee because each bin represents a larger price movement. A lower base fee can attract more volume, while a higher base fee can earn more per unit of volume.
+This value is stored in `1e9` precision.
+
+**Product intuition:** a larger bin step often pairs with a larger base fee because each bin represents a larger price movement. A smaller bin step is usually used for tighter markets where LPs expect smaller price changes.
 
 ## Variable Fee
 
-The variable fee is DLMM's volatility-aware fee. It increases when the pool observes more price movement across bins.
+The variable fee is DLMM's volatility-aware fee. In the program, it is calculated as:
 
 ```math
-\text{variable fee rate} \propto (\text{volatility accumulator} \times \text{bin step})^2
+\text{variable fee rate}
+=
+\left\lceil
+\frac{
+\text{variable fee control}
+\times
+(\text{volatility accumulator} \times \text{bin step})^2
+}{
+100{,}000{,}000{,}000
+}
+\right\rceil
 ```
 
-The **volatility accumulator** rises when swaps cross bins, especially when swaps happen frequently. It decays when the market slows down. This lets DLMM charge more during high-volatility periods without permanently locking the pool into a high fee.
+If `variable fee control` is `0`, the variable fee is `0`.
 
-<Info>In product terms, variable fees act like surge pricing for liquidity. When LPs are taking more risk because the market is moving quickly, the pool can charge more for access to that liquidity.</Info>
-
-## Per-Bin Fee Distribution
-
-Fees are calculated per bin as swaps move through the pool. If a large swap crosses multiple bins, each crossed bin calculates its fee based on the amount traded through that bin.
+The volatility accumulator updates from bin movement:
 
 ```math
-\text{fee for bin} = \text{swap amount in bin} \times (\text{base fee} + \text{variable fee})
+\text{volatility accumulator}
+=
+\min(
+\text{volatility reference} + |\text{index reference} - \text{active id}| \times 10{,}000,
+\text{max volatility accumulator}
+)
 ```
 
-This matters because LPs only earn fees from the bins where they actually provide liquidity. If your liquidity is concentrated in the bins being crossed by traders, your position participates in that fee flow. If the active price moves outside your selected range, your position stops earning fees until the market returns or you rebalance.
+The volatility reference decays based on elapsed time:
+
+| Time Since Last Update | Program Behavior |
+|---|---|
+| Less than `filter_period` | Keep the existing reference. |
+| Between `filter_period` and `decay_period` | `volatility reference = volatility accumulator × reduction factor / 10,000` |
+| Greater than or equal to `decay_period` | `volatility reference = 0` |
+
+This lets fees increase when swaps move across bins and cool down after quieter periods.
+
+## Fee Amounts
+
+The program supports two common fee calculations.
+
+When the fee is part of the amount already provided by the trader:
+
+```math
+\text{fee amount}
+=
+\left\lceil
+\frac{\text{amount with fee} \times \text{total fee rate}}{1{,}000{,}000{,}000}
+\right\rceil
+```
+
+```math
+\text{amount excluding fee}
+=
+\text{amount with fee} - \text{fee amount}
+```
+
+When the fee must be added on top of an amount that does not include fees:
+
+```math
+\text{fee amount}
+=
+\left\lceil
+\frac{
+\text{amount excluding fee} \times \text{total fee rate}
+}{
+1{,}000{,}000{,}000 - \text{total fee rate}
+}
+\right\rceil
+```
+
+```math
+\text{amount including fee}
+=
+\text{amount excluding fee} + \text{fee amount}
+```
+
+Which form is used depends on the swap direction and the pool's [Collect Fee Mode](/core-products/dlmm/collect-fee-mode).
+
+## Fee Split
+
+How a bin's **trading fee** is distributed depends on the pool's [function mode](/core-products/dlmm/what-is-dlmm#pool-function-modes):
+
+| Pool mode | Liquidity sources | Limit-order fee path |
+|---|---|---|
+| Liquidity mining | MM positions only | No |
+| Limit order | MM positions and/or limit orders | Yes |
+
+Both modes use the same `protocol share` for MM liquidity and the same referral **host fee** rule. Limit-order pools add an extra split when limit-order liquidity contributes to the fill.
+
+<Note>These rates apply to how the **trading fee** is shared among recipients. They are separate from the pool's base fee, variable fee, and total fee cap.</Note>
+
+### MM protocol and LP shares
+
+For any fill that comes from MM positions, the MM slice of the trading fee is split by the pool's `protocol share`:
+
+| Pool type | Protocol | LP |
+|---|---|---|
+| Standard pool | `10%` (`protocol share` = `1,000` bps) | `90%` |
+| Launch Pool | `20%` (`ILM_PROTOCOL_SHARE` = `2,000` bps) | `80%` |
+
+```math
+\text{protocol fee}
+=
+\left\lfloor
+\frac{\text{trading fee} \times \text{protocol share}}{10{,}000}
+\right\rfloor
+```
+
+```math
+\text{LP fee}
+=
+\text{trading fee} - \text{protocol fee}
+```
+
+On limit-order pools, replace `trading fee` with `total MM fee` when the fill also includes limit-order liquidity (see below).
+
+### Referral host fee
+
+When a swap passes a **referral account**, the host receives `20%` of the applicable protocol fee (`HOST_FEE_BPS` = `2,000` bps). The rest stays as protocol treasury fee.
+
+```math
+\text{host fee}
+=
+\left\lfloor
+\frac{\text{protocol fee} \times 2{,}000}{10{,}000}
+\right\rfloor
+```
+
+```math
+\text{protocol fee remainder}
+=
+\text{protocol fee} - \text{host fee}
+```
+
+Without a referral account, `host fee = 0` and `protocol fee remainder = protocol fee`.
+
+On limit-order pools with mixed fills, host fee can also include a capped share from the limit-order protocol slice (see below).
+
+### Liquidity mining pools
+
+Liquidity mining pools do not support limit orders. Every swap fill is MM liquidity, so the entire trading fee uses the MM formulas above with no liquidity-source split.
+
+```math
+\text{trading fee}
+=
+\text{LP fee}
++
+\text{protocol fee remainder}
++
+\text{host fee}
+```
+
+### Limit-order pools
+
+Limit-order pools can fill from MM positions, limit orders, or both in the same bin. The program first assigns the trading fee by **liquidity source**, then applies the recipient splits above.
+
+**By liquidity source** (rounding favors MM):
+
+```math
+\text{total MM fee}
+=
+\left\lceil
+\text{trading fee}
+\times
+\frac{\text{MM amount in}}{\text{total amount in}}
+\right\rceil
+```
+
+```math
+\text{total limit order fee}
+=
+\text{trading fee} - \text{total MM fee}
+```
+
+**MM slice** — split with `protocol share` as in the table above:
+
+```math
+\text{MM protocol fee}
+=
+\left\lfloor
+\frac{\text{total MM fee} \times \text{protocol share}}{10{,}000}
+\right\rfloor
+```
+
+```math
+\text{MM LP fee}
+=
+\text{total MM fee} - \text{MM protocol fee}
+```
+
+**Limit-order slice** — always `50%` / `50%` via `LIMIT_ORDER_FEE_SHARE` (`5,000` bps), independent of pool type:
+
+```math
+\text{limit order participant fee}
+=
+\left\lfloor
+\frac{\text{total limit order fee} \times 5{,}000}{10{,}000}
+\right\rfloor
+```
+
+```math
+\text{limit order protocol fee}
+=
+\text{total limit order fee} - \text{limit order participant fee}
+```
+
+**Referral host fee** — `20%` of `MM protocol fee`, plus a capped share from the limit-order protocol slice:
+
+```math
+\text{host fee on limit order}
+=
+\min
+\left(
+\left\lfloor
+\frac{
+\left\lfloor
+\frac{\text{total limit order fee} \times \text{protocol share}}{10{,}000}
+\right\rfloor
+\times 2{,}000
+}{
+10{,}000
+}
+\right\rfloor,
+\text{limit order protocol fee}
+\right)
+```
+
+```math
+\text{host fee}
+=
+\left\lfloor
+\frac{\text{MM protocol fee} \times 2{,}000}{10{,}000}
+\right\rfloor
++
+\text{host fee on limit order}
+```
+
+```math
+\text{protocol fee remainder}
+=
+\text{MM protocol fee}
++
+\text{limit order protocol fee}
+-
+\text{host fee}
+```
+
+When a swap fills only MM liquidity, `total limit order fee = 0` and the limit-order paths above are zero — the result matches a liquidity mining pool.
+
+```math
+\text{trading fee}
+=
+\text{MM LP fee}
++
+\text{limit order participant fee}
++
+\text{protocol fee remainder}
++
+\text{host fee}
+```
 
 ## Liquidity Shares
 
-When you add liquidity to a bin, your position receives a share of that bin's total liquidity.
+When a user deposits into a bin, the program first computes the liquidity value of the deposit:
 
 ```math
-\text{liquidity share} = \frac{\text{liquidity added} \times \text{existing liquidity shares}}{\text{bin liquidity}}
+L_\text{in} = P \cdot x_\text{in} + y_\text{in}
 ```
 
-Those shares determine your proportional claim on fees and rewards earned by that bin.
+If the bin has no existing liquidity supply, the new liquidity share equals the deposit liquidity:
+
+```math
+\text{liquidity share} = L_\text{in}
+```
+
+If the bin already has liquidity, the new share is:
+
+```math
+\text{liquidity share}
+=
+\left\lfloor
+\frac{
+L_\text{in} \times \text{existing liquidity supply}
+}{
+L_\text{bin}
+}
+\right\rfloor
+```
+
+Where:
+
+- `L_in` is the liquidity value of the user's deposit
+- `L_bin` is the existing liquidity value of the bin before the deposit
+- `existing liquidity supply` is the bin's current share supply
+
+Those shares determine the position's proportional claim on bin liquidity, fees, and eligible rewards.
+
+## Withdrawal Amounts
+
+When liquidity is removed from a bin, token amounts are returned pro rata:
+
+```math
+\text{amount out}_X
+=
+\left\lfloor
+\frac{
+\text{liquidity share removed} \times \text{bin amount}_X
+}{
+\text{bin liquidity supply}
+}
+\right\rfloor
+```
+
+```math
+\text{amount out}_Y
+=
+\left\lfloor
+\frac{
+\text{liquidity share removed} \times \text{bin amount}_Y
+}{
+\text{bin liquidity supply}
+}
+\right\rfloor
+```
+
+## Composition Fee
+
+When adding liquidity to the active bin of a bin that already has liquidity, the program may charge a **composition fee** if the deposit changes the bin composition in a way that resembles a swap.
+
+The composition fee is based on the token delta and the current total fee rate:
+
+```math
+\text{composition fee}
+=
+\left\lfloor
+\frac{
+\Delta \text{amount}
+\times
+\text{total fee rate}
+\times
+(1{,}000{,}000{,}000 + \text{total fee rate})
+}{
+1{,}000{,}000{,}000^2
+}
+\right\rfloor
+```
+
+The protocol share is then taken from the composition fee using the same protocol-fee formula:
+
+```math
+\text{composition protocol fee}
+=
+\left\lfloor
+\frac{\text{composition fee} \times \text{protocol share}}{10{,}000}
+\right\rfloor
+```
+
+No composition fee is charged when depositing into an empty bin or a non-active bin.
+
+## Liquidity Mining Rewards
+
+For reward-enabled pools, rewards are tracked per token of liquidity for eligible bins.
+
+The reward emission rate is funded over a reward duration. If a reward is funded while a previous reward period is still active, the program includes the remaining unvested reward amount in the new rate calculation:
+
+```math
+\text{reward rate}
+=
+\frac{\text{new funded amount} + \text{remaining reward amount}}{\text{reward duration}}
+```
+
+If the funder chooses to carry forward ineligible rewards from empty-liquidity time, that carry-forward amount is also included in the new funded amount. In the program, `reward_rate` is stored in fixed-point precision. On active-bin reward updates, the per-token reward increment is:
+
+```math
+\Delta \text{reward per token}
+=
+\left\lfloor
+\frac{
+\text{seconds elapsed} \times \text{reward rate}
+}{
+\text{active bin liquidity supply}
+}
+\right\rfloor
+```
+
+If the active bin has no liquidity, the program records the elapsed empty-liquidity time instead of assigning rewards to LPs. During v2 swaps, accumulated rewards can also be split across crossed bins with liquidity, up to the program's reward-bin split limit.
+
+## Price Impact Guard
+
+Some swap flows can include a maximum price impact limit. The program computes a guard price from the active bin price:
+
+For X to Y swaps:
+
+```math
+\text{minimum price}
+=
+P_\text{active}
+\times
+\frac{10{,}000 - \text{max price impact bps}}{10{,}000}
+```
+
+For Y to X swaps:
+
+```math
+\text{maximum effective price}
+=
+P_\text{active}
+\times
+\frac{10{,}000}{10{,}000 - \text{max price impact bps}}
+```
+
+This protects users from swaps that would move too far from their expected active-bin price.

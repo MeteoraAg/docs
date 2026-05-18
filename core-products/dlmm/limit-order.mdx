@@ -1,11 +1,13 @@
 ---
 title: "DLMM Limit Order"
 sidebarTitle: "Limit Order"
-description: "Learn how DLMM Limit Orders place liquidity at selected price bins to create on-chain buy and sell strategies inside Meteora's bin-based market."
-llmsDescription: "Explains DLMM Limit Orders as on-chain liquidity placed at specific price bins, including bid-side and ask-side orders, how orders fill when swaps cross target bins, how limit orders differ from LP positions, fee sharing with market-maker liquidity, DCA use cases, take-profit use cases, and execution considerations."
+description: "Learn how DLMM Limit Orders place liquidity at selected price bins to create on-chain buy and sell strategies inside limit-order-enabled DLMM pools."
+llmsDescription: "Explains DLMM Limit Orders as on-chain liquidity placed at specific price bins in limit-order-enabled pools, including bid-side and ask-side orders, the 50-bin order limit, absolute and relative bin placement, how orders fill when swaps cross target bins, how limit orders differ from LP positions, fee sharing with market-maker liquidity, DCA use cases, take-profit use cases, and execution considerations."
 ---
 
 DLMM Limit Order lets users place liquidity at specific bins so their position behaves like a buy or sell order at a chosen price. It brings a familiar orderbook-style experience into DLMM's on-chain bin model.
+
+Limit orders are available only on DLMM pools whose function mode supports limit orders. In the `lb_clmm` program, a pool supports either liquidity mining or limit-order behavior; it does not run both modes at the same time.
 
 Instead of submitting a market swap immediately, a user can place an order at a target bin. When swaps move through that bin, the order can be filled by normal pool activity. This creates a more flexible trading and liquidity experience: users can express a price view, while the pool still benefits from deeper liquidity at those prices.
 
@@ -28,7 +30,7 @@ Instead of submitting a market swap immediately, a user can place an order at a 
 
 ## How It Works
 
-A DLMM pool is a ladder of bins. A limit order chooses one or more bins and places a token amount there.
+A DLMM pool is a ladder of bins. A limit order chooses one or more bins and places a token amount there. One limit-order account can cover up to `50` bins.
 
 ```text
 Lower prices                Target bin                 Higher prices
@@ -39,8 +41,10 @@ If the market reaches the selected bin and swaps consume the order's liquidity, 
 
 DLMM supports both sides:
 
-- **Bid side:** place token Y to buy token X when price reaches the selected bin.
-- **Ask side:** place token X to sell token X for token Y when price reaches the selected bin.
+- **Bid side:** place token Y at bins at or below the active bin to buy token X when price reaches those bins.
+- **Ask side:** place token X at bins at or above the active bin to sell token X for token Y when price reaches those bins.
+
+Orders can be placed by absolute bin ID or by relative bin offset from an observed active bin. Relative placement includes a max active-bin slippage check so the order is not created if the live active bin has moved too far from the user's expected active bin.
 
 <Info>A limit order is not a separate centralized orderbook. It is an on-chain DLMM account that places order liquidity into selected bins.</Info>
 
@@ -60,6 +64,8 @@ Both LP positions and limit orders use DLMM bins, but they are designed for diff
 When a swap fills both market-maker liquidity and limit-order liquidity, the trading fee is split between the relevant participants according to the pool's fee logic. DLMM allocates a share of the applicable fee to limit-order liquidity when it contributes to the fill.
 
 This means limit orders are not just passive instructions waiting on a matching engine. They are part of the liquidity surface that traders route through.
+
+At the program level, filled limit-order liquidity and market-maker liquidity are accounted separately. Limit-order fee accounting is tracked per bin for ask-side and bid-side orders, and the current program constant allocates `50%` of the limit-order portion of fees to limit-order participants, with the remaining portion treated as protocol-side fee according to the fee split logic.
 
 ## Product Use Cases
 

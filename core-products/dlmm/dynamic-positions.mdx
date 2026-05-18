@@ -2,7 +2,7 @@
 title: "DLMM Dynamic Positions"
 sidebarTitle: "Dynamic Positions"
 description: "Learn how DLMM Dynamic Positions track LP ownership, bin ranges, liquidity shares, fees, rewards, operators, and resizable ranges up to 1,400 bins."
-llmsDescription: "Explains DLMM Dynamic Positions based on the lb_clmm PositionV2 and DynamicPosition model. Covers position accounts, why DLMM positions are not LP tokens or NFTs, ownership, operators, fee owner behavior, permissionless operation bits, lower and upper bin IDs, per-bin liquidity shares, pending fees, liquidity mining reward tracking, claimed totals, adding and removing liquidity, locked liquidity, closing rules, dynamic account space, increasing and decreasing position length, rebalancing, shrink modes, and support for up to 1,400 bins."
+llmsDescription: "Explains DLMM Dynamic Positions based on the lb_clmm PositionV2 and DynamicPosition model. Covers position accounts, why DLMM positions are not LP tokens or NFTs, ownership, operators, fee owner behavior, permissionless operation bits, lower and upper bin IDs, per-bin liquidity shares, pending fees, liquidity mining reward tracking, claimed totals, adding and removing liquidity, locked liquidity, closing rules, dynamic account space, increasing and decreasing position length, the 91-bin per-resize allocation limit, rebalancing, shrink modes, and support for up to 1,400 bins."
 ---
 
 DLMM Dynamic Positions are the accounts that track a liquidity provider's ownership in a DLMM pool. When you add liquidity, you are not receiving a fungible LP token or a position NFT. You are creating or updating a dedicated position account that records where your liquidity sits, how much of each bin you own, and what fees or rewards are available to claim.
@@ -46,7 +46,7 @@ When price moves outside your range, the position remains open, but that positio
 
 Trading fees accrue to positions based on the bins where the position has liquidity and where swaps happen. A position tracks pending fees for both token X and token Y.
 
-Liquidity mining rewards also accrue through the position when its liquidity is active or in bins crossed by swaps. Fees and rewards do not auto-compound into liquidity; they remain claimable until you claim them.
+Liquidity mining rewards accrue through the position on reward-enabled pools when its liquidity is active, and v2 swap processing can allocate elapsed rewards across crossed bins with liquidity. Fees and rewards do not auto-compound into liquidity; they remain claimable until you claim them.
 
 <Note>DLMM Collect Fee Mode affects which token fees are collected in at the pool level. See [DLMM Collect Fee Mode](/core-products/dlmm/collect-fee-mode) for the fee-token behavior.</Note>
 
@@ -89,7 +89,7 @@ Dynamic Positions can be resized without closing the position first. This is use
 
 | Action | Product Meaning |
 |---|---|
-| Increase length | Add bins to the lower side or upper side of the range. |
+| Increase length | Add bins to the lower side or upper side of the range. New allocation beyond the default 70-bin layout is capped at `91` added bins per resize instruction. |
 | Decrease length | Remove empty bins from the lower side or upper side of the range. |
 | Rebalance liquidity | Combine claim, remove, resize, and add-liquidity actions into a single position-management flow. |
 
@@ -129,6 +129,7 @@ Rebalance flows can choose how aggressively to shrink the existing range.
 |---|---|---|
 | Bin coverage | 70 bins | Up to 1,400 bins |
 | Account data | Default position size | Extra per-bin data allocated as needed |
+| Resize allocation | No extra allocation needed | Additional allocation is limited to 91 new bins per resize instruction |
 | Best fit | Tight active strategies | Wide, evolving, or launch-oriented strategies |
 | Management style | Simpler range | More flexible range updates |
 

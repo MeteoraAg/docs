@@ -5,7 +5,7 @@ description: "See how DLMM supports SPL Token 2022 assets, permissionless extens
 llmsDescription: "Explains DLMM Token 2022 support, including permissionless supported extensions such as TransferFeeConfig, MetadataPointer, TokenMetadata, and revoked TransferHook, account-level MemoTransfer handling, token badge review for permissioned or sensitive extensions, freeze authority considerations, and why Token 2022 matters for DLMM pools, launches, metadata, transfer-fee tokens, and controlled risk."
 ---
 
-DLMM supports SPL Token 2022 assets so teams can create pools for tokens with newer Solana token features. This helps token creators use richer token designs while still accessing Meteora's concentrated liquidity, dynamic fees, limit-order support, and aggregator-ready pool infrastructure.
+DLMM supports SPL Token 2022 assets so teams can create pools for tokens with newer Solana token features. This helps token creators use richer token designs while still accessing Meteora's concentrated liquidity, dynamic fees, pool function modes, and aggregator-ready pool infrastructure.
 
 Token 2022 support is split into two paths:
 
@@ -37,37 +37,11 @@ Some Token 2022 extensions can affect transfers, account states, authority behav
 
 Start by completing this [Google Form](https://forms.gle/59n3zDiGS2C6qMfd7) with the extensions your token requires. After submitting the form, open a Discord ticket so the Meteora team can review your request.
 
-Getting a token badge can enable support for Token 2022 extensions such as:
-
-- `Uninitialized`
-- `TransferFeeConfig`
-- `TransferFeeAmount`
-- `MintCloseAuthority`
-- `ConfidentialTransferMint`
-- `ConfidentialTransferAccount`
-- `DefaultAccountState` - All new token accounts must be unfrozen by default
-- `ImmutableOwner`
-- `NonTransferable`
-- `InterestBearingConfig`
-- `CpiGuard`
-- `PermanentDelegate`
-- `NonTransferableAccount`
-- `TransferHook`
-- `TransferHookAccount`
-- `ConfidentialTransferFeeConfig`
-- `ConfidentialTransferFeeAmount`
-- `MetadataPointer`
-- `TokenMetadata`
-- `GroupPointer`
-- `TokenGroup`
-- `GroupMemberPointer`
-- `TokenGroupMember`
-- `ConfidentialMintBurn`
-- `ScaledUiAmount`
-- `Pausable`
-- `PausableAccount`
+At the program level, a valid token badge allows a Token 2022 mint to pass DLMM mint validation even if it uses extensions that are not on the permissionless allowlist. This review path is intended for extensions that can affect transfers, account state, authorities, pausing, hooks, confidentiality, non-transferability, scaled UI amounts, or other behavior that can materially affect swaps, deposits, withdrawals, and integrations.
 
 <Warning>Token 2022 mints with a freeze authority require additional review. DLMM does not permissionlessly accept mints that can freeze accounts.</Warning>
+
+<Warning>DLMM rejects the native Token 2022 mint to avoid fragmented SOL liquidity. Use the standard wrapped SOL mint for SOL liquidity.</Warning>
 
 ## What This Means For Pool Creators
 
