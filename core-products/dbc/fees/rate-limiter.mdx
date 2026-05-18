@@ -48,6 +48,8 @@ This does not block large buys. It makes large buys more expensive during the co
 
 It also helps protect the fee design at the transaction level. When the limiter is active, the program validates single-swap behavior for the pool so traders cannot easily split one large buy into multiple swaps inside the same transaction.
 
+For exact-in swaps, the limiter derives the fee from the included input amount. For exact-out swaps, it derives the fee from the excluded amount and performs a conservative reverse calculation, so different swap modes can produce slightly different effective limiter behavior.
+
 ## Requirements
 
 Rate limiter mode has important constraints.
@@ -60,6 +62,8 @@ Rate limiter mode has important constraints.
 | Max duration | The limiter duration is capped at 12 hours. |
 | Fee bounds | The starting fee must stay within DBC's bonding phase fee bounds. |
 | Single-swap validation | Active rate limiter trades are checked so a transaction cannot bundle multiple swaps for the same pool to bypass the limiter. |
+
+The 12-hour cap is represented as `43,200` seconds for timestamp activation or `108,000` slots for slot activation. If `reference_amount`, `max_limiter_duration`, and `fee_increment_bps` are all zero, rate limiter mode behaves like a fixed cliff-fee mode.
 
 <Warning>
   Rate limiter should be used when the launch specifically wants buy-size-sensitive fees. If the launch only needs time-based fee decay, use a linear or exponential scheduler instead.
@@ -90,7 +94,3 @@ Choose rate limiter when:
 - The goal is to make large buys less attractive without fully preventing them.
 - The launch wants fee protection based on size rather than time.
 - Fees should return to the base level after the limiter window ends.
-
-## Product Takeaway
-
-Rate limiter is DBC's buy-size protection mode. It is best used when distribution quality matters and the launch wants large early buys to pay more than smaller participants.

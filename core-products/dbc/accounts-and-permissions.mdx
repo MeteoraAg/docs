@@ -1,0 +1,93 @@
+---
+title: "DBC Accounts and Permissions"
+sidebarTitle: "Accounts and Permissions"
+description: "Review the main DBC on-chain accounts, lifecycle flags, permissions, limits, and claim gates."
+llmsDescription: "Implementation-grounded DBC account and permission reference covering PoolConfig, VirtualPool, partner and creator metadata, operator permissions, collect fee modes, migration progress states, config limits, token limits, fee limits, liquidity lock requirements, claim gates, and Token 2022 quote mint restrictions."
+---
+
+This page summarizes the DBC implementation details that are useful when reading pool state, building integrations, or checking whether a claim or migration action is allowed.
+
+## Main Accounts
+
+| Account | What It Stores |
+| --- | --- |
+| `PoolConfig` | Reusable launch template: quote mint, fee claimer, leftover receiver, bonding curve, fees, migration target, token settings, liquidity distribution, migration fee settings, and migrated-pool fee settings. |
+| `VirtualPool` | Live launch state: creator, base and quote vaults, reserves, current square-root price, activation point, fee balances, migration progress, surplus and claim flags, and protocol migration fee balances. |
+| `PartnerMetadata` | Optional partner metadata used by launchpad partners. |
+| `VirtualPoolMetadata` | Optional metadata account for a launched virtual pool, created by the pool creator. |
+| `Operator` | Admin-created permission account used for protocol operations such as claiming protocol fees or zapping protocol fees. |
+
+## Lifecycle State
+
+`VirtualPool` tracks migration progress with four states.
+
+| State | Meaning |
+| --- | --- |
+| `PreBondingCurve` | The pool is still trading on the DBC curve. |
+| `PostBondingCurve` | The curve is complete and a locker step is still needed. This is used when locked vesting is configured. |
+| `LockedVesting` | The pool is ready for DAMM pool creation, or vesting/locker setup has been completed. |
+| `CreatedPool` | The migrated DAMM pool has been created. |
+
+When the quote reserve reaches `migration_quote_threshold`, normal curve trading stops. If locked vesting is configured, the pool moves to `PostBondingCurve`; otherwise it moves directly to `LockedVesting`.
+
+## Core Limits
+
+| Setting | Program Constraint |
+| --- | --- |
+| Active curve points | `1` to `16` points. The account stores 20 slots for compatibility and future capacity. |
+| Token decimals | `6` to `9`. |
+| Bonding-curve minimum base fee | `0.25%`, stored as `2_500_000` over `1_000_000_000`. |
+| Bonding-curve maximum total fee | `99%`, stored as `990_000_000` over `1_000_000_000`. |
+| Rate limiter duration | Up to `43,200` seconds for timestamp activation or `108,000` slots for slot activation. |
+| Migration fee percentage | Up to `99%`. If the migration fee is `0`, the creator migration fee percentage must also be `0`. |
+| Pool creation fee | If non-zero, from `0.001 SOL` to `100 SOL`, paid in lamports. |
+| Migrated pool fee | `0.1%` to `10%` when custom DAMM v2 migrated-pool fees are configured. |
+| Day-one locked liquidity | At least `10%` of migrated liquidity must still be locked after one day. |
+| DAMM v2 vesting lock duration | At most `2` years. |
+
+## Permissions
+
+| Action | Required Authority |
+| --- | --- |
+| Create config | Any payer can create a config account, but the config fixes the `fee_claimer` and `leftover_receiver`. |
+| Initialize virtual pool | Creator signs and launches from an existing config. |
+| Create virtual pool metadata | Current pool creator. |
+| Transfer pool creator | Current pool creator. |
+| Claim partner trading fee | Config `fee_claimer`. |
+| Claim creator trading fee | Current pool creator. |
+| Partner withdraw surplus | Config `fee_claimer`. |
+| Creator withdraw surplus | Current pool creator. |
+| Withdraw partner migration fee | Config `fee_claimer`. |
+| Withdraw creator migration fee | Current pool creator. |
+| Withdraw leftover | Permissionless instruction, but funds can only go to the config `leftover_receiver` ATA after migration. |
+| Claim protocol fees | Operator with `ClaimProtocolFee` permission. |
+| Zap protocol fee | Operator with `ZapProtocolFee` permission. |
+
+Several claim paths also use one-time flags on `VirtualPool`, so a valid signer cannot claim the same surplus, migration fee, pool creation fee, or leftover more than once.
+
+## Claims by Lifecycle Stage
+
+| Lifecycle Stage | Claim Paths |
+| --- | --- |
+| After virtual pool creation | Partner and protocol pool creation fees can be claimed once, when configured. |
+| During bonding curve trading | Partner, creator, and protocol trading fees can be claimed as fees accrue. |
+| After curve completion | Surplus and partner or creator migration fees become available. |
+| After migrated pool creation | Fixed-supply leftover withdrawal, DAMM v1 LP-token claims, and DAMM v2 migrated position ownership are finalized. |
+
+## Token Support
+
+DBC can launch SPL Token or Token 2022 base mints. DAMM v1 migration is restricted to SPL Token base mints and SPL Token quote mints. DAMM v2 is the migration path for Token 2022 launches.
+
+Quote mints can be SPL Token mints. Token 2022 quote mints are accepted only when their extensions are limited to `MetadataPointer` and `TokenMetadata`; native Token 2022 mint behavior is rejected as a quote mint.
+
+## Config Validation Highlights
+
+DBC validates the launch template before it can be used:
+
+- The quote mint must be supported.
+- The collect fee mode must be `QuoteToken` or `OutputToken`.
+- The migration target must be DAMM v1 or DAMM v2.
+- DAMM v1 configs cannot use Token 2022, custom DAMM v2 migration fees, or DAMM v2 liquidity vesting.
+- Liquidity percentages across partner, creator, permanent locks, and vesting must add to `100%`.
+- Curve prices must strictly increase and every active curve point must have positive liquidity.
+- Fixed-supply configs must set a non-default leftover receiver and must provide enough supply for the curve, migration liquidity, locked vesting, and the 25% swap buffer.

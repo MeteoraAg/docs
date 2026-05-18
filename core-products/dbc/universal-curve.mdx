@@ -23,6 +23,10 @@ DBC represents the curve as a starting price plus up to 16 curve points. Each po
 Start price -> Segment 1 -> Segment 2 -> ... -> Migration price
 ```
 
+<Note>
+  Each curve segment is a constant-product price range, with a lower and upper price, and a liquidity value.
+</Note>
+
 ## Single-Segment Curves
 
 A single-segment curve uses one liquidity setting from the starting price to the migration price.
@@ -46,7 +50,7 @@ This lets a launch team design distinct phases:
 
 - An early discovery phase.
 - A broader distribution phase.
-- A final migration phase.
+- A steep final migration phase.
 
 Each segment can feel different to traders because each segment can require a different amount of quote token to move price.
 
@@ -89,20 +93,20 @@ The migration price is not manually chosen after the launch. It is derived from 
 
 As quote tokens enter the virtual pool, the price moves through the curve. When the quote reserve reaches the threshold, the current curve price becomes the migration price used to initialize the graduated pool.
 
-This is one of DBC's most important product properties: the DAMM pool starts from the price discovered during the bonding phase.
+**This is one of DBC's most important product properties: the DAMM pool starts from the price discovered during the bonding phase.**
 
 ## Curve Constraints
 
 | Constraint | Product Meaning |
 | --- | --- |
-| Up to 16 curve points | The launch can use one segment or multiple segments, but should stay simple enough to explain. |
+| Up to 16 curve points | The launch can use one segment or multiple segments, up to 16 segments. |
 | Prices must increase | Each curve point must be above the previous price. |
 | Liquidity must be positive | Every segment needs liquidity so trades can move through it. |
 | Migration threshold must be reachable | The curve needs enough liquidity to reach the configured migration quote threshold. |
+| Start price bounds | The start square-root price must be at least `4295048016` and below `79226673521066979257578248091`. |
+| Migration price bounds | The derived migration square-root price must stay below `79226673521066979257578248091`. |
 
-<Note>
-  DBC configs can store extra curve capacity internally, but product launches use up to 16 active curve points.
-</Note>
+During config creation, the program derives the migration square-root price from `migration_quote_threshold`, `sqrt_start_price`, and the active curve points. It also calculates `swap_base_amount`, the amount of base token available for buys until migration, from that derived migration price.
 
 ## Choosing a Curve
 

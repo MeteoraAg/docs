@@ -39,7 +39,7 @@ Fixed-fee behavior is the simplest scheduler setup.
 In product terms, every trade pays the same base fee unless dynamic fees are enabled. This is useful for launchpads that want broad, easy-to-explain presets.
 
 <Note>
-  Fixed fee is not a separate on-chain base fee mode. It is scheduler behavior where the fee does not decay.
+  Fixed fee is not a separate on-chain scheduler curve. It is scheduler behavior where `period_frequency`, `number_of_period`, and `reduction_factor` are all zero, so the program returns the cliff fee for every swap.
 </Note>
 
 ## Linear Scheduling
@@ -93,6 +93,8 @@ Scheduler fees must stay within DBC bonding phase fee bounds.
 | Minimum base fee | 0.25% minimum base fee for bonding phase configurations. |
 | Maximum total fee | 99% maximum fee cap to avoid invalid launch configurations. |
 
+If any scheduler field is non-zero, all three schedule fields must be non-zero. Mixed zero and non-zero scheduler settings are invalid.
+
 ## Choosing a Scheduler
 
 <AccordionGroup>
@@ -106,7 +108,3 @@ Scheduler fees must stay within DBC bonding phase fee bounds.
     Use exponential scheduling. It front-loads fee protection while making the launch more accessible as early trading settles.
   </Accordion>
 </AccordionGroup>
-
-## Product Takeaway
-
-The fee scheduler is DBC's predictable base-fee tool. Use fixed behavior for simplicity, linear scheduling for clear step-down rules, and exponential scheduling for stronger early protection that tapers over time.

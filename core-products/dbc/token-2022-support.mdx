@@ -7,7 +7,11 @@ llmsDescription: "Explains DBC Token 2022 support, including SPL Token and Token
 
 DBC supports both SPL Token and Token 2022 base token launches.
 
-Token 2022 support helps launch teams use newer Solana token capabilities while still accessing DBC's bonding curve, launch fee controls, and DAMM migration flow.
+Token 2022 support helps launch teams use newer Solana token capabilities while still accessing DBC's bonding curve, launch fee controls, and DAMM migration flow. 
+
+<Note>
+  Token 2022 support in DBC does not allow you to utilize any token extensions.
+</Note>
 
 ## SPL Token vs Token 2022
 
@@ -26,8 +30,9 @@ DBC handles:
 - Setting token decimals from the config.
 - Initializing metadata pointer behavior.
 - Initializing token metadata with name, symbol, and URI.
-- Setting update authority according to the configured authority option.
+- Initializing metadata with the creator, then setting metadata pointer and token metadata update authority according to the configured authority option.
 - Minting the initial base supply into the pool vault.
+- Setting mint authority according to the configured authority option.
 
 This lets creators launch a Token 2022 token through the same product flow as a standard DBC launch.
 
@@ -57,6 +62,8 @@ This means Token 2022 quote mints with transfer fees or other behavioral extensi
 <Note>
   Native Token 2022 mint behavior is not supported as a quote mint.
 </Note>
+
+DBC records whether the quote mint belongs to the SPL Token program or Token 2022 program. Token transfers use `transfer_checked`, so integrations should provide the token program that matches each mint.
 
 ## Token Authority Choices
 
@@ -98,7 +105,3 @@ For fixed-supply Token 2022 launches, leftover handling works the same product w
     Token 2022 quote assets should be checked for supported extensions before launch.
   </Card>
 </CardGroup>
-
-## Product Takeaway
-
-DBC Token 2022 support lets launch teams use a newer Solana token standard without giving up the DBC launch experience. The main planning step is to pair Token 2022 launches with the right migration target, authority model, and supported quote token setup.

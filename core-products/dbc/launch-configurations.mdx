@@ -1,0 +1,70 @@
+---
+title: "DBC Launch Configuration"
+sidebarTitle: "Launch Configuration"
+description: "Review the DBC configuration fields that sit around the curve, including token settings, fees, migration, supply, liquidity locks, and claim addresses."
+llmsDescription: "Concise DBC launch configuration reference covering quote mint, activation type, token decimals, token authority, fixed and dynamic supply, migration target, migration fee, migrated DAMM v2 pool fees, liquidity distribution, pool creation fee, first swap with minimum fee, fee claimer, leftover receiver, and links to deeper DBC pages."
+---
+
+DBC configs are reusable launch templates. The curve defines price discovery; the surrounding config defines which token can launch, how fees behave, how migration works, and who can claim each economic bucket.
+
+Use this page as a checklist. For implementation limits and permissions, see [DBC Accounts and Permissions](/core-products/dbc/accounts-and-permissions).
+
+## Core Fields
+
+| Field | Program Behavior |
+| --- | --- |
+| Quote mint | Must be supported. SPL Token quote mints are supported; Token 2022 quote mints are limited to metadata-related extensions. |
+| Activation type | Slot-based or timestamp-based. Fee schedules and rate limiter windows use the same activation type. |
+| Token decimals | Must be from `6` to `9`. |
+| Token type | SPL Token or Token 2022. Token 2022 launches must use DAMM v2 migration. |
+| Token authority option | Controls whether creator, partner, or no one receives update authority, and whether creator or partner receives mint authority. |
+| Collect fee mode | `QuoteToken` or `OutputToken` for bonding-curve trading. |
+
+## Supply
+
+DBC supports dynamic supply and fixed supply.
+
+| Supply Model | Program Behavior |
+| --- | --- |
+| Dynamic supply | Initial base supply is calculated from the curve swap amount with a 25% buffer, migration base threshold, and locked-vesting amount. |
+| Fixed supply | Config provides pre-migration and post-migration supply. The leftover receiver must be non-default, and pre-migration supply must cover the buffered requirement. |
+
+Fixed-supply cleanup is covered in [DBC Leftover](/core-products/dbc/leftover).
+
+## Migration
+
+| Setting | Program Behavior |
+| --- | --- |
+| Migration target | DAMM v1 or DAMM v2. DAMM v1 is restricted to SPL Token base and quote mints. |
+| Migration fee option | Fixed DAMM fee options or `Customizable` for custom DAMM v2 migrated-pool fee settings. |
+| Migration fee percentage | Up to `99%`. If it is `0`, creator migration fee percentage must also be `0`. |
+| DAMM v2 migrated pool fee | Must be `0.1%` to `10%` when custom migrated-pool fees are configured. |
+| DAMM v2 compounding fee bps | Must be non-zero only for compounding migrated-pool collect fee mode. |
+| DAMM v2 market-cap scheduler params | Apply after migration; they do not affect the DBC bonding-curve fee. |
+
+For the migration flow and liquidity ownership, see [DBC Migration and Liquidity](/core-products/dbc/migration-and-liquidity).
+
+## Liquidity Distribution
+
+The migrated liquidity distribution must add to `100%` across:
+
+- Partner unlocked liquidity.
+- Partner permanent locked liquidity.
+- Partner vesting liquidity.
+- Creator unlocked liquidity.
+- Creator permanent locked liquidity.
+- Creator vesting liquidity.
+
+At least `10%` of migrated liquidity must still be locked after one day. DAMM v2 vesting lock duration is capped at two years.
+
+## Fees and Claim Addresses
+
+| Setting | Program Behavior |
+| --- | --- |
+| Pool creation fee | Optional. If non-zero, must be between `0.001 SOL` and `100 SOL`; split 10% protocol and 90% partner. |
+| Creator trading fee percentage | Splits the non-protocol trading fee between creator and partner. |
+| Fee claimer | Authorizes partner-side claims such as trading fees, pool creation fees, migration fees, and surplus. |
+| Leftover receiver | Receives fixed-supply leftover after the migrated pool reaches `CreatedPool`. |
+| First swap with minimum fee | Optional narrow path for an initialize-pool transaction that includes the first swap, targets that new pool, and has no referral account. |
+
+Bonding-curve fee modes are covered in [DBC Fees](/core-products/dbc/fees/overview).

@@ -37,6 +37,10 @@ DBC supports two migration targets.
 
 DAMM v2 is the more flexible path for modern launches, especially Token 2022 launches and teams that need detailed post-migration liquidity controls.
 
+<Warning>
+  DAMM v1 migration is restricted to SPL Token base mints and SPL Token quote mints. Token 2022 launches must migrate to DAMM v2.
+</Warning>
+
 ## What Migrates
 
 At migration, DBC uses:
@@ -60,7 +64,7 @@ Each bucket can include:
 | Permanently locked liquidity | Liquidity remains locked while still supporting the pool. |
 | Vesting liquidity | Liquidity unlocks over time according to the configured schedule. |
 
-The full partner and creator liquidity distribution must add up to 100%.
+The full distribution across partner unlocked liquidity, partner permanent locked liquidity, partner vesting liquidity, creator unlocked liquidity, creator permanent locked liquidity, and creator vesting liquidity must add up to 100%.
 
 <Warning>
   DBC requires at least 10% of liquidity to remain locked at day 1 after migration. Vesting lock durations are capped at 2 years.
@@ -103,6 +107,15 @@ For fixed-supply launches, some base tokens may remain in the virtual pool after
 
 Leftover is covered in more detail in [DBC Leftover](/core-products/dbc/leftover).
 
-## Product Takeaway
+## Mainnet Migration Keepers
 
-DBC migration turns launch demand into long-term liquidity. The important product decision is not only whether a token migrates, but how liquidity is split, who owns it, which parts are locked, and whether DAMM v1 or DAMM v2 is the right long-term home.
+Meteora operates migration keepers on mainnet to help eligible DBC pools graduate automatically.
+
+| Keeper | Threshold Requirements |
+| --- | --- |
+| [CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY](https://solscan.io/account/CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY) | 10 SOL, 750 USDC, or 1500 JUP |
+| [DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW](https://solscan.io/account/DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW) | At least 750 USD equivalent in the quote token |
+
+<Note>
+  Migration keepers run on mainnet. For testing or manual flows, use the [manual migrator](https://migrator.meteora.ag/), which supports mainnet and devnet.
+</Note>
