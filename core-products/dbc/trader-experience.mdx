@@ -20,6 +20,8 @@ A DBC pool can open immediately or wait for an activation point.
 
 Activation lets launchpads prepare a pool before public trading begins.
 
+The pool stores its activation point when it is initialized. Fee schedules and rate limiter windows are measured from that activation point using the config's activation type.
+
 ## Trading on the Curve
 
 When traders buy the launched token, quote tokens enter the pool and the price moves up the curve. When traders sell, base tokens return to the pool and quote tokens leave the pool.
@@ -45,6 +47,8 @@ DBC has two collect fee modes during the bonding phase.
 
 The configured base fee mode and optional dynamic fee determine the fee rate.
 
+For quote-token fee mode, buys pay fees on quote input and sells pay fees from quote output. For output-token fee mode, buys pay fees from base output and sells pay fees from quote output.
+
 ## Referral Fees
 
 DBC swaps can include referral fee behavior. When a referral is present, the referral receives a share of the protocol fee.
@@ -60,6 +64,8 @@ This is useful when the creator creates the pool and performs an initial buy in 
 <Note>
   This only applies to the eligible first creator swap. It is not a general fee discount for all early traders.
 </Note>
+
+The program checks that the initialize-pool instruction appears earlier in the same top-level transaction and that the swap has no referral account. If those checks fail, normal fee logic applies.
 
 ## Rate Limiter Experience
 
@@ -80,7 +86,3 @@ quote_reserve >= migration_quote_threshold
 At that point, normal DBC curve trading stops and the pool becomes eligible for migration. Traders then wait for the pool to migrate into DAMM v1 or DAMM v2.
 
 After migration, trading moves to the created DAMM pool instead of the DBC virtual pool.
-
-## Product Takeaway
-
-For traders, DBC provides a clear path: trade on the launch curve first, then trade on the migrated DAMM pool after graduation. For launch teams, the product advantage is that activation, fees, referrals, rate limiting, and migration behavior can all be configured before the launch opens.

@@ -38,7 +38,9 @@ When swaps move price, the accumulator can increase. As time passes, the volatil
 
 ```math
 \text{Dynamic Fee} =
+\left\lceil
 \frac{(\text{Volatility Accumulator} \times \text{Bin Step})^2 \times \text{Variable Fee Control}}{100000000000}
+\right\rceil
 ```
 
 In product terms:
@@ -46,6 +48,7 @@ In product terms:
 - More recent price movement can increase the fee.
 - The fee is capped by configuration so it does not grow without bound.
 - The fee can cool down as volatility decays.
+- The total trading fee is still capped at `99%` after the base fee and dynamic fee are added.
 
 ## Why Use Dynamic Fees
 
@@ -90,8 +93,4 @@ Example:
 | Max dynamic fee from helper | Up to 0.20% |
 | Total fee | Up to 1.20% |
 
-This is a helper-level product convention for common launch configurations. Custom configurations still need to respect the program's dynamic fee validation rules, including the default 1 bps bin step, filter period below decay period, and volatility parameter caps.
-
-## Product Takeaway
-
-Dynamic fees are best used as an adaptive layer. The base fee defines the normal launch fee behavior, while dynamic fees help the launch respond when markets become more volatile.
+This is a helper-level product convention for common launch configurations. Custom configurations still need to respect the program's dynamic fee validation rules, including the default 1 bps bin step, filter period below decay period, reduction factor at most `10000`, and volatility parameter caps.

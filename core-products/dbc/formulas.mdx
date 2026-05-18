@@ -2,10 +2,12 @@
 title: "DBC Formulas"
 sidebarTitle: "Formulas"
 description: "Understand the product math behind DBC price movement, universal curve segments, migration thresholds, trading fees, surplus, protocol migration fees, and leftover tokens."
-llmsDescription: "Explains non-technical DBC formulas including constant-product curve segments, virtual liquidity, base token sold, quote token collected, migration quote threshold, migration price, total trading fee, fee scheduler behavior, rate limiter fees, dynamic fee, protocol and referral fees, partner and creator fee split, migration fee, protocol liquidity migration fee, surplus split, and fixed-supply leftover."
+llmsDescription: "Explains DBC formulas, including constant-product curve segments, virtual liquidity, base token sold, quote token collected, migration quote threshold, migration price, total trading fee, fee scheduler behavior, rate limiter fees, dynamic fee, protocol and referral fees, partner and creator fee split, migration fee, protocol liquidity migration fee, surplus split, and fixed-supply leftover."
 ---
 
 DBC uses concentrated-liquidity style math to create a customizable bonding curve. You do not need to understand every implementation detail to use the product, but the formulas below explain the main economic levers behind a launch.
+
+On-chain fee numerators use a denominator of `1,000,000,000`. For example, `2,500,000` is `0.25%`, and `990,000,000` is `99%`.
 
 ## Curve Segment Formula
 
@@ -83,6 +85,8 @@ DBC trading fees have two layers:
 
 The base fee is always present. The dynamic fee is optional and becomes zero when disabled.
 
+The total fee numerator is capped at `990,000,000`, or `99%`.
+
 ## Base Fee
 
 The base fee is the default trading fee behavior. DBC supports fee scheduler and rate limiter behavior:
@@ -100,7 +104,9 @@ The dynamic fee responds to volatility.
 
 ```math
 \text{Dynamic Fee} =
+\left\lceil
 \frac{(\text{Volatility Accumulator} \times \text{Bin Step})^2 \times \text{Variable Fee Control}}{100000000000}
+\right\rceil
 ```
 
 In product terms, the dynamic fee rises when price movement becomes more intense and decays when trading calms down.
@@ -133,11 +139,6 @@ The remaining trading fee is shared between partner and creator according to the
 
 DBC can take a configured migration fee from the quote reserve at graduation.
 
-```math
-\text{Migration Fee} =
-\text{Migration Quote Threshold} \times \text{Migration Fee Percentage}
-```
-
 That fee can be split between partner and creator.
 
 ```math
@@ -151,6 +152,20 @@ That fee can be split between partner and creator.
 ```
 
 Partner and creator migration-fee withdrawals are available after the curve is complete because the program can then confirm the launch reached its migration quote threshold.
+
+The quote amount used for migration is calculated by removing the configured migration fee from the migration threshold, rounded up:
+
+```math
+\text{Migration Quote Amount} =
+\left\lceil
+\text{Migration Quote Threshold} \times \frac{100 - \text{Migration Fee Percentage}}{100}
+\right\rceil
+```
+
+```math
+\text{Migration Fee} =
+\text{Migration Quote Threshold} - \text{Migration Quote Amount}
+```
 
 <Note>
   A fixed 0.2% protocol liquidity migration fee also applies during migration. It is separate from the configurable partner and creator migration fee, and it reduces the base and quote liquidity deposited into the migrated pool.
@@ -170,6 +185,8 @@ Partners can configure a pool creation fee that is paid when a creator launches 
 
 Pool creation fee claims are tied to virtual pool creation, not to curve completion or migration.
 
+If configured, the pool creation fee must be between `0.001 SOL` and `100 SOL`, denominated in lamports.
+
 ## Surplus
 
 Surplus is extra quote reserve above the migration threshold.
@@ -181,7 +198,11 @@ Surplus is extra quote reserve above the migration threshold.
 DBC allocates 80% of surplus to partner and creator, then splits that share using the creator trading fee percentage. The remaining 20% is protocol surplus.
 
 ```math
-\text{Partner and Creator Surplus} = \text{Total Surplus} \times 80\%
+\text{Partner and Creator Surplus} = \left\lfloor\text{Total Surplus} \times 80\%\right\rfloor
+```
+
+```math
+\text{Protocol Surplus} = \text{Total Surplus} - \left\lfloor\text{Total Surplus} \times 80\%\right\rfloor
 ```
 
 ## Leftover
