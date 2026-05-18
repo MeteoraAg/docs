@@ -1,11 +1,11 @@
 ---
 title: "DAMM v2 Formulas"
 sidebarTitle: "Formulas"
-description: "Understand the product math behind DAMM v2 prices, concentrated liquidity, compounding liquidity, fees, and liquidity mining rewards."
-llmsDescription: "Explains DAMM v2 formulas covering constant-product pricing, square-root price, concentrated liquidity ranges, token amounts for liquidity, compounding full-range liquidity, total trading fee, protocol fee, LP fee, compounding fee split, dynamic fee, and liquidity mining reward distribution."
+description: "Understand the product math behind DAMM v2 prices, liquidity, fees, compounding, and rewards."
+llmsDescription: "Explains DAMM v2 formulas covering square-root price, concentrated liquidity token amounts, compounding full-range liquidity, dead liquidity, included and excluded fee amounts, protocol and referral fee splitting, dynamic fee calculation, and liquidity mining reward distribution with rounding notes."
 ---
 
-DAMM v2 is designed around constant-product liquidity. The formulas below explain the ideas behind the product without requiring you to integrate directly with the on-chain math.
+DAMM v2 is designed around constant-product liquidity. The formulas below explain the product math and the implementation details users most often need to reason about. On-chain values use integer math, so rounding matters.
 
 ## Constant Product
 
@@ -15,45 +15,27 @@ The basic AMM idea is simple:
 x \times y = k
 ```
 
-`x` is the token A reserve, `y` is the token B reserve, and `k` is the pool's liquidity invariant. When a trader adds one token to the pool and removes the other, the pool adjusts the price so the relationship between both reserves stays balanced.
-
-For users, this means:
-
-- Larger pools usually create lower price impact.
-- Larger trades move price more than smaller trades.
-- Pool depth matters most around the prices where trading happens.
+`x` is the token A reserve, `y` is the token B reserve, and `k` is the pool's liquidity invariant. In compounding mode this is reserve-based. In concentrated mode, the same idea is bounded by the pool's configured square-root price range.
 
 ## Price and Square-Root Price
 
-DAMM v2 stores price as square-root price:
+DAMM v2 stores price as a square-root price:
 
 ```math
-\sqrt{P} = \sqrt{\frac{\text{token B}}{\text{token A}}}
+\sqrt{P} = \sqrt{\frac{\text{token B amount}}{\text{token A amount}}}
 ```
 
-This format makes liquidity math more precise and efficient on-chain. In product terms, you can think of it as the pool's current price, expressed in a way that makes adding, removing, and swapping liquidity easier for the program to calculate.
+This format makes liquidity math more precise and efficient on-chain. Product users can still think of it as the pool price expressed in a form that is easier for the program to update during swaps and liquidity changes.
 
-## Concentrated Liquidity Range
+## Concentrated Liquidity
 
-In concentrated liquidity mode, a DAMM v2 pool has a fixed lower and upper price:
+In concentrated liquidity mode, a DAMM v2 pool has a fixed lower and upper square-root price:
 
 ```math
 \sqrt{P_{\min}} \le \sqrt{P} \le \sqrt{P_{\max}}
 ```
 
-Liquidity is active inside that range. If the market moves outside the configured range, the pool reaches its boundary and swaps cannot continue through that range.
-
-The practical product tradeoff is:
-
-- A tighter range can make liquidity more efficient near the target price.
-- A wider range can support more price movement.
-- Full-range liquidity behaves more like a traditional constant-product pool.
-
-## Token Amounts for Liquidity
-
-When an LP adds liquidity to a concentrated pool, DAMM v2 calculates how much token A and token B are needed based on the current price and the pool's range.
-
-For a liquidity amount `L`:
+For a liquidity amount `L`, the token amounts are:
 
 ```math
 \Delta A = L \times \left(\frac{1}{\sqrt{P}} - \frac{1}{\sqrt{P_{\max}}}\right)
@@ -63,73 +45,98 @@ For a liquidity amount `L`:
 \Delta B = L \times (\sqrt{P} - \sqrt{P_{\min}})
 ```
 
-In plain English:
-
-- Token A is more important as price approaches the lower side of the range.
-- Token B is more important as price approaches the upper side of the range.
-- The current pool price determines the deposit ratio.
-
-<Note>
-  This is why DAMM v2 may ask for different token ratios depending on the current price, even when the pool range stays the same.
-</Note>
+The program rounds required deposit amounts up and withdrawal or swap output amounts down. Token A calculations also guard against values larger than `u64::MAX`.
 
 ## Compounding Liquidity
 
-In compounding mode, DAMM v2 uses full-range constant-product liquidity. Instead of tracking custom lower and upper price bounds, the pool tracks token reserves directly:
+In compounding mode, DAMM v2 uses full-range constant-product liquidity and prices the pool from reserves:
 
 ```math
 \text{token A reserve} \times \text{token B reserve} = k
 ```
 
-The pool price comes from the reserve ratio:
-
 ```math
 P = \frac{\text{token B reserve}}{\text{token A reserve}}
 ```
 
-A share of LP fees can be added back into reserves. As reserves grow, the pool gets deeper, and every LP benefits in proportion to their position liquidity.
+At initialization, compounding mode derives reserves from liquidity and square-root price:
+
+```math
+A_0 = \left\lceil \frac{L}{\sqrt{P}} \right\rceil
+```
+
+```math
+B_0 = \left\lceil \frac{L \times \sqrt{P}}{2^{128}} \right\rceil
+```
+
+The first position receives:
+
+```math
+L_{\text{position}} = L - (100 \ll 64)
+```
+
+because `100 << 64` is kept as dead liquidity in the pool.
 
 ## Trading Fees
 
-DAMM v2 trading fees are built in layers:
+DAMM v2 fee rates are stored as numerators over `1,000,000,000`:
 
 ```math
-\text{Total Trading Fee} = \text{Base Fee} + \text{Dynamic Fee}
+\text{Total Fee Numerator} = \min(\text{Base Fee Numerator} + \text{Dynamic Fee Numerator}, \text{Pool Fee Cap})
 ```
 
-The base fee is chosen from one of DAMM v2's five base fee modes. The dynamic fee is optional and increases when recent price movement is volatile.
-
-After the total trading fee is calculated, DAMM v2 splits it:
+For fees taken from an amount that already includes the fee, the program rounds the fee up:
 
 ```math
-\text{Protocol Fee} = \text{Trading Fee} \times \text{Protocol Fee Percent}
+\text{Trading Fee} = \left\lceil \frac{\text{Included Amount} \times \text{Fee Numerator}}{1{,}000{,}000{,}000} \right\rceil
+```
+
+For fees added to an amount that excludes the fee:
+
+```math
+\text{Included Amount} = \left\lceil \frac{\text{Excluded Amount} \times 1{,}000{,}000{,}000}{1{,}000{,}000{,}000 - \text{Fee Numerator}} \right\rceil
+```
+
+After the trading fee is calculated, DAMM v2 splits it:
+
+```math
+\text{Protocol Fee} = \left\lfloor \text{Trading Fee} \times \frac{\text{Protocol Fee Percent}}{100} \right\rfloor
 ```
 
 ```math
-\text{LP Fee} = \text{Trading Fee} - \text{Protocol Fee}
+\text{LP Fee Before Compounding} = \text{Trading Fee} - \text{Protocol Fee}
 ```
 
 If the pool uses compounding mode, the LP fee can be split again:
 
 ```math
-\text{Compounding Fee} = \text{LP Fee} \times \frac{\text{Compounding Fee Bps}}{10{,}000}
+\text{Compounding Fee} = \left\lfloor \text{LP Fee Before Compounding} \times \frac{\text{Compounding Fee Bps}}{10{,}000} \right\rfloor
 ```
 
 ```math
-\text{Claimable Fee} = \text{LP Fee} - \text{Compounding Fee}
+\text{Claimable Fee} = \text{LP Fee Before Compounding} - \text{Compounding Fee}
 ```
 
-For non-compounding pools, the compounding fee is zero and LP fees remain claimable by positions.
+If a referral is present, the referral fee is taken from the protocol fee:
+
+```math
+\text{Referral Fee} = \left\lfloor \text{Protocol Fee} \times \frac{\text{Referral Fee Percent}}{100} \right\rfloor
+```
+
+DAMM v2's default protocol fee percent is `20`, and the referral fee percent is `20` of the protocol fee when a referral account is used.
 
 ## Dynamic Fee
 
 Dynamic fees use a volatility accumulator. When price changes quickly, the accumulator rises. When the market calms down, it decays.
 
 ```math
-\text{Dynamic Fee} \propto (\text{Volatility Accumulator} \times \text{Bin Step})^2
+\text{Dynamic Fee Numerator} =
+\left\lceil
+\frac{(\text{Volatility Accumulator} \times \text{Bin Step})^2 \times \text{Variable Fee Control}}{100{,}000{,}000{,}000}
+\right\rceil
 ```
 
-For product users, the important idea is not the exact coefficient. It is that DAMM v2 can charge more during volatile periods and less during quiet periods, creating a fee response that adapts to market conditions.
+In the current implementation, dynamic fee `bin_step` must be `1` bps and `bin_step_u128` must match the default 1 bps fixed-point value. `filter_period` must be lower than `decay_period`, and both `variable_fee_control` and `max_volatility_accumulator` are capped at `0xffffff`.
 
 ## Liquidity Mining Rewards
 
@@ -144,3 +151,5 @@ DAMM v2 liquidity mining distributes reward tokens by position liquidity:
 ```
 
 This means LPs earn rewards in proportion to their share of pool liquidity. Unlocked, vesting, and permanently locked liquidity can all count toward rewards because the position's total liquidity is used for reward accounting.
+
+The reward rate is stored as a fixed-point value scaled by `2^64`, while reward-per-liquidity accounting is accumulated with a `2^128` liquidity scale. Integer division truncates fractional rewards.

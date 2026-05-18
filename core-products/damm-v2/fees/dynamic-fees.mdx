@@ -2,7 +2,7 @@
 title: "DAMM v2 Dynamic Fees"
 sidebarTitle: "Dynamic Fees"
 description: "Learn how DAMM v2 dynamic fees add a volatility-responsive fee layer on top of the selected base fee mode."
-llmsDescription: "Explains DAMM v2 dynamic fees, covering optional volatility-based fees, volatility accumulator, volatility reference, filter period, decay period, reduction factor, max volatility accumulator, variable fee control, bin step, total trading fee calculation, and why dynamic fees help pools respond to volatile markets."
+llmsDescription: "Explains DAMM v2 dynamic fees, covering optional volatility-based fees, volatility accumulator, volatility reference, filter period, decay period, reduction factor, max volatility accumulator, variable fee control, fixed 1 bps bin step, total trading fee calculation, validation limits, and update behavior."
 ---
 
 DAMM v2 dynamic fees are an optional fee layer that responds to market volatility. When price movement is higher, the dynamic fee can increase. When the market calms down, the dynamic fee decays.
@@ -21,18 +21,41 @@ If dynamic fees are disabled, the dynamic fee is zero.
 
 ## How It Works
 
-DAMM v2 tracks recent price movement through a volatility accumulator. The accumulator rises when price changes and decays over time.
+DAMM v2 tracks recent price movement through a volatility accumulator. The accumulator rises when price changes and can decay or reset over time.
 
 Key settings include:
 
 | Setting | Product Meaning |
 | --- | --- |
-| Bin step | Price sensitivity used by the volatility calculation |
+| Bin step | Price sensitivity used by the volatility calculation; currently fixed to 1 bps |
 | Filter period | Very short-term window that helps smooth noisy updates |
 | Decay period | Time window after which volatility can decay or reset |
-| Reduction factor | How quickly the volatility reference decays |
+| Reduction factor | How much of the previous accumulator becomes the next volatility reference |
 | Max volatility accumulator | Cap that prevents the volatility measure from growing without bound |
-| Variable fee control | How strongly volatility affects the final dynamic fee |
+| Variable fee control | How strongly volatility affects the final dynamic fee numerator |
+
+The dynamic fee numerator is:
+
+```math
+\left\lceil
+\frac{(\text{Volatility Accumulator} \times \text{Bin Step})^2 \times \text{Variable Fee Control}}{100{,}000{,}000{,}000}
+\right\rceil
+```
+
+## Validation Limits
+
+The current implementation enforces:
+
+| Parameter | Constraint |
+| --- | --- |
+| `bin_step` | Must equal `1` |
+| `bin_step_u128` | Must equal the default fixed-point value for 1 bps |
+| `filter_period` and `decay_period` | `filter_period < decay_period` |
+| `reduction_factor` | At most `10000` |
+| `variable_fee_control` | At most `0xffffff` |
+| `max_volatility_accumulator` | At most `0xffffff` |
+
+Operators can enable or update dynamic fees with non-default dynamic fee parameters. Passing default dynamic fee parameters disables dynamic fees, but only if dynamic fees are already enabled.
 
 ## Why Use Dynamic Fees
 

@@ -1,13 +1,13 @@
 ---
 title: "What is DAMM v2?"
 sidebarTitle: "What is DAMM v2?"
-description: "Learn how Meteora's DAMM v2 combines configurable constant-product pools, concentrated liquidity, compounding liquidity, launch-ready fees, NFT positions, liquidity mining, and Token 2022 support."
-llmsDescription: "Product overview of Meteora DAMM v2, explaining DAMM v2 as a configurable Solana constant-product AMM powered by the cp-amm program, covering concentrated liquidity, compounding liquidity, collect fee modes, base fee modes, dynamic fees, NFT-backed positions, locked liquidity, built-in liquidity mining, Token 2022 support, activation controls, and why DAMM v2 is useful for token launches, launchpads, LPs, traders, and integrators."
+description: "Learn more about Meteora's DAMM v2 configurable constant-product pools, concentrated or compounding liquidity, launch fee modes, NFT positions, rewards, locks, and Token 2022 support."
+llmsDescription: "Overview of Meteora DAMM v2, explaining DAMM v2 as a configurable Solana constant-product AMM powered by the cp-amm program, covering concentrated liquidity, compounding liquidity, collect fee modes, base fee modes, dynamic fees, NFT-backed positions, locked liquidity, built-in liquidity mining, Token 2022 support, activation controls, source-code limits, and the main users of the product."
 ---
 
-DAMM v2 is Meteora's highly configurable Dynamic AMM for Solana markets. It is built for teams that need more than a simple pool: launch teams can tune fees, open trading at a specific moment, choose how liquidity behaves, support modern token standards, and give LPs transferable NFT positions in one product.
+DAMM v2 is Meteora's configurable constant-product AMM for Solana markets. It is built for pools that need explicit launch settings, fee behavior, liquidity ownership, reward distribution, and token support in one on-chain program.
 
-At its core, DAMM v2 uses constant-product market making. That means every pool balances two token reserves so traders can swap against shared liquidity. DAMM v2 expands that familiar model with product controls for launch protection, capital efficiency, fee collection, auto-compounding, liquidity mining, and long-term liquidity commitments.
+At its core, a DAMM v2 pool holds two token vaults, tracks a current square-root price, and lets traders swap against shared liquidity. The pool can use either a fixed concentrated price range or a full-range compounding model. LP ownership is represented by Token 2022 position NFTs, and the position account tracks liquidity, pending fees, rewards, vesting locks, and permanent locks.
 
 <Info>
   DAMM v2 runs on the mainnet program `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`.
@@ -15,22 +15,22 @@ At its core, DAMM v2 uses constant-product market making. That means every pool 
 
 ## Why DAMM v2 Exists
 
-Token markets need different liquidity behavior at different stages. A new launch may need elevated anti-sniper fees and quote-token fee collection. A mature pair may need deeper full-range liquidity and auto-compounding. A launchpad may need repeatable pool settings across many launches. A project treasury may need permanently locked liquidity that still earns fees and incentives.
+Token markets need different liquidity behavior at different stages. A new launch may need scheduled fees, quote-token fee collection, activation timing, or an alpha-vault window. A mature pair may need full-range liquidity with compounding. A launchpad may need reusable pool configurations. A project treasury may need locked liquidity that still earns fees and rewards.
 
 DAMM v2 is designed to support those different needs without forcing every pool into the same template.
 
 <CardGroup cols={2}>
   <Card title="Configurable Liquidity" icon="sliders" iconType="solid">
-    Choose concentrated liquidity for a defined price range, or full-range compounding liquidity for hands-off depth.
+    Choose a fixed price range for concentrated liquidity, or use compounding mode for full-range constant-product liquidity.
   </Card>
   <Card title="Launch-Ready Fees" icon="shield" iconType="solid">
-    Use time schedulers, market-cap schedulers, rate limiter fees, and optional dynamic fees to shape launch trading behavior.
+    Use time schedulers, market-cap schedulers, a rate limiter, and optional dynamic fees to shape trading fees.
   </Card>
   <Card title="NFT Positions" icon="image" iconType="solid">
     Each LP position is represented by a Token 2022 NFT, making liquidity ownership transferable and easier to compose.
   </Card>
   <Card title="Built-In Liquidity Mining" icon="seedling" iconType="solid">
-    Pools can distribute up to two reward tokens directly to LP positions without a separate farming program.
+    Pools can distribute up to two reward tokens directly to LP positions without a separate farm.
   </Card>
   <Card title="Liquidity Locks" icon="lock" iconType="solid">
     Positions can hold unlocked, vesting, and permanently locked liquidity, while locked liquidity continues earning.
@@ -42,27 +42,27 @@ DAMM v2 is designed to support those different needs without forcing every pool 
 
 ## How DAMM v2 Works
 
-A DAMM v2 pool is created around two tokens: token A and token B. Token B is commonly the quote asset, such as SOL or USDC. The pool has an initial price, liquidity, a fee configuration, and an activation setting that determines when public trading begins.
+A DAMM v2 pool is created around two different token mints: token A and token B. Token B is commonly the quote asset, such as SOL or USDC, because `OnlyB` and `Compounding` fee modes collect fees in token B. The pool has an initial square-root price, initial liquidity, fee parameters, an activation type, and an activation point.
 
 Pool creators can use static or dynamic configurations:
 
-- **Static configurations** reuse pre-defined settings, useful for launchpads and repeatable pool templates.
-- **Dynamic configurations** allow pool-specific choices, useful when each market needs different fees, ranges, or launch controls.
-- **Customizable pools** expose the highest level of configuration for specialized integrations.
+- **Static configurations** reuse operator-created settings. They can be public or restricted to a specific pool creator authority.
+- **Dynamic configurations** let an authorized pool creator provide pool-specific parameters while still using a registered config account.
+- **Customizable pools** are initialized directly with pool parameters and use a separate pool address seed.
 
 For LPs, the experience is position-based. When you add liquidity, you hold a position NFT. That position tracks your liquidity, your pending fees, your pending liquidity mining rewards, and any liquidity that is locked or vesting.
 
-## Product Pillars
+## What makes DAMM v2 unique?
 
 ### Concentrated Liquidity
 
-DAMM v2 can create pools with a fixed minimum and maximum price range. Liquidity inside that range is used more efficiently than full-range liquidity because capital is focused where trading is expected to happen.
+DAMM v2 can create pools with a fixed minimum and maximum square-root price. Liquidity inside that range is active for swaps; exact-in swaps that would move beyond the boundary fail unless the partial-fill swap path is used.
 
 This is useful for launch teams that want tighter market depth around an expected price area, or for integrators that want predictable pool boundaries.
 
 ### Compounding Liquidity
 
-DAMM v2 also supports a compounding mode where the pool behaves like a full-range constant-product AMM. A configurable share of LP fees is automatically added back into pool reserves, increasing depth over time instead of requiring every fee to be manually claimed.
+DAMM v2 also supports a compounding mode where the pool behaves like a full-range constant-product AMM. A configurable share of the LP fee is added back into pool reserves, while the remaining LP fee stays claimable by positions.
 
 This is useful for long-lived pools where LPs want passive liquidity growth and less operational overhead.
 
@@ -70,12 +70,11 @@ This is useful for long-lived pools where LPs want passive liquidity growth and 
 
 DAMM v2 separates fee behavior into layers:
 
-- A **base fee mode** defines the pool's primary trading fee behavior.
+- A **base fee mode** defines the pool's primary trading fee behavior, powered by our anti-sniping mechanisms.
 - An optional **dynamic fee** raises fees when volatility increases.
-- A **protocol fee** can be taken from the trading fee.
 - In compounding mode, a share of the LP fee can be reinvested into pool reserves.
 
-The five base fee modes are time scheduler linear, time scheduler exponential, market cap scheduler linear, market cap scheduler exponential, and rate limiter.
+The five base fee modes are `time scheduler linear`, `time scheduler exponential`, `rate limiter`, `market-cap scheduler linear`, and `market-cap scheduler exponential`. The total fee is capped by the pool fee version which is currently set to `99%` max fee.
 
 ### NFT Positions
 
@@ -85,7 +84,7 @@ Positions can also be split, which makes it easier to separate liquidity tranche
 
 ### Liquidity Mining
 
-DAMM v2 includes liquidity mining in the pool program itself. A pool can support up to two reward tokens, and rewards accrue to positions based on their share of total liquidity.
+DAMM v2 includes liquidity mining in the pool program itself. A pool can support up to two reward tokens, and rewards accrue to positions based on each position's share of total pool liquidity.
 
 This gives projects a direct way to incentivize LPs without deploying and managing a separate staking contract.
 
@@ -109,25 +108,25 @@ This gives projects a direct way to incentivize LPs without deploying and managi
 ## Explore DAMM v2
 
 <CardGroup cols={2}>
-  <Card title="DAMM v2 Formulas" href="/core-products/damm-v2/damm-v2-formulas" icon="calculator">
-    Understand the product math behind prices, liquidity, fees, compounding, and rewards.
-  </Card>
-  <Card title="Concentrated Liquidity" href="/core-products/damm-v2/concentrated-liquidity" icon="chart-line">
+  <Card title="DAMM v2 Concentrated Liquidity" href="/core-products/damm-v2/concentrated-liquidity" icon="chart-line">
     Learn how fixed price ranges make liquidity more capital efficient.
   </Card>
-  <Card title="Compounding Liquidity" href="/core-products/damm-v2/compounding-liquidity" icon="arrows-rotate">
+  <Card title="DAMM v2 Compounding Liquidity" href="/core-products/damm-v2/compounding-liquidity" icon="arrows-rotate">
     See how auto-compounding grows full-range pool reserves over time.
   </Card>
   <Card title="DAMM v2 Fees" href="/core-products/damm-v2/fees/overview" icon="percent">
     Compare base fee modes, dynamic fees, protocol fees, and fee collection behavior.
   </Card>
-  <Card title="NFT Positions" href="/core-products/damm-v2/nft-positions" icon="image">
+  <Card title="DAMM v2 NFT Positions" href="/core-products/damm-v2/nft-positions" icon="image">
     Learn how position NFTs represent liquidity, fee ownership, locks, and rewards.
   </Card>
-  <Card title="Liquidity Mining" href="/core-products/damm-v2/liquidity-mining" icon="seedling">
+  <Card title="DAMM v2 Liquidity Mining" href="/core-products/damm-v2/liquidity-mining" icon="seedling">
     Understand built-in reward campaigns for LP positions.
   </Card>
-  <Card title="Token 2022 Support" href="/core-products/damm-v2/token-2022-support" icon="certificate">
+  <Card title="DAMM v2 Token 2022 Support" href="/core-products/damm-v2/token-2022-support" icon="certificate">
     Review supported Token 2022 extensions and token badge requirements.
+  </Card>
+  <Card title="DAMM v2 Formulas" href="/core-products/damm-v2/formulas" icon="calculator">
+    Understand the product math behind prices, liquidity, fees, compounding, and rewards.
   </Card>
 </CardGroup>

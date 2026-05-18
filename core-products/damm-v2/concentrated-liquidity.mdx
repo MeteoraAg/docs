@@ -1,26 +1,26 @@
 ---
 title: "DAMM v2 Concentrated Liquidity"
 sidebarTitle: "Concentrated Liquidity"
-description: "Learn how DAMM v2 concentrated liquidity lets pool creators focus liquidity inside a fixed price range for better capital efficiency."
-llmsDescription: "Explains   DAMM v2 concentrated liquidity, covering fixed minimum and maximum price ranges, square-root price bounds, capital efficiency, one-sided liquidity behavior near range edges, price range violations, pool creation choices, and use cases for launches, LPs, and integrators."
+description: "Learn how DAMM v2 concentrated liquidity uses a fixed price range to focus pool liquidity."
+llmsDescription: "Explains DAMM v2 concentrated liquidity, covering fixed minimum and maximum square-root price bounds, initial price validation, token amount calculations, swap behavior at range edges, partial fills, rounding, and when concentrated mode is preferable to compounding mode."
 ---
 
-DAMM v2 concentrated liquidity lets a pool focus liquidity inside a chosen price range. Instead of spreading capital across every possible price, the pool creator defines where the liquidity should be active.
+DAMM v2 concentrated liquidity lets a pool focus liquidity inside a chosen price range. Instead of using an unbounded constant-product curve, the pool creator sets lower and upper price bounds when the pool is initialized.
 
 This makes liquidity more efficient when a market has an expected trading area. More of the deposited capital can sit near the current price, giving traders better depth and giving LPs more fee exposure per dollar deployed.
 
 ## How It Works
 
-A concentrated DAMM v2 pool has three important price values:
+A concentrated DAMM v2 pool has three important square-root price values:
 
 - **Minimum price**: the lower bound of the pool's active range.
 - **Maximum price**: the upper bound of the pool's active range.
 - **Current price**: the live pool price between those bounds.
 
-When the current price is inside the range, swaps can use the pool's liquidity. If price reaches the lower or upper boundary, the pool has reached the edge of its configured market and cannot keep moving past that boundary.
+When the current price is inside the range, swaps can use the pool's liquidity. If an exact-in or exact-out swap would move price beyond the lower or upper boundary, the instruction returns a price-range violation. The partial-fill swap path can consume only the amount that moves the pool to the boundary and return the unused input amount.
 
 <Info>
-  DAMM v2 stores these values as square-root prices on-chain, but product users can think of them as the pool's lower price, upper price, and current price.
+  Concentrated pools require `sqrt_min_price < sqrt_max_price`, both bounds inside DAMM v2's global price limits, and an initial square-root price inside the configured range.
 </Info>
 
 ## Why Concentrate Liquidity
@@ -46,11 +46,23 @@ Concentrated liquidity narrows the active range, so capital can work harder arou
 
 ## Deposit Ratios
 
-In a concentrated pool, the current price determines the token ratio needed to add liquidity.
+In a concentrated pool, the current price determines the token ratio needed to add liquidity. The program calculates token amounts from the current price and the fixed range:
+
+```math
+\Delta A = L \times \frac{\sqrt{P_{\max}} - \sqrt{P}}{\sqrt{P_{\max}} \times \sqrt{P}}
+```
+
+```math
+\Delta B = L \times (\sqrt{P} - \sqrt{P_{\min}})
+```
 
 If the current price is closer to the lower side of the range, the pool needs more token A. If the current price is closer to the upper side of the range, the pool needs more token B.
 
 This is not a UI quirk. It is how concentrated liquidity represents exposure across the selected price range.
+
+<Note>
+  When adding liquidity or making initial deposits, required token amounts are rounded up. Conversely, withdrawals and swap outputs are rounded down. This ensures the pool does not receive too little or pay out too much due to integer math.
+</Note>
 
 ## Range Selection
 
@@ -60,10 +72,10 @@ Choosing a range is a product decision:
 | --- | --- |
 | Narrower range | More capital efficiency near the target price, but less room for price movement |
 | Wider range | More room for trading across price movement, but less concentrated depth |
-| Full range | Most similar to a traditional constant-product pool |
+| Full range | Broadest concentrated range, but not the same as compounding mode |
 
 <Warning>
-  In concentrated liquidity mode, the price range is set when the pool is created. It is part of the pool design, not an LP setting that can be changed later for the same pool.
+  In concentrated liquidity mode, the price range is set when the pool is created. DAMM v2 positions do not choose independent per-position ranges.
 </Warning>
 
 ## Best Use Cases

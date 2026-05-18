@@ -1,8 +1,8 @@
 ---
 title: "DAMM v2 Token 2022 Support"
 sidebarTitle: "Token 2022 Support"
-description: "Learn how DAMM v2 supports Token 2022 mints, transfer-fee tokens, metadata extensions, token badges, and reward tokens."
-llmsDescription: "Documentation for DAMM v2 Token 2022 support, covering SPL Token and Token 2022 mint detection, token program flags, permissionless extensions such as TransferFeeConfig, MetadataPointer, and TokenMetadata, TransferHook limitations, token badge requirements for other extensions, Token 2022 reward token support, unsupported Token 2022 native mint behavior, and why review is required for sensitive token extensions."
+description: "Learn how DAMM v2 supports SPL Token and Token 2022 mints, transfer-fee tokens, metadata extensions, token badges, and reward tokens."
+llmsDescription: "Documentation for DAMM v2 Token 2022 support, covering SPL Token and Token 2022 mint detection, token program flags, permissionless extensions such as TransferFeeConfig, MetadataPointer, and TokenMetadata, inactive TransferHook handling, token badge requirements for other extensions, Token 2022 reward token support, unsupported Token 2022 native mint behavior, and transfer fee accounting."
 ---
 
 DAMM v2 supports both standard SPL Token mints and Token 2022 mints. This lets more Solana assets use DAMM v2 pools while preserving safety around extensions that can change token behavior.
@@ -13,6 +13,8 @@ Token 2022 is powerful because it allows mints to add features such as transfer 
 
 When a pool is created, DAMM v2 checks whether each mint is owned by the standard SPL Token Program or the Token 2022 Program. The pool stores that information as token flags, so future swaps, liquidity changes, fee claims, and reward flows can use the correct token program.
 
+The two pool mints must be different. If a Token 2022 mint is not permissionlessly supported, the initializer must provide a valid token badge account for that mint.
+
 For users, the benefit is simple: DAMM v2 can handle pools where one or both tokens are Token 2022 mints, as long as their extensions are supported.
 
 ## Permissionlessly Supported Extensions
@@ -21,7 +23,7 @@ The following Token 2022 extensions are supported without a token badge.
 
 <CardGroup cols={2}>
   <Card title="Transfer Fee Config" icon="percent" iconType="solid">
-    DAMM v2 accounts for transfer fees when tokens move into or out of pools, including swaps, deposits, withdrawals, and reward flows.
+    DAMM v2 accounts for transfer fees when tokens move into or out of pools, including deposits, withdrawals, swaps, and reward funding.
   </Card>
   <Card title="Metadata Pointer" icon="tag" iconType="solid">
     DAMM v2 supports mints that point to metadata through the Token 2022 metadata pointer extension.
@@ -64,7 +66,11 @@ Some Token 2022 designs are not supported.
   The Token 2022 native mint `So11111111111111111111111111111111111111112` is not supported in DAMM v2.
 </Warning>
 
-Active Transfer Hook behavior is also not permissionlessly supported. DAMM v2 only treats Transfer Hook as supported when both the hook program ID and authority are unset.
+**Active Transfer Hook behavior is also not supported**. DAMM v2 only treats Transfer Hook as supported when both the hook program ID and authority are unset.
+
+## Transfer Fee Accounting
+
+For incoming transfers, DAMM v2 calculates the transfer-fee-included amount needed for the pool to receive the expected post-fee amount. For outgoing or reward-funding flows, it calculates the post-fee amount actually received. The code also handles the Token 2022 edge case where the transfer fee is 100% by using the mint's maximum transfer fee.
 
 ## Why This Matters
 

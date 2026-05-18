@@ -1,0 +1,89 @@
+---
+title: "DAMM v2 Fees"
+sidebarTitle: "Fees Overview"
+description: "Understand DAMM v2 fee layers, collect fee modes, base fee modes, dynamic fees, protocol fees, referral fees, and update constraints."
+llmsDescription: "Overview of DAMM v2 fees, covering total fee numerator, base fee modes, dynamic fee, protocol fee, referral fee, LP fee, BothToken collect fee mode, OnlyB collect fee mode, Compounding collect fee mode, compounding_fee_bps, fee caps, update constraints, and rate-limiter limitations."
+---
+
+DAMM v2 fees are configurable, but they are not arbitrary. The `cp-amm` program combines one base fee mode, an optional dynamic fee layer, a protocol fee split, an optional referral split, and a collect fee mode that determines which token pays the fee.
+
+## Fee Layers
+
+DAMM v2 first calculates the total fee numerator:
+
+```math
+\text{Total Fee Numerator} = \min(\text{Base Fee Numerator} + \text{Dynamic Fee Numerator}, \text{Pool Fee Cap})
+```
+
+The denominator is `1,000,000,000`. A fee of 1 bps is `100,000` in numerator units.
+
+After the trading fee is calculated, DAMM v2 splits it:
+
+| Component | Program Behavior |
+| --- | --- |
+| Protocol fee | Defaults to `20%` of the trading fee |
+| Referral fee | Defaults to `20%` of the protocol fee when a referral is present |
+| LP fee | Trading fee after protocol fee |
+| Compounding fee | In compounding mode only, a share of the LP fee added back to reserves |
+| Claimable fee | LP fee remaining after the compounding share |
+
+## Base Fee Modes
+
+DAMM v2 has five base fee modes, where Time Scheduler and Market Cap Scheduler each have linear and exponential curves.
+
+<CardGroup cols={2}>
+  <Card title="Time Scheduler" href="/core-products/damm-v2/fees/time-scheduler" icon="clock">
+    Fee is fixed or decays over time using a linear or exponential curve.
+  </Card>
+  <Card title="Market Cap Scheduler" href="/core-products/damm-v2/fees/market-cap-scheduler" icon="chart-line">
+    Fee decreases as the square-root price moves above the initial price, using a linear or exponential curve.
+  </Card>
+</CardGroup>
+<CardGroup cols={1}>
+  <Card title="Rate Limiter" href="/core-products/damm-v2/fees/rate-limiter" icon="gauge-high">
+    Fee increases with buy size during a bounded launch window.
+  </Card>
+</CardGroup>
+
+## Dynamic Fees
+
+<CardGroup cols={1}>
+  <Card title="Dynamic Fees" href="/core-products/damm-v2/fees/dynamic-fees" icon="wave-pulse">
+    Optional volatility-based fee layer on top of the selected base fee mode.
+  </Card>
+</CardGroup>
+
+## Collect Fee Modes
+
+Collect fee mode determines which token pays LP and protocol fees.
+
+| Mode | A-to-B swap | B-to-A swap | Notes |
+| --- | --- | --- | --- |
+| `BothToken` | Fee taken from token B output | Fee taken from token A output | Fees can accrue in both tokens |
+| `OnlyB` | Fee taken from token B output | Fee taken from token B input | Quote-token fee collection |
+| `Compounding` | Fee taken from token B output | Fee taken from token B input | Token B fees, with atomic LP fee compounding |
+
+<Note>
+  Rate limiter mode is only valid with `OnlyB` collect fee mode. Compounding pools use `Compounding` collect fee mode and require a non-zero `compounding_fee_bps`.
+</Note>
+
+## Fee Caps and Updates
+
+The current pool version supports total fee caps up to `99%`. Older version 0 pools are capped at `50%`. The minimum fee is 1 bps.
+
+## Choosing a Fee Design
+
+<AccordionGroup>
+  <Accordion title="I want fees to decay over time after launch">
+    Use a time scheduler. Linear decay changes by a fixed amount each period; exponential decay changes by a percentage-style factor each period.
+  </Accordion>
+  <Accordion title="I want fees to decay only if price grows">
+    Use a market-cap scheduler. Fees stay elevated until the square-root price advances through configured steps, or until the scheduler expires.
+  </Accordion>
+  <Accordion title="I want large launch buys to pay more">
+    Use the rate limiter with `OnlyB` collect fee mode. It only applies to B-to-A buy-side swaps during the configured limiter window.
+  </Accordion>
+  <Accordion title="I want fees to react to volatility">
+    Add dynamic fees. They sit on top of the base fee and rise when recent price movement increases the volatility accumulator.
+  </Accordion>
+</AccordionGroup>

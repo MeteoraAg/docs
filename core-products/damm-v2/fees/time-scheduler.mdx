@@ -1,11 +1,11 @@
 ---
 title: "DAMM v2 Time Scheduler Fees"
 sidebarTitle: "Time Scheduler"
-description: "Learn how DAMM v2 time scheduler fees start high and decay over configured time periods using linear or exponential curves."
-llmsDescription: "Explains DAMM v2 time scheduler base fee modes, covering FeeTimeSchedulerLinear, FeeTimeSchedulerExponential, cliff fee, period frequency, number of periods, reduction factor, fixed fee decay, percentage-based fee decay, launch protection, anti-sniper use cases, and how to choose between linear and exponential time scheduling."
+description: "Learn how DAMM v2 time scheduler fees can stay fixed or decay over configured time periods using linear or exponential curves."
+llmsDescription: "Explains DAMM v2 time scheduler base fee modes, covering FeeTimeSchedulerLinear, FeeTimeSchedulerExponential, cliff fee numerator, period frequency, number of periods, reduction factor, fixed fee configuration, linear fee decay, exponential fee decay, alpha-vault pre-activation behavior, and validation constraints."
 ---
 
-DAMM v2 time scheduler fees let a pool start with a higher launch fee and reduce that fee over time. This is useful when a launch needs stronger early protection, but should gradually move toward normal trading conditions.
+DAMM v2 time scheduler fees let a pool use a fixed base fee or start with a higher launch fee and reduce that fee over time. This is useful when a launch needs stronger early protection, but should gradually move toward normal trading conditions.
 
 Time scheduler fees are based on a clock: after trading activates, DAMM v2 counts configured periods and adjusts the fee as each period passes.
 
@@ -15,7 +15,7 @@ A time scheduler uses four core settings:
 
 | Setting | Product Meaning |
 | --- | --- |
-| Cliff fee | Starting fee when the pool opens |
+| Cliff fee numerator | Starting fee when the pool opens |
 | Number of periods | How many fee reductions happen |
 | Period frequency | How long each period lasts |
 | Reduction factor | How much the fee changes each period |
@@ -24,10 +24,10 @@ DAMM v2 supports two time scheduler curves: linear and exponential.
 
 ## Linear Time Scheduler
 
-The linear time scheduler decreases the fee by the same fixed amount each period.
+The linear time scheduler decreases the fee numerator by the same fixed amount each period.
 
 ```math
-\text{Fee} = \text{Starting Fee} - (\text{Passed Periods} \times \text{Reduction Amount})
+\text{Fee Numerator} = \text{Cliff Fee Numerator} - (\text{Passed Periods} \times \text{Reduction Factor})
 ```
 
 In product terms, the fee walks down a staircase. Every step is the same size, so teams can explain exactly when the fee will drop and by how much.
@@ -36,13 +36,25 @@ Use linear time scheduling when you want a simple, predictable launch schedule s
 
 ## Exponential Time Scheduler
 
-The exponential time scheduler reduces the fee by a percentage of its current value each period.
+The exponential time scheduler reduces the fee by applying the reduction factor each period.
 
 ```math
-\text{Fee} = \text{Starting Fee} \times (1 - \text{Reduction Percent})^{\text{Passed Periods}}
+\text{Fee Numerator} = \text{Cliff Fee Numerator} \times \left(1 - \frac{\text{Reduction Factor}}{10{,}000}\right)^{\text{Passed Periods}}
 ```
 
-In product terms, the fee drops faster early, then slows as it approaches the final fee. This is useful when the earliest trades should carry the highest protection, but trading should become more accessible soon after launch.
+In product terms, the fee drops faster early, then slows as it approaches the final fee. The exact on-chain calculation uses integer math.
+
+## Fixed Fee Configuration
+
+A time scheduler can also behave as a fixed fee. If `period_frequency`, `number_of_period`, and `reduction_factor` are all zero, the program returns the cliff fee numerator for every swap.
+
+<Warning>
+  If any of those three scheduler fields is non-zero, all three must be non-zero. Mixed zero/non-zero scheduler settings are invalid.
+</Warning>
+
+## Pre-Activation Behavior
+
+If the current slot or timestamp is before the pool activation point, the time scheduler uses the final period. This path is used for pre-activation alpha-vault buying, not normal public trading.
 
 ## Why Use Time Scheduler Fees
 
@@ -65,11 +77,11 @@ In product terms, the fee drops faster early, then slows as it approaches the fi
 
 | Curve | Best For | Fee Behavior |
 | --- | --- | --- |
-| Linear | Simple, transparent schedules | Fee decreases by a fixed amount each period |
-| Exponential | Strong early protection with faster early relief | Fee decreases by a percentage each period |
+| Linear | Simple, transparent schedules | Fee numerator decreases by a fixed amount each period |
+| Exponential | Strong early protection with faster early relief | Fee numerator decreases by a percentage-style factor each period |
 
 ## When To Choose It
 
-Use a time scheduler when the launch plan is time-based. If fees should come down after a fixed number of minutes, slots, or seconds, time scheduling is the clearest choice.
+Use a time scheduler when the launch plan is time-based. If fees should come down after a fixed number of slots or seconds, time scheduling is the clearest choice.
 
 Use [Market Cap Scheduler Fees](/core-products/damm-v2/fees/market-cap-scheduler) instead when fees should decrease only as the pool price grows.
