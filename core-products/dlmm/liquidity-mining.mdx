@@ -1,15 +1,17 @@
 ---
 title: "DLMM Liquidity Mining"
 sidebarTitle: "Liquidity Mining"
-description: "Learn how DLMM Liquidity Mining incentivizes active liquidity, how rewards are distributed across bins, and how LPs claim eligible rewards."
-llmsDescription: "Explains DLMM Liquidity Mining as the token reward mechanism for active DLMM liquidity, matching the lb_clmm program's LiquidityMining function type and is_support_liquidity_mining behavior. Covers why liquidity mining matters, who earns rewards, how active bins and crossed bins receive rewards, pro-rata distribution by liquidity share, fixed reward emission over time, examples of reward allocation, manual claiming, non-compounding rewards, what happens when there is no active liquidity, and product takeaways for LPs, token teams, and traders."
+description: "Learn how DLMM Liquidity Mining incentivizes active liquidity, how reward-enabled pools distribute rewards, and how LPs claim eligible rewards."
+llmsDescription: "Explains DLMM Liquidity Mining as the token reward mechanism for active DLMM liquidity, matching the lb_clmm program's LiquidityMining function type and is_support_liquidity_mining behavior. Covers liquidity-mining pool mode, why liquidity mining matters, who earns rewards, active-bin and crossed-bin reward updates, the 15-bin reward split limit, pro-rata distribution by liquidity share, fixed reward emission over time, manual claiming, non-compounding rewards, empty-liquidity accounting, and product takeaways for LPs, token teams, and traders."
 ---
 
 DLMM Liquidity Mining is the token reward mechanism for LPs who provide useful, active liquidity in a DLMM pool. In the `lb_clmm` program, this feature is represented by the `LiquidityMining` function type and liquidity mining support checks.
 
+Liquidity mining is a pool function mode. A reward-enabled DLMM pool supports liquidity mining and does not support limit-order placement at the same time. Each pool can track up to `2` reward tokens.
+
 Rewards are designed to flow to liquidity where trading is actually happening, not liquidity that sits far away from the market price.
 
-Rewards accrue through your [DLMM Dynamic Position](/core-products/dlmm/dynamic-positions) when your liquidity is in the active bin or in bins crossed by swaps.
+Rewards accrue through your [DLMM Dynamic Position](/core-products/dlmm/dynamic-positions) when your liquidity is in the active bin or, during swap processing, in eligible bins crossed by swaps.
 
 ## Why Liquidity Mining Matters
 
@@ -30,7 +32,7 @@ Rewards accrue through your [DLMM Dynamic Position](/core-products/dlmm/dynamic-
 
 ## Who Earns Rewards
 
-Rewards are distributed to positions with liquidity in the **active bin**. If a swap moves the active price across multiple bins, rewards can be distributed across the bins crossed during that move.
+Rewards are distributed to positions with liquidity in the **active bin** during normal reward updates. If a swap moves the active price across multiple bins, the v2 swap flow can also distribute elapsed rewards across bins with liquidity that were crossed during that swap, up to the program's `15` bin reward-split limit.
 
 Your reward share depends on your share of liquidity in the eligible bin or bins.
 
@@ -46,7 +48,7 @@ If your position is out of range, it does not earn liquidity mining rewards beca
 
 Liquidity mining rewards are emitted at a fixed rate over the reward period. For example, a pool could distribute 50,000 USDC over four weeks. That budget is streamed over time and allocated to eligible bins.
 
-When the active bin stays in one place, rewards go to liquidity in that active bin. When a swap crosses bins, rewards are split across the crossed bins and then distributed proportionally to LPs in each bin.
+When the active bin stays in one place, rewards go to liquidity in that active bin. When a v2 swap crosses multiple bins with liquidity, rewards accumulated since the last update can be split across crossed bins and then distributed proportionally to LPs in each bin.
 
 ```text
 Reward budget over time
@@ -82,7 +84,9 @@ DLMM liquidity mining rewards do not auto-compound. They accrue to eligible posi
 
 ## What Happens When There Is No Active Liquidity
 
-If there is no liquidity in the active bin, rewards are not distributed to LPs for that period. They remain undistributed until there is eligible active liquidity based on the pool's reward logic.
+If there is no liquidity in the active bin, rewards are not distributed to LPs for that period.
+
+The program tracks `cumulative_seconds_with_empty_liquidity_reward` for reward time that passed while the active bin had no liquidity. Operators can withdraw ineligible rewards through the program flow designed for that case.
 
 This is important for LPs and token teams. If incentives are meant to attract market depth, the best outcome is not just more liquidity overall, but liquidity placed close enough to support trading.
 
