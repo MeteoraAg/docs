@@ -1,11 +1,11 @@
 ---
 title: "DAMM v2 Compounding Liquidity"
 sidebarTitle: "Compounding Liquidity"
-description: "Learn how DAMM v2 compounding liquidity automatically reinvests a share of LP fees into full-range pool reserves."
-llmsDescription: "Explains DAMM v2 compounding liquidity, covering CollectFeeMode Compounding, full-range constant-product pools, compoundingFeeBps, claimable versus compounded LP fees, token B fee behavior, reserve growth, balanced liquidity requirements, and best use cases for mature pools and long-term LPs."
+description: "Learn how DAMM v2 compounding liquidity reinvests a share of LP fees into full-range pool reserves."
+llmsDescription: "Explains DAMM v2 compounding liquidity, covering CollectFeeMode Compounding, full-range constant-product reserves, DEAD_LIQUIDITY, compounding_fee_bps limits, claimable versus compounded LP fees, token B fee behavior, reserve accounting, and best use cases."
 ---
 
-DAMM v2 compounding liquidity is a pool mode where a share of LP fees is automatically reinvested back into the pool. Instead of every LP fee waiting to be claimed, the pool can use part of those fees to grow reserves and deepen liquidity over time.
+DAMM v2 compounding liquidity is a pool mode where a share of LP fees is automatically reinvested back into the pool. Instead of every LP fee waiting to be claimed and manually compounded back, the pool can use part of those fees to grow reserves and deepen liquidity over time.
 
 This is useful for long-term pools where LPs want liquidity growth, fewer manual fee actions, and a simpler full-range market design.
 
@@ -14,15 +14,15 @@ This is useful for long-term pools where LPs want liquidity growth, fewer manual
 Compounding liquidity uses `Compounding` collect fee mode. In this mode:
 
 - The pool behaves like a full-range constant-product AMM.
-- Fees are handled in token B.
-- A configurable share of the LP fee is added back into pool reserves.
+- Fees are collected in token B.
+- A configurable share of the LP fee is added back into the pool's token B reserves.
 - The remaining LP fee stays claimable by position owners.
 
 ```math
 \text{LP Fee} = \text{Compounding Fee} + \text{Claimable Fee}
 ```
 
-The compounding share is controlled by `compounding_fee_bps`.
+The compounding share is controlled by `compounding_fee_bps`, in basis points.
 
 | `compounding_fee_bps` | Product Meaning |
 | --- | --- |
@@ -31,12 +31,12 @@ The compounding share is controlled by `compounding_fee_bps`.
 | `10000` | 100% of LP fees compound, no LP fee remains claimable |
 
 <Note>
-  `compounding_fee_bps` must be greater than zero for compounding pools and must be zero for non-compounding pools.
+  `compounding_fee_bps` must be greater than `0` and at most `10000` for compounding pools. It must be `0` for `BothToken` and `OnlyB` pools.
 </Note>
 
 ## Full-Range by Design
 
-Compounding pools do not use custom concentrated price ranges. They use a full-range constant-product model:
+Compounding pools do not use custom concentrated price ranges. The program stores their range as `0` to `u128::MAX` and prices them from reserves:
 
 ```math
 \text{token A reserves} \times \text{token B reserves} = k
@@ -44,9 +44,29 @@ Compounding pools do not use custom concentrated price ranges. They use a full-r
 
 This makes the pool easier to reason about: reserves grow as compounded fees are added back, and LPs benefit proportionally through their position liquidity.
 
+## Initial Liquidity
+
+Compounding pools have one special initialization rule: the requested initial liquidity must be greater than `DEAD_LIQUIDITY`, which is `100 << 64`. DAMM v2 subtracts this dead liquidity from the first position's liquidity while keeping it in the pool's total liquidity.
+
+<Info>
+  The dead-liquidity rule prevents the pool from starting at a fragile zero-liquidity edge. It also means the first position receives slightly less liquidity than the raw initialization liquidity.
+</Info>
+
+The initial token amounts are derived from the requested liquidity and initial square-root price:
+
+```math
+\text{token A} = \left\lceil \frac{L}{\sqrt{P}} \right\rceil
+```
+
+```math
+\text{token B} = \left\lceil \frac{L \times \sqrt{P}}{2^{128}} \right\rceil
+```
+
+The initial square-root price still must be inside DAMM v2's global price limits, even though the compounding pool itself has no custom range.
+
 ## What LPs Experience
 
-In a non-compounding pool, LP fees accumulate as claimable balances on the position. In a compounding pool, the LP fee can be split:
+In a non-compounding pool, LP fees accumulate as claimable balances on the position. In a compounding pool, the LP fee is split after the protocol fee is removed:
 
 - **Compounded portion**: added to pool reserves, increasing pool depth.
 - **Claimable portion**: remains pending on the LP position and can be claimed later.
@@ -55,7 +75,7 @@ This lets a pool balance two goals: grow liquidity over time and still provide c
 
 ## Why Token B Matters
 
-In compounding mode, fees are always handled in token B. Token B is commonly the quote token, such as SOL or USDC. This makes compounding behavior predictable for launches and long-term pools that want fee accounting centered around the quote asset.
+In compounding mode, fees are always handled in token B. For an A-to-B swap, the fee is taken from token B output. For a B-to-A swap, the fee is taken from token B input. Token B is commonly the quote token, such as SOL or USDC.
 
 ## Product Benefits
 

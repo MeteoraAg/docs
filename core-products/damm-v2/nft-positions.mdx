@@ -1,8 +1,8 @@
 ---
 title: "DAMM v2 NFT Positions"
 sidebarTitle: "NFT Positions"
-description: "Learn how DAMM v2 uses NFT-backed positions to represent LP liquidity, pending fees, liquidity mining rewards, vesting locks, and permanent locks."
-llmsDescription: "Documentation for DAMM v2 NFT positions, covering position NFT ownership, transferable LP positions, position account state, unlocked liquidity, vesting liquidity, permanently locked liquidity, pending trading fees, liquidity mining rewards, splitting positions, claiming fees, closing positions, and product use cases."
+description: "Learn how DAMM v2 uses NFT-backed positions to represent LP liquidity, pending fees, rewards, vesting locks, and permanent locks."
+llmsDescription: "Documentation for DAMM v2 NFT positions, covering position NFT ownership, Token 2022 mint metadata, position account state, unlocked liquidity, vesting liquidity, permanently locked liquidity, pending trading fees, liquidity mining rewards, split denominator and rounding, claiming fees, closing positions, and product use cases."
 ---
 
 Every DAMM v2 LP position is represented by a unique position NFT. The NFT is the ownership handle for the liquidity position: whoever holds the position NFT controls the position.
@@ -42,7 +42,7 @@ Locked liquidity still earns. DAMM v2 uses total position liquidity when trackin
 
 ## Position NFTs
 
-Position NFTs are Token 2022 NFTs created by the DAMM v2 program. They are minted with zero decimals and tied to the pool's position account.
+Position NFTs are Token 2022 NFTs created by the DAMM v2 program. They are minted with zero decimals and supply `1`, use Token 2022 metadata, and are tied to a DAMM v2 position account.
 
 For product users, the important behavior is simple:
 
@@ -51,7 +51,7 @@ For product users, the important behavior is simple:
 - The NFT makes the position discoverable and composable.
 
 <Info>
-  DAMM v2 uses the pool as the freeze authority for position NFTs so positions can be associated with the pool they belong to.
+  DAMM v2 uses the pool as the freeze authority for position NFTs and the pool authority as mint/update authority. The default metadata name is `Meteora Position NFT` with symbol `MPN`.
 </Info>
 
 ## Fees and Rewards
@@ -68,7 +68,9 @@ The exact fee tokens depend on the pool's collect fee mode:
 
 ## Splitting Positions
 
-DAMM v2 positions can be split. This lets one position become two positions while dividing liquidity, fees, rewards, and supported inner vesting state.
+DAMM v2 positions can be split. This lets one position become two positions while dividing unlocked liquidity, permanent locked liquidity, pending token A fees, pending token B fees, pending rewards, and supported inner vesting state.
+
+Split numerators use a denominator of `1,000,000,000`. Each split amount is rounded down, so tiny residual amounts can remain in the source position.
 
 This is useful when you want to:
 
@@ -87,14 +89,14 @@ DAMM v2 supports two lock styles:
 This gives token teams a way to show long-term alignment while keeping fee and reward participation active.
 
 <Note>
-  Inner vesting stores the vesting schedule inside the position itself. For multiple tranches, a position can be split before applying separate schedules.
+  Inner vesting stores the vesting schedule inside the position itself. A position must not already have active inner vesting when a new inner vesting lock is applied.
 </Note>
 
 ## Closing a Position
 
-A position can only be closed after it is empty. That means liquidity has been removed where allowed, pending fees have been claimed, and pending liquidity mining rewards have been claimed.
+A position can only be closed after it is empty. That means total liquidity is zero, pending token A and token B fees are zero, and pending rewards in both reward slots are zero.
 
-This protects users from accidentally closing a position that still contains value.
+When a position is closed, the program burns the position NFT, closes the NFT token account, closes the NFT mint, and closes the position account.
 
 ## Why NFT Positions Matter
 

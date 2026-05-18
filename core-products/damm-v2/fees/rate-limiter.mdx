@@ -1,17 +1,17 @@
 ---
 title: "DAMM v2 Rate Limiter Fee"
 sidebarTitle: "Rate Limiter"
-description: "Learn how DAMM v2 rate limiter fees increase with buy size to help protect launch pools from oversized early trades."
-llmsDescription: "Explains the DAMM v2 RateLimiter base fee mode, covering reference amount, cliff fee, fee increment, max fee, max limiter duration, quote-token-only behavior, buy-side protection, single swap per transaction validation, and anti-sniper launch use cases."
+description: "Learn how DAMM v2 rate limiter fees increase with buy size during a bounded launch window."
+llmsDescription: "Explains the DAMM v2 RateLimiter base fee mode, covering reference amount, cliff fee numerator, fee increment bps, max fee bps, max limiter duration, OnlyB collect fee requirement, B-to-A buy-side behavior, zero limiter fixed-fee behavior, single swap per transaction validation, and anti-sniper launch use cases."
 ---
 
-The DAMM v2 rate limiter is a base fee mode that increases the effective fee as buy size increases. It is designed for launch pools where oversized early buys can distort distribution or create a poor trading experience for the broader market.
+The DAMM v2 rate limiter is a base fee mode that increases the effective fee as buy size increases. It is designed for launch pools where oversized early buys can distort distribution or create a poor trading experience.
 
 Instead of charging every buy the same fee, the rate limiter behaves like a fee slope.
 
 ## How It Works
 
-The pool defines a reference amount. Trades up to that amount pay the starting fee. As the input amount grows beyond the reference amount, DAMM v2 applies higher fee tiers until the configured maximum fee is reached.
+The pool defines a reference amount. Buys up to that amount pay the cliff fee. As the token B input amount grows beyond the reference amount, DAMM v2 applies higher fee tiers until the configured maximum fee is reached.
 
 In product terms, a small buy may pay the base fee, while a much larger buy pays a higher average fee.
 
@@ -19,7 +19,7 @@ In product terms, a small buy may pay the base fee, while a much larger buy pays
 
 | Setting | Product Meaning |
 | --- | --- |
-| Cliff fee | Starting fee for the first reference amount |
+| Cliff fee numerator | Starting fee for the first reference amount |
 | Reference amount | Trade size unit used for the fee slope |
 | Fee increment bps | How much the fee increases per step |
 | Max fee bps | Highest fee the limiter can charge |
@@ -29,11 +29,15 @@ In product terms, a small buy may pay the base fee, while a much larger buy pays
 
 Rate limiter mode has specific product constraints:
 
-- It applies to buy-side behavior in quote-token fee mode.
-- It is designed for `OnlyB` collect fee mode.
-- It lasts only through the configured limiter duration.
+- It applies only when the trade direction is B-to-A.
+- It is valid only with `OnlyB` collect fee mode.
+- It starts at the activation point and lasts only through the configured limiter duration.
 - DAMM v2 validates that rate-limited swaps are not bundled as multiple swaps against the same pool in one transaction.
-- The limiter duration is capped at 12 hours.
+- The limiter duration is capped at 12 hours: `43,200` seconds for timestamp activation or `108,000` slots for slot activation.
+
+<Info>
+  If `reference_amount`, `max_limiter_duration`, `max_fee_bps`, and `fee_increment_bps` are all zero, the rate limiter acts as a fixed cliff-fee mode.
+</Info>
 
 <Warning>
   Rate limiter is mutually exclusive with the time scheduler and market cap scheduler base fee modes. A DAMM v2 pool chooses one base fee mode.

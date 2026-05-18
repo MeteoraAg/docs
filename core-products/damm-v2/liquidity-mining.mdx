@@ -1,8 +1,8 @@
 ---
 title: "DAMM v2 Liquidity Mining"
 sidebarTitle: "Liquidity Mining"
-description: "Learn how DAMM v2 distributes built-in liquidity mining rewards directly to LP positions without a separate staking contract."
-llmsDescription: "Documentation for DAMM v2 liquidity mining, covering built-in reward slots, up to two reward tokens per pool, reward duration, reward funder, reward rate, reward-per-liquidity accounting, position reward accrual, claiming rewards, locked liquidity earning rewards, Token 2022 reward support, and use cases for launches and LP incentives."
+description: "Learn how DAMM v2 distributes built-in liquidity mining rewards directly to LP positions."
+llmsDescription: "Documentation for DAMM v2 liquidity mining, covering built-in reward slots, up to two reward tokens per pool, reward duration limits, reward funder permissions, reward rate fixed-point accounting, reward-per-liquidity accounting, position reward accrual, claiming rewards, locked liquidity earning rewards, empty-liquidity carry-forward behavior, Token 2022 reward support, and use cases."
 ---
 
 DAMM v2 has liquidity mining built into the pool program. Projects can fund reward campaigns directly on a pool, and LP positions earn those rewards automatically while they provide liquidity.
@@ -11,7 +11,7 @@ There is no separate farm contract, no LP token wrapping, and no extra staking s
 
 ## How It Works
 
-Each DAMM v2 pool has up to two reward slots. A reward slot defines:
+Each DAMM v2 pool has up to two reward slots. Once a reward slot is initialized, it cannot return to the uninitialized state. A reward slot defines:
 
 - The reward token mint.
 - The reward vault that holds funded tokens.
@@ -41,7 +41,7 @@ This is important for launches and treasuries. A team can lock liquidity for com
 
 <Steps>
   <Step title="Initialize a reward slot">
-    A pool creator or authorized operator sets up reward slot 0 or 1 with a reward mint, funder, and duration.
+    The pool creator or an authorized operator sets up reward slot 0 or 1 with a reward mint, funder, and duration.
   </Step>
   <Step title="Fund the reward vault">
     The funder sends reward tokens into the vault. DAMM v2 calculates the reward rate over the active duration.
@@ -65,6 +65,10 @@ This is important for launches and treasuries. A team can lock liquidity for com
 | Separate staking contract | Not required |
 | Token 2022 reward tokens | Supported, subject to extension rules |
 
+<Note>
+  Only the configured funder can fund a reward slot. Reward duration can be updated separately, but it must remain within the 1 day to 1 year limit.
+</Note>
+
 ## Why It Matters
 
 Liquidity mining helps projects bootstrap deeper markets. Instead of asking LPs to provide liquidity only for trading fees, a project can add reward tokens that make participation more attractive during key market phases.
@@ -86,7 +90,7 @@ Liquidity mining helps projects bootstrap deeper markets. Instead of asking LPs 
 
 ## Empty Liquidity Periods
 
-If a reward campaign is active but the pool has no liquidity, DAMM v2 tracks the empty-liquidity time and carries those undistributed rewards forward. This helps avoid wasting rewards during periods where no LPs are eligible.
+If a reward campaign is active but the pool has no liquidity, DAMM v2 tracks the number of empty-liquidity seconds. On the next funding, the funder can carry that ineligible reward value forward into the new reward window. If they do not carry it forward, the ineligible reward must be withdrawn before funding again.
 
 ## Product Takeaway
 
