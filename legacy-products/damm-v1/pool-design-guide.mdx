@@ -2,7 +2,7 @@
 title: "DAMM v1 Pool Design Guide"
 sidebarTitle: "Pool Design Guide"
 description: "Choose the right DAMM v1 pool type, yield layers, farm setup, fee interpretation, and liquidity commitment for a legacy Meteora pool."
-llmsDescription: "Non-technical design guide for DAMM v1 pools, helping teams choose between constant-product, stable, and LST pools; decide whether to use farms, Dynamic Vault yield, liquidity locks, fee and APY metrics, and launch or maintenance considerations."
+llmsDescription: "Design guide for DAMM v1 pools, helping teams choose between constant-product, stable, and LST pools; decide whether to use farms, Dynamic Vault yield, liquidity locks, fee and APY metrics, and launch or maintenance considerations."
 ---
 
 DAMM v1 is a legacy product, but many teams still need to understand how to evaluate or maintain an existing DAMM v1 pool. This guide helps you think like a product owner: what kind of market are you creating, what LP behavior do you want, and what return stack supports that behavior?
@@ -36,7 +36,7 @@ Product tradeoff: stable pools are efficient near the target relationship, but t
 
 ### Use an LST pool for supported SOL/LST markets
 
-Choose an LST pool when one side is SOL and the other is a supported liquid staking token.
+Choose an LST-aware stable pool when token A is native SOL and token B is a supported liquid staking token. In DAMM v1, this is a permissioned depeg configuration rather than a generic permissionless stable-pool option.
 
 Good fit:
 
@@ -58,7 +58,7 @@ DAMM v1 LP returns can come from several layers:
     Eligible idle assets may earn external strategy yield through Dynamic Vaults.
   </Card>
   <Card title="Farm Rewards" icon="seedling" iconType="solid">
-    Partner-funded farms can distribute up to two reward tokens to staked LP tokens.
+    External farms can distribute campaign rewards to staked LP tokens.
   </Card>
   <Card title="Liquidity Commitment" icon="lock" iconType="solid">
     Locked LP tokens can signal long-term support and improve market confidence.
@@ -69,7 +69,7 @@ A strong pool does not need every layer, but it should have a clear reason for w
 
 ## Step 3: Decide whether the pool needs a farm
 
-A farm is useful when organic fees and vault yield are not enough to attract the target depth.
+A farm is useful when organic fees and vault yield are not enough to attract the target depth. It is a separate incentive layer around DAMM v1 LP tokens, not a setting inside the AMM pool state.
 
 Use a farm when:
 

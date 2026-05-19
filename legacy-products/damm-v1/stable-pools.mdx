@@ -1,10 +1,11 @@
 ---
-title: "Stable Pools"
+title: "DAMM v1 Stable Pools"
+sidebarTitle: "Stable Pools"
 description: "Understand DAMM v1 stable pools, the StableSwap-style design used for pegged assets, and why amplification helps create lower-slippage liquidity around a target price."
-llmsDescription: "Product documentation for DAMM v1 stable pools, explaining StableSwap curves, amplification, token normalization, supported use cases such as stablecoins and correlated assets, LP benefits, risks, and how stable pools differ from constant-product pools."
+llmsDescription: "Documentation for DAMM v1 stable pools, explaining StableSwap curves, amplification, token normalization, supported use cases such as stablecoins and correlated assets, LP benefits, risks, and how stable pools differ from constant-product pools."
 ---
 
-DAMM v1 stable pools are designed for token pairs that are expected to trade close to a known relationship. The common examples are stablecoin pairs such as USDC/USDT, but the same product idea can apply to other correlated assets.
+DAMM v1 stable pools are designed for token pairs that are expected to trade close to a known relationship. Common examples are stablecoin pairs such as USDC/USDT and permissioned SOL/LST pools that can account for a supported staking-token virtual price.
 
 Instead of spreading liquidity evenly across every possible price like a volatile constant-product pool, a stable pool concentrates more of its effective liquidity near the target relationship. The result is a smoother trading experience for assets that should not move far apart.
 
@@ -28,9 +29,11 @@ DAMM v1 stable pools use a StableSwap-style curve. Product-wise, the curve has t
 
 This creates a natural incentive for the pool to support efficient swaps near the target while still protecting LPs when one side becomes scarce.
 
-## Fees
+## Fees and limits
 
-Stable Swap pools use a **0.01%** trade fee with **0%** Protocol Fee and **100%** LP Fee. See [DAMM v1 Fee and APY Calculation](/legacy-products/damm-v1/damm-v1-fee-and-apy-calculation) for how protocol fees apply across pool types.
+By default, stable-swap pools use a **0.01%** trade fee with **0%** protocol fee, so the full trade fee remains LP-relevant. Permissionless fee-tier creation also allows **0.04%**, **0.10%**, and **1.00%** stable-pool trade fees.
+
+Stable pools support imbalanced deposits and single-sided withdrawals through stable-swap math. Constant-product pools do not support those curve operations.
 
 ## The role of amplification
 
@@ -40,7 +43,7 @@ The amplification factor, often called `AMP`, controls how concentrated the pool
 - **Lower AMP** means the pool behaves more like a normal AMM and is more tolerant of imbalance.
 
 <Note>
-  In DAMM v1 permissionless stable pools, the program uses a standard amplification setting. More specialized configurations may use permissioned pool setup.
+  DAMM v1 permissionless stable pools must use `amp = 100`, token multipliers derived from mint decimals, and no depeg mode. More specialized stable pools require permissioned setup.
 </Note>
 
 Think of AMP as the pool's confidence in the relationship between the two assets. If the assets are genuinely stable relative to each other, more amplification can improve the trading experience. If the relationship is uncertain, too much amplification can make the pool brittle when the pair moves away from the target.
@@ -84,8 +87,8 @@ Choose a **constant-product pool** when:
 - The pair includes a volatile token.
 - You do not want the pool optimized around a specific relationship.
 
-## Example: stablecoin liquidity
+## Example: Stablecoin Liquidity
 
 Suppose a USDC/USDT pool has deep liquidity and both tokens are expected to trade close to $1. A stable pool can offer tight pricing for users swapping between the two assets. Traders get lower slippage, aggregators can route more volume through the pool, and LPs earn fees from that activity.
 
-If the pool's assets are supported by Dynamic Vaults, idle liquidity may also earn additional lending yield, improving the pool's appeal even when swap volume fluctuates.
+If the pool's assets are supported by Dynamic Vault strategies, idle liquidity may also earn additional yield, improving the pool's appeal even when swap volume fluctuates.

@@ -2,7 +2,7 @@
 title: "DAMM v1 Fee and APY Calculation"
 sidebarTitle: "Fee and APY Calculation"
 description: "How DAMM v1 trading fees, protocol fees, base APY, fee-over-TVL, Dynamic Vault yield, and farm APR are interpreted for LPs."
-llmsDescription: "Product explanation of DAMM v1 fee and APY calculation, covering swap fees, protocol fees, LP fee value, virtual price growth, base APY, 365-day fee over TVL, farm APR, Dynamic Vault yield, and caveats when comparing displayed returns."
+llmsDescription: "Explains how DAMM v1 fee and APY calculation works, covering swap fees, protocol fees, LP fee value, virtual price growth, base APY, 365-day fee over TVL, farm APR, Dynamic Vault yield, and caveats when comparing displayed returns."
 ---
 
 DAMM v1 LP returns can come from several sources, so APY needs to be read carefully. A pool may show fee performance, base APY, Dynamic Vault yield, and farming incentives. These are related, but they are not the same thing.
@@ -24,10 +24,10 @@ The LP-relevant portion of the fee remains with the pool and increases the value
 DAMM v1 can also charge a protocol fee:
 
 ```math
-\text{protocol fee} = \text{input amount} \times \frac{\text{protocol fee numerator}}{\text{protocol fee denominator}}
+\text{protocol fee} = \text{total trading fee} \times \frac{\text{protocol fee numerator}}{\text{protocol fee denominator}}
 ```
 
-The protocol fee is separate from the LP value. Depending on pool configuration, protocol and partner fee settings can determine how swap fees are split.
+The protocol fee is separate from the LP value. Depending on pool configuration, protocol, host, and partner fee settings can determine how swap fees are split.
 
 ### Constant Product pools
 
@@ -40,13 +40,13 @@ The protocol fee is separate from the LP value. Depending on pool configuration,
 
 ### Swaps
 
-Swap hosts can include a referral account in the swap transaction to receive a **Referral Fee** equal to **20%** of the protocol fee.
+Swap hosts can include a host fee account in the swap transaction to receive **20%** of the protocol fee.
 
 For LPs, the key question is: what portion of the trading fee remains in the pool and increases LP token value?
 
 ## Host and partner fee routing
 
-DAMM v1 also has fee routing logic for host or partner fee arrangements. Product-wise, this allows integrations or partners to receive a configured share of eligible protocol-side fees.
+DAMM v1 also has fee routing logic for partner fee arrangements. A configured partner can accrue up to **50%** of protocol-side fees after any host fee routing.
 
 This does not change the core LP concept: LPs evaluate the net value accruing to the pool after applicable fee splits.
 
@@ -67,8 +67,10 @@ Where:
 Virtual price is:
 
 ```math
-\text{virtual price} = \frac{\text{total pool value}}{\text{LP token supply}}
+\text{virtual price} = \frac{D}{\text{LP token supply}}
 ```
+
+`D` is the curve invariant computed from the pool's token amounts after converting vault LP shares into underlying token balances. For constant-product pools, `D = sqrt(x * y)`. For stable pools, `D` comes from the stable-swap invariant.
 
 Virtual price can rise because of:
 
@@ -107,9 +109,9 @@ Vault yield can contribute to base APY because it can increase the value backing
 
 These can all appear in the LP return profile, but each has different drivers and risks.
 
-## Farm APR
+## External farm APR
 
-Liquidity mining APR estimates the annualized value of farm rewards relative to farm TVL:
+External liquidity mining APR estimates the annualized value of farm rewards relative to farm TVL:
 
 ```math
 \text{LM APR} = \left(\left(1 + \frac{\text{farm reward per day}}{\text{farm TVL}}\right)^{365} - 1\right) \times 100
@@ -120,7 +122,7 @@ Where:
 - `farm reward per day` is the daily value of reward emissions.
 - `farm TVL` is the value of LP tokens staked in the farm.
 
-Farm APR is only relevant if LPs stake LP tokens in the farm. LP tokens sitting unstaked in a wallet still own pool liquidity, but they do not earn farm rewards from that farm.
+Farm APR is only relevant if LPs stake LP tokens in the separate farm program. LP tokens sitting unstaked in a wallet still own pool liquidity, but they do not earn farm rewards from that farm.
 
 ## Reading a DAMM v1 pool return stack
 

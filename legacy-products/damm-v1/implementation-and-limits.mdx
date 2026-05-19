@@ -1,0 +1,150 @@
+---
+title: "DAMM v1 Implementation and Limits"
+sidebarTitle: "Implementation and Limits"
+description: "Source-backed DAMM v1 implementation details, account model, fees, curve limits, activation rules, liquidity operations, depeg support, and lock behavior."
+llmsDescription: "Implementation reference for DAMM v1 based on the AMM program source code, covering the two-token pool state, Dynamic Vault composition, supported curve types, permissionless and permissioned constraints, fee numerators and denominators, protocol/host/partner fee routing, activation gates, depeg LST support, liquidity operation limits, and liquidity lock accounting."
+---
+
+This page summarizes the DAMM v1 behavior that is enforced by the on-chain AMM program. Use it when you need exact product limits rather than a high-level explanation.
+
+<Info>
+  DAMM v1 mainnet program: `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`.
+</Info>
+
+## Pool account model
+
+A DAMM v1 pool is a two-token SPL Token pool. The pool account stores:
+
+| Field group | What it controls |
+| --- | --- |
+| LP mint | The fungible LP token mint for pool ownership |
+| Token mints | `token_a_mint` and `token_b_mint` |
+| Vault accounts | One Dynamic Vault for token A and one Dynamic Vault for token B |
+| Vault LP accounts | The pool's vault-share accounts for both token-side vaults |
+| Protocol fee accounts | Token A and token B accounts that receive protocol-side fees |
+| Pool fees | Trade fee and protocol-trade-fee fractions |
+| Curve type | Constant-product or stable-swap parameters |
+| Pool type | Permissioned or permissionless |
+| Bootstrapping | Optional activation point, activation type, and whitelisted vault |
+| Partner info | Optional partner authority and partner share of protocol-side fees |
+| Lock accounting | Total locked LP token amount |
+
+The AMM does not price from raw token account balances alone. It converts the pool's vault LP holdings back into underlying token amounts, then uses those amounts for swaps, LP minting, withdrawals, and virtual price.
+
+## Supported curves
+
+DAMM v1 supports two curve families:
+
+| Curve | Source behavior |
+| --- | --- |
+| Constant product | Uses `x * y = k`; pool invariant `D` is represented as `sqrt(x * y)` for LP minting and virtual price. |
+| Stable swap | Uses Saber StableSwap math with token multipliers for decimal normalization, optional depeg handling, and an amplification coefficient. |
+
+Constant-product pools do not support imbalanced deposits or single-sided withdrawals in the curve implementation. Stable pools support imbalanced deposits and single-sided withdrawals because those operations are implemented through the stable-swap math.
+
+## Permissionless constraints
+
+Permissionless pool creation is intentionally constrained:
+
+| Item | Limit |
+| --- | --- |
+| Stable AMP | Permissionless stable pools must use `amp = 100`. |
+| Maximum AMP | Stable-pool AMP is capped at `10000`. |
+| AMP updates | Permissioned stable-pool AMP updates must wait at least `600` seconds between changes. |
+| Stable depeg | Permissionless stable pools cannot use depeg mode. |
+| Stable token multipliers | Must match the token mint decimals. |
+| Initial stable liquidity | Initial amounts must be equal after token normalization and depeg adjustment. |
+| Initial deposits | Token A and token B amounts must both be non-zero. |
+
+Specialized stable pools, including depeg-aware LST pools, require permissioned pool setup.
+
+## Fee settings
+
+DAMM v1 fee fractions use a denominator of `100000`.
+
+| Pool type | Default trade fee | Default protocol share |
+| --- | ---: | ---: |
+| Constant product | `250 / 100000` = `0.25%` | `20000 / 100000` = `20%` of the trade fee |
+| Stable swap | `10 / 100000` = `0.01%` | `0%` |
+
+The protocol fee is calculated from the total trade fee, not directly from the full input amount. The remaining trade fee stays in the pool and benefits LP token value.
+
+For non-zero fee settings, the fee helper returns a minimum fee of one token unit when integer division would otherwise round the fee to zero.
+
+## Fee tiers and updates
+
+Permissionless fee-tier creation only allows specific trade fee basis points:
+
+| Curve | Allowed trade fee bps |
+| --- | --- |
+| Constant product | `25`, `100`, `400`, `600` bps |
+| Stable swap | `1`, `4`, `10`, `100` bps |
+
+Customizable permissionless constant-product pools use a different launch-oriented fee path:
+
+| Item | Limit |
+| --- | --- |
+| Trade fee range | `0.25%` to `15%` |
+| Step size | Must be divisible by `0.05%` |
+| Protocol share | Uses the constant-product default protocol share |
+
+Pool fees can also be updated after creation. The configured fee-update authority can only decrease the trade fee, cannot change the protocol fee, and cannot reduce below `0.25%`. The admin path can set fees and partner fee settings after validating fee fractions and partner limits.
+
+## Host and partner fees
+
+If a swap includes a host fee account in the expected remaining-account position, the program routes `20%` of the protocol fee to that host account and leaves the rest as protocol fee.
+
+Partner fees are tracked separately in pool state. When a partner is configured, the partner can accrue up to `50%` of protocol-side fees. Partner accounting only applies to protocol fees that remain after host fee routing.
+
+## Depeg-aware LST support
+
+Depeg mode exists only on stable pools. The program supports:
+
+| Depeg type | Source of virtual price |
+| --- | --- |
+| Marinade | mSOL state account |
+| Lido/Solido | stSOL state account |
+| SPL stake pool | SPL stake pool account |
+
+For a depeg pool, token A must be native SOL and token B is the staking or interest-bearing token. The pool multiplies token A balances by `1_000_000` and token B balances by the cached base virtual price before stable-swap calculations.
+
+The cached base virtual price is refreshed only when more than `10 minutes` have passed since the previous cache update. SPL stake-pool depeg pools store the stake account in pool state and validate the same account on later updates.
+
+## Activation rules
+
+Some permissionless constant-product pools can be created with an activation point. Activation can be based on either:
+
+| Activation type | Meaning |
+| --- | --- |
+| `0` | Slot-based activation |
+| `1` | Timestamp-based activation |
+
+Before activation, normal swaps are disabled. If a whitelisted vault is configured, that vault can buy during the pre-activation window. Balanced withdrawals are also gated until activation.
+
+Mainnet timing limits include:
+
+| Item | Slot mode | Timestamp mode |
+| --- | ---: | ---: |
+| Buffer | `9000` slots | `3600` seconds |
+| Max activation duration | `6,696,000` slots | `2,678,400` seconds |
+| Last-join buffer | About `5` minutes | `5` minutes |
+
+## Liquidity operations
+
+| Operation | Source-backed behavior |
+| --- | --- |
+| Balanced add | Requires pool enabled; mints a requested LP token amount and computes max token A/B needed. |
+| Imbalanced add | Requires pool enabled; implemented by stable-swap curve math. Constant-product curves return unsupported. |
+| Balanced remove | Can run even when the pool is disabled, but activation gates can still apply. |
+| Single-sided remove | Requires pool enabled and stable-swap support; protocol trading fee is not charged on this operation. |
+| Bootstrap liquidity | Can initialize a depleted pool when LP supply is zero and both token amounts are non-zero. |
+
+The code deliberately rounds some share calculations against the user to account for vault-share precision loss. Integrations should use slippage bounds and quoted amounts rather than assuming exact proportional arithmetic.
+
+## Liquidity locks
+
+Liquidity locks escrow DAMM v1 LP tokens and increase `total_locked_lp` on the pool. The underlying assets remain in the AMM and its connected vaults.
+
+For constant-product pools, the lock escrow can accrue claimable fee value when virtual price increases. Claiming those fees burns a portion of escrowed LP tokens and withdraws the corresponding underlying token amounts. The `claim_fee` path rejects non-constant-product pools.
+
+Locks restrict control of the LP tokens; they do not remove price risk, vault risk, or smart-contract risk.
