@@ -1,7 +1,22 @@
 ---
-title: "Overview"
-description: <Tip>**All DLMM APIs have a rate limit of 30 requests per second (30 RPS).** Explore the full spec at the [Swagger UI](https://dlmm.datapi.meteora.ag/swagger-ui/).</Tip>
+title: "DLMM Data API Overview"
+sidebarTitle: "API Overview"
+description: "Use the DLMM Data API to fetch indexed pool, portfolio, position, wallet, OHLCV, stats, and limit order data from production or development."
+llmsDescription: "Overview of the DLMM Data API for developer integrations. Covers production and development base URLs, Swagger and OpenAPI locations, rate limits, generated endpoint pages, pool discovery, pool groups, OHLCV, historical volume, portfolio endpoints, position PnL and historical events, protocol stats, wallet claims, limit order endpoints, and common query syntax for pagination, sorting, filtering, and time windows."
 ---
+
+<Tip>
+  **All DLMM APIs have a rate limit of 30 requests per second (30 RPS).** Explore the production spec at the [Prod Swagger UI](https://dlmm.datapi.meteora.ag/swagger-ui/) or the development spec at the [Dev Swagger UI](https://dlmm.dev.metdev.io/swagger-ui/).
+</Tip>
+
+## Base URLs
+
+| Environment | Base URL | Swagger UI | OpenAPI JSON |
+| --- | --- | --- | --- |
+| Production | `https://dlmm.datapi.meteora.ag` | [Open](https://dlmm.datapi.meteora.ag/swagger-ui/) | `https://dlmm.datapi.meteora.ag/api-docs/openapi.json` |
+| Development | `https://dlmm.dev.metdev.io` | [Open](https://dlmm.dev.metdev.io/swagger-ui/) | `https://dlmm.dev.metdev.io/api-docs/openapi.json` |
+
+The checked-in OpenAPI file uses the same endpoint schema for both environments. Use the server dropdown in the API playground to switch between production and development.
 
 ## Pools
 
@@ -26,6 +41,31 @@ description: <Tip>**All DLMM APIs have a rate limit of 30 requests per second (3
   </Card>
 </CardGroup>
 
+## Portfolio
+
+<CardGroup>
+  <Card title="Closed Portfolio" icon="file-code" iconType="solid" href="/api-reference/dlmm/portfolio/get-user-portfolio-with-all-pools-containing-closed-positions">
+    Returns user portfolio data with pools containing closed positions using `GET` `/portfolio`
+  </Card>
+  <Card title="Open Portfolio" icon="file-code" iconType="solid" href="/api-reference/dlmm/portfolio/get-user-portfolio-with-all-pools-containing-open-positions">
+    Returns user portfolio data with pools containing open positions using `GET` `/portfolio/open`
+  </Card>
+  <Card title="Portfolio Total" icon="file-code" iconType="solid" href="/api-reference/dlmm/portfolio/get-total-portfolio-p-n-l-across-all-pools">
+    Returns total portfolio PnL across pools using `GET` `/portfolio/total`
+  </Card>
+</CardGroup>
+
+## Positions
+
+<CardGroup>
+  <Card title="Historical Events" icon="file-code" iconType="solid" href="/api-reference/dlmm/positions/get-the-historical-events-for-a-position">
+    Returns add, remove, claim fee, and claim reward events using `GET` `/positions/{address}/historical`
+  </Card>
+  <Card title="Position PnL" icon="file-code" iconType="solid" href="/api-reference/dlmm/positions/get-position-p-n-l-data-open-and-closed-positions-with-on-the-fly-calculation">
+    Returns position PnL for open and closed positions using `GET` `/positions/{pool_address}/pnl`
+  </Card>
+</CardGroup>
+
 ## Stats
 
 <CardGroup>
@@ -33,3 +73,48 @@ description: <Tip>**All DLMM APIs have a rate limit of 30 requests per second (3
     Returns aggregated protocol-level metrics across all pools using `GET` `/stats/protocol_metrics`
   </Card>
 </CardGroup>
+
+## Limit Orders
+
+<CardGroup>
+  <Card title="Open Limit Order Pools" icon="file-code" iconType="solid" href="/api-reference/dlmm/limit-orders/get-open-limit-order-pools">
+    Returns open limit order pools for a wallet using `GET` `/wallets/{wallet}/limit_orders/open/pools`
+  </Card>
+  <Card title="Open Limit Orders For Pool" icon="file-code" iconType="solid" href="/api-reference/dlmm/limit-orders/get-open-limit-orders-for-pool">
+    Returns open limit orders for a wallet and pool using `GET` `/wallets/{wallet}/limit_orders/open/pools/{pool_address}`
+  </Card>
+  <Card title="Closed Limit Order Pools" icon="file-code" iconType="solid" href="/api-reference/dlmm/limit-orders/get-closed-limit-order-pools">
+    Returns closed limit order pools for a wallet using `GET` `/wallets/{wallet}/limit_orders/closed/pools`
+  </Card>
+  <Card title="Closed Limit Orders For Pool" icon="file-code" iconType="solid" href="/api-reference/dlmm/limit-orders/get-closed-limit-orders-for-pool">
+    Returns closed limit orders for a wallet and pool using `GET` `/wallets/{wallet}/limit_orders/closed/pools/{pool_address}`
+  </Card>
+  <Card title="Limit Order Summary" icon="file-code" iconType="solid" href="/api-reference/dlmm/limit-orders/get-limit-order-summary">
+    Returns wallet limit order summary using `GET` `/wallets/{wallet}/limit_orders/summary`
+  </Card>
+  <Card title="Bonus Claimed For Pool" icon="file-code" iconType="solid" href="/api-reference/dlmm/limit-orders/get-bonus-claimed-for-pool">
+    Returns bonus claimed data using `GET` `/wallets/{wallet}/limit_orders/pools/{pool_address}/bonus_claimed`
+  </Card>
+</CardGroup>
+
+## Wallets
+
+<CardGroup>
+  <Card title="Wallet Pool Total Claims" icon="file-code" iconType="solid" href="/api-reference/dlmm/wallets/get-wallet-pool-total-claims">
+    Returns accumulated fee/reward claims for a wallet and pool using `GET` `/wallets/{wallet}/pools/{pool_address}/total_claims`
+  </Card>
+</CardGroup>
+
+## Query Syntax
+
+List endpoints use common query parameters:
+
+| Parameter | Use |
+| --- | --- |
+| `page` | 1-based page number. |
+| `page_size` | Page size. Pool lists support up to `1000`; group lists support up to `100`. |
+| `query` | Search by name, tokens, or address. |
+| `sort_by` | Format: `<field>:<direction>` or `<metric>_<window>:<direction>`. |
+| `filter_by` | Format: `<field><op><value> [&& <field><op><value> ...]`. |
+
+Supported time windows include `5m`, `30m`, `1h`, `2h`, `4h`, `12h`, and `24h`.

@@ -1,22 +1,24 @@
 ---
-title: Getting Started
-description: DLMM
+title: "DLMM TypeScript SDK Getting Started"
+sidebarTitle: "Getting Started"
+description: "Install @meteora-ag/dlmm, initialize DLMM pool clients, discover pool addresses with the Data API, configure clusters, quote swaps, and run SDK checks."
+llmsDescription: "Getting started guide for the official @meteora-ag/dlmm TypeScript SDK. Covers npm, pnpm, and yarn installation, initializing DLMM clients with Connection and PublicKey, finding pool addresses through the DLMM Data API, using DLMM.createMultiple, configuring mainnet and devnet clusters, understanding the default DLMM program ID, building a basic swap quote with getBinArrayForSwap and swapQuote, running public SDK build and unit checks, and using the Solana devnet faucet."
 ---
 
-This guide provides instructions on how to get started with building on Meteora's DLMM program using the DLMM TypeScript SDK.
+This guide shows how to install and initialize the official DLMM TypeScript SDK, `@meteora-ag/dlmm`.
 
 Before you begin, here are some important resources:
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/dlmm-sdk/tree/main/ts-client">
-    Meteora DLMM Typescript SDK
+  <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/dlmm-sdk/tree/main/ts-client">
+    Meteora DLMM TypeScript SDK
   </Card>
   <Card title="DLMM NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/dlmm">
     Meteora DLMM NPM Package
   </Card>
 </CardGroup>
 
-# Installation
+## Installation
 
 To use the SDK in your project, install it using your preferred package manager:
 
@@ -38,46 +40,89 @@ To use the SDK in your project, install it using your preferred package manager:
   </Tab>
 </Tabs>
 
-# Initialization
+## Initialization
 
-Once installed, you can initialize the DLMM client in your `Node.js` project like this:
+Once installed, initialize a pool client with a Solana connection and a DLMM pool address:
 
 ```typescript
-import DLMM from '@meteora-ag/dlmm'
-import { Connection, PublicKey } from '@solana/web3.js';
+import DLMM from "@meteora-ag/dlmm";
+import { Connection, PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
 
-const mainnetConnection = new Connection('https://api.mainnet-beta.solana.com');
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
 
-// Create pool instances
-
-// e.g. creating a DLMM pool
-// You can get your desired pool address from the API https://dlmm.datapi.meteora.ag/pair/all
-const USDC_USDT_POOL_ADDRESS = new PublicKey('ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq')
-const dlmmPool = await DLMM.create(connection, USDC_USDT_POOL_ADDRESS);
-
-// e.g. creating multiple pools
-const dlmmMultiplePools = await DLMM.createMultiple(connection, [USDC_USDT_POOL_ADDRESS, ...otherPoolAddresses]);
+const poolAddress = new PublicKey("ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq");
+const dlmmPool = await DLMM.create(connection, poolAddress, {
+  cluster: "mainnet-beta",
+});
 ```
 
-# Testing the SDK (for contributors)
-
-If you have cloned the SDK repository and want to run the built-in tests:
+You can find pool addresses with the Data API:
 
 ```bash
-# Install dependencies
-cd ts-client
-bun install
-
-# Run tests
-bun test
+curl "https://dlmm.datapi.meteora.ag/pools?page=1&page_size=20"
 ```
 
-# Development Resources
+To initialize several pools efficiently:
+
+```typescript
+const pools = await DLMM.createMultiple(connection, [
+  poolAddress,
+  ...otherPoolAddresses,
+]);
+```
+
+## Cluster And Program ID
+
+The SDK defaults to the public DLMM program ID:
+
+```typescript
+LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo
+```
+
+Pass `opt` when using devnet or a custom program ID:
+
+```typescript
+const dlmmPool = await DLMM.create(connection, poolAddress, {
+  cluster: "devnet",
+})
+```
+
+## Typical Swap Flow
+
+```typescript
+const swapYtoX = true;
+const inAmount = new BN(1_000_000);
+const slippageBps = new BN(50);
+
+const binArrays = await dlmmPool.getBinArrayForSwap(swapYtoX);
+const quote = dlmmPool.swapQuote(
+  inAmount,
+  swapYtoX,
+  slippageBps,
+  binArrays,
+);
+```
+
+Use the [SDK Examples](/developer-guides/dlmm/typescript-sdk/examples) for full transaction flows and the [SDK Reference](/developer-guides/dlmm/typescript-sdk/sdk-functions) for pool creation, liquidity, swaps, rewards, limit orders, and Token-2022 helpers.
+
+## Testing The SDK
+
+If you have cloned the SDK repository, start with package-level checks:
+
+```bash
+cd ts-client
+pnpm install
+pnpm run build
+pnpm run unit-test
+```
+
+For `commons`, CLI, scripts, and broader repository testing notes, see the [DLMM overview](/developer-guides/dlmm#repository-map).
 
 ## Faucets
 
 <CardGroup cols={1}>
-  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.raccoons.dev/">
+  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.solana.com/">
     <p>When working on devnet, you might need test tokens. Here is a helpful faucet.</p>
   </Card>
 </CardGroup>

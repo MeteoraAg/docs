@@ -1,4375 +1,728 @@
 ---
-title: SDK Functions
-description: DLMM
+title: "DLMM TypeScript SDK Reference"
+sidebarTitle: "SDK Reference"
+description: "Reference @meteora-ag/dlmm exports, types, constants, client creation, pool discovery, positions, liquidity, swaps, rewards, limit orders, rebalancing, helpers, and errors."
+llmsDescription: "Detailed reference for the @meteora-ag/dlmm TypeScript SDK. Covers package exports, DLMM class usage, helper modules, IDL exports, dependencies, program IDs, Opt configuration, core SDK types, enums, important constants, DLMM.create and createMultiple, static discovery methods, pool creation methods, instance state, pool state readers, price helpers, position queries and resizing, liquidity builders, swap quote and transaction builders, fee and reward claims, limit order queries and transaction builders, rebalancing, seed liquidity, bin arrays, pool controls, Token-2022 helper behavior, PDA helpers, account filters, oracle helpers, limit order wrappers, SDK errors, and practical integration notes."
 ---
 
-## Common Types
-
-These types are referenced throughout the SDK functions.
-
-### StrategyType
+This page is based on the public `ts-client` source for `@meteora-ag/dlmm`. The package exports the `DLMM` class as its default export, plus helper modules, constants, IDL types, account filters, and low-level wrappers.
 
 ```typescript
-enum StrategyType {
-  Spot,   // Uniform distribution across all bins
-  Curve,  // Bell-curve distribution concentrated near the active bin
-  BidAsk, // V-shaped distribution with more weight at price extremes
+import DLMM, {
+  ActivationType,
+  CollectFeeMode,
+  ConcreteFunctionType,
+  PairType,
+  ResizeSide,
+  StrategyType,
+  deriveBinArray,
+  getBinArrayIndexesCoverage,
+} from "@meteora-ag/dlmm"
+```
+
+## Package Surface
+
+The package entrypoint exports:
+
+| Export | Description |
+| --- | --- |
+| `default` / `DLMM` | Main pool client class. Use this for pool reads, quoting, transactions, positions, rewards, rebalances, and limit orders. |
+| `helpers` | PDA derivation, bin array utilities, price math, fee math, position helpers, rebalance helpers, Token-2022 helpers, and RPC chunking helpers. |
+| `types` | SDK and IDL-derived TypeScript types. |
+| `constants` | Program IDs, limits, rent estimates, fee precision, enums, and SDK defaults. |
+| `IDL` and `LbClmm` | Raw IDL JSON and generated IDL TypeScript type. |
+| `accountFilters` | `getProgramAccounts` memcmp filters for positions, bin arrays, preset parameters, and limit orders. |
+| `DlmmSdkError` | SDK error class used by quote helpers. |
+
+## Version And Dependencies
+
+The local SDK package is `@meteora-ag/dlmm` version `1.9.10`.
+
+Important runtime dependencies:
+
+| Package | Use |
+| --- | --- |
+| `@coral-xyz/anchor` | Program client, BN, IDL-derived types. |
+| `@solana/web3.js` | Connections, transactions, instructions, public keys. |
+| `@solana/spl-token` | ATA creation, Token and Token-2022 account handling, transfer fee and transfer hook data. |
+| `decimal.js` | Price, fee, and UI conversion arithmetic. |
+
+## Program IDs
+
+```typescript
+LBCLMM_PROGRAM_IDS = {
+  devnet: "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+  localhost: "LbVRzDTvBDEcrthxfZ4RL6yiq3uZw8bS6MwtdY6UhFQ",
+  "mainnet-beta": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
 }
 ```
 
-### StrategyParameters
+`localhost` is an SDK constant for local test harnesses. Because the `lb_clmm` program source is not open sourced, most public integrations should use devnet or mainnet unless Meteora provides a separate local testing fixture.
+
+Pass `opt` to most static methods and `DLMM.create` when you need a non-default cluster or program ID:
+
+```typescript
+type Opt = {
+  cluster?: Cluster | "localhost"
+  programId?: PublicKey
+  skipSolWrappingOperation?: boolean
+}
+```
+
+`skipSolWrappingOperation` is useful when another integration, such as a zap flow, manages wrapped SOL accounts itself.
+
+## Core Types
+
+| Type | Description |
+| --- | --- |
+| `ClmmProgram` | Anchor `Program&lt;LbClmm&gt;`. |
+| `LbPair`, `LbPairAccount` | Pool account state and Anchor account wrapper. |
+| `Bin`, `BinArray`, `BinArrayAccount` | Bin and bin array state. |
+| `BinArrayBitmapExtensionAccount` | Bitmap extension account wrapper. |
+| `PositionV2`, `LbPosition`, `PositionInfo`, `PositionData` | Position account and SDK-normalized position data. |
+| `LimitOrder`, `ParsedLimitOrderWithPubkey` | Limit order account and parsed SDK view. |
+| `TokenReserve` | Mint, reserve, raw balance, token program owner, and transfer-hook metas. |
+| `SwapQuote`, `SwapQuoteExactOut` | Exact-in and exact-out quote result types. |
+| `FeeInfo`, `EmissionRate` | Current pool fee and reward emission views. |
+| `StrategyParameters` | Position/liquidity strategy input. |
 
 ```typescript
 interface StrategyParameters {
-  maxBinId: number;        // Upper bound of the target bin range
-  minBinId: number;        // Lower bound of the target bin range
-  strategyType: StrategyType; // Distribution strategy
-  singleSidedX?: boolean;  // If true, deposit only token X (ask side only)
+  maxBinId: number
+  minBinId: number
+  strategyType: StrategyType
+  singleSidedX?: boolean
 }
 ```
 
-### ActivationType
+## Enums
+
+| Enum | Values |
+| --- | --- |
+| `StrategyType` | `Spot`, `Curve`, `BidAsk` |
+| `ActivationType` | `Slot`, `Timestamp` |
+| `PairType` | `Permissionless`, `Permissioned`, `CustomizablePermissionless`, `PermissionlessV2` |
+| `PairStatus` | `Enabled`, `Disabled` |
+| `FunctionType` | `Undetermined`, `LiquidityMining`, `LimitOrder` |
+| `ConcreteFunctionType` | `LimitOrder`, `LiquidityMining` |
+| `CollectFeeMode` | `InputOnly`, `OnlyY` |
+| `PositionVersion` | `V1`, `V2` |
+| `ShrinkMode` | `ShrinkBoth`, `NoShrinkLeft`, `NoShrinkRight`, `NoShrinkBoth` |
+| `ResizeSide` | `Lower`, `Upper` |
+| `ActionType` | `Liquidity`, `Reward` |
+
+## Important Constants
+
+| Constant | Meaning |
+| --- | --- |
+| `BASIS_POINT_MAX` | `10000`. Used for bps calculations. |
+| `FEE_PRECISION` | Program fee precision. |
+| `MAX_FEE_RATE` | Maximum fee rate in program precision. |
+| `BIN_ARRAY_DEFAULT_VERSION` | Current bin array layout version. |
+| `MAX_BINS_PER_POSITION` / `POSITION_MAX_LENGTH` | Maximum dynamic position width. |
+| `MAX_RESIZE_LENGTH` | Maximum position resize increment per instruction. |
+| `DEFAULT_BIN_PER_POSITION` | Base position width before dynamic extension data. |
+| `MAX_BIN_LENGTH_ALLOWED_IN_ONE_TX` | Threshold used by legacy weight flows before splitting transactions. |
+| `MAX_EXTRA_BIN_ARRAYS` | Maximum extra bin arrays quote helpers may include. |
+| `MAX_BIN_PER_LIMIT_ORDER` | Maximum bins allowed in one limit order account. |
+| `LIMIT_ORDER_FEE_SHARE` | Program constant for limit order fee share. |
+| `MAX_CLAIM_ALL_ALLOWED` | Claim-all transaction chunk size. |
+
+The SDK also exports approximate rent constants such as `BIN_ARRAY_FEE`, `POSITION_FEE`, `POOL_FEE`, `TOKEN_ACCOUNT_FEE`, and `BIN_ARRAY_BITMAP_FEE`, plus BN versions of those amounts.
+
+## Creating A Client
+
+### `DLMM.create`
 
 ```typescript
-enum ActivationType {
-  Slot,      // Activation based on slot number
-  Timestamp, // Activation based on Unix timestamp
-}
-```
-
----
-
-## Pool Functions
-
-### create
-
-Creates an instance of the DLMM pool given the pool address.
-
-**Function**
-```typescript
-async create(
-    connection: Connection, 
-    dlmm: PublicKey, 
-    opt?: {
-        cluster?: Cluster | "localhost"; 
-        programId?: PublicKey; 
-    }
+static create(
+  connection: Connection,
+  dlmm: PublicKey,
+  opt?: Opt,
 ): Promise<DLMM>
 ```
 
-**Parameters**
-```typescript
-connection: Connection         // Solana connection instance
-dlmm: PublicKey                // The DLMM pool address
-opt?: {                        // Optional parameters
-  cluster?: Cluster | "localhost"; // The Solana cluster (mainnet, devnet, etc.)
-  programId?: PublicKey; // Custom program ID if different from default
-}
-```
-
-**Returns**
-
-An instance of the DLMM pool.
-
-**Example**
-```typescript
-// Creating a DLMM pool
-// You can get your desired pool address from the API https://dlmm.datapi.meteora.ag/pair/all
-const USDC_USDT_POOL = new PublicKey('ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq')
-const dlmmPool = await DLMM.create(connection, USDC_USDT_POOL);
-```
-
-**Notes**
-- The pool addresses can be fetched from the DLMM API https://dlmm.datapi.meteora.ag/pair/all
-- The `opt` parameter is optional and can be used to specify the cluster and program ID.
-
----
-
-### createMultiple
-
-Creates multiple instances of the DLMM pool given the pool addresses.
-
-**Function**
-```typescript
-async createMultiple(
-    connection: Connection, 
-    dlmmList: Array<PublicKey>,
-    opt?: {
-        cluster?: Cluster | "localhost"; 
-        programId?: PublicKey; 
-    }
-): Promise<DLMM[]>
-```
-
-**Parameters**
-```typescript
-connection: Connection         // Solana connection instance
-dlmmList: Array<PublicKey>     // The array of DLMM pool addresses
-opt?: {                        // Optional parameters
-  cluster?: Cluster | "localhost"; // The Solana cluster (mainnet, devnet, etc.)
-  programId?: PublicKey; // Custom program ID if different from default
-}
-```
-
-**Returns**
-
-An array of DLMM instances.
-
-**Example**
-```typescript
-// Creating a DLMM pool
-// You can get your desired pool address from the API https://dlmm.datapi.meteora.ag/pair/all
-const USDC_USDT_POOL = new PublicKey('ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq')
-const dlmmPool = await DLMM.createMultiple(connection, [USDC_USDT_POOL, ...]);
-```
-
-**Notes** 
-- The pool addresses can be fetched from the DLMM API https://dlmm.datapi.meteora.ag/pair/all
-- The `opt` parameter is optional and can be used to specify the cluster and program ID.
-
----
-
-### createCustomizablePermissionlessLbPair
-
-Creates a customizable permissionless LB pair. This function only supports token program.
-
-**Function**
-```typescript
-static async createCustomizablePermissionlessLbPair(
-    connection: Connection,
-    binStep: BN,
-    tokenX: PublicKey,
-    tokenY: PublicKey,
-    activeId: BN,
-    feeBps: BN,
-    activationType: ActivationType,
-    hasAlphaVault: boolean,
-    creatorKey: PublicKey,
-    activationPoint?: BN,
-    creatorPoolOnOffControl?: boolean,
-    opt?: {
-      cluster?: Cluster | "localhost";
-      programId?: PublicKey;
-    };
-): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-connection: Connection         // Solana connection instance
-binStep: BN                    // Bin step of the pair
-tokenX: PublicKey              // Token X mint address
-tokenY: PublicKey              // Token Y mint address
-activeId: BN                   // Active bin ID
-feeBps: BN                     // Fee in basis points
-activationType: ActivationType // Activation type
-hasAlphaVault: boolean         // Whether the pair has an alpha vault
-creatorKey: PublicKey          // Creator key
-activationPoint?: BN           // Optional activation point
-creatorPoolOnOffControl?: boolean // Optional creator pool on/off control
-opt?: Opt                      // Optional parameters
-```
-
-**Returns**
-
-A transaction to create the customizable permissionless LB pair.
-
-**Example**
-```typescript
-const WEN = new PublicKey('WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk')
-const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
-
-const binId = 8388608
-const feeBps = new BN(100)
-const activationPoint = new BN(1720000000)
-const owner = new Keypair()
-
-// Create a customizable permissionless LB pair
-const transaction = await DLMM.createCustomizablePermissionlessLbPair(
-  connection,
-  new BN(binStep),
-  WEN,
-  USDC,
-  new BN(binId.toString()),
-  feeBps,
-  ActivationType.Slot,
-  false, // No alpha vault. 
-  owner.publicKey,
-  activationPoint,
-  false,
-  {
-    cluster: "localhost",
-  }
-);
-```
-
-**Notes**
-- If Alpha Vault is enabled, the program will deterministically whitelist the alpha vault to swap before the pool start trading. Check: https://github.com/MeteoraAg/alpha-vault-sdk `initialize{Prorata|Fcfs}Vault` method to create the alpha vault.
-
----
-
-### createCustomizablePermissionlessLbPair2
-
-Creates a customizable permissionless LB pair with specified parameters. This function supports both token and token2022 programs.
-
-**Function**
-```typescript
-static async createCustomizablePermissionlessLbPair2(
-    connection: Connection,
-    binStep: BN,
-    tokenX: PublicKey,
-    tokenY: PublicKey,
-    activeId: BN,
-    feeBps: BN,
-    activationType: ActivationType,
-    hasAlphaVault: boolean,
-    creatorKey: PublicKey,
-    activationPoint?: BN,
-    creatorPoolOnOffControl?: boolean,
-    opt?: Opt
-): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-connection: Connection         // Solana connection instance
-binStep: BN                   // The bin step for the pair
-tokenX: PublicKey             // The mint of the first token
-tokenY: PublicKey             // The mint of the second token
-activeId: BN                  // The ID of the initial active bin (starting price)
-feeBps: BN                    // The fee rate for swaps in basis points
-activationType: ActivationType // The type of activation for the pair
-hasAlphaVault: boolean        // Whether the pair has an alpha vault
-creatorKey: PublicKey         // The public key of the creator
-activationPoint?: BN          // Optional timestamp for activation
-creatorPoolOnOffControl?: boolean // Optional creator control flag
-opt?: Opt                     // Optional cluster and program ID
-```
-
-**Returns**
-
-A transaction to create the customizable permissionless LB pair.
-
-**Example**
-```typescript
-const WEN = new PublicKey('WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk')
-const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
-
-const binId = 8388608
-const feeBps = new BN(100)
-const activationPoint = new BN(1720000000)
-const owner = new Keypair()
-
-const transaction = await DLMM.createCustomizablePermissionlessLbPair2(
-  connection,
-  new BN(25), // 0.25% bin step
-  WEN,
-  USDC,
-  new BN(binId.toString()), // active bin ID representing starting price
-  new BN(feeBps.toString()), // 1% fee
-  ActivationType.Timestamp,
-  false, // no alpha vault
-  owner.publicKey,
-  activationPoint,
-  false,
-  {
-    cluster: "localhost",
-  }
-);
-```
-
-**Notes**
-- This creates a customizable permissionless pair that supports both token and token2022 programs
-- The active bin ID represents the starting price of the pool
-- Fee is specified in basis points (100 = 1%)
-
----
-
-### createLbPair
-
-Creates a new liquidity pair that supports only token program.
-
-**Function**
-```typescript
-static async createLbPair(
-    connection: Connection,
-    funder: PublicKey,
-    tokenX: PublicKey,
-    tokenY: PublicKey,
-    binStep: BN,
-    baseFactor: BN,
-    presetParameter: PublicKey,
-    activeId: BN,
-    opt?: Opt
-): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-connection: Connection        // Solana connection instance
-funder: PublicKey             // The public key of the funder
-tokenX: PublicKey             // The mint of the first token
-tokenY: PublicKey             // The mint of the second token
-binStep: BN                   // The bin step for the pair
-baseFactor: BN                // The base factor for the pair
-presetParameter: PublicKey    // The public key of the preset parameter account
-activeId: BN                  // The ID of the initial active bin
-opt?: Opt                     // Optional parameters
-```
-
-**Returns**
-
-A transaction to create the LB pair.
-
-**Example**
-```typescript
-const WEN = new PublicKey('WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk')
-const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
-
-const activeBinId = 8388608
-const binStep = new BN(25)
-const baseFactor = new BN(10000)
-
-const presetParamPda = derivePresetParameter2(
-  binStep,
-  baseFactor,
-  programId
-);
-
-const activationPoint = new BN(1720000000)
-const owner = new Keypair()
-
-const transaction = await DLMM.createLbPair(
-  connection,
-  owner.publicKey,
-  WEN,
-  USDC,
-  binStep,
-  baseFactor, // base factor
-  presetParamPda,
-  activeBinId // active bin ID
-);
-```
-
-**Notes**
-- Throws an error if the pair already exists
-- Only supports token program
-
----
-
-### createLbPair2
-
-Creates a new liquidity pair that supports both token and token2022 programs.
-
-**Function**
-```typescript
-static async createLbPair2(
-    connection: Connection,
-    funder: PublicKey,
-    tokenX: PublicKey,
-    tokenY: PublicKey,
-    presetParameter: PublicKey,
-    activeId: BN,
-    opt?: Opt
-): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-connection: Connection        // Solana connection instance
-funder: PublicKey             // The public key of the funder
-tokenX: PublicKey             // The mint of the first token
-tokenY: PublicKey             // The mint of the second token
-presetParameter: PublicKey    // The public key of the preset parameter account
-activeId: BN                  // The ID of the initial active bin
-opt?: Opt                     // Optional parameters
-```
-
-**Returns**
-
-A transaction to create the LB pair.
-
-**Example**
-```typescript
-const WEN = new PublicKey('WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk')
-const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
-
-const activeBinId = 8388608
-const binStep = new BN(25)
-const baseFactor = new BN(10000)
-const programId = LBCLMM_PROGRAM_IDS["mainnet-beta"]
-
-const presetParamPda = derivePresetParameter2(
-  binStep,
-  baseFactor,
-  programId
-);
-
-
-const transaction = await DLMM.createLbPair2(
-  connection,
-  owner.publicKey,
-  WEN,
-  USDC,
-  presetParamPda,
-  activeBinId // active bin ID
-);
-```
-
-**Notes**
-- Throws an error if the pair already exists
-- Supports both token and token2022 programs
-
----
-
-### initializePositionAndAddLiquidityByStrategy
-
-Initializes a new position and adds liquidity using a specified strategy.
-
-**Function**
-```typescript
-async initializePositionAndAddLiquidityByStrategy({
-    positionPubKey,
-    totalXAmount,
-    totalYAmount,
-    strategy,
-    user,
-    slippage,
-}: TInitializePositionAndAddLiquidityParamsByStrategy): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-positionPubKey: PublicKey     // The public key of the position account (usually new Keypair())
-totalXAmount: BN              // Total amount of token X to add
-totalYAmount: BN              // Total amount of token Y to add
-strategy: StrategyParameters  // Strategy parameters (can use calculateStrategyParameter)
-user: PublicKey               // The public key of the user account
-slippage?: number             // Optional slippage percentage
-```
-
-**Returns**
-
-A transaction for initializing the position and adding liquidity.
-
-**Example**
-```typescript
-const positionKeypair = new Keypair();
-
-const btcInAmount = new BN(1).mul(new BN(10 ** btcDecimal));
-const usdcInAmount = new BN(24000).mul(new BN(10 ** usdcDecimal));
-
-const strategy = {
-  strategyType: StrategyType.SpotBalanced,
-  minBinId: 8388600,
-  maxBinId: 8388620,
-};
-
-const transaction = await dlmmPool.initializePositionAndAddLiquidityByStrategy({
-  positionPubKey: positionKeypair.publicKey,
-  totalXAmount: btcInAmount,
-  totalYAmount: usdcInAmount,
-  strategy,
-  user: userPublicKey,
-  slippage: 1 // 1% slippage
-});
-```
-
-**Notes**
-- `positionPubKey`: The public key of the position account (usually use `new Keypair()`). The keypair must be passed as a signer when sending the transaction.
-- `strategy`: The strategy parameters defining the bin range and distribution type.
-- For bin ranges that exceed a single position's width, use `initializeMultiplePositionAndAddLiquidityByStrategy` instead.
-
----
-
-### addLiquidityByStrategy
-
-Adds liquidity to an existing position using a specified strategy.
-
-**Function**
-```typescript
-async addLiquidityByStrategy({
-    positionPubKey,
-    totalXAmount,
-    totalYAmount,
-    strategy,
-    user,
-    slippage,
-}: TInitializePositionAndAddLiquidityParamsByStrategy): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-positionPubKey: PublicKey     // The public key of the existing position
-totalXAmount: BN              // Total amount of token X to add
-totalYAmount: BN              // Total amount of token Y to add
-strategy: StrategyParameters  // Strategy parameters
-user: PublicKey               // The public key of the user account
-slippage?: number             // Optional slippage percentage
-```
-
-**Returns**
-
-A transaction for adding liquidity to the position.
-
-**Example**
-```typescript
-const btcInAmount = new BN(1).mul(new BN(10 ** btcDecimal));
-const usdcInAmount = new BN(24000).mul(new BN(10 ** usdcDecimal));
-
-const transaction = await dlmmPool.addLiquidityByStrategy({
-  positionPubKey: position.publicKey,
-  totalXAmount: btcInAmount,
-  totalYAmount: usdcInAmount,
-  strategy: {
-    minBinId: 8388600,
-    maxBinId: 8388620,
-    strategyType: StrategyType.SpotBalanced,
-  },
-  user: userPublicKey,
-  slippage: 1
-});
-```
-
-**Notes**
-- `positionPubKey`: The public key of an existing position to add liquidity to.
-- `strategy`: The strategy parameters defining the bin range and distribution type. The bin range must fall within the existing position bounds. To auto-expand, use `addLiquidityByStrategyChunkable` instead.
-
----
-
-### addLiquidityByStrategyChunkable
-
-Adds liquidity to an existing position using a specified strategy. Automatically expands the position if the target bin range extends beyond the current position bounds (up to 70 bins maximum). Returns an array of transactions for chunkable execution.
-
-**Function**
-```typescript
-async addLiquidityByStrategyChunkable({
-    positionPubKey,
-    totalXAmount,
-    totalYAmount,
-    strategy,
-    user,
-    slippage,
-}: TInitializePositionAndAddLiquidityParamsByStrategy): Promise<Transaction[]>
-```
-
-**Parameters**
-```typescript
-positionPubKey: PublicKey     // The public key of the existing position
-totalXAmount: BN              // Total amount of token X to add
-totalYAmount: BN              // Total amount of token Y to add
-strategy: StrategyParameters  // Strategy parameters defining the bin range and type
-user: PublicKey               // The public key of the user
-slippage?: number             // Optional slippage percentage
-```
-
-**Returns**
-
-An array of transactions. Multiple transactions may be returned when the bin range spans many bins.
-
-**Example**
-```typescript
-const transactions = await dlmmPool.addLiquidityByStrategyChunkable({
-  positionPubKey: position.publicKey,
-  totalXAmount: new BN(1_000_000),
-  totalYAmount: new BN(24_000_000),
-  strategy: {
-    minBinId: 8388600,
-    maxBinId: 8388670,
-    strategyType: StrategyType.SpotBalanced,
-  },
-  user: userPublicKey,
-  slippage: 1,
-});
-
-for (const tx of transactions) {
-  await sendAndConfirmTransaction(connection, tx, [userKeypair]);
-}
-```
-
-**Notes**
-- Automatically expands the position if the target bin range is larger than the current position bounds (up to 70 bins maximum).
-- Returns multiple transactions when the range requires it. Sign and send each transaction sequentially.
-- Differs from `addLiquidityByStrategy`, which returns a single transaction and does not auto-expand.
-
----
-
-### initializeMultiplePositionAndAddLiquidityByStrategy
-
-Initializes multiple positions and adds liquidity across all of them using a single strategy. Use this when depositing into a bin range that exceeds a single position's maximum width.
-
-**Function**
-```typescript
-async initializeMultiplePositionAndAddLiquidityByStrategy(
-    positionKeypairGenerator: (count: number) => Promise<Keypair[]>,
-    totalXAmount: BN,
-    totalYAmount: BN,
-    strategy: StrategyParameters,
-    owner: PublicKey,
-    payer: PublicKey,
-    slippagePercentage: number
-): Promise<InitializeMultiplePositionAndAddLiquidityByStrategyResponse>
-```
-
-**Parameters**
-```typescript
-positionKeypairGenerator: (count: number) => Promise<Keypair[]>
-                                // Async function that generates the required keypairs
-totalXAmount: BN                // Total amount of token X to add
-totalYAmount: BN                // Total amount of token Y to add
-strategy: StrategyParameters    // Strategy parameters defining the bin range and type
-owner: PublicKey                // Owner of the positions
-payer: PublicKey                // Payer for rent and transaction fees
-slippagePercentage: number      // Slippage tolerance as a percentage
-```
-
-**Returns**
-```typescript
-{
-  instructionsByPositions: {
-    positionKeypair: Keypair;
-    initializePositionIx: TransactionInstruction;
-    initializeAtaIxs: TransactionInstruction[];
-    addLiquidityIxs: TransactionInstruction[][];
-  }[];
-}
-```
-
-An object where each entry contains the keypair and all instructions needed to initialize and fund one position.
-
-**Example**
-```typescript
-const response = await dlmmPool.initializeMultiplePositionAndAddLiquidityByStrategy(
-  async (count) => Array.from({ length: count }, () => new Keypair()),
-  new BN(1_000_000),
-  new BN(24_000_000),
-  {
-    minBinId: 8388550,
-    maxBinId: 8388700,
-    strategyType: StrategyType.SpotBalanced,
-  },
-  userPublicKey,
-  userPublicKey,
-  1 // 1% slippage
-);
-
-for (const { positionKeypair, initializePositionIx, initializeAtaIxs, addLiquidityIxs } of response.instructionsByPositions) {
-  // Build and send transactions for each position
-}
-```
-
-**Notes**
-- The number of positions is automatically calculated from the bin range width.
-- `positionKeypairGenerator` receives the required count and must return that many fresh `Keypair` instances.
-- Use this when `strategy.minBinId` to `strategy.maxBinId` exceeds the per-position maximum bin count.
-
----
-
-### removeLiquidity
-
-Removes liquidity from a position with options to claim rewards and close the position.
-
-**Function**
-```typescript
-async removeLiquidity({
-    user,
-    position,
-    fromBinId,
-    toBinId,
-    bps,
-    shouldClaimAndClose = false,
-    skipUnwrapSOL = false,
-}: {
-    user: PublicKey;
-    position: PublicKey;
-    fromBinId: number;
-    toBinId: number;
-    bps: BN;
-    shouldClaimAndClose?: boolean;
-    skipUnwrapSOL?: boolean;
-}): Promise<Transaction[]>
-```
-
-**Parameters**
-```typescript
-user: PublicKey               // The public key of the user account
-position: PublicKey           // The public key of the position account
-fromBinId: number             // Starting bin ID to remove liquidity from
-toBinId: number               // Ending bin ID to remove liquidity from
-bps: BN                       // Percentage of liquidity to remove (in basis points)
-shouldClaimAndClose?: boolean // Whether to claim rewards and close position (default: false)
-skipUnwrapSOL?: boolean       // Whether to skip unwrapping wSOL to SOL (default: false)
-```
-
-**Returns**
-
-An array of transactions for removing liquidity.
-
-**Example**
-```typescript
-// Remove 50% of liquidity from position
-const transaction = await dlmmPool.removeLiquidity({
-  user: userPublicKey,
-  position: positionPublicKey,
-  fromBinId: 8388600,
-  toBinId: 8388620,
-  bps: new BN(5000), // 50% in basis points
-  shouldClaimAndClose: false
-});
-```
-
-**Notes**
-- `fromBinId` and `toBinId` must be within the position's bin range.
-- `bps`: Basis points of liquidity to remove (e.g. 5000 = 50%, 10000 = 100%).
-- `shouldClaimAndClose`: When true, claims all rewards and closes the position after removing liquidity.
-- `skipUnwrapSOL`: When true, keeps withdrawn SOL as wrapped SOL (wSOL) instead of unwrapping.
-
----
-
-### swapQuote
-
-Returns a quote for a swap operation.
-
-**Function**
-```typescript
-swapQuote(
-    inAmount: BN,
-    swapForY: boolean,
-    allowedSlippage: BN,
-    binArrays: BinArrayAccount[],
-    isPartialFill?: boolean,
-    maxExtraBinArrays: number = 0
-): SwapQuote
-```
-
-**Parameters**
-```typescript
-inAmount: BN                  // Amount of lamports to swap in
-swapForY: boolean             // True to swap X to Y, false for Y to X
-allowedSlippage: BN           // Allowed slippage in basis points
-binArrays: BinArrayAccount[]  // Bin arrays for the swap quote
-isPartialFill?: boolean       // Whether partial fill is allowed
-maxExtraBinArrays?: number    // Maximum extra bin arrays to return
-```
-
-**Returns**
-
-A SwapQuote object containing swap information.
-
-**Example**
-```typescript
-const binArrays = await dlmmPool.getBinArrayForSwap(true, 5);
-const swapQuote = dlmmPool.swapQuote(
-  new BN(1000000), // 1 token input
-  true, // swap X for Y
-  new BN(100), // 1% slippage
-  binArrays,
-  false, // no partial fill
-  2 // max extra bin arrays
-);
-```
-
-**Notes**
-- This is a synchronous method — it computes the quote locally without RPC calls.
-- `allowedSlippage` is in BPS (basis points). To convert from percentage: `SLIPPAGE_PERCENTAGE * 100` (e.g., 1% = 100 BPS).
-- Use `getBinArrayForSwap` to fetch the required `binArrays` parameter.
-- The returned `SwapQuote.binArraysPubkey` can be passed directly to the `swap` method.
-
----
-
-### swapQuoteExactOut
-
-Returns a quote for a swap with exact output amount.
-
-**Function**
-```typescript
-swapQuoteExactOut(
-    outAmount: BN,
-    swapForY: boolean,
-    allowedSlippage: BN,
-    binArrays: BinArrayAccount[],
-    maxExtraBinArrays: number = 0
-): SwapQuoteExactOut
-```
-
-**Parameters**
-```typescript
-outAmount: BN                 // Amount of lamports to swap out
-swapForY: boolean             // True to swap X to Y, false for Y to X
-allowedSlippage: BN           // Allowed slippage in basis points
-binArrays: BinArrayAccount[]  // Bin arrays for the swap quote
-maxExtraBinArrays?: number    // Maximum extra bin arrays to return
-```
-
-**Returns**
-
-A SwapQuoteExactOut object containing swap information.
-
-**Example**
-```typescript
-const binArrays = await dlmmPool.getBinArrayForSwap(true, 5);
-const swapQuote = dlmmPool.swapQuoteExactOut(
-  new BN(1000000), // 1 token output
-  true, // swap X for Y
-  new BN(100), // 1% slippage
-  binArrays,
-  2 // max extra bin arrays
-);
-```
-
-**Notes**
-- This is a synchronous method — it computes the quote locally without RPC calls.
-- `allowedSlippage` is in BPS (basis points). To convert from percentage: `SLIPPAGE_PERCENTAGE * 100`.
-- The returned `SwapQuoteExactOut.binArraysPubkey` can be passed directly to the `swapExactOut` method.
-
----
-
-### swapExactOut
-
-Executes a swap operation with exact output amount.
-
-**Function**
-```typescript
-async swapExactOut({
-    inToken,
-    outToken,
-    outAmount,
-    maxInAmount,
-    lbPair,
-    user,
-    binArraysPubkey,
-}: SwapExactOutParams): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-inToken: PublicKey            // The public key of input token mint
-outToken: PublicKey           // The public key of output token mint
-outAmount: BN                 // Exact amount of output token to receive
-maxInAmount: BN               // Maximum amount of input token to spend
-lbPair: PublicKey             // The public key of the liquidity pool
-user: PublicKey               // The public key of the user account
-binArraysPubkey: PublicKey[]  // Array of bin arrays involved in swap
-```
-
-**Returns**
-
-A transaction for executing the exact out swap.
-
-**Example**
-```typescript
-const swapTx = await dlmmPool.swapExactOut({
-  inToken: tokenXMint,
-  outToken: tokenYMint,
-  outAmount: new BN(1000000), 
-  maxInAmount: new BN(1100000), 
-  lbPair: dlmmPool.pubkey,
-  user: userPublicKey,
-  binArraysPubkey: swapQuote.binArraysPubkey
-});
-```
-
-**Notes**
-- Use `swapQuoteExactOut` to compute `maxInAmount` and `binArraysPubkey` before calling this method.
-
----
-
-### swapWithPriceImpact
-
-Executes a swap with price impact constraints.
-
-**Function**
-```typescript
-async swapWithPriceImpact({
-    inToken,
-    outToken,
-    inAmount,
-    lbPair,
-    user,
-    priceImpact,
-    binArraysPubkey,
-}: SwapWithPriceImpactParams): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-inToken: PublicKey            // The public key of input token mint
-outToken: PublicKey           // The public key of output token mint
-inAmount: BN                  // Amount of input token to swap
-lbPair: PublicKey             // The public key of the liquidity pool
-user: PublicKey               // The public key of the user account
-priceImpact: BN               // Accepted price impact in basis points
-binArraysPubkey: PublicKey[]  // Array of bin arrays involved in swap
-```
-
-**Returns**
-
-A transaction for executing the swap with price impact constraints.
-
-**Example**
-```typescript
-const swapTx = await dlmmPool.swapWithPriceImpact({
-  inToken: tokenXMint,
-  outToken: tokenYMint,
-  inAmount: new BN(1000000),
-  lbPair: dlmmPool.pubkey,
-  user: userPublicKey,
-  priceImpact: new BN(50), // 0.5% max price impact
-  binArraysPubkey: binArrays.map(b => b.publicKey)
-});
-```
-
-**Notes**
-- `priceImpact` is in BPS (e.g., 50 = 0.5%). The swap will fail on-chain if the actual price impact exceeds this threshold.
-
----
-
-### swap
-
-Executes a swap operation.
-
-**Function**
-```typescript
-async swap({
-    inToken,
-    outToken,
-    inAmount,
-    minOutAmount,
-    lbPair,
-    user,
-    binArraysPubkey,
-}: SwapParams): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-inToken: PublicKey            // The public key of input token mint
-outToken: PublicKey           // The public key of output token mint
-inAmount: BN                  // Amount of input token to swap
-minOutAmount: BN              // Minimum amount of output token expected
-lbPair: PublicKey             // The public key of the liquidity pool
-user: PublicKey               // The public key of the user account
-binArraysPubkey: PublicKey[]  // Array of bin arrays involved in swap
-```
-
-**Returns**
-
-A transaction for executing the swap.
-
-**Example**
-```typescript
-// Execute swap
-const swapTx = await dlmmPool.swap({
-  inToken: tokenXMint,
-  outToken: tokenYMint,
-  inAmount: new BN(1000000),
-  minOutAmount: new BN(950000), // accounting for slippage
-  lbPair: dlmmPool.pubkey,
-  user: userPublicKey,
-  binArraysPubkey: swapQuote.binArraysPubkey
-});
-```
-
-**Notes**
-- Use `swapQuote` to compute `minOutAmount` and `binArraysPubkey` before calling this method.
-- The swap will fail on-chain if the output is less than `minOutAmount`.
-
----
-
-### claimLMReward
-
-Claims liquidity mining rewards for a specific position.
-
-**Function**
-```typescript
-async claimLMReward({
-    owner,
-    position,
-}: {
-    owner: PublicKey;
-    position: LbPosition;
-}): Promise<Transaction[]>
-```
-
-**Parameters**
-```typescript
-owner: PublicKey              // The public key of the position owner
-position: LbPosition          // The position object containing position data
-```
-
-**Returns**
-
-An array of transactions for claiming LM rewards.
-
-**Example**
-```typescript
-// Claim LM rewards for a position
-const position = await dlmmPool.getPosition(positionPublicKey);
-const claimTxs = await dlmmPool.claimLMReward({
-  owner: userPublicKey,
-  position
-});
-```
-
-**Notes**
-- This function is only available for LB pairs with liquidity mining rewards.
-- Throws an error if the position has no LM rewards to claim.
-
----
-
-### claimAllLMRewards
-
-Claims all liquidity mining rewards for multiple positions.
-
-**Function**
-```typescript
-async claimAllLMRewards({
-    owner,
-    positions,
-}: {
-    owner: PublicKey;
-    positions: LbPosition[];
-}): Promise<Transaction[]>
-```
-
-**Parameters**
-```typescript
-owner: PublicKey              // The public key of the positions owner
-positions: LbPosition[]       // Array of position objects
-```
-
-**Returns**
-
-Array of transactions for claiming all LM rewards.
-
-**Example**
-```typescript
-const positions = await dlmmPool.getPositionsByUserAndLbPair(userPublicKey);
-const claimTxs = await dlmmPool.claimAllLMRewards({
-  owner: userPublicKey,
-  positions: positions.userPositions
-});
-```
-
-**Notes**
-- This function is only available for LB pairs with liquidity mining rewards.
-
----
-
-### claimSwapFee
-
-Claims swap fees earned by a specific position.
-
-**Function**
-```typescript
-async claimSwapFee({
-    owner,
-    position,
-}: {
-    owner: PublicKey;
-    position: LbPosition;
-}): Promise<Transaction[]>
-```
-
-**Parameters**
-```typescript
-owner: PublicKey              // The public key of the position owner
-position: LbPosition          // The position object containing position data
-```
-
-**Returns**
-
-An array of transactions for claiming swap fees.
-
-**Example**
-```typescript
-const position = await dlmmPool.getPosition(positionPublicKey);
-const claimFeeTxs = await dlmmPool.claimSwapFee({
-  owner: userPublicKey,
-  position
-});
-```
-
-**Notes**
-- Throws an error if the position has no swap fees to claim.
-
----
-
-### claimAllSwapFee
-
-Claims swap fees for multiple positions.
-
-**Function**
-```typescript
-async claimAllSwapFee({
-    owner,
-    positions,
-}: {
-    owner: PublicKey;
-    positions: LbPosition[];
-}): Promise<Transaction[]>
-```
-
-**Parameters**
-```typescript
-owner: PublicKey              // The public key of the positions owner
-positions: LbPosition[]       // Array of position objects
-```
-
-**Returns**
-
-Array of transactions for claiming all swap fees.
-
-**Example**
-```typescript
-// Claim all swap fees for user positions
-const positions = await dlmmPool.getPositionsByUserAndLbPair(userPublicKey);
-const claimFeeTxs = await dlmmPool.claimAllSwapFee({
-  owner: userPublicKey,
-  positions: positions.userPositions
-});
-```
-
-**Notes**
-- Batch claims swap fees across all provided positions. Each position generates its own transaction(s).
-
----
-
-### claimAllRewards
-
-Claims all rewards (both LM rewards and swap fees) for multiple positions.
-
-**Function**
-```typescript
-async claimAllRewards({
-    owner,
-    positions,
-}: {
-    owner: PublicKey;
-    positions: LbPosition[];
-}): Promise<Transaction[]>
-```
-
-**Parameters**
-```typescript
-owner: PublicKey              // The public key of the positions owner
-positions: LbPosition[]       // Array of position objects
-```
-
-**Returns**
-
-Array of transactions for claiming all rewards.
-
-**Example**
-```typescript
-const positions = await dlmmPool.getPositionsByUserAndLbPair(userPublicKey);
-const claimAllTxs = await dlmmPool.claimAllRewards({
-  owner: userPublicKey,
-  positions: positions.userPositions
-});
-```
-
-**Notes**
-- Combines both `claimAllLMRewards` and `claimAllSwapFee` into a single call for convenience.
-
----
-
-### claimAllRewardsByPosition
-
-Claims all rewards (both LM rewards and swap fees) for a specific position.
-
-**Function**
-```typescript
-async claimAllRewardsByPosition({
-    owner,
-    position,
-}: {
-    owner: PublicKey;
-    position: LbPosition;
-}): Promise<Transaction[]>
-```
-
-**Parameters**
-```typescript
-owner: PublicKey              // The public key of the position owner
-position: LbPosition          // The position object to claim rewards for
-```
-
-**Returns**
-
-Array of transactions for claiming all rewards for the position.
-
-**Example**
-```typescript
-// Claim all rewards for a specific position
-const position = await dlmmPool.getPosition(positionPublicKey);
-const claimAllTxs = await dlmmPool.claimAllRewardsByPosition({
-  owner: userPublicKey,
-  position
-});
-```
-
-**Notes**
-- Claims both LM rewards and swap fees for a single position in one call.
-
----
-
-### closePosition
-
-Closes a position and recovers the rent.
-
-**Function**
-```typescript
-async closePosition({
-    owner,
-    position,
-}: {
-    owner: PublicKey;
-    position: LbPosition;
-}): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-owner: PublicKey              // The public key of the position owner
-position: LbPosition          // The position object to close
-```
-
-**Returns**
-
-A transaction for closing the position.
-
-**Example**
-```typescript
-// Close a position
-const position = await dlmmPool.getPosition(positionPublicKey);
-const closeTx = await dlmmPool.closePosition({
-  owner: userPublicKey,
-  position
-});
-```
-
-**Notes**
-- Position must have zero liquidity before closing. Use `removeLiquidity` with `shouldClaimAndClose: true` to remove liquidity, claim, and close in one step.
-
----
-
-### closePositionIfEmpty
-
-Closes a position if it is empty, otherwise does nothing.
-
-**Function**
-```typescript
-async closePositionIfEmpty({
-    owner,
-    position,
-}: {
-    owner: PublicKey;
-    position: LbPosition;
-}): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-owner: PublicKey              // The public key of the position owner
-position: LbPosition          // The position object to close
-```
-
-**Returns**
-
-A transaction for closing the position if empty.
-
-**Example**
-```typescript
-// Close position if empty
-const position = await dlmmPool.getPosition(positionPublicKey);
-const closeTx = await dlmmPool.closePositionIfEmpty({
-  owner: userPublicKey,
-  position
-});
-```
-
-**Notes**
-- Useful for cleanup after liquidity has been fully withdrawn from a position.
-
----
-
-### quoteCreatePosition
-
-Quotes the cost of creating a position with a given strategy.
-
-**Function**
-```typescript
-async quoteCreatePosition({ strategy }: TQuoteCreatePositionParams)
-```
-
-**Parameters**
-```typescript
-strategy: StrategyParameters  // Strategy parameters containing min/max bin IDs
-```
-
-**Returns**
-
-An object containing cost breakdown information.
-
-**Example**
-```typescript
-// Quote position creation cost
-const quote = await dlmmPool.quoteCreatePosition({
-  strategy: {
-    minBinId: 8388600,
-    maxBinId: 8388620,
-    strategyType: StrategyType.SpotBalanced,
-  }
-});
-```
-
-**Notes**
-- Useful for estimating costs before committing to a position. Includes rent for position accounts, bin arrays, and optional bitmap extension.
-
----
-
-### createEmptyPosition
-
-Creates an empty position and initializes the corresponding bin arrays if needed.
-
-**Function**
-```typescript
-async createEmptyPosition({
-    positionPubKey,
-    minBinId,
-    maxBinId,
-    user,
-}: {
-    positionPubKey: PublicKey;
-    minBinId: number;
-    maxBinId: number;
-    user: PublicKey;
+Creates one hydrated `DLMM` pool client. It fetches:
+
+- `LbPair`
+- `BinArrayBitmapExtension`, if initialized
+- `SYSVAR_CLOCK`
+- reserve token accounts
+- token X/Y mint accounts
+- reward vaults and reward mint accounts
+- Token-2022 transfer-hook extra account metas for pool and reward mints
+
+```typescript
+const pool = await DLMM.create(connection, poolAddress, {
+  cluster: "mainnet-beta",
 })
 ```
 
-**Parameters**
-```typescript
-positionPubKey: PublicKey     // The public key of the position account
-minBinId: number              // Lower bin ID of the position
-maxBinId: number              // Upper bin ID of the position
-user: PublicKey               // The public key of the user account
-```
-
-**Returns**
-
-A transaction for creating the empty position.
-
-**Example**
-```typescript
-const positionKeypair = Keypair.generate();
-const createTx = await dlmmPool.createEmptyPosition({
-  positionPubKey: positionKeypair.publicKey,
-  minBinId: 8388600,
-  maxBinId: 8388620,
-  user: userPublicKey
-});
-```
-
-**Notes**
-- Creates the position account and initializes any required bin arrays. Add liquidity separately using `addLiquidityByStrategy`.
-
----
-
-### seedLiquidity
-
-Creates multiple grouped instructions. The grouped instructions will be [init ata + send lamport for token provde], [initialize bin array + initialize position instructions] and [deposit instruction]. Each grouped instructions can be executed parallelly.
-
-**Function**
-```typescript
-async seedLiquidity(
-    owner: PublicKey,
-    seedAmount: BN,
-    curvature: number,
-    minPrice: number,
-    maxPrice: number,
-    base: PublicKey,
-    payer: PublicKey,
-    feeOwner: PublicKey,
-    operator: PublicKey,
-    lockReleasePoint: BN,
-    shouldSeedPositionOwner: boolean = false
-): Promise<SeedLiquidityResponse>
-```
-
-**Parameters**
-```typescript
-owner: PublicKey              // The public key of the positions owner
-seedAmount: BN                // Lamport amount to be seeded to the pool
-curvature: number             // Distribution curvature parameter
-minPrice: number              // Start price in UI format
-maxPrice: number              // End price in UI format
-base: PublicKey               // Base key for position derivation
-payer: PublicKey              // Account rental fee payer
-feeOwner: PublicKey           // Fee owner key
-operator: PublicKey           // Operator key
-lockReleasePoint: BN          // Timelock point for position withdrawal
-shouldSeedPositionOwner?: boolean // Whether to send token to position owner
-```
-
-**Returns**
-
-A SeedLiquidityResponse containing grouped instructions and cost breakdown.
-
-**Example**
-```typescript
-const curvature = 0.6;
-const minPrice = 0.000001;
-const maxPrice = 0.00003;
-
-const currentSlot = await connection.getSlot();
-const lockDuration = new BN(86400 * 31);
-const lockReleaseSlot = lockDuration.add(new BN(currentSlot));
-
-const seedResponse = await dlmmPool.seedLiquidity(
-  ownerPublicKey,
-  new BN(200_000_000_000), 
-  curvature, 
-  minPrice, 
-  maxPrice, 
-  baseKeypair.publicKey,
-  payerPublicKey,
-  feeOwnerPublicKey,
-  operatorPublicKey,
-  lockReleaseSlot,
-  true 
-);
-```
-
-**Notes**
-- `owner`: The public key of the positions owner.
-- `seedAmount`: Lamport amount to be seeded to the pool.
-- `minPrice`: Start price in UI format
-- `maxPrice`: End price in UI format
-- `base`: Base key
-- `txPayer`: Account rental fee payer
-- `feeOwner`: Fee owner key. Default to position owner
-- `operator`: Operator key
-- `lockReleasePoint`: Timelock. Point (slot/timestamp) the position can withdraw the liquidity,
-- `shouldSeedPositionOwner` (optional): Whether to send 1 lamport amount of token X to the position owner to prove ownership.
-
----
-
-### seedLiquiditySingleBin
-
-Seeds liquidity into a single bin at a specific price.
-
-**Function**
-```typescript
-async seedLiquiditySingleBin(
-    payer: PublicKey,
-    base: PublicKey,
-    seedAmount: BN,
-    price: number,
-    roundingUp: boolean,
-    positionOwner: PublicKey,
-    feeOwner: PublicKey,
-    operator: PublicKey,
-    lockReleasePoint: BN,
-    shouldSeedPositionOwner: boolean = false
-): Promise<SeedLiquiditySingleBinResponse>
-```
-
-**Parameters**
-```typescript
-payer: PublicKey              // The public key of the tx payer
-base: PublicKey               // Base key for position derivation
-seedAmount: BN                // Token X lamport amount to be seeded
-price: number                 // TokenX/TokenY Price in UI format
-roundingUp: boolean           // Whether to round up the price
-positionOwner: PublicKey      // The owner of the position
-feeOwner: PublicKey           // Position fee owner
-operator: PublicKey           // Operator of the position
-lockReleasePoint: BN          // The lock release point of the position
-shouldSeedPositionOwner?: boolean // Whether to send token to position owner
-```
-
-**Returns**
-
-A SeedLiquiditySingleBinResponse containing instructions and cost breakdown.
-
-**Example**
-```typescript
-const initialPrice = 0.000001;
-
-const seedResponse = await dlmmPool.seedLiquiditySingleBin(
-  payerPublicKey,
-  baseKeypair.publicKey,
-  new BN(1000000), 
-  initialPrice, 
-  true,
-  ownerPublicKey,
-  feeOwnerPublicKey,
-  operatorPublicKey,
-  new BN(Date.now() / 1000 + 86400) 
-);
-```
-
-**Notes**
-- `payer`: The public key of the tx payer.
-- `base`: Base key
-- `seedAmount`: Token X lamport amount to be seeded to the pool.
-- `price`: TokenX/TokenY Price in UI format
-- `roundingUp`: Whether to round up the price
-- `positionOwner`: The owner of the position
-- `feeOwner`: Position fee owner
-- `operator`: Operator of the position. Operator able to manage the position on behalf of the position owner. However, liquidity withdrawal issue by the operator can only send to the position owner.
-- `lockReleasePoint`: The lock release point of the position.
-- `shouldSeedPositionOwner` (optional): Whether to send 1 lamport amount of token X to the position owner to prove ownership.
-
----
-
-### initializeBinArrays
-
-Initializes bin arrays for the given bin array indexes if they weren't initialized.
-
-**Function**
-```typescript
-async initializeBinArrays(binArrayIndexes: BN[], funder: PublicKey)
-```
-
-**Parameters**
-```typescript
-binArrayIndexes: BN[]         // Array of bin array indexes to initialize
-funder: PublicKey             // The public key of the funder
-```
-
-**Returns**
-
-Array of transaction instructions to initialize the bin arrays.
-
-**Example**
-```typescript
-// Initialize specific bin arrays
-const binArrayIndexes = [new BN(-1), new BN(0), new BN(1)];
-const instructions = await dlmmPool.initializeBinArrays(
-  binArrayIndexes,
-  funderPublicKey
-);
-```
-
-**Notes**
-- Only initializes bin arrays that don't already exist on-chain. Use `binIdToBinArrayIndex` to compute the required indexes.
-
----
-
-### initializePositionByOperator
-
-Initializes a position with an operator that can manage it on behalf of the owner.
-
-**Function**
-```typescript
-async initializePositionByOperator({
-    lowerBinId,
-    positionWidth,
-    owner,
-    feeOwner,
-    base,
-    operator,
-    payer,
-    lockReleasePoint,
-}: {
-    lowerBinId: BN;
-    positionWidth: BN;
-    owner: PublicKey;
-    feeOwner: PublicKey;
-    operator: PublicKey;
-    payer: PublicKey;
-    base: PublicKey;
-    lockReleasePoint: BN;
-}): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-lowerBinId: BN                // Lower bin ID of the position
-positionWidth: BN             // Width of the position
-owner: PublicKey              // Owner of the position
-feeOwner: PublicKey           // Owner of the fees earned by the position
-operator: PublicKey           // Operator of the position
-payer: PublicKey              // Payer for the position account rental
-base: PublicKey               // Base key for position derivation
-lockReleasePoint: BN          // The lock release point of the position
-```
-
-**Returns**
-
-A transaction for initializing the position by operator.
-
-**Example**
-```typescript
-const initTx = await dlmmPool.initializePositionByOperator({
-  lowerBinId: new BN(5660),
-  positionWidth: MAX_BIN_PER_POSITION,
-  owner: ownerPublicKey,
-  feeOwner: feeOwnerPublicKey,
-  operator: operatorPublicKey,
-  payer: payerPublicKey,
-  base: baseKeypair.publicKey,
-  lockReleasePoint: new BN(Date.now() / 1000 + 86400)
-});
-```
-
-**Notes**
-- `lowerBinId`: Lower bin ID of the position. This represent the lowest price of the position
-- `positionWidth`: Width of the position. This will decide the upper bin id of the position, which represents the highest price of the position. UpperBinId = lowerBinId + positionWidth
-- `owner`: Owner of the position.
-- `operator`: Operator of the position. Operator able to manage the position on behalf of the position owner. However, liquidity withdrawal issue by the operator can only send to the position owner.
-- `base`: Base key
-- `feeOwner`: Owner of the fees earned by the position.
-- `payer`: Payer for the position account rental.
-- `lockReleasePoint`: The lock release point of the position.
-
----
-
-### setPairStatusPermissionless
-
-Sets the status of a permissionless LB pair to either enabled or disabled.
-
-**Function**
-```typescript
-async setPairStatusPermissionless(
-    enable: boolean,
-    creator: PublicKey
-)
-```
-
-**Parameters**
-```typescript
-enable: boolean               // If true, enables the pair; if false, disables it
-creator: PublicKey            // The public key of the pool creator
-```
-
-**Returns**
-
-A transaction for setting the pair status.
-
-**Example**
-```typescript
-const statusTx = await dlmmPool.setPairStatusPermissionless(
-  true, 
-  creatorPublicKey
-);
-```
-
-**Notes**
-- Requires `creator_pool_on_off_control` to be true and type `CustomizablePermissionless`
-- Pool creator can enable/disable anytime before activation
-- After activation, creator can only enable the pair
-
----
-
-### setActivationPoint
-
-Sets the activation point for the LB pair.
-
-**Function**
-```typescript
-async setActivationPoint(activationPoint: BN)
-```
-
-**Parameters**
-```typescript
-activationPoint: BN           // The activation point (timestamp/slot)
-```
-
-**Returns**
-
-A transaction for setting the activation point.
-
-**Example**
-```typescript
-const activationTx = await dlmmPool.setActivationPoint(
-  new BN(Date.now() / 1000 + 3600)
-);
-```
-
-**Notes**
-- The activation point determines when the pool becomes active. Interpretation depends on `ActivationType` (slot number or Unix timestamp).
-
----
-
-### setPairStatus
-
-Sets the pair status (enabled/disabled) for admin-controlled pairs.
-
-**Function**
-```typescript
-async setPairStatus(enabled: boolean): Promise<Transaction>
-```
-
-**Parameters**
-```typescript
-enabled: boolean              // Whether to enable or disable the pair
-```
-
-**Returns**
-
-A transaction for setting the pair status.
-
-**Example**
-```typescript
-const statusTx = await dlmmPool.setPairStatus(true); // enable
-```
-
-**Notes**
-- Only available for admin-controlled (permissioned) pairs. For permissionless pairs, use `setPairStatusPermissionless`.
-
----
-
-## State Functions
-
-### getLbPairs
-
-Retrieves all LB pair accounts for the DLMM program.
-
-**Function**
-```typescript
-static async getLbPairs(
-    connection: Connection,
-    opt?: Opt
-): Promise<LbPairAccount[]>
-```
-
-**Parameters**
-```typescript
-connection: Connection        // Solana connection instance
-opt?: Opt                     // Optional cluster and program ID
-```
-
-**Returns**
-
-An array of LB pair account objects.
-
-**Example**
-```typescript
-const allPairs = await DLMM.getLbPairs(connection);
-```
-
-**Notes**
-- Returns all pairs on-chain.
-
----
-
-### getCustomizablePermissionlessLbPairIfExists
-
-Retrieves the public key of a customizable permissionless LB pair if it exists.
-
-**Function**
-```typescript
-static async getCustomizablePermissionlessLbPairIfExists(
-    connection: Connection,
-    tokenX: PublicKey,
-    tokenY: PublicKey,
-    opt?: Opt
-): Promise<PublicKey | null>
-```
-
-**Parameters**
-```typescript
-connection: Connection        // Solana connection instance
-tokenX: PublicKey             // Token X mint address
-tokenY: PublicKey             // Token Y mint address
-opt?: Opt                     // Optional parameters
-```
-
-**Returns**
-
-Public key of the pair if it exists, null otherwise.
-
-**Example**
-```typescript
-const WEN = new PublicKey('WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk')
-const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
-
-const pairPubkey = await DLMM.getCustomizablePermissionlessLbPairIfExists(
-  connection,
-  WEN,
-  USDC,
-  {
-    cluster: "localhost",
-  }
-);
-```
-
----
-
-### getPosition
-
-Retrieves position information for a given position public key.
-
-**Function**
-```typescript
-async getPosition(positionPubKey: PublicKey): Promise<LbPosition>
-```
-
-**Parameters**
-```typescript
-positionPubKey: PublicKey     // The public key of the position account
-```
-
-**Returns**
-
-An LbPosition object containing position data and metadata.
-
-**Example**
-```typescript
-const position = await dlmmPool.getPosition(positionPublicKey);
-```
-
-**Notes**
-- Returns position data including bin range, liquidity distribution, and fee/reward accruals.
-
----
-
-### getAllPresetParameters
-
-Retrieves all preset parameter accounts for the DLMM program.
-
-**Function**
-```typescript
-static async getAllPresetParameters(
-    connection: Connection, 
-    opt?: Opt
-): Promise<{
-    presetParameter: PresetParameterAccount[];
-    presetParameter2: PresetParameter2Account[];
-}>
-```
-
-**Parameters**
-```typescript
-connection: Connection         // Solana connection instance
-opt?: Opt                     // Optional cluster and program ID
-```
-
-**Returns**
-
-An object containing preset parameter accounts.
-
-**Example**
-```typescript
-const presetParams = await DLMM.getAllPresetParameters(connection);
-```
-
-**Notes**
-- Returns both `presetParameter` (v1) and `presetParameter2` (v2) accounts. Use `presetParameter2` for new pool creation with `createLbPair2`.
-
----
-
-### getAllLbPairPositionsByUser
-
-Retrieves all LB pair positions for a given user.
-
-**Function**
-```typescript
-static async getAllLbPairPositionsByUser(
-    connection: Connection,
-    userPubKey: PublicKey,
-    opt?: Opt,
-    getPositionsOpt?: GetPositionsOpt
-): Promise<Map<string, PositionInfo>>
-```
-
-**Parameters**
-```typescript
-connection: Connection         // Solana connection instance
-userPubKey: PublicKey         // The user's wallet public key
-opt?: Opt                     // Optional cluster and program ID
-getPositionsOpt?: GetPositionsOpt // Optional chunked fetch settings (chunkSize, onChunkFetched, isParallelExecution)
-```
-
-**Returns**
-
-A Map containing LB pair addresses and their position information.
-
-**Example**
-```typescript
-// Get all positions for a user
-const userPositions = await DLMM.getAllLbPairPositionsByUser(
-  connection,
-  userPublicKey
-);
-
-userPositions.forEach((positionInfo, lbPairAddress) => {
-  console.log(`Positions in pool ${lbPairAddress}:`, positionInfo);
-});
-```
-
-**Notes**
-- Use `getPositionsOpt` for large accounts to control chunk size and enable parallel execution.
-
----
-
-### refetchStates
-
-Refetches and updates the current state of the DLMM instance.
-
-**Function**
-```typescript
-async refetchStates(): Promise<void>
-```
-
-**Parameters**
-
-None.
+### `DLMM.createMultiple`
 
-**Returns**
-
-Promise that resolves when states are updated.
-
-**Example**
-```typescript
-await dlmmPool.refetchStates();
-console.log('Updated active bin:', dlmmPool.lbPair.activeId);
-```
-
-**Notes**
-- Call this to refresh the DLMM instance's cached state (active bin, reserves, etc.) before operations that depend on current on-chain data.
-
----
-
-### getBinArrays
-
-Returns all bin arrays for the current LB pair.
-
-**Function**
-```typescript
-async getBinArrays(): Promise<BinArrayAccount[]>
-```
-
-**Parameters**
-
-None.
-
-**Returns**
-
-Array of bin array accounts.
-
-**Example**
-```typescript
-const binArrays = await dlmmPool.getBinArrays();
-```
-
-**Notes**
-- Fetches all on-chain bin arrays for this pool. For swap-specific arrays, use `getBinArrayForSwap` instead.
-
----
-
-### getBinArrayForSwap
-
-Retrieves bin arrays needed for a swap operation.
-
-**Function**
-```typescript
-async getBinArrayForSwap(
-    swapForY: boolean,
-    count = 4
-): Promise<BinArrayAccount[]>
-```
-
-**Parameters**
-```typescript
-swapForY: boolean             // Direction of swap (true for X to Y)
-count?: number                // Number of bin arrays to retrieve (default: 4)
-```
-
-**Returns**
-
-Array of bin array accounts for the swap.
-
-**Example**
-```typescript
-const binArrays = await dlmmPool.getBinArrayForSwap(true, 5);
-```
-
-**Notes**
-- Retrieves bin arrays around the active bin in the swap direction. Pass the result to `swapQuote` or `swapQuoteExactOut`.
-
----
-
-### getFeeInfo
-
-Calculates and returns fee information for the pool.
-
-**Function**
-```typescript
-getFeeInfo(): FeeInfo
-```
-
-**Parameters**
-
-None.
-
-**Returns**
-
-FeeInfo object containing fee percentages.
-
-**Example**
-```typescript
-const feeInfo = dlmmPool.getFeeInfo();
-console.log('Base fee rate:', feeInfo.baseFeeRatePercentage.toString());
-console.log('Max fee rate:', feeInfo.maxFeeRatePercentage.toString());
-console.log('Protocol fee:', feeInfo.protocolFeePercentage.toString());
-```
-
-**Notes**
-- Returns fee rates as `Decimal` percentages. For example, a `baseFeeRatePercentage` of `0.25` means 0.25%.
-
----
-
-### getDynamicFee
-
-Calculates the current dynamic fee for the pool.
-
-**Function**
-```typescript
-getDynamicFee(): Decimal
-```
-
-**Parameters**
-
-None.
-
-**Returns**
-
-Current dynamic fee as a Decimal percentage.
-
-**Example**
-```typescript
-const dynamicFee = dlmmPool.getDynamicFee();
-console.log('Current dynamic fee:', dynamicFee.toString(), '%');
-```
-
-**Notes**
-- The dynamic fee includes both the base fee and the variable fee (which changes based on volatility).
-
----
-
-### getEmissionRate
-
-Returns the emission rates for LM rewards.
-
-**Function**
-```typescript
-getEmissionRate(): EmissionRate
-```
-
-**Parameters**
-
-None.
-
-**Returns**
-
-An EmissionRate object containing reward emission rates.
-
-**Example**
-```typescript
-const emissionRate = dlmmPool.getEmissionRate();
-console.log('Reward one rate:', emissionRate.rewardOne?.toString());
-console.log('Reward two rate:', emissionRate.rewardTwo?.toString());
-```
-
-**Notes**
-- Returns `undefined` for a reward slot if no reward is configured for that slot.
-
----
-
-### getBinsAroundActiveBin
-
-Retrieves bins around the active bin within specified ranges.
-
-**Function**
-```typescript
-async getBinsAroundActiveBin(
-    numberOfBinsToTheLeft: number,
-    numberOfBinsToTheRight: number
-): Promise<{ activeBin: number; bins: BinLiquidity[] }>
-```
-
-**Parameters**
-```typescript
-numberOfBinsToTheLeft: number  // Number of bins to retrieve on the left
-numberOfBinsToTheRight: number // Number of bins to retrieve on the right
-```
-
-**Returns**
-
-Object containing the active bin ID and array of bin liquidity data.
-
-**Example**
-```typescript
-const { activeBin, bins } = await dlmmPool.getBinsAroundActiveBin(10, 10);
-console.log('Active bin:', activeBin);
-console.log('Total bins:', bins.length);
-```
-
-**Notes**
-- Useful for displaying liquidity distribution around the current price.
-
----
-
-### getBinsBetweenMinAndMaxPrice
-
-Retrieves bins within a specified price range.
-
-**Function**
-```typescript
-async getBinsBetweenMinAndMaxPrice(
-    minPrice: number,
-    maxPrice: number
-): Promise<{ activeBin: number; bins: BinLiquidity[] }>
-```
-
-**Parameters**
-```typescript
-minPrice: number              // Minimum price for filtering bins
-maxPrice: number              // Maximum price for filtering bins
-```
-
-**Returns**
-
-Object containing the active bin ID and filtered bin liquidity data.
-
-**Example**
-```typescript
-const result = await dlmmPool.getBinsBetweenMinAndMaxPrice(1.0, 1.2);
-console.log('Bins in price range:', result.bins.length);
-```
-
-**Notes**
-- Prices are in human-readable format (e.g., 1.0 for 1 token Y per token X).
-
----
-
-### getBinsBetweenLowerAndUpperBound
-
-Retrieves bins between specified bin IDs.
-
-**Function**
-```typescript
-async getBinsBetweenLowerAndUpperBound(
-    lowerBinId: number,
-    upperBinId: number,
-    lowerBinArray?: BinArray,
-    upperBinArray?: BinArray
-): Promise<{ activeBin: number; bins: BinLiquidity[] }>
-```
-
-**Parameters**
-```typescript
-lowerBinId: number            // Lower bound bin ID
-upperBinId: number            // Upper bound bin ID
-lowerBinArray?: BinArray      // Optional cached lower bin array
-upperBinArray?: BinArray      // Optional cached upper bin array
-```
-
-**Returns**
-
-Object containing the active bin ID and bin liquidity data in the range.
-
-**Example**
-```typescript
-const result = await dlmmPool.getBinsBetweenLowerAndUpperBound(
-  8388600, 8388620
-);
-```
-
-**Notes**
-- Optionally pass cached `BinArray` objects to avoid redundant RPC calls.
-
----
-
-### getActiveBin
-
-Retrieves information about the currently active bin.
-
-**Function**
-```typescript
-async getActiveBin(): Promise<BinLiquidity>
-```
-
-**Parameters**
-
-None.
-
-**Returns**
-
-BinLiquidity object for the active bin.
-
-**Example**
-```typescript
-const activeBin = await dlmmPool.getActiveBin();
-console.log('Active bin ID:', activeBin.binId);
-console.log('Active bin price:', activeBin.pricePerToken);
-```
-
-**Notes**
-- The function retrieves the active bin ID and its corresponding price.
-
----
-
-### getPositionsByUserAndLbPair
-
-Retrieves positions by user for the current LB pair.
-
-**Function**
-```typescript
-async getPositionsByUserAndLbPair(
-    userPubKey?: PublicKey,
-    getPositionsOpt?: GetPositionsOpt
-): Promise<{
-    activeBin: BinLiquidity;
-    userPositions: Array<LbPosition>;
-}>
-```
-
-**Parameters**
-```typescript
-userPubKey?: PublicKey        // Optional user public key
-getPositionsOpt?: GetPositionsOpt // Optional chunked fetch settings (chunkSize, onChunkFetched, isParallelExecution)
-```
-
-**Returns**
-
-Object containing active bin and user positions.
-
-**Example**
-```typescript
-// Get user positions for this pool
-const result = await dlmmPool.getPositionsByUserAndLbPair(userPublicKey);
-console.log('User has', result.userPositions.length, 'positions');
-console.log('Active bin:', result.activeBin.binId);
-```
-
-**Notes**
-- Returns the active bin state alongside positions for convenience.
-- Use `getPositionsOpt` for wallets with many positions to control chunk size and enable parallel execution.
-
----
-
-### getPairPubkeyIfExists
-
-Retrieves the public key of an LB pair if it exists.
-
-**Function**
-```typescript
-static async getPairPubkeyIfExists(
-    connection: Connection,
-    tokenX: PublicKey,
-    tokenY: PublicKey,
-    binStep: BN,
-    baseFactor: BN,
-    baseFeePowerFactor: BN,
-    opt?: Opt
-): Promise<PublicKey | null>
-```
-
-**Parameters**
-```typescript
-connection: Connection         // Solana connection instance
-tokenX: PublicKey             // Token X mint address
-tokenY: PublicKey             // Token Y mint address
-binStep: BN                   // Bin step of the pair
-baseFactor: BN                // Base factor of the pair
-baseFeePowerFactor: BN        // Base fee power factor
-opt?: Opt                     // Optional parameters
-```
-
-**Returns**
-
-Public key of the pair if it exists, null otherwise.
-
-**Example**
-```typescript
-const dlmm = await DLMM.create(connection, pairKey, opt);
-const pairPubkey = await DLMM.getPairPubkeyIfExists(
-  connection,
-  dlmm.lbPair.tokenXMint,
-  dlmm.lbPair.tokenYMint,
-  new BN(dlmm.lbPair.binStep),
-  new BN(dlmm.lbPair.parameters.baseFactor),
-  new BN(dlmm.lbPair.parameters.baseFeePowerFactor),
-);
-```
-
-**Notes**
-- Requires `getProgramAccounts` RPC support. Not available on all RPC providers.
-
----
-
-### getMaxPriceInBinArrays
-
-Gets the maximum price from the provided bin arrays.
-
-**Function**
-```typescript
-async getMaxPriceInBinArrays(
-    binArrayAccounts: BinArrayAccount[]
-): Promise<string>
-```
-
-**Parameters**
-```typescript
-binArrayAccounts: BinArrayAccount[] // Array of bin array accounts
-```
-
-**Returns**
-
-Maximum price as a string.
-
-**Example**
-```typescript
-const binArrays = await dlmmPool.getBinArrays();
-const maxPrice = await dlmmPool.getMaxPriceInBinArrays(binArrays);
-console.log('Maximum price:', maxPrice);
-```
-**Notes**
-- Returns the human-readable price of the highest bin that contains token X liquidity.
-
----
-
-### getLbPairLockInfo
-
-Retrieves all pair positions that have locked liquidity.
-
-**Function**
-```typescript
-async getLbPairLockInfo(
-    lockDurationOpt?: number,
-    getPositionsOpt?: GetPositionsOpt
-): Promise<PairLockInfo>
-```
-
-**Parameters**
-```typescript
-lockDurationOpt?: number      // Minimum position lock duration to filter by
-getPositionsOpt?: GetPositionsOpt // Optional chunked fetch settings (chunkSize, onChunkFetched, isParallelExecution)
-```
-
-**Returns**
-
-A PairLockInfo object containing information about locked positions.
-
-**Example**
 ```typescript
-const lockInfo = await dlmmPool.getLbPairLockInfo(86400); // 1 day minimum
-console.log('Locked positions:', lockInfo.positions.length);
-
-lockInfo.positions.forEach(pos => {
-  console.log('Position:', pos.positionAddress.toString());
-  console.log('Lock release:', pos.lockReleasePoint);
-});
+static createMultiple(
+  connection: Connection,
+  dlmmList: PublicKey[],
+  opt?: Opt,
+): Promise<DLMM[]>
 ```
-
-**Notes**
-- Filters positions by minimum lock duration when `lockDurationOpt` is provided.
-- Use `getPositionsOpt` for pairs with many positions to control chunk size and enable parallel execution.
-
----
 
-### canSyncWithMarketPrice
+Batch version of `create`. Prefer this for dashboards, portfolio pages, routing, or any flow loading multiple pools. It batches pool, reserve, mint, reward, bitmap, and transfer-hook reads.
 
-Checks if the pool can sync with a given market price.
+## Static Discovery Methods
 
-**Function**
-```typescript
-canSyncWithMarketPrice(marketPrice: number, activeBinId: number)
-```
-
-**Parameters**
-```typescript
-marketPrice: number           // Market price to check sync compatibility
-activeBinId: number           // Current active bin ID
-```
+| Method | Signature | Description |
+| --- | --- | --- |
+| `getLbPairs` | `(connection, opt?) =&gt; Promise&lt;LbPairAccount[]&gt;` | Fetches all `LbPair` accounts from the configured program. Requires RPC support for `getProgramAccounts`. |
+| `getPairPubkeyIfExists` | `(connection, tokenX, tokenY, binStep, baseFactor, baseFeePowerFactor, concreteFunctionType?, collectFeeMode?, opt?) =&gt; Promise&lt;PublicKey | null&gt;` | Checks v2 PDA, legacy PDA, and `PresetParameter2`-derived candidate pool addresses. |
+| `getCustomizablePermissionlessLbPairIfExists` | `(connection, tokenX, tokenY, opt?) =&gt; Promise&lt;PublicKey | null&gt;` | Checks the customizable permissionless pool PDA for a token pair. |
+| `getAllPresetParameters` | `(connection, opt?) =&gt; Promise&lt;{ presetParameter; presetParameter2 }&gt;` | Fetches legacy and v2 preset parameter accounts. |
+| `getAllLbPairPositionsByUser` | `(connection, userPubKey, opt?, getPositionsOpt?) =&gt; Promise&lt;Map&lt;string, PositionInfo&gt;&gt;` | Fetches every `PositionV2` owned by a user, groups by pool, loads bin arrays and pool accounts, and returns processed position data. |
+| `getPricePerLamport` | `(baseTokenDecimal, quoteTokenDecimal, price) =&gt; string` | Converts UI price to price-per-lamport. |
+| `getBinIdFromPrice` | `(price, binStep, min) =&gt; number` | Converts price to bin ID. `min` controls rounding side. |
+| `calculateFeeInfo` | `(baseFactor, binStep, protocolShare, baseFeePowerFactor?) =&gt; FeeInfo` | Computes base/max/protocol fee percentages from fee parameters. |
+| `updateVolatilityAccumulator` | `(vParameter, sParameter, activeId) =&gt; void` | In-memory helper used by quote simulation. |
+| `updateReference` | `(activeId, vParameter, sParameter, currentTimestamp) =&gt; void` | In-memory helper used by quote simulation. |
 
-**Returns**
+`getPositionsOpt` supports chunked position loading:
 
-Boolean indicating if sync is possible.
-
-**Example**
 ```typescript
-// Check if can sync with market price
-const activeBin = await dlmmPool.getActiveBin();
-const canSync = dlmmPool.canSyncWithMarketPrice(1.05, activeBin.binId);
-
-if (canSync) {
-  console.log('Can sync with market price');
-} else {
-  console.log('Cannot sync - liquidity exists between current and market price');
+type GetPositionsOpt = {
+  chunkSize?: number
+  onChunkFetched?: ChunkCallback
+  isParallelExecution?: boolean
 }
 ```
 
-**Notes**
-- Returns `false` if there is liquidity between the current active bin and the target market price bin, as syncing would skip over that liquidity.
+## Pool Creation Methods
 
----
+Creation helpers return unsigned `Transaction` objects. The caller still signs and sends.
 
-### isSwapDisabled
+| Method | Underlying instruction | Token support | Notes |
+| --- | --- | --- | --- |
+| `createLbPair` | `initialize_lb_pair` | SPL Token only | Legacy permissionless creation. Requires `binStep`, `baseFactor`, and legacy `presetParameter`. |
+| `createLbPair2` | `initialize_lb_pair2` | SPL Token and Token-2022 | Current permissionless path. Reads `PresetParameter2`, token badges, token program IDs, and derives pool PDA from preset parameter. |
+| `createCustomizablePermissionlessLbPair` | `initialize_customizable_permissionless_lb_pair` | SPL Token only | Creator-configurable pool. Throws if computed base fee power factor overflows legacy path. |
+| `createCustomizablePermissionlessLbPair2` | `initialize_customizable_permissionless_lb_pair2` | SPL Token and Token-2022 | Current customizable path. Supports `ConcreteFunctionType` and `CollectFeeMode`. |
 
-Checks if swapping is disabled for a given swap initiator.
+### `createLbPair2`
 
-**Function**
 ```typescript
-isSwapDisabled(swapInitiator: PublicKey)
-```
-
-**Parameters**
-```typescript
-swapInitiator: PublicKey      // Address of the swap initiator
-```
-
-**Returns**
-
-Boolean indicating if swap is disabled for the initiator.
-
-**Example**
-```typescript
-const isDisabled = dlmmPool.isSwapDisabled(userPublicKey);
-
-if (isDisabled) {
-  console.log('Swap is disabled for this user');
-} else {
-  console.log('Swap is enabled');
-}
-```
-
-**Notes**
-- Returns true if pair status is disabled
-- For permissioned pairs, checks activation time and pre-activation settings
-- Considers special pre-activation swap addresses
-
----
-
-## Helper Functions
-
-### syncWithMarketPrice
-
-Synchronizes the pool with a given market price.
-
-**Function**
-```typescript
-async syncWithMarketPrice(
-    marketPrice: number, 
-    owner: PublicKey
+static createLbPair2(
+  connection: Connection,
+  funder: PublicKey,
+  tokenX: PublicKey,
+  tokenY: PublicKey,
+  presetParameter: PublicKey,
+  activeId: BN,
+  opt?: Opt,
 ): Promise<Transaction>
 ```
 
-**Parameters**
-```typescript
-marketPrice: number           // Market price to sync with
-owner: PublicKey              // Owner of the transaction
-```
-
-**Returns**
-
-Transaction for syncing with market price.
-
-**Example**
-```typescript
-const syncTx = await dlmmPool.syncWithMarketPrice(1.05, userPublicKey);
-```
-
-**Notes**
-- Check `canSyncWithMarketPrice` first to verify the sync is possible.
-
----
-
-### toPricePerLamport
-
-Converts a real price of bin to a lamport value
-
-**Function**
-```typescript
-toPricePerLamport(price: number): string
-```
-
-**Parameters**
-```typescript
-price: number                 // Real price to convert
-```
-
-**Returns**
-
-Price per lamport as a string.
-
-**Example**
-```typescript
-const pricePerLamport = dlmmPool.toPricePerLamport(1.05);
-console.log('Price per lamport:', pricePerLamport);
-```
-
-**Notes**
-- Inverse of `fromPricePerLamport`. Use this when constructing on-chain operations from UI prices.
-
----
-
-### fromPricePerLamport
-
-Converts a price per lamport value to a real price of bin
-
-**Function**
-```typescript
-fromPricePerLamport(pricePerLamport: number): string
-```
-
-**Parameters**
-```typescript
-pricePerLamport: number       // Price per lamport to convert
-```
-
-**Returns**
-
-Real price as a string.
-
-**Example**
-```typescript
-const realPrice = dlmmPool.fromPricePerLamport(1050000);
-console.log('Real price:', realPrice);
-```
-
-**Notes**
-- Inverse of `toPricePerLamport`. Use this when displaying on-chain prices to users.
-
----
-
-## Auto-fill & Strategy Helpers
-
-These standalone utility functions compute optimal token amounts or per-bin distributions for a given strategy type.
-
-### autoFillXByStrategy
-
-Given a known amount of token Y and the current active bin state, calculates the balanced token X amount required for a two-sided deposit using the specified strategy.
-
-**Function**
-```typescript
-autoFillXByStrategy(
-    activeId: number,
-    binStep: number,
-    amountY: BN,
-    amountXInActiveBin: BN,
-    amountYInActiveBin: BN,
-    minBinId: number,
-    maxBinId: number,
-    strategyType: StrategyType
-): BN
-```
-
-**Parameters**
-```typescript
-activeId: number               // Current active bin ID
-binStep: number                // Bin step of the pool
-amountY: BN                    // Amount of token Y to deposit
-amountXInActiveBin: BN         // Amount of token X currently in the active bin
-amountYInActiveBin: BN         // Amount of token Y currently in the active bin
-minBinId: number               // Lower bound of the target bin range
-maxBinId: number               // Upper bound of the target bin range
-strategyType: StrategyType     // Spot, Curve, or BidAsk
-```
-
-**Returns**
-
-The balanced token X amount (`BN`) to pair with the given token Y amount.
-
-**Example**
-```typescript
-import { autoFillXByStrategy } from '@meteora-ag/dlmm';
-
-const amountX = autoFillXByStrategy(
-  dlmmPool.lbPair.activeId,
-  dlmmPool.lbPair.binStep,
-  amountY,
-  activeBinXAmount,
-  activeBinYAmount,
-  minBinId,
-  maxBinId,
-  StrategyType.Spot
-);
-```
-
-**Notes**
-- Only applicable for balanced two-sided deposits.
-- Uses the active bin's token ratio to determine the matching X amount.
-
----
-
-### autoFillYByStrategy
-
-Given a known amount of token X and the current active bin state, calculates the balanced token Y amount required for a two-sided deposit using the specified strategy.
-
-**Function**
-```typescript
-autoFillYByStrategy(
-    activeId: number,
-    binStep: number,
-    amountX: BN,
-    amountXInActiveBin: BN,
-    amountYInActiveBin: BN,
-    minBinId: number,
-    maxBinId: number,
-    strategyType: StrategyType
-): BN
-```
-
-**Parameters**
-```typescript
-activeId: number               // Current active bin ID
-binStep: number                // Bin step of the pool
-amountX: BN                    // Amount of token X to deposit
-amountXInActiveBin: BN         // Amount of token X currently in the active bin
-amountYInActiveBin: BN         // Amount of token Y currently in the active bin
-minBinId: number               // Lower bound of the target bin range
-maxBinId: number               // Upper bound of the target bin range
-strategyType: StrategyType     // Spot, Curve, or BidAsk
-```
-
-**Returns**
-
-The balanced token Y amount (`BN`) to pair with the given token X amount.
-
-**Example**
-```typescript
-import { autoFillYByStrategy } from '@meteora-ag/dlmm';
-
-const amountY = autoFillYByStrategy(
-  dlmmPool.lbPair.activeId,
-  dlmmPool.lbPair.binStep,
-  amountX,
-  activeBinXAmount,
-  activeBinYAmount,
-  minBinId,
-  maxBinId,
-  StrategyType.Spot
-);
-```
-
-**Notes**
-- Mirrors `autoFillXByStrategy` but returns the required Y amount when X is the known quantity.
-
----
-
-### toAmountsBothSideByStrategy
-
-Distributes amounts of token X and token Y across a bin range according to a strategy type. Returns per-bin amounts for both tokens.
-
-**Function**
-```typescript
-toAmountsBothSideByStrategy(
-    activeId: number,
-    binStep: number,
-    minBinId: number,
-    maxBinId: number,
-    amountX: BN,
-    amountY: BN,
-    amountXInActiveBin: BN,
-    amountYInActiveBin: BN,
-    strategyType: StrategyType,
-    mintX: Mint,
-    mintY: Mint,
-    clock: Clock
-): { binId: number; amountX: BN; amountY: BN }[]
-```
-
-**Parameters**
-```typescript
-activeId: number               // Current active bin ID
-binStep: number                // Bin step of the pool
-minBinId: number               // Lower bound of the target bin range
-maxBinId: number               // Upper bound of the target bin range
-amountX: BN                    // Total token X to distribute
-amountY: BN                    // Total token Y to distribute
-amountXInActiveBin: BN         // Amount of token X currently in the active bin
-amountYInActiveBin: BN         // Amount of token Y currently in the active bin
-strategyType: StrategyType     // Spot, Curve, or BidAsk
-mintX: Mint                    // Mint info for token X (from DLMM instance)
-mintY: Mint                    // Mint info for token Y (from DLMM instance)
-clock: Clock                   // Clock info (from DLMM instance)
-```
-
-**Returns**
-
-An array of `{ binId, amountX, amountY }` objects representing the per-bin token distribution.
-
-**Example**
-```typescript
-import { toAmountsBothSideByStrategy } from '@meteora-ag/dlmm';
-
-const binDistributions = toAmountsBothSideByStrategy(
-  dlmmPool.lbPair.activeId,
-  dlmmPool.lbPair.binStep,
-  minBinId,
-  maxBinId,
-  totalAmountX,
-  totalAmountY,
-  activeBinXAmount,
-  activeBinYAmount,
-  StrategyType.Spot,
-  dlmmPool.tokenX.mint,
-  dlmmPool.tokenY.mint,
-  dlmmPool.clock
-);
-```
-
----
-
-### suggestBalancedXParametersFromY
-
-Given a token Y amount for a rebalance deposit, calculates the balanced `x0`, `deltaX`, and total `amountX` parameters to pair with it.
-
-**Function**
-```typescript
-suggestBalancedXParametersFromY(
-    y0: BN,
-    deltaY: BN,
-    minDeltaId: BN,
-    maxDeltaId: BN,
-    activeId: BN,
-    binStep: BN,
-    favorXInActiveBin: boolean,
-    builder: LiquidityStrategyParameterBuilder
-): { x0: BN; deltaX: BN; amountX: BN }
-```
-
-**Parameters**
-```typescript
-y0: BN                             // Base amount of token Y in the active bin
-deltaY: BN                         // Per-bin increment for token Y on the bid side
-minDeltaId: BN                     // Minimum delta from the active bin
-maxDeltaId: BN                     // Maximum delta from the active bin
-activeId: BN                       // Current active bin ID
-binStep: BN                        // Bin step of the pool
-favorXInActiveBin: boolean         // Whether to favor token X in the active bin
-builder: LiquidityStrategyParameterBuilder
-                                   // Strategy-specific parameter builder instance
-```
-
-**Returns**
-
-An object with `x0` (base amount), `deltaX` (per-bin increment), and `amountX` (total token X needed).
-
-**Example**
-```typescript
-import { suggestBalancedXParametersFromY, getLiquidityStrategyParameterBuilder } from '@meteora-ag/dlmm';
-
-const builder = getLiquidityStrategyParameterBuilder(StrategyType.Spot);
-const { x0, deltaX, amountX } = suggestBalancedXParametersFromY(
-  y0,
-  deltaY,
-  minDeltaId,
-  maxDeltaId,
-  new BN(dlmmPool.lbPair.activeId),
-  new BN(dlmmPool.lbPair.binStep),
-  false,
-  builder
-);
-```
-
-**Notes**
-- Primarily used when constructing rebalance deposit parameters.
-- The `builder` instance should match the intended strategy type.
-
----
-
-### suggestBalancedYParametersFromX
-
-Given a token X amount for a rebalance deposit, calculates the balanced `y0`, `deltaY`, and total `amountY` parameters to pair with it.
-
-**Function**
-```typescript
-suggestBalancedYParametersFromX(
-    x0: BN,
-    deltaX: BN,
-    minDeltaId: BN,
-    maxDeltaId: BN,
-    activeId: BN,
-    binStep: BN,
-    favorXInActiveBin: boolean,
-    builder: LiquidityStrategyParameterBuilder
-): { y0: BN; deltaY: BN; amountY: BN }
-```
-
-**Parameters**
-```typescript
-x0: BN                             // Base amount of token X in the active bin
-deltaX: BN                         // Per-bin increment for token X on the ask side
-minDeltaId: BN                     // Minimum delta from the active bin
-maxDeltaId: BN                     // Maximum delta from the active bin
-activeId: BN                       // Current active bin ID
-binStep: BN                        // Bin step of the pool
-favorXInActiveBin: boolean         // Whether to favor token X in the active bin
-builder: LiquidityStrategyParameterBuilder
-                                   // Strategy-specific parameter builder instance
-```
-
-**Returns**
-
-An object with `y0` (base amount), `deltaY` (per-bin increment), and `amountY` (total token Y needed).
-
-**Example**
-```typescript
-import { suggestBalancedYParametersFromX, getLiquidityStrategyParameterBuilder } from '@meteora-ag/dlmm';
-
-const builder = getLiquidityStrategyParameterBuilder(StrategyType.Spot);
-const { y0, deltaY, amountY } = suggestBalancedYParametersFromX(
-  x0,
-  deltaX,
-  minDeltaId,
-  maxDeltaId,
-  new BN(dlmmPool.lbPair.activeId),
-  new BN(dlmmPool.lbPair.binStep),
-  false,
-  builder
-);
-```
-
-**Notes**
-- Mirror of `suggestBalancedXParametersFromY` for when token X is the known quantity.
-
----
-
-## Bin & Price Math
-
-### binDeltaToMinMaxBinId
-
-Converts a bin delta value and an active bin ID into symmetric min and max bin IDs.
-
-**Function**
-```typescript
-binDeltaToMinMaxBinId(
-    binDelta: number,
-    activeBinId: number
-): { minBinId: number; maxBinId: number }
-```
-
-**Parameters**
-```typescript
-binDelta: number               // Number of bins on each side of the active bin
-activeBinId: number            // Current active bin ID
-```
-
-**Returns**
-
-An object with `minBinId` (`activeId - delta`) and `maxBinId` (`activeId + delta`).
-
-**Example**
-```typescript
-import { binDeltaToMinMaxBinId } from '@meteora-ag/dlmm';
-
-const { minBinId, maxBinId } = binDeltaToMinMaxBinId(10, dlmmPool.lbPair.activeId);
-// Creates a 21-bin range: 10 below and 10 above the active bin
-```
-
----
-
-### binIdToBinArrayIndex
-
-Converts a bin ID to the index of the bin array that contains it.
-
-**Function**
-```typescript
-binIdToBinArrayIndex(binId: BN): BN
-```
-
-**Parameters**
-```typescript
-binId: BN                      // The bin ID to convert
-```
-
-**Returns**
-
-The bin array index (`BN`) containing the given bin.
-
-**Example**
-```typescript
-import { binIdToBinArrayIndex } from '@meteora-ag/dlmm';
-
-const binArrayIndex = binIdToBinArrayIndex(new BN(dlmmPool.lbPair.activeId));
-```
-
----
-
-### getBinCount
-
-Calculates the total number of bins in an inclusive range.
-
-**Function**
-```typescript
-getBinCount(minBinId: number, maxBinId: number): number
-```
-
-**Parameters**
-```typescript
-minBinId: number               // The minimum bin ID of the range
-maxBinId: number               // The maximum bin ID of the range
-```
-
-**Returns**
-
-The number of bins in the range (inclusive).
-
-**Example**
-```typescript
-import { getBinCount } from '@meteora-ag/dlmm';
-
-const count = getBinCount(8388600, 8388620); // returns 21
-```
-
----
-
-### getBinFromBinArray
-
-Retrieves a specific bin from a bin array account by its bin ID.
-
-**Function**
-```typescript
-getBinFromBinArray(binId: number, binArray: BinArray): Bin
-```
-
-**Parameters**
-```typescript
-binId: number                  // The bin ID to retrieve
-binArray: BinArray             // The bin array account containing the bin
-```
-
-**Returns**
-
-The `Bin` object at the given bin ID.
-
-**Example**
-```typescript
-import { getBinFromBinArray } from '@meteora-ag/dlmm';
-
-const binArrays = await dlmmPool.getBinArrays();
-const bin = getBinFromBinArray(dlmmPool.lbPair.activeId, binArrays[0].account);
-```
-
----
-
-### getBinIdIndexInBinArray
-
-Returns the local (zero-based) index of a bin ID within a specific bin array's range.
-
-**Function**
-```typescript
-getBinIdIndexInBinArray(
-    binId: BN,
-    lowerBinId: BN,
-    upperBinId: BN
-): number
-```
-
-**Parameters**
-```typescript
-binId: BN                      // The bin ID to locate
-lowerBinId: BN                 // The lower bound bin ID of the bin array
-upperBinId: BN                 // The upper bound bin ID of the bin array
-```
-
-**Returns**
-
-The zero-based index of the bin within the array.
-
-**Example**
-```typescript
-import { getBinIdIndexInBinArray, getBinArrayLowerUpperBinId, binIdToBinArrayIndex } from '@meteora-ag/dlmm';
-
-const binArrayIndex = binIdToBinArrayIndex(new BN(dlmmPool.lbPair.activeId));
-const [lowerBinId, upperBinId] = getBinArrayLowerUpperBinId(binArrayIndex);
-const index = getBinIdIndexInBinArray(new BN(dlmmPool.lbPair.activeId), lowerBinId, upperBinId);
-```
-
----
-
-### getBinArrayLowerUpperBinId
-
-Returns the lower and upper bin IDs (inclusive) covered by a given bin array index.
-
-**Function**
-```typescript
-getBinArrayLowerUpperBinId(binArrayIndex: BN): [BN, BN]
-```
-
-**Parameters**
-```typescript
-binArrayIndex: BN              // The bin array index
-```
-
-**Returns**
-
-A tuple `[lowerBinId, upperBinId]` representing the bin range covered by the bin array.
-
-**Example**
-```typescript
-import { getBinArrayLowerUpperBinId, binIdToBinArrayIndex } from '@meteora-ag/dlmm';
-
-const binArrayIndex = binIdToBinArrayIndex(new BN(dlmmPool.lbPair.activeId));
-const [lowerBinId, upperBinId] = getBinArrayLowerUpperBinId(binArrayIndex);
-```
-
----
-
-### getPriceOfBinByBinId
-
-Calculates the price at a specific bin ID given the pool's bin step.
-
-**Function**
-```typescript
-getPriceOfBinByBinId(binId: number, binStep: number): Decimal
-```
-
-**Parameters**
-```typescript
-binId: number                  // The bin ID
-binStep: number                // The bin step of the pool (in basis points)
-```
-
-**Returns**
-
-The price at that bin as a `Decimal` value (token X per token Y, in raw lamport terms).
-
-**Example**
-```typescript
-import { getPriceOfBinByBinId } from '@meteora-ag/dlmm';
-
-const price = getPriceOfBinByBinId(dlmmPool.lbPair.activeId, dlmmPool.lbPair.binStep);
-console.log('Active bin price (per lamport):', price.toString());
-```
-
-**Notes**
-- Returns the price in lamport terms. Multiply by the token decimal adjustment (`10^(decimalX - decimalY)`) to get the human-readable token price.
-
----
-
-## Distribution Helpers
-
-### calculateSpotDistribution
-
-Computes a uniform (spot) token distribution across a set of bins relative to the active bin.
-
-**Function**
-```typescript
-calculateSpotDistribution(
-    activeBin: number,
-    binIds: number[]
-): { binId: number; xAmountBpsOfTotal: BN; yAmountBpsOfTotal: BN }[]
-```
-
-**Parameters**
-```typescript
-activeBin: number              // The active bin ID
-binIds: number[]               // Array of bin IDs to include in the distribution
-```
-
-**Returns**
-
-An array of objects with each bin's share of token X and token Y in basis points.
-
-**Example**
-```typescript
-import { calculateSpotDistribution } from '@meteora-ag/dlmm';
-
-const binIds = Array.from({ length: 21 }, (_, i) => 8388600 + i);
-const distribution = calculateSpotDistribution(dlmmPool.lbPair.activeId, binIds);
-```
-
----
-
-### calculateBidAskDistribution
-
-Computes a bid-ask (V-shaped) token distribution across a set of bins, placing more weight at the price extremes.
-
-**Function**
-```typescript
-calculateBidAskDistribution(
-    activeBin: number,
-    binIds: number[]
-): { binId: number; xAmountBpsOfTotal: BN; yAmountBpsOfTotal: BN }[]
-```
-
-**Parameters**
-```typescript
-activeBin: number              // The active bin ID
-binIds: number[]               // Array of bin IDs to include
-```
-
-**Returns**
-
-An array of distribution objects with bid/ask-weighted basis point shares for each bin.
-
-**Example**
-```typescript
-import { calculateBidAskDistribution } from '@meteora-ag/dlmm';
-
-const distribution = calculateBidAskDistribution(dlmmPool.lbPair.activeId, binIds);
-```
-
----
-
-### calculateNormalDistribution
-
-Computes a normal (bell-curve) token distribution across a set of bins, concentrating liquidity near the active bin.
-
-**Function**
-```typescript
-calculateNormalDistribution(
-    activeBin: number,
-    binIds: number[]
-): { binId: number; xAmountBpsOfTotal: BN; yAmountBpsOfTotal: BN }[]
-```
-
-**Parameters**
-```typescript
-activeBin: number              // The active bin ID
-binIds: number[]               // Array of bin IDs to include
-```
-
-**Returns**
-
-An array of distribution objects with normal-weighted basis point shares for each bin.
-
-**Example**
-```typescript
-import { calculateNormalDistribution } from '@meteora-ag/dlmm';
-
-const distribution = calculateNormalDistribution(dlmmPool.lbPair.activeId, binIds);
-```
-
----
-
-### toAmountAskSide
-
-Distributes a total token X amount across the ask-side bins (above the active bin) according to given weight distributions.
-
-**Function**
-```typescript
-toAmountAskSide(
-    activeId: number,
-    binStep: number,
-    totalAmount: BN,
-    distributions: { binId: number; weight: number }[],
-    mintX: Mint,
-    clock: Clock
-): { binId: number; amount: BN }[]
-```
-
-**Parameters**
-```typescript
-activeId: number               // Active bin ID
-binStep: number                // Bin step of the pool
-totalAmount: BN                // Total amount of token X to distribute
-distributions: { binId: number; weight: number }[]
-                               // Weight distribution for each ask-side bin
-mintX: Mint                    // Mint info for token X (from DLMM instance)
-clock: Clock                   // Clock info (from DLMM instance)
-```
-
-**Returns**
-
-An array of `{ binId, amount }` objects representing per-bin token X amounts.
-
-**Example**
-```typescript
-import { toAmountAskSide } from '@meteora-ag/dlmm';
-
-const askAmounts = toAmountAskSide(
-  dlmmPool.lbPair.activeId,
-  dlmmPool.lbPair.binStep,
-  totalAmountX,
-  askSideWeights,
-  dlmmPool.tokenX.mint,
-  dlmmPool.clock
-);
-```
-
----
-
-### toAmountBidSide
-
-Distributes a total token Y amount across the bid-side bins (at and below the active bin) according to given weight distributions.
-
-**Function**
-```typescript
-toAmountBidSide(
-    activeId: number,
-    totalAmount: BN,
-    distributions: { binId: number; weight: number }[],
-    mintY: Mint,
-    clock: Clock
-): { binId: number; amount: BN }[]
-```
-
-**Parameters**
-```typescript
-activeId: number               // Active bin ID
-totalAmount: BN                // Total amount of token Y to distribute
-distributions: { binId: number; weight: number }[]
-                               // Weight distribution for each bid-side bin
-mintY: Mint                    // Mint info for token Y (from DLMM instance)
-clock: Clock                   // Clock info (from DLMM instance)
-```
-
-**Returns**
-
-An array of `{ binId, amount }` objects representing per-bin token Y amounts.
-
-**Example**
-```typescript
-import { toAmountBidSide } from '@meteora-ag/dlmm';
-
-const bidAmounts = toAmountBidSide(
-  dlmmPool.lbPair.activeId,
-  totalAmountY,
-  bidSideWeights,
-  dlmmPool.tokenY.mint,
-  dlmmPool.clock
-);
-```
-
----
-
-### toAmountBothSide
-
-Distributes token X and token Y across both bid and ask bins according to given weight distributions, taking the active bin's existing liquidity ratio into account.
-
-**Function**
-```typescript
-toAmountBothSide(
-    activeId: number,
-    binStep: number,
-    amountX: BN,
-    amountY: BN,
-    amountXInActiveBin: BN,
-    amountYInActiveBin: BN,
-    distributions: { binId: number; weight: number }[],
-    mintX: Mint,
-    mintY: Mint,
-    clock: Clock
-): { binId: number; amountX: BN; amountY: BN }[]
-```
-
-**Parameters**
-```typescript
-activeId: number               // Active bin ID
-binStep: number                // Bin step of the pool
-amountX: BN                    // Total token X to distribute
-amountY: BN                    // Total token Y to distribute
-amountXInActiveBin: BN         // Current token X in the active bin
-amountYInActiveBin: BN         // Current token Y in the active bin
-distributions: { binId: number; weight: number }[]
-                               // Combined bid and ask weight distributions
-mintX: Mint                    // Mint info for token X (from DLMM instance)
-mintY: Mint                    // Mint info for token Y (from DLMM instance)
-clock: Clock                   // Clock info (from DLMM instance)
-```
-
-**Returns**
-
-An array of `{ binId, amountX, amountY }` objects for both sides of the distribution.
-
-**Example**
-```typescript
-import { toAmountBothSide } from '@meteora-ag/dlmm';
-
-const amounts = toAmountBothSide(
-  dlmmPool.lbPair.activeId,
-  dlmmPool.lbPair.binStep,
-  totalAmountX,
-  totalAmountY,
-  activeBinXAmount,
-  activeBinYAmount,
-  weightDistributions,
-  dlmmPool.tokenX.mint,
-  dlmmPool.tokenY.mint,
-  dlmmPool.clock
-);
-```
-
----
-
-### toAmountIntoBins
-
-Converts rebalance deposit parameters into per-bin amounts for both sides of the active bin. Used to build deposit instructions in the rebalance flow.
-
-**Function**
-```typescript
-toAmountIntoBins(
-    activeId: BN,
-    minDeltaId: BN,
-    maxDeltaId: BN,
-    deltaX: BN,
-    deltaY: BN,
-    x0: BN,
-    y0: BN,
-    binStep: BN,
-    favorXInActiveBin: boolean
-): { binId: BN; amountX: BN; amountY: BN }[]
-```
-
-**Parameters**
-```typescript
-activeId: BN                   // Current active bin ID
-minDeltaId: BN                 // Minimum bin delta from the active bin (negative = bid side)
-maxDeltaId: BN                 // Maximum bin delta from the active bin (positive = ask side)
-deltaX: BN                     // Per-bin increment for token X on the ask side
-deltaY: BN                     // Per-bin increment for token Y on the bid side
-x0: BN                         // Base amount of token X in the active bin
-y0: BN                         // Base amount of token Y in the active bin
-binStep: BN                    // Bin step of the pool
-favorXInActiveBin: boolean     // Whether to deposit token X in the active bin
-```
-
-**Returns**
-
-An array of `{ binId, amountX, amountY }` covering the full target range.
-
-**Example**
-```typescript
-import { toAmountIntoBins } from '@meteora-ag/dlmm';
-
-const amounts = toAmountIntoBins(
-  new BN(dlmmPool.lbPair.activeId),
-  minDeltaId,
-  maxDeltaId,
-  deltaX,
-  deltaY,
-  x0,
-  y0,
-  new BN(dlmmPool.lbPair.binStep),
-  true
-);
-```
-
----
-
-## Swap & Fee Utilities
-
-### getOutAmount
-
-Calculates the output amount for a swap within a single bin given an input amount.
-
-**Function**
-```typescript
-getOutAmount(bin: Bin, inAmount: BN, swapForY: boolean): BN
-```
-
-**Parameters**
-```typescript
-bin: Bin                       // The bin to simulate the swap in
-inAmount: BN                   // The input token amount
-swapForY: boolean              // true = swapping token X for Y, false = swapping Y for X
-```
-
-**Returns**
-
-The output token amount (`BN`) for the given input.
-
-**Example**
-```typescript
-import { getOutAmount, getBinFromBinArray } from '@meteora-ag/dlmm';
-
-const binArrays = await dlmmPool.getBinArrays();
-const activeBin = getBinFromBinArray(dlmmPool.lbPair.activeId, binArrays[0].account);
-const outAmount = getOutAmount(activeBin, new BN(1_000_000), true);
-```
-
----
-
-### getSlippageMaxAmount
-
-Calculates the maximum acceptable token amount after applying an upward slippage tolerance.
-
-**Function**
-```typescript
-getSlippageMaxAmount(amount: BN, slippage: number): BN
-```
-
-**Parameters**
-```typescript
-amount: BN                     // The reference token amount
-slippage: number               // Slippage percentage (e.g. 1 for 1%)
-```
-
-**Returns**
-
-The maximum acceptable amount after slippage. Returns `U64_MAX` if slippage is 100%.
-
-**Example**
-```typescript
-import { getSlippageMaxAmount } from '@meteora-ag/dlmm';
-
-const maxOut = getSlippageMaxAmount(expectedOutAmount, 1); // 1% slippage
-```
-
----
-
-### getSlippageMinAmount
-
-Calculates the minimum acceptable token amount after applying a downward slippage tolerance.
-
-**Function**
-```typescript
-getSlippageMinAmount(amount: BN, slippage: number): BN
-```
-
-**Parameters**
-```typescript
-amount: BN                     // The reference token amount
-slippage: number               // Slippage percentage (e.g. 1 for 1%)
-```
-
-**Returns**
-
-The minimum acceptable amount after deducting slippage.
-
-**Example**
-```typescript
-import { getSlippageMinAmount } from '@meteora-ag/dlmm';
-
-const minIn = getSlippageMinAmount(expectedInAmount, 0.5); // 0.5% slippage
-```
-
----
-
-### getVariableFee
-
-Computes the variable fee component for a pool based on its bin step and volatility accumulator parameters.
-
-**Function**
-```typescript
-getVariableFee(
-    binStep: number,
-    sParameter: sParameters,
-    vParameter: vParameters
-): BN
-```
-
-**Parameters**
-```typescript
-binStep: number                // Bin step of the pool
-sParameter: sParameters        // Static fee parameters (from pool state)
-vParameter: vParameters        // Volatile fee parameters (from pool state)
-```
-
-**Returns**
-
-The variable fee amount (`BN`).
-
-**Example**
-```typescript
-import { getVariableFee } from '@meteora-ag/dlmm';
-
-const variableFee = getVariableFee(
-  dlmmPool.lbPair.binStep,
-  dlmmPool.lbPair.parameters,
-  dlmmPool.lbPair.vParameters
-);
-```
-
----
-
-### swapExactInQuoteAtBin
-
-Simulates a swap-exact-in operation within a single bin and returns the amounts, fees, and protocol fees.
+Use this for new permissionless pools when you already know the `PresetParameter2` account.
+
+### `createCustomizablePermissionlessLbPair2`
 
-**Function**
 ```typescript
-swapExactInQuoteAtBin(
-    bin: Bin,
-    binStep: number,
-    sParameter: sParameters,
-    vParameter: vParameters,
-    inAmount: BN,
-    swapForY: boolean
-): {
-    amountIn: BN;
-    amountOut: BN;
-    fee: BN;
-    protocolFee: BN;
+static createCustomizablePermissionlessLbPair2(
+  connection: Connection,
+  binStep: BN,
+  tokenX: PublicKey,
+  tokenY: PublicKey,
+  activeId: BN,
+  feeBps: BN,
+  activationType: ActivationType,
+  hasAlphaVault: boolean,
+  creatorKey: PublicKey,
+  activationPoint?: BN,
+  creatorPoolOnOffControl?: boolean,
+  concreteFunctionType?: ConcreteFunctionType,
+  collectFeeMode?: CollectFeeMode,
+  opt?: Opt,
+): Promise<Transaction>
+```
+
+Defaults:
+
+- `concreteFunctionType`: `ConcreteFunctionType.LimitOrder`
+- `collectFeeMode`: `CollectFeeMode.InputOnly`
+- `creatorPoolOnOffControl`: `false`
+
+When either token is native SOL and `skipSolWrappingOperation` is not set, the SDK adds temporary wrap and unwrap instructions.
+
+## Instance State
+
+Each `DLMM` instance exposes these public fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `pubkey` | `PublicKey` | Pool address. |
+| `program` | `ClmmProgram` | Anchor program client. |
+| `lbPair` | `LbPair` | Current pool account state. |
+| `binArrayBitmapExtension` | `BinArrayBitmapExtensionAccount | null` | Bitmap extension account if present. |
+| `tokenX`, `tokenY` | `TokenReserve` | Pool token mint/reserve metadata. |
+| `rewards` | `(TokenReserve | null)[]` | Up to two reward token reserves. |
+| `clock` | `Clock` | Clock state loaded when the client was created/refetched. |
+
+Call `refetchStates()` after sending transactions if you need the client to reflect current pool state.
+
+## Reading Pool State
+
+| Method | Signature | Description |
+| --- | --- | --- |
+| `refetchStates` | `() =&gt; Promise&lt;void&gt;` | Reloads pool, bitmap, reserves, rewards, token mints, transfer hooks, and clock. |
+| `getLbPairLockInfo` | `(lockDurationOpt?, getPositionsOpt?) =&gt; Promise&lt;PairLockInfo&gt;` | Finds positions whose `lockReleasePoint` is greater than the current slot/timestamp plus optional duration. |
+| `getBinArrays` | `() =&gt; Promise&lt;BinArrayAccount[]&gt;` | Fetches initialized bin arrays tracked by pool bitmap and bitmap extension. |
+| `getBinArrayForSwap` | `(swapForY, count?) =&gt; Promise&lt;BinArrayAccount[]&gt;` | Fetches bin arrays from the active bin in the swap direction. |
+| `getBinsAroundActiveBin` | `(numberOfBinsToTheLeft, numberOfBinsToTheRight) =&gt; Promise&lt;{ activeBin; bins }&gt;` | Reads a window of bins around `activeId`. |
+| `getBinsBetweenMinAndMaxPrice` | `(minPrice, maxPrice) =&gt; Promise&lt;BinLiquidity[]&gt;` | Reads bins in a UI price range. |
+| `getBinsBetweenLowerAndUpperBound` | `(lowerBinId, upperBinId) =&gt; Promise&lt;BinLiquidity[]&gt;` | Reads bins in an absolute bin range. |
+| `getActiveBin` | `() =&gt; Promise&lt;BinLiquidity&gt;` | Returns processed active-bin liquidity. |
+| `getFeeInfo` | `() =&gt; FeeInfo` | Returns base, max, and protocol fee percentages. |
+| `getDynamicFee` | `() =&gt; Decimal` | Returns current variable fee percentage. |
+| `getEmissionRate` | `() =&gt; EmissionRate` | Returns reward emissions for reward slots. |
+| `getOracle` | `() =&gt; Promise&lt;IDynamicOracle&gt;` | Wraps the oracle account for observation and TWAP reads. |
+| `increaseOracleLength` | `(lengthToAdd, funder) =&gt; Promise&lt;Transaction&gt;` | Builds a transaction to increase oracle account length. |
+
+## Price Helpers
+
+| Method | Description |
+| --- | --- |
+| `toPricePerLamport(price)` | Converts UI token price using the pool token decimals. |
+| `fromPricePerLamport(pricePerLamport)` | Converts price-per-lamport into UI token price. |
+| `getBinIdFromPrice(price, min)` | Pool-aware bin ID conversion using the pool `binStep`. |
+| `getMaxPriceInBinArrays(binArrayAccounts)` | Finds the max price with token X liquidity in a set of bin arrays. |
+
+Example:
+
+```typescript
+const activeBin = await pool.getActiveBin()
+const price = pool.fromPricePerLamport(Number(activeBin.price))
+const binId = pool.getBinIdFromPrice(Number(price), true)
+```
+
+## Positions
+
+### Querying Positions
+
+| Method | Signature | Description |
+| --- | --- | --- |
+| `getPosition` | `(positionPubKey) =&gt; Promise&lt;LbPosition&gt;` | Fetches one position, loads covered bin arrays, and returns processed balances, fees, rewards, and per-bin data. |
+| `getPositionsByUserAndLbPair` | `(userPubKey?, getPositionsOpt?) =&gt; Promise&lt;{ activeBin; userPositions }&gt;` | Fetches user positions for this pool. If no user is provided, returns only `activeBin` and an empty array. |
+| `DLMM.getAllLbPairPositionsByUser` | Static | Fetches positions across all pools and returns a map keyed by pool address. |
+
+`PositionData` includes:
+
+- total token X/Y amounts
+- per-bin position data
+- fees and rewards
+- transfer-fee-excluded amounts
+- owner and fee owner
+- claimed fee/reward totals
+
+### Creating Positions
+
+| Method | Signature | Description |
+| --- | --- | --- |
+| `createEmptyPosition` | `({ positionPubKey, minBinId, maxBinId, user }) =&gt; Promise&lt;Transaction&gt;` | Initializes a legacy-width position and needed bin arrays. |
+| `createExtendedEmptyPosition` | `(lowerBinId, upperBinId, position, owner) =&gt; Promise&lt;Transaction&gt;` | Creates a position and adds extension instructions for wide ranges. |
+| `initializePositionByOperator` | `({ lowerBinId, positionWidth, owner, feeOwner, base, operator, payer, lockReleasePoint }) =&gt; Promise&lt;Transaction&gt;` | Creates an operator-managed PDA position with fee owner and lock release point. |
+| `quoteCreatePosition` | `({ strategy }) =&gt; Promise&lt;QuoteCreatePositionResult&gt;` | Estimates position count, position rent, realloc cost, bitmap extension cost, bin array count, and transaction count. |
+| `quoteExtendPosition` | `(currentMinBinId, currentMaxBinId, binCountToExpand) =&gt; Promise&lt;{ positionExtendCost; binArrayCost }&gt;` | Estimates rent and bin array costs for extension. |
+
+### Resizing And Closing Positions
+
+| Method | Description |
+| --- | --- |
+| `increasePositionLength(position, side, length, funder, allowParallelExecution?)` | Builds one or more transactions to extend lower or upper side. The final width is capped at `POSITION_MAX_LENGTH`. |
+| `decreasePositionLength(position, side, length, allowParallelExecution?)` | Builds one or more transactions to shrink an empty lower or upper segment. The position keeps at least one bin. |
+| `closePosition({ owner, position })` | Closes a position with `closePosition2`. |
+| `closePositionIfEmpty({ owner, position })` | Closes only when empty; otherwise the program no-ops/fails according to program rules. |
+| `enablePositionPermissionlessClaimFee({ position, owner })` | Sets the position permission bit for permissionless fee claiming. |
+
+## Liquidity
+
+### Strategy-Based Liquidity
+
+| Method | Return | Description |
+| --- | --- | --- |
+| `initializePositionAndAddLiquidityByStrategy(params)` | `Promise&lt;Transaction&gt;` | Initializes a position, initializes needed bin arrays, creates ATAs, handles SOL wrapping, and calls `addLiquidityByStrategy2`. |
+| `initializeMultiplePositionAndAddLiquidityByStrategy(...)` | `Promise&lt;InitializeMultiplePositionAndAddLiquidityByStrategyResponse&gt;` | Splits a range across multiple base-width positions and returns grouped instructions. |
+| `initializeMultiplePositionAndAddLiquidityByStrategy2(...)` | `Promise&lt;InitializeMultiplePositionAndAddLiquidityByStrategyResponse2&gt;` | Current multi-position path. Supports extended positions, optional ALT, and chunked transaction instruction groups. |
+| `addLiquidityByStrategy(params)` | `Promise&lt;Transaction&gt;` | Adds liquidity to an existing position using `addLiquidityByStrategy2`. |
+| `addLiquidityByStrategyChunkable(params)` | `Promise&lt;Transaction[]&gt;` | Adds strategy liquidity with chunked transaction output. Can auto-expand through rebalance endpoint. |
+
+`params` for single-position strategy flows:
+
+```typescript
+type TInitializePositionAndAddLiquidityParamsByStrategy = {
+  positionPubKey: PublicKey
+  totalXAmount: BN
+  totalYAmount: BN
+  strategy: StrategyParameters
+  user: PublicKey
+  slippage?: number
 }
 ```
 
-**Parameters**
+### Weight-Based Liquidity
+
+| Method | Return | Description |
+| --- | --- | --- |
+| `initializePositionAndAddLiquidityByWeight(params)` | `Promise&lt;Transaction | Transaction[]&gt;` | Deprecated legacy path. Initializes a position and deposits explicit bin weights. |
+| `addLiquidityByWeight(params)` | `Promise&lt;Transaction | Transaction[]&gt;` | Legacy explicit-weight deposit path. |
+| `addLiquidityByWeight2(params, binPerChunk?)` | `Promise&lt;Transaction[]&gt;` | Current chunked weight deposit path for existing positions. Validates the deposit range is inside the position range. |
+
+Weight params:
+
 ```typescript
-bin: Bin                       // The bin to quote within
-binStep: number                // Bin step of the pool
-sParameter: sParameters        // Static fee parameters
-vParameter: vParameters        // Volatile fee parameters
-inAmount: BN                   // Exact input amount
-swapForY: boolean              // true = swap X for Y, false = swap Y for X
-```
-
-**Returns**
-
-An object containing `amountIn`, `amountOut`, `fee`, and `protocolFee`.
-
-**Example**
-```typescript
-import { swapExactInQuoteAtBin, getBinFromBinArray } from '@meteora-ag/dlmm';
-
-const binArrays = await dlmmPool.getBinArrays();
-const activeBin = getBinFromBinArray(dlmmPool.lbPair.activeId, binArrays[0].account);
-
-const quote = swapExactInQuoteAtBin(
-  activeBin,
-  dlmmPool.lbPair.binStep,
-  dlmmPool.lbPair.parameters,
-  dlmmPool.lbPair.vParameters,
-  new BN(1_000_000),
-  true
-);
-console.log('Amount out:', quote.amountOut.toString());
-console.log('Fee:', quote.fee.toString());
-```
-
----
-
-### swapExactOutQuoteAtBin
-
-Simulates a swap-exact-out operation within a single bin and returns the required input amount, fees, and protocol fees.
-
-**Function**
-```typescript
-swapExactOutQuoteAtBin(
-    bin: Bin,
-    binStep: number,
-    sParameter: sParameters,
-    vParameter: vParameters,
-    outAmount: BN,
-    swapForY: boolean
-): {
-    amountIn: BN;
-    amountOut: BN;
-    fee: BN;
-    protocolFee: BN;
+type TInitializePositionAndAddLiquidityParams = {
+  positionPubKey: PublicKey
+  totalXAmount: BN
+  totalYAmount: BN
+  xYAmountDistribution: BinAndAmount[]
+  user: PublicKey
+  slippage?: number
 }
 ```
 
-**Parameters**
+### Removing Liquidity
+
 ```typescript
-bin: Bin                       // The bin to quote within
-binStep: number                // Bin step of the pool
-sParameter: sParameters        // Static fee parameters
-vParameter: vParameters        // Volatile fee parameters
-outAmount: BN                  // Desired exact output amount
-swapForY: boolean              // true = swap X for Y, false = swap Y for X
+removeLiquidity({
+  user,
+  position,
+  fromBinId,
+  toBinId,
+  bps,
+  shouldClaimAndClose = false,
+  skipUnwrapSOL = false,
+}): Promise<Transaction[]>
 ```
 
-**Returns**
+The SDK:
 
-An object containing `amountIn`, `amountOut`, `fee`, and `protocolFee`.
+- trims requested range to bins with liquidity, fees, or rewards
+- creates owner and fee-owner ATAs
+- optionally claims fees and rewards
+- optionally closes the position if empty
+- chunks by bin range
+- uses `removeLiquidityByRange2`
 
-**Example**
+## Swaps
+
+### Quote Methods
+
+| Method | Signature | Description |
+| --- | --- | --- |
+| `swapQuote` | `(inAmount, swapForY, allowedSlippage, binArrays, isPartialFill?, maxExtraBinArrays?) =&gt; SwapQuote` | Exact-in quote. `swapForY = true` means token X to token Y. Slippage is bps. |
+| `swapQuoteExactOut` | `(outAmount, swapForY, allowedSlippage, binArrays, maxExtraBinArrays?) =&gt; SwapQuoteExactOut` | Exact-out quote. Returns max input amount after slippage. |
+
+Quote result fields:
+
+| Field | Exact in | Exact out | Description |
+| --- | --- | --- | --- |
+| `consumedInAmount` | Yes | No | Input amount actually consumed, transfer-fee included. |
+| `inAmount` | No | Yes | Required input amount. |
+| `outAmount` | Yes | Yes | Output amount, transfer-fee adjusted where applicable. |
+| `fee` | Yes | Yes | Swap fee amount. |
+| `protocolFee` | Yes | Yes | Protocol fee amount. |
+| `minOutAmount` | Yes | No | Minimum output after slippage. |
+| `maxInAmount` | No | Yes | Maximum input after slippage. |
+| `priceImpact` | Yes | Yes | Price impact as `Decimal`. |
+| `binArraysPubkey` | Yes | Yes | Bin arrays to pass into swap transaction builder. |
+| `endPrice` | Yes | No | End bin price after simulated exact-in swap. |
+| `feeOnInput` | Yes | No | Whether fees are collected on input for this direction. |
+
+### Transaction Builders
+
+| Method | Instruction | Description |
+| --- | --- | --- |
+| `swap(params)` | `swap2` | Exact-in swap transaction. |
+| `swapExactOut(params)` | `swap_exact_out2` | Exact-out swap transaction. Uses a fixed `1_400_000` CU limit. |
+| `swapWithPriceImpact(params)` | `swap_with_price_impact2` | Exact-in style swap with price-impact bps guard. |
+
 ```typescript
-import { swapExactOutQuoteAtBin, getBinFromBinArray } from '@meteora-ag/dlmm';
+const binArrays = await pool.getBinArrayForSwap(true)
+const quote = pool.swapQuote(new BN(1_000_000), true, new BN(50), binArrays)
 
-const binArrays = await dlmmPool.getBinArrays();
-const activeBin = getBinFromBinArray(dlmmPool.lbPair.activeId, binArrays[0].account);
-
-const quote = swapExactOutQuoteAtBin(
-  activeBin,
-  dlmmPool.lbPair.binStep,
-  dlmmPool.lbPair.parameters,
-  dlmmPool.lbPair.vParameters,
-  new BN(500_000),
-  true
-);
-console.log('Required input:', quote.amountIn.toString());
+const tx = await pool.swap({
+  inToken: pool.tokenX.publicKey,
+  outToken: pool.tokenY.publicKey,
+  inAmount: quote.consumedInAmount,
+  minOutAmount: quote.minOutAmount,
+  lbPair: pool.pubkey,
+  user: wallet.publicKey,
+  binArraysPubkey: quote.binArraysPubkey,
+})
 ```
 
----
+The swap builders create missing ATAs, handle wrapped SOL unless disabled, add Token-2022 transfer-hook remaining accounts, and pass bin arrays as remaining writable accounts.
 
-### getAndCapMaxActiveBinSlippage
+## Fees And Rewards
 
-Converts a slippage percentage to a maximum allowed bin drift, capped at a provided maximum.
+| Method | Return | Description |
+| --- | --- | --- |
+| `claimSwapFee({ owner, position })` | `Promise&lt;Transaction[]&gt;` | Claims swap fees for one position. Throws if there are no fees. |
+| `claimAllSwapFee({ owner, positions })` | `Promise&lt;Transaction[]&gt;` | Claims swap fees for multiple positions. Chunks by `MAX_CLAIM_ALL_ALLOWED`. |
+| `claimLMReward({ owner, position })` | `Promise&lt;Transaction[]&gt;` | Claims liquidity mining rewards for one position. Throws if no rewards. |
+| `claimAllLMRewards({ owner, positions })` | `Promise&lt;Transaction[]&gt;` | Claims LM rewards for multiple positions. |
+| `claimAllRewardsByPosition({ owner, position })` | `Promise&lt;Transaction[]&gt;` | Claims fees and rewards for a single position. |
+| `claimAllRewards({ owner, positions })` | `Promise&lt;Transaction[]&gt;` | Claims fees and rewards across multiple positions. |
 
-**Function**
-```typescript
-getAndCapMaxActiveBinSlippage(
-    slippagePercentage: number,
-    binStep: number,
-    maxActiveBinSlippage: number
-): number
-```
+The claim builders create token accounts as needed and use Token-2022 transfer-hook remaining accounts for pool tokens and reward tokens.
 
-**Parameters**
-```typescript
-slippagePercentage: number     // Slippage tolerance as a percentage (0 = use cap directly)
-binStep: number                // Bin step of the pool (in basis points)
-maxActiveBinSlippage: number   // Hard cap on the number of bins the active bin can drift
-```
+## Limit Orders
 
-**Returns**
+Limit order methods are available for pools that support limit orders.
 
-The maximum number of bins (`number`) the active bin is allowed to move.
+### Query Methods
 
-**Example**
-```typescript
-import { getAndCapMaxActiveBinSlippage } from '@meteora-ag/dlmm';
+| Method | Return | Description |
+| --- | --- | --- |
+| `getLimitOrder(limitOrder)` | `Promise&lt;ParsedLimitOrderWithPubkey | null&gt;` | Fetches and parses one limit order account. |
+| `getLimitOrderByUserAndLbPair(user)` | `Promise&lt;ParsedLimitOrderWithPubkey[]&gt;` | Fetches parsed limit orders for the user and current pool. |
+| `quoteCreateLimitOrder({ bins, relativeBin? })` | Cost quote | Estimates limit order rent, uninitialized bin arrays, bitmap extension cost. |
 
-const maxBinSlippage = getAndCapMaxActiveBinSlippage(1, dlmmPool.lbPair.binStep, 100);
-```
+`relativeBin` treats each `bin.id` as an offset from current `activeId`.
 
-**Notes**
-- If `slippagePercentage` is 0 or null, `maxActiveBinSlippage` is returned directly.
+### Transaction Builders
 
----
+| Method | Description |
+| --- | --- |
+| `placeLimitOrder({ owner, payer, sender, limitOrder, params })` | Creates bin arrays if needed, optionally initializes bitmap extension, wraps SOL if needed, and calls `place_limit_order`. |
+| `cancelLimitOrder({ limitOrderPubkey, owner, rentReceiver, binIds })` | Cancels bins, creates owner ATAs, unwraps SOL if needed, and appends `close_limit_order_if_empty`. |
+| `closeLimitOrderIfEmpty({ limitOrder, owner, rentReceiver })` | Closes an empty limit order account. |
 
-## PDA Derivations
+`placeLimitOrder` accepts `params: Omit&lt;PlaceLimitOrderParams, "padding"&gt;`; the SDK injects padding.
 
-### deriveBinArray
+## Rebalancing
 
-Derives the program-derived address (PDA) for a bin array account.
+Rebalance helpers simulate a desired position update off-chain, then build a `rebalance_liquidity` instruction.
 
-**Function**
-```typescript
-deriveBinArray(
-    lbPair: PublicKey,
-    index: BN,
-    programId: PublicKey
-): [PublicKey, number]
-```
+| Method | Description |
+| --- | --- |
+| `simulateRebalancePositionWithBalancedStrategy(positionAddress, positionData, strategy, topUpAmountX, topUpAmountY, xWithdrawBps, yWithdrawBps)` | Builds balanced strategy parameters and simulates deposits/withdrawals. |
+| `simulateRebalancePosition(positionAddress, positionData, shouldClaimFee, shouldClaimReward, deposits, withdraws)` | Low-level simulation for custom rebalance parameters. |
+| `rebalancePosition(rebalancePositionResponse, maxActiveBinSlippage, rentPayer?, slippage?)` | Builds initialization instructions for missing bin arrays and the final rebalance instruction group. |
 
-**Parameters**
-```typescript
-lbPair: PublicKey              // The LB pair address
-index: BN                      // Bin array index
-programId: PublicKey           // DLMM program ID
-```
+Returned simulation data includes:
 
-**Returns**
+- `rebalancePosition`
+- `simulationResult`
+- `binArrayExistence`
+- `binArrayCount`
+- `binArrayCost`
+- `bitmapExtensionCost`
 
-A tuple of `[PublicKey, bump]` for the bin array PDA.
+`rebalancePosition` returns:
 
-**Example**
-```typescript
-import { deriveBinArray, binIdToBinArrayIndex } from '@meteora-ag/dlmm';
-
-const programId = new PublicKey('LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo');
-const index = binIdToBinArrayIndex(new BN(dlmmPool.lbPair.activeId));
-const [binArrayPda] = deriveBinArray(dlmmPool.pubkey, index, programId);
-```
-
----
-
-### deriveBinArrayBitmapExtension
-
-Derives the PDA for the bin array bitmap extension account of an LB pair.
-
-**Function**
-```typescript
-deriveBinArrayBitmapExtension(
-    lbPair: PublicKey,
-    programId: PublicKey
-): [PublicKey, number]
-```
-
-**Parameters**
-```typescript
-lbPair: PublicKey              // The LB pair address
-programId: PublicKey           // DLMM program ID
-```
-
-**Returns**
-
-A tuple of `[PublicKey, bump]` for the bitmap extension PDA.
-
-**Example**
-```typescript
-import { deriveBinArrayBitmapExtension } from '@meteora-ag/dlmm';
-
-const programId = new PublicKey('LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo');
-const [bitmapExtension] = deriveBinArrayBitmapExtension(dlmmPool.pubkey, programId);
-```
-
----
-
-### deriveCustomizablePermissionlessLbPair
-
-Derives the PDA for a customizable permissionless LB pair given two token mints.
-
-**Function**
-```typescript
-deriveCustomizablePermissionlessLbPair(
-    tokenX: PublicKey,
-    tokenY: PublicKey,
-    programId: PublicKey
-): [PublicKey, number]
-```
-
-**Parameters**
-```typescript
-tokenX: PublicKey              // Mint address of token X
-tokenY: PublicKey              // Mint address of token Y
-programId: PublicKey           // DLMM program ID
-```
-
-**Returns**
-
-A tuple of `[PublicKey, bump]` for the LB pair PDA.
-
-**Example**
-```typescript
-import { deriveCustomizablePermissionlessLbPair } from '@meteora-ag/dlmm';
-
-const programId = new PublicKey('LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo');
-const [lbPairAddress] = deriveCustomizablePermissionlessLbPair(
-  tokenXMint,
-  tokenYMint,
-  programId
-);
-```
-
----
-
-### deriveLbPair
-
-Derives the PDA for an LB pair given two token mints and a bin step.
-
-**Function**
-```typescript
-deriveLbPair(
-    tokenX: PublicKey,
-    tokenY: PublicKey,
-    binStep: BN,
-    programId: PublicKey
-): [PublicKey, number]
-```
-
-**Parameters**
-```typescript
-tokenX: PublicKey              // Mint address of token X
-tokenY: PublicKey              // Mint address of token Y
-binStep: BN                    // Bin step of the pair
-programId: PublicKey           // DLMM program ID
-```
-
-**Returns**
-
-A tuple of `[PublicKey, bump]` for the LB pair PDA.
-
-**Example**
-```typescript
-import { deriveLbPair } from '@meteora-ag/dlmm';
-
-const [lbPairAddress] = deriveLbPair(tokenXMint, tokenYMint, new BN(25), programId);
-```
-
-<Warning>
-`deriveLbPair` is deprecated. Use `deriveLbPair2` instead.
-</Warning>
-
----
-
-### deriveLbPair2
-
-Derives the PDA for an LB pair using both bin step and base factor. Use this when multiple pools exist for the same token pair and bin step.
-
-**Function**
-```typescript
-deriveLbPair2(
-    tokenX: PublicKey,
-    tokenY: PublicKey,
-    binStep: BN,
-    baseFactor: BN,
-    programId: PublicKey
-): [PublicKey, number]
-```
-
-**Parameters**
-```typescript
-tokenX: PublicKey              // Mint address of token X
-tokenY: PublicKey              // Mint address of token Y
-binStep: BN                    // Bin step of the pair
-baseFactor: BN                 // Base factor for the pair's fee structure
-programId: PublicKey           // DLMM program ID
-```
-
-**Returns**
-
-A tuple of `[PublicKey, bump]` for the LB pair PDA.
-
-**Example**
-```typescript
-import { deriveLbPair2 } from '@meteora-ag/dlmm';
-
-const [lbPairAddress] = deriveLbPair2(
-  tokenXMint,
-  tokenYMint,
-  new BN(25),
-  new BN(10000),
-  programId
-);
-```
-
----
-
-### deriveLbPairWithPresetParamWithIndexKey
-
-Derives the PDA for an LB pair using a preset parameter account key and two token mints.
-
-**Function**
-```typescript
-deriveLbPairWithPresetParamWithIndexKey(
-    presetParameterKey: PublicKey,
-    tokenX: PublicKey,
-    tokenY: PublicKey,
-    programId: PublicKey
-): [PublicKey, number]
-```
-
-**Parameters**
-```typescript
-presetParameterKey: PublicKey  // The preset parameter account address
-tokenX: PublicKey              // Mint address of token X
-tokenY: PublicKey              // Mint address of token Y
-programId: PublicKey           // DLMM program ID
-```
-
-**Returns**
-
-A tuple of `[PublicKey, bump]` for the LB pair PDA.
-
-**Example**
-```typescript
-import { deriveLbPairWithPresetParamWithIndexKey } from '@meteora-ag/dlmm';
-
-const presetParams = await dlmmPool.getAllPresetParameters();
-const [lbPairAddress] = deriveLbPairWithPresetParamWithIndexKey(
-  presetParams[0].publicKey,
-  tokenXMint,
-  tokenYMint,
-  programId
-);
-```
-
----
-
-## Position Utilities
-
-### calculatePositionSize
-
-Calculates the on-chain account size (in bytes) required for a position with a given number of bins.
-
-**Function**
-```typescript
-calculatePositionSize(binCount: BN): BN
-```
-
-**Parameters**
-```typescript
-binCount: BN                   // Number of bins the position will hold
-```
-
-**Returns**
-
-The account size in bytes (`BN`).
-
-**Example**
-```typescript
-import { calculatePositionSize } from '@meteora-ag/dlmm';
-
-const size = calculatePositionSize(new BN(20));
-```
-
----
-
-### getExtendedPositionBinCount
-
-Returns the number of bins in a position that exceed the default position width. Returns zero if the position fits within the default width.
-
-**Function**
-```typescript
-getExtendedPositionBinCount(minBinId: BN, maxBinId: BN): BN
-```
-
-**Parameters**
-```typescript
-minBinId: BN                   // Minimum bin ID of the position
-maxBinId: BN                   // Maximum bin ID of the position
-```
-
-**Returns**
-
-The number of extended bins (`BN`), or zero if no extension is needed.
-
-**Example**
-```typescript
-import { getExtendedPositionBinCount } from '@meteora-ag/dlmm';
-
-const extendedBins = getExtendedPositionBinCount(
-  new BN(position.positionData.lowerBinId),
-  new BN(position.positionData.upperBinId)
-);
-```
-
----
-
-### getPositionCountByBinCount
-
-Calculates the number of position accounts required to cover a given number of bins, rounding up.
-
-**Function**
-```typescript
-getPositionCountByBinCount(binCount: number): number
-```
-
-**Parameters**
-```typescript
-binCount: number               // Total number of bins to cover
-```
-
-**Returns**
-
-The number of positions required (`number`).
-
-**Example**
-```typescript
-import { getPositionCountByBinCount, getBinCount } from '@meteora-ag/dlmm';
-
-const binCount = getBinCount(minBinId, maxBinId);
-const positionCount = getPositionCountByBinCount(binCount);
-console.log(`Need ${positionCount} positions for ${binCount} bins`);
-```
-
----
-
-### getPositionExpandRentExemption
-
-Calculates the additional rent-exemption lamports needed to expand an existing position to accommodate more bins.
-
-**Function**
-```typescript
-async getPositionExpandRentExemption(
-    currentMinBinId: BN,
-    currentMaxBinId: BN,
-    connection: Connection,
-    binCountToExpand: BN
-): Promise<number>
-```
-
-**Parameters**
-```typescript
-currentMinBinId: BN            // Current lower bound of the position
-currentMaxBinId: BN            // Current upper bound of the position
-connection: Connection         // Solana connection instance
-binCountToExpand: BN           // Number of additional bins to accommodate
-```
-
-**Returns**
-
-The additional rent-exemption lamports (`number`) required for the expansion.
-
-**Example**
-```typescript
-import { getPositionExpandRentExemption } from '@meteora-ag/dlmm';
-
-const extraRent = await getPositionExpandRentExemption(
-  new BN(position.positionData.lowerBinId),
-  new BN(position.positionData.upperBinId),
-  connection,
-  new BN(20)
-);
-console.log('Extra rent needed:', extraRent, 'lamports');
-```
-
-**Notes**
-- Returns 0 if the expanded width stays within the default position size.
-
----
-
-### getPositionLowerUpperBinIdWithLiquidity
-
-Returns the effective lower and upper bin IDs of a position, trimmed to only the bins that actually hold liquidity.
-
-**Function**
-```typescript
-getPositionLowerUpperBinIdWithLiquidity(
-    position: PositionData
-): { lowerBinId: BN; upperBinId: BN } | null
-```
-
-**Parameters**
-```typescript
-position: PositionData         // The position data object
-```
-
-**Returns**
-
-An object with `lowerBinId` and `upperBinId` for the active liquidity range, or `null` if the position has no liquidity.
-
-**Example**
-```typescript
-import { getPositionLowerUpperBinIdWithLiquidity } from '@meteora-ag/dlmm';
-
-const liquidityRange = getPositionLowerUpperBinIdWithLiquidity(positionData);
-if (liquidityRange) {
-  console.log('Liquidity from bin', liquidityRange.lowerBinId.toString());
-  console.log('to bin', liquidityRange.upperBinId.toString());
-}
-```
-
----
-
-### getPositionRentExemption
-
-Calculates the minimum rent-exemption lamports required for a new position account with a given number of bins.
-
-**Function**
-```typescript
-async getPositionRentExemption(
-    connection: Connection,
-    binCount: BN
-): Promise<number>
-```
-
-**Parameters**
-```typescript
-connection: Connection         // Solana connection instance
-binCount: BN                   // Number of bins the position will hold
-```
-
-**Returns**
-
-The minimum rent-exemption lamports (`number`) for the position account.
-
-**Example**
-```typescript
-import { getPositionRentExemption, getBinCount } from '@meteora-ag/dlmm';
-
-const binCount = new BN(getBinCount(minBinId, maxBinId));
-const rentLamports = await getPositionRentExemption(connection, binCount);
-console.log('Position rent:', rentLamports, 'lamports');
-```
-
----
-
-### getBinArraysRequiredByPositionRange
-
-Returns the bin array PDAs and their indexes required to initialize positions covering a continuous bin range.
-
-**Function**
-```typescript
-getBinArraysRequiredByPositionRange(
-    pair: PublicKey,
-    fromBinId: BN,
-    toBinId: BN,
-    programId: PublicKey
-): { key: PublicKey; index: BN }[]
-```
-
-**Parameters**
-```typescript
-pair: PublicKey                // The LB pair address
-fromBinId: BN                  // Start bin ID of the range
-toBinId: BN                    // End bin ID of the range
-programId: PublicKey           // DLMM program ID
-```
-
-**Returns**
-
-An array of objects containing each bin array `key` (PDA) and its `index`.
-
-**Example**
-```typescript
-import { getBinArraysRequiredByPositionRange } from '@meteora-ag/dlmm';
-
-const programId = new PublicKey('LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo');
-const requiredBinArrays = getBinArraysRequiredByPositionRange(
-  dlmmPool.pubkey,
-  new BN(minBinId),
-  new BN(maxBinId),
-  programId
-);
-```
-
----
-
-### isBinIdWithinBinArray
-
-Checks whether a given bin ID falls within the range covered by a specified bin array index.
-
-**Function**
-```typescript
-isBinIdWithinBinArray(activeId: BN, binArrayIndex: BN): boolean
-```
-
-**Parameters**
-```typescript
-activeId: BN                   // The bin ID to check
-binArrayIndex: BN              // The bin array index to check against
-```
-
-**Returns**
-
-`true` if the bin is within the bin array's range, `false` otherwise.
-
-**Example**
-```typescript
-import { isBinIdWithinBinArray, binIdToBinArrayIndex } from '@meteora-ag/dlmm';
-
-const binArrayIndex = binIdToBinArrayIndex(new BN(dlmmPool.lbPair.activeId));
-const isWithin = isBinIdWithinBinArray(new BN(targetBinId), binArrayIndex);
-```
-
----
-
-### updateBinArray
-
-Applies the current LM reward state to a bin array in-memory, distributing accumulated rewards into each bin. Used when computing reward accruals off-chain.
-
-**Function**
-```typescript
-updateBinArray(
-    activeId: BN,
-    clock: Clock,
-    allRewardInfos: RewardInfos,
-    binArray: BinArray
-): void
-```
-
-**Parameters**
-```typescript
-activeId: BN                   // Current active bin ID
-clock: Clock                   // Current clock state
-allRewardInfos: RewardInfos    // Pool reward info (from LB pair state)
-binArray: BinArray             // The bin array account to update (mutated in place)
-```
-
-**Returns**
-
-Nothing. The `binArray` is mutated in place.
-
-**Example**
-```typescript
-import { updateBinArray } from '@meteora-ag/dlmm';
-
-updateBinArray(
-  new BN(dlmmPool.lbPair.activeId),
-  dlmmPool.clock,
-  dlmmPool.lbPair.rewardInfos,
-  binArrayAccount
-);
-```
-
----
-
-## Rebalance Utilities
-
-### RebalancePosition
-
-A class that encapsulates the state of an existing position for rebalance simulation. Create instances using the static `RebalancePosition.create()` factory method.
-
-**Class**
-```typescript
-class RebalancePosition {
-  address: PublicKey;
-  lowerBinId: BN;
-  upperBinId: BN;
-  owner: PublicKey;
-  shouldClaimFee: boolean;
-  shouldClaimReward: boolean;
-
-  static async create(
-    params: CreateRebalancePositionParams
-  ): Promise<RebalancePosition>;
-
-  async simulateRebalance(
-    connection: Connection,
-    binStep: BN,
-    tokenXDecimal: BN,
-    tokenYDecimal: BN,
-    withdraws: RebalanceWithWithdraw[],
-    deposits: RebalanceWithDeposit[]
-  ): Promise<SimulateRebalanceResp>;
-
-  totalAmounts(): BN[];
-  totalFeeAmounts(): BN[];
-  totalRewardAmounts(): BN[];
-}
-```
-
-**CreateRebalancePositionParams**
 ```typescript
 {
-  program: Program<LbClmm>;
-  pairAddress: PublicKey;
-  positionAddress: PublicKey;
-  positionData: PositionData;
-  shouldClaimFee: boolean;
-  shouldClaimReward: boolean;
+  initBinArrayInstructions: TransactionInstruction[]
+  rebalancePositionInstruction: TransactionInstruction[]
 }
 ```
 
-**Example**
+## Seed Liquidity
+
+Seed liquidity helpers are for launch/operator workflows and return instruction groups rather than ready-to-send signed transactions.
+
+| Method | Return | Description |
+| --- | --- | --- |
+| `seedLiquidity(owner, seedAmount, curvature, minPrice, maxPrice, base, payer, feeOwner, operator, lockReleasePoint, shouldSeedPositionOwner?)` | `Promise&lt;SeedLiquidityResponse&gt;` | Creates grouped instructions for owner proof, bin array/position initialization, and one-sided precise deposits across a price range. |
+| `seedLiquiditySingleBin(payer, base, seedAmount, price, roundingUp, positionOwner, feeOwner, operator, lockReleasePoint, shouldSeedPositionOwner?)` | `Promise&lt;SeedLiquiditySingleBinResponse&gt;` | Seeds token X into one bin and initializes bin array/position if needed. |
+
+`SeedLiquidityResponse` groups instructions for parallel/sequential execution:
+
+| Field | Description |
+| --- | --- |
+| `sendPositionOwnerTokenProveIxs` | Optional owner proof instructions. |
+| `initializeBinArraysAndPositionIxs` | Grouped setup instructions. |
+| `addLiquidityIxs` | Grouped deposit instructions. |
+| `costBreakdown` | Estimated rent/lamport costs. |
+
+## Bin Arrays
+
+| Method | Description |
+| --- | --- |
+| `initializeBinArrays(binArrayIndexes, funder)` | Returns instructions to initialize missing bin arrays, with compute-budget instruction prepended if needed. |
+| `getBinArrays()` | Fetch all initialized bin arrays for the pool. |
+| `getBinArrayForSwap(swapForY, count?)` | Fetch bin arrays in the swap direction. |
+
+`initialize_bin_array` is compute-heavy because it initializes bin prices. Use the SDK helper or add compute budget manually in custom flows.
+
+## Pool Controls
+
+| Method | Description |
+| --- | --- |
+| `setPairStatusPermissionless(enabled, creator)` | Creator-controlled status transaction for eligible customizable permissionless pools. |
+| `setPairStatus(enabled)` | Builds admin/creator pair status transaction using `lbPair.creator` as fee payer/signing account. |
+| `setActivationPoint(activationPoint)` | Builds activation point transaction using `lbPair.creator`. |
+| `isSwapDisabled(swapInitiator)` | Local check for disabled status, permissioned/customizable activation point, and pre-activation swap address. |
+| `canSyncWithMarketPrice(marketPrice, activeBinId)` | Checks whether active bin can be moved to market price without crossing liquidity. |
+| `syncWithMarketPrice(marketPrice, owner)` | Builds `go_to_a_bin` transaction and initializes bitmap extension when needed. |
+
+## Token-2022 Support
+
+The SDK automatically detects token program ownership when `DLMM.create` or `createMultiple` loads a pool. It also fetches transfer-hook extra account metas for token X, token Y, and reward mints.
+
+Internally, transaction builders use:
+
 ```typescript
-import { RebalancePosition } from '@meteora-ag/dlmm';
-
-const rebalancePos = await RebalancePosition.create({
-  program: dlmmPool.program,
-  pairAddress: dlmmPool.pubkey,
-  positionAddress: positionAddress,
-  positionData: positionData,
-  shouldClaimFee: true,
-  shouldClaimReward: true,
-});
-
-const simulation = await rebalancePos.simulateRebalance(
-  connection,
-  new BN(dlmmPool.lbPair.binStep),
-  new BN(tokenXDecimal),
-  new BN(tokenYDecimal),
-  withdrawParams,
-  depositParams
-);
+getPotentialToken2022IxDataAndAccounts(actionType, rewardIndex?)
 ```
 
----
+This returns `RemainingAccountsInfoSlice[]` and account metas for Token-2022 transfer hooks. Public Token-2022 helper exports include:
 
-### RebalancePositionBinArrayRentalCostQuote
+| Helper | Description |
+| --- | --- |
+| `calculateTransferFeeIncludedAmount(amount, mint, epoch)` | Grosses up an amount so the receiver gets the intended net amount after transfer fee. |
+| `calculateTransferFeeExcludedAmount(amount, mint, epoch)` | Calculates net amount after transfer fee. |
+| `getExtraAccountMetasForTransferHook(connection, mint, mintAccount)` | Reads transfer-hook extra account metas for one mint. |
+| `getMultipleMintsExtraAccountMetasForTransferHook(connection, mintAccounts)` | Batch version used by `createMultiple`. |
 
-Interface describing the rental cost breakdown for bin arrays required during a rebalance.
+## Helper Exports
 
-**Interface**
-```typescript
-interface RebalancePositionBinArrayRentalCostQuote {
-  binArrayExistence: Set<string>; // Set of existing bin array addresses (as strings)
-  binArrayCount: number;          // Total number of bin arrays needed
-  binArrayCost: number;           // Lamports required for new bin arrays
-  bitmapExtensionCost: number;    // Lamports required for bitmap extension (if needed)
-}
-```
+### PDA Helpers
 
-**Notes**
-- Returned alongside `SimulateRebalanceResp` from rebalance quote methods.
-- `binArrayCost` covers only bin arrays that do not already exist on-chain.
-- `bitmapExtensionCost` is non-zero only if the rebalance requires bins outside the default bitmap range.
+| Helper | Description |
+| --- | --- |
+| `derivePresetParameterWithIndex` | Derives `PresetParameter2` with index key. |
+| `deriveLbPairWithPresetParamWithIndexKey` | Derives v2 pool PDA from preset parameter key and token mints. |
+| `derivePresetParameter`, `derivePresetParameter2` | Derive preset parameter accounts. |
+| `deriveLbPair`, `deriveLbPair2` | Derive legacy/v2 pool PDAs. |
+| `deriveCustomizablePermissionlessLbPair`, `derivePermissionLbPair` | Derive pool PDAs for specialized pool types. |
+| `deriveOracle`, `derivePosition`, `deriveBinArray`, `deriveReserve`, `deriveRewardVault` | Derive common pool accounts. |
+| `deriveTokenBadge`, `deriveOperator`, `deriveEventAuthority` | Derive program support accounts. |
 
----
+### Bin Array Helpers
 
-### RebalanceWithDeposit
+| Helper | Description |
+| --- | --- |
+| `binIdToBinArrayIndex` | Converts a bin ID to bin array index. |
+| `getBinArrayLowerUpperBinId` | Returns lower/upper bin IDs for a bin array index. |
+| `isBinIdWithinBinArray` | Checks whether a bin belongs to a bin array. |
+| `isOverflowDefaultBinArrayBitmap` | Checks if a bin array index requires bitmap extension. |
+| `findNextBinArrayIndexWithLiquidity` | Finds next initialized bin array with liquidity in a direction. |
+| `findNextBinArrayWithLiquidity` | Same, but returns an account from loaded bin arrays. |
+| `getBinArraysRequiredByPositionRange` | Returns bin array PDAs required for a position range. |
+| `enumerateBins` | Iterates bins across loaded bin arrays. |
+| `getBinArrayInfoForNonContiguousBinIds` | Returns bin array metas and bitmap account for arbitrary bin IDs. |
 
-Interface defining the parameters for a deposit leg of a rebalance operation.
+### Position Helpers
 
-**Interface**
-```typescript
-interface RebalanceWithDeposit {
-  minDeltaId: BN;             // minBinId = activeId + minDeltaId
-  maxDeltaId: BN;             // maxBinId = activeId + maxDeltaId
-  x0: BN;                     // Base amount of token X in the active bin
-  y0: BN;                     // Base amount of token Y in the active bin
-  deltaX: BN;                 // Per-bin increment of token X on the ask side
-  deltaY: BN;                 // Per-bin increment of token Y on the bid side
-  favorXInActiveBin: boolean; // Whether to deposit token X into the active bin
-}
-```
+| Helper | Description |
+| --- | --- |
+| `wrapPosition` | Wraps raw account data in a position wrapper. |
+| `getBinArrayIndexesCoverage`, `getBinArrayKeysCoverage`, `getBinArrayAccountMetasCoverage` | Derive bin array coverage for ranges. |
+| `getPositionLowerUpperBinIdWithLiquidity` | Trims a position range to bins with liquidity. |
+| `isPositionNoFee`, `isPositionNoReward` | Checks whether processed position data has claimable fees/rewards. |
+| `chunkBinRangeIntoExtendedPositions`, `chunkBinRange`, `chunkPositionBinRange` | Splits bin ranges for transaction and dynamic-position limits. |
+| `calculatePositionSize`, `getPositionRentExemption`, `getPositionExpandRentExemption` | Rent and account-size helpers. |
+| `getExtendedPositionBinCount`, `decodeExtendedPosition` | Dynamic position data helpers. |
 
-**Notes**
-- `minDeltaId` and `maxDeltaId` are relative to the `activeId` at the time of the rebalance.
-- Use `suggestBalancedXParametersFromY` or `suggestBalancedYParametersFromX` to compute balanced parameter values.
+### Strategy And Weight Helpers
 
----
+| Helper | Description |
+| --- | --- |
+| `calculateSpotDistribution` | Builds spot weight distribution. |
+| `calculateBidAskDistribution` | Builds bid/ask weight distribution. |
+| `calculateNormalDistribution` | Builds curve/normal distribution. |
+| `toAmountsBothSideByStrategy` | Converts strategy into token amounts per bin. |
+| `autoFillYByStrategy`, `autoFillXByStrategy` | Calculates missing side amount for strategy deposits. |
+| `toStrategyParameters` | Converts SDK strategy enum into program strategy parameters. |
+| `toWeightDistribution` | Converts bps distributions into program weights. |
+| `fromWeightDistributionToAmount`, `fromWeightDistributionToAmountOneSide` | Converts weights back to token amounts. |
+| `autoFillYByWeight`, `autoFillXByWeight` | Calculates missing side amount for weight deposits. |
 
-### RebalanceWithWithdraw
+### Fee And Math Helpers
 
-Interface defining the parameters for a withdrawal leg of a rebalance operation.
+| Helper | Description |
+| --- | --- |
+| `getBaseFee`, `getVariableFee`, `getTotalFee` | Fee rate helpers. |
+| `computeFee`, `computeFeeFromAmount`, `computeProtocolFee` | Fee amount helpers. |
+| `getExcludedFeeAmount`, `getIncludedFeeAmount`, `splitFee` | Fee-inclusive/exclusive calculations. |
+| `computeBaseFactorFromFeeBps` | Converts fee bps into base factor and base fee power factor. |
+| `getQPriceFromId`, `getQPriceBaseFactor` | Q64.64 price helpers. |
+| `mulShr`, `shlDiv`, `mulDiv` | Fixed-point arithmetic helpers. |
+| `generateAmountForBinRange`, `compressBinAmount`, `findOptimumDecompressMultiplier` | Seed liquidity compression helpers. |
 
-**Interface**
-```typescript
-interface RebalanceWithWithdraw {
-  minBinId: BN | null; // Start of withdrawal range (null = start from activeId)
-  maxBinId: BN | null; // End of withdrawal range (null = end at activeId)
-  bps: BN;             // Basis points of liquidity to withdraw (10000 = 100%)
-}
-```
+### RPC And Transaction Helpers
 
-**Notes**
-- Set `minBinId` to `null` to withdraw from the active bin downwards.
-- Set `maxBinId` to `null` to withdraw up to the active bin.
-- A `bps` of `10000` withdraws 100% of liquidity within the specified range.
+| Helper | Description |
+| --- | --- |
+| `chunks`, `range` | Array utilities. |
+| `chunkedFetchMultiplePoolAccount`, `chunkedFetchMultipleBinArrayBitmapExtensionAccount` | Batched account fetch helpers. |
+| `chunkedGetMultipleAccountInfos`, `chunkedGetProgramAccounts` | RPC-safe batched reads. |
+| `getTokenDecimals`, `getTokenBalance` | Token account reads. |
+| `getOrCreateATAInstruction` | Returns ATA address and optional create instruction. |
+| `wrapSOLInstruction`, `unwrapSOLInstruction` | Native SOL wrapping helpers. |
+| `getEstimatedComputeUnitUsageWithBuffer`, `getEstimatedComputeUnitIxWithBuffer` | Simulation-based compute budget helpers. |
+| `createProgram`, `decodeAccount`, `getAccountDiscriminator` | Anchor program/account helpers. |
+| `capSlippagePercentage`, `getAndCapMaxActiveBinSlippage`, `getSlippageMaxAmount`, `getSlippageMinAmount` | Slippage helpers. |
+| `encodePositionPermissions` | Encodes position permission bits. |
 
----
+### Account Filters
 
-### SimulateRebalanceResp
+Use these with `getProgramAccounts`:
 
-Interface representing the result of a rebalance simulation, used to preview amounts and costs before executing the transaction.
+| Filter | Description |
+| --- | --- |
+| `presetParameter2BinStepFilter` | Filter `PresetParameter2` by bin step. |
+| `presetParameter2BaseFactorFilter` | Filter `PresetParameter2` by base factor. |
+| `presetParameter2BaseFeePowerFactor` | Filter `PresetParameter2` by base fee power factor. |
+| `binArrayLbPairFilter` | Filter bin arrays by pool. |
+| `positionOwnerFilter` | Filter positions by owner. |
+| `positionLbPairFilter` | Filter positions by pool. |
+| `positionV2Filter` | Filter `PositionV2` accounts. |
+| `limitOrderFilter` | Filter limit order accounts. |
+| `limitOrderOwnerFilter` | Filter limit orders by owner. |
+| `limitOrderLbPairFilter` | Filter limit orders by pool. |
 
-**Interface**
-```typescript
-interface SimulateRebalanceResp {
-  amountXDeposited: BN;               // Expected token X to be deposited
-  amountYDeposited: BN;               // Expected token Y to be deposited
-  actualAmountXDeposited: BN;         // Actual token X after compression
-  actualAmountYDeposited: BN;         // Actual token Y after compression
-  actualAmountXWithdrawn: BN;         // Actual token X withdrawn
-  actualAmountYWithdrawn: BN;         // Actual token Y withdrawn
-  rewardAmountsClaimed: BN[];         // Reward amounts claimed per reward token
-  depositParams: RebalanceAddLiquidityParam[];    // Encoded deposit instructions
-  withdrawParams: RebalanceRemoveLiquidityParam[]; // Encoded withdraw instructions
-  rentalCostLamports: BN;             // Total lamports needed for bin array rent
-}
-```
+## Oracle Helpers
 
-**Example**
-```typescript
-const simulation = await rebalancePos.simulateRebalance(
-  connection,
-  binStep,
-  tokenXDecimal,
-  tokenYDecimal,
-  withdraws,
-  deposits
-);
+The `getOracle()` instance method returns an `IDynamicOracle` wrapper. It exposes observation and TWAP functionality around the pool oracle account.
 
-console.log('Token X to deposit:', simulation.amountXDeposited.toString());
-console.log('Token Y to deposit:', simulation.amountYDeposited.toString());
-console.log('Rental cost (lamports):', simulation.rentalCostLamports.toString());
-```
+Important exports:
 
----
+| Export | Description |
+| --- | --- |
+| `wrapOracle` | Wraps a raw oracle account. |
+| `DynamicOracle` | Oracle wrapper class. |
+| `Observation` | Observation wrapper. |
+| `TwapResult&lt;T&gt;` | Result type for TWAP reads. |
 
-### getAutoFillAmountByRebalancedPosition
+## Limit Order Wrappers
 
-Determines the amount of the deficient token needed to bring a rebalanced position back into balance, and specifies whether it is a bid-side (token Y) or ask-side (token X) deposit.
+Low-level exports from `helpers/limitOrders` include:
 
-**Function**
-```typescript
-getAutoFillAmountByRebalancedPosition(
-    rebalancePosition: RebalancePosition,
-    strategyType: StrategyType
-): { amount: BN; isBidSide: boolean }
-```
+| Export | Description |
+| --- | --- |
+| `decodeLimitOrderBinData` | Decodes dynamic limit order bin data bytes. |
+| `wrapLimitOrder` | Wraps a `LimitOrder` account and dynamic bin data. |
+| `LimitOrderV1Wrapper` | Wrapper implementing the limit order interface. |
+| `LimitOrderBinDataWrapper` | Wrapper for one limit order bin entry. |
+| `ParsedLimitOrder`, `ParsedLimitOrderBinData` | Parsed limit order views. |
 
-**Parameters**
-```typescript
-rebalancePosition: RebalancePosition
-                               // The rebalance position instance (from RebalancePosition.create)
-strategyType: StrategyType     // The target strategy type (Spot, Curve, or BidAsk)
-```
+## Error Handling
 
-**Returns**
+Quote methods throw `DlmmSdkError` for SDK-level quote failures. Common cases include:
 
-An object with `amount` (the token amount needed) and `isBidSide` (`true` = token Y needed, `false` = token X needed).
+| Code | Meaning |
+| --- | --- |
+| `INVALID_MAX_EXTRA_BIN_ARRAYS` | `maxExtraBinArrays` is outside the supported range. |
+| `SWAP_QUOTE_INSUFFICIENT_LIQUIDITY` | Loaded bin arrays do not contain enough liquidity for the requested quote. |
 
-**Example**
-```typescript
-import { getAutoFillAmountByRebalancedPosition } from '@meteora-ag/dlmm';
+Transaction builders may also throw standard `Error` objects for invalid ranges, missing accounts, existing pools, no claimable fees/rewards, or unsupported state.
 
-const { amount, isBidSide } = getAutoFillAmountByRebalancedPosition(
-  rebalancePos,
-  StrategyType.Spot
-);
+## Practical Notes
 
-if (isBidSide) {
-  console.log('Need to deposit', amount.toString(), 'of token Y');
-} else {
-  console.log('Need to deposit', amount.toString(), 'of token X');
-}
-```
-
-**Notes**
-- Typically used after constructing a `RebalancePosition` to determine how much of one token to supply for a one-sided top-up.
+- All token amounts are raw integer token amounts, usually `BN`, not UI decimals.
+- Slippage values in quote methods are bps. A 0.5% slippage is `new BN(50)`.
+- `swapForY = true` means swapping token X into token Y.
+- Most current transaction builders use the v2 program instructions and support Token-2022.
+- Legacy methods remain exported for older flows, but new integrations should prefer v2 creation, v2 liquidity, and v2 swap paths.
+- Methods that return `TransactionInstruction[][]` or grouped instruction objects are intended for callers that need custom transaction assembly, ALT usage, or parallel execution.
+- After sending a transaction, call `refetchStates()` before quoting or reading from the same `DLMM` instance again.
