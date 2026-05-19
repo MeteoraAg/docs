@@ -1,128 +1,75 @@
 ---
 title: "Whitelist and Access Control"
 sidebarTitle: "Whitelist and Access"
-description: "Understand Alpha Vault permissionless deposits, Merkle proof whitelists, authority-managed whitelists, wallet caps, and when to use each access model."
-llmsDescription: "Explains Alpha Vault whitelist and access control in product terms: permissionless deposits, permission with Merkle proof, permission with authority, user escrows, max caps, individual caps, when to use allowlists, community allocations, small curated lists, larger whitelist campaigns, and launch communication best practices."
+description: "Understand Alpha Vault permissionless escrows, Merkle proof escrows, authority-created escrows, wallet caps, vault authority, and escrow fees."
+llmsDescription: "Explains Alpha Vault access control from source behavior: permissionless escrow creation, Merkle proof escrow creation using wallet and max cap leaves, authority-created escrows, permissioned max caps, escrow fee restrictions, vault authority and admin permissions, Merkle root metadata, and crank fee whitelist accounts."
 ---
 
-Alpha Vault can be open to everyone or restricted to selected wallets. This lets teams decide whether the vault is a public early-access window, a curated allowlist round, or a tightly controlled partner allocation.
+Alpha Vault controls access at the escrow-creation layer. A user must have an escrow for the vault before they can deposit.
 
 ## Access Models
 
-Alpha Vault supports three access models.
-
-| Access Model | Product Meaning | Best Fit |
+| Access model | Who can create the escrow | How user quota is set |
 | --- | --- | --- |
-| Permissionless | Anyone can create an escrow and deposit while the vault is open. | Public community access and simple launches. |
-| Permission with Merkle proof | Only wallets in a whitelist can deposit, usually with wallet-specific caps. | Larger allowlists, community campaigns, NFT holders, points users, or partner lists. |
-| Permission with authority | The vault authority creates escrows for selected wallets. | Smaller curated lists where the team wants direct control. |
+| Permissionless | Anyone can create an escrow during the deposit window. | Permissionless FCFS uses `individual_depositing_cap`; permissionless Pro Rata effectively has no individual cap. |
+| Merkle proof | A user or payer creates an escrow with a valid Merkle proof. | The Merkle leaf includes the wallet and `max_cap`; the escrow stores that `max_cap`. |
+| Authority-managed | The vault authority creates the escrow for a selected wallet. | The authority passes a positive `max_cap`; the escrow stores that `max_cap`. |
 
-## Permissionless Access
+## Permissionless Escrows
 
-Permissionless mode is the simplest version of Alpha Vault.
+Permissionless mode lets anyone create an escrow while the vault is open. The escrow address is derived from the vault and owner, so each owner has one escrow per vault.
 
-Any wallet can create an escrow and deposit while the deposit window is open. Distribution is then handled by the selected vault mode:
+Permissionless vaults may charge an escrow creation fee. The program caps this fee at `10,000,000` lamports (`0.01 SOL`) and sends it to the Meteora treasury account. The fee is recorded in `total_escrow_fee` and is not refunded when the escrow is closed.
 
-- In Pro Rata, everyone shares the vault result proportionally.
-- In FCFS, capacity goes to users who deposit before the cap is filled.
+## Merkle Proof Escrows
 
-Permissionless access is best when the project wants fewer operational steps and a more open community launch.
+Merkle proof mode is built for larger allowlists.
 
-<Info>
-  Permissionless FCFS launches should think carefully about individual caps. Without them, one wallet can potentially fill the entire vault.
-</Info>
+The vault authority or a program admin creates a `MerkleRootConfig` for the vault. Each user then proves membership with a leaf built from:
 
-## Permission with Merkle Proof
+```text
+owner pubkey + max_cap
+```
 
-Merkle proof mode is designed for larger whitelists.
+The program stores the supplied `max_cap` in the user's escrow after verifying the proof. Deposits are then limited by the escrow's remaining cap.
 
-The project prepares a whitelist of wallet addresses and, optionally, max caps for those wallets. The list is converted into a Merkle root. When a user deposits, they prove that their wallet belongs to the approved list without putting the entire whitelist on-chain.
+The program also supports Merkle proof metadata with a `proof_url`, which can point clients to off-chain proof data.
 
-Product-wise, this gives teams a scalable allowlist design:
+<Note>
+  The Merkle root account is versioned, so teams can publish multiple root versions for the same vault when needed.
+</Note>
 
-- Wallets can be approved before deposits open.
-- Each wallet can have a defined max cap.
-- Large lists are cheaper and easier to manage than creating every escrow manually.
-- The UI can verify whether a connected wallet is eligible.
+## Authority-Managed Escrows
 
-### Common Uses
+Authority-managed mode is for curated lists. The vault authority signs the escrow creation transaction and selects the owner and `max_cap`.
 
-Merkle proof access is useful for:
+This mode is operationally simple for small lists because the team can create the escrow accounts directly. It is less scalable than Merkle proof mode for large public allowlists.
 
-- Community allowlists.
-- NFT holder campaigns.
-- Points or loyalty tiers.
-- Partner or ecosystem allocations.
-- Launchpad user lists.
-- Regional or compliance-based participation filters, where applicable.
+## Permissioned Vault Fee Rule
 
-<Warning>
-  For Merkle proof launches, the whitelist data and proof hosting should be ready before deposits open. Otherwise eligible users may not be able to deposit even if the vault itself is live.
-</Warning>
+Permissioned vaults cannot charge an escrow creation fee.
 
-## Permission with Authority
+The initialization path rejects any nonzero `escrow_fee` when `whitelist_mode` is Merkle proof or authority-managed. This avoids charging users or teams for escrow creation in permissioned flows where the project may create many escrows.
 
-Authority-managed access is designed for smaller curated lists.
+## Vault Authority and Admins
 
-Instead of asking each user to create their own escrow through a Merkle proof, the vault authority creates permissioned escrows for selected wallets. Each escrow can include a max cap.
+The vault authority is normally the vault creator. It can:
 
-This model is operationally simple for small lists but does not scale as well as Merkle proof mode because the authority needs to create escrows for the approved wallets.
+- Create Merkle root configs for a Merkle-proof vault.
+- Create Merkle proof metadata.
+- Create authority-managed escrows when the vault uses authority mode.
+- Transfer vault authority to a new pubkey.
 
-It is best for:
-
-- Strategic partner allocations.
-- Small VIP or contributor lists.
-- Internal allocations.
-- Cases where the team wants direct control over every eligible wallet.
+Program admins can create global Pro Rata and FCFS config accounts, update vault parameters through admin-only instructions, create crank-fee whitelist accounts, and also create Merkle root configs or metadata.
 
 ## Wallet Caps
 
-Wallet caps define how much a specific wallet can deposit.
+Caps are enforced during deposit, not just during escrow creation.
 
-Caps are especially important for FCFS launches, where capacity can disappear quickly. A cap prevents a single wallet from taking too much of the vault.
-
-| Cap Type | Product Meaning |
-| --- | --- |
-| Vault cap | The overall amount the vault can use or accept. |
-| Individual cap | The maximum amount one wallet can deposit. |
-| Whitelist cap | A wallet-specific cap included in the whitelist or permissioned escrow. |
-
-In Pro Rata mode, caps are mainly about shaping allocation and deposit behavior. In FCFS mode, caps are often essential for distribution quality.
-
-## Choosing an Access Model
-
-Use **permissionless** when:
-
-- The team wants a public launch.
-- The deposit rules are simple.
-- The team is comfortable with open participation.
-- Pro Rata is used to smooth out demand.
-
-Use **Merkle proof whitelist** when:
-
-- The team has a large eligible user list.
-- Different wallets may need different caps.
-- The campaign needs a scalable allowlist.
-- The UI should show whether a wallet is eligible.
-
-Use **authority-managed access** when:
-
-- The eligible list is small.
-- The team wants direct control over each wallet's escrow.
-- The launch does not need a large proof-based campaign.
-
-## Communication Checklist
-
-Before opening deposits, teams should tell users:
-
-- Which wallets are eligible.
-- Which quote token is accepted.
-- Whether the vault is Pro Rata or FCFS.
-- The vault cap and any wallet cap.
-- When deposits open and close.
-- Whether users can withdraw before deposits close.
-- When token claims begin.
-- Whether tokens vest over time.
-- When and how refunds can be claimed.
-
-Good access design is not just about who can deposit. It is about making sure users understand the rules before they commit funds.
+| Cap source | Applies when | Behavior |
+| --- | --- | --- |
+| `individual_depositing_cap` | Permissionless FCFS | Limits each escrow's accepted deposit. |
+| `u64::MAX` | Permissionless Pro Rata | Means the individual cap is effectively ignored. |
+| Escrow `max_cap` | Merkle proof and authority-managed vaults | Limits deposits for that permissioned escrow. |
+| `max_depositing_cap` | FCFS vaults | Limits total accepted vault deposits. |
+| `max_buying_cap` | Pro Rata vaults | Limits how much quote the vault can swap, not how much it can accept. |

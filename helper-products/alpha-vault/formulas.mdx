@@ -1,0 +1,177 @@
+---
+title: "Alpha Vault Formulas"
+sidebarTitle: "Formulas"
+description: "Review Alpha Vault allocation, swappable amount, refund, vesting, cap, and Token 2022 transfer-fee formulas."
+llmsDescription: "Source-backed Alpha Vault formulas for max swappable amount, swappable amount per fill, user token claim, linear vesting, Pro Rata overflow refund, final remaining quote refund, FCFS accepted deposit, permissioned remaining quota, and Token 2022 transfer-fee accounting. Notes integer division and rounding down."
+---
+
+Alpha Vault accounting is proportional: the vault buys as one account, then users receive token claims and quote refunds based on their escrow deposit share.
+
+All on-chain arithmetic uses integer token amounts. Division rounds down.
+
+## Key Terms
+
+| Term | Meaning |
+| --- | --- |
+| `total_deposit` | Total net quote amount recorded across all escrows. |
+| `escrow.total_deposit` | Net quote amount recorded for one escrow. |
+| `max_buying_cap` | Pro Rata quote amount cap for vault fills. |
+| `max_depositing_cap` | FCFS total accepted deposit cap. |
+| `swapped_amount` | Total quote amount already used by vault fills. |
+| `bought_token` | Total launch token bought by the vault. |
+| `claimed_token` | Launch token already claimed by an escrow. |
+| `withdrawn_deposit_overflow` | Pro Rata overflow quote already withdrawn by an escrow. |
+
+## Max Swappable Amount
+
+The max swappable amount is mode-dependent.
+
+```math
+\text{Pro Rata Max Swappable} =
+\min(\text{total\_deposit}, \text{max\_buying\_cap})
+```
+
+```math
+\text{FCFS Max Swappable} =
+\text{total\_deposit}
+```
+
+Each fill instruction also takes a `max_amount`, so the actual amount for that fill is:
+
+```math
+\text{Fill Swappable Amount} =
+\min(\text{Max Swappable Amount} - \text{swapped\_amount}, \text{max\_amount})
+```
+
+## User Deposit Share
+
+Most user-facing amounts use the escrow's share of total vault deposits.
+
+```math
+\text{User Share} =
+\frac{\text{escrow.total\_deposit}}{\text{total\_deposit}}
+```
+
+Because this is integer math on-chain, the program multiplies before dividing and rounds down.
+
+## Linear Vesting
+
+The program treats both endpoints as inclusive by adding `1` to the numerator and denominator.
+
+```math
+\text{Vesting Duration} =
+\text{end\_vesting\_point} - \text{start\_vesting\_point} + 1
+```
+
+```math
+\text{Elapsed Duration} =
+\min(\text{current\_point}, \text{end\_vesting\_point})
+- \text{start\_vesting\_point} + 1
+```
+
+```math
+\text{Total Claimable Token} =
+\text{bought\_token}
+\times
+\frac{\text{Elapsed Duration}}{\text{Vesting Duration}}
+```
+
+Claims are not allowed before `start_vesting_point`.
+
+## User Claimable Token
+
+```math
+\text{Escrow Dripped Token} =
+\text{Total Claimable Token}
+\times
+\frac{\text{escrow.total\_deposit}}{\text{total\_deposit}}
+```
+
+```math
+\text{User Claimable Token} =
+\text{Escrow Dripped Token} - \text{escrow.claimed\_token}
+```
+
+After a claim, the program increments both the escrow's `claimed_token` and the vault's `total_claimed_token`.
+
+## Pro Rata Overflow Refund
+
+Overflow is the part of total deposits that cannot be included in max swappable amount.
+
+```math
+\text{Deposit Overflow} =
+\text{total\_deposit} - \text{Max Swappable Amount}
+```
+
+```math
+\text{Escrow Overflow Refund} =
+\text{Deposit Overflow}
+\times
+\frac{\text{escrow.total\_deposit}}{\text{total\_deposit}}
+```
+
+An escrow can withdraw this overflow after `last_join_point` and through `last_buying_point`. The program tracks `withdrawn_deposit_overflow` so repeated withdrawals only receive the remaining overflow amount.
+
+## Final Remaining Quote Refund
+
+After the pool's `last_buying_point`, an escrow can withdraw its share of quote left in the vault.
+
+```math
+\text{Remaining Quote} =
+\text{total\_deposit} - \text{swapped\_amount}
+```
+
+```math
+\text{Escrow Total Refund Quote} =
+\text{Remaining Quote}
+\times
+\frac{\text{escrow.total\_deposit}}{\text{total\_deposit}}
+```
+
+```math
+\text{Final Refund Transfer} =
+\text{Escrow Total Refund Quote}
+- \text{escrow.withdrawn\_deposit\_overflow}
+```
+
+The escrow is then marked as refunded so the final remaining quote path cannot be used twice.
+
+## FCFS Accepted Deposit
+
+In FCFS mode, the program limits the accepted deposit amount before transfer.
+
+```math
+\text{Remaining Vault Capacity} =
+\text{max\_depositing\_cap} - \text{total\_deposit}
+```
+
+```math
+\text{Remaining User Quota} =
+\text{User Cap} - \text{escrow.total\_deposit}
+```
+
+```math
+\text{Accepted Deposit} =
+\min(
+\text{requested net amount},
+\text{Remaining Vault Capacity},
+\text{Remaining User Quota}
+)
+```
+
+If the accepted amount is `0`, the deposit fails.
+
+## Token 2022 Transfer Fees
+
+When the quote mint has a Token 2022 transfer fee, the vault records the fee-excluded amount as the deposit. It transfers the fee-included amount from the user so that the vault receives the intended net amount.
+
+```math
+\text{Recorded Deposit} =
+\text{Transfer Amount} - \text{Transfer Fee}
+```
+
+For outbound claims and refunds, emitted event amounts are fee-excluded when a transfer fee applies.
+
+<Warning>
+  Formula examples describe the accounting path. Actual token balances can also be affected by Token 2022 transfer fees and transfer-memo requirements on destination accounts.
+</Warning>
