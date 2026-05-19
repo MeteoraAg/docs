@@ -1,0 +1,230 @@
+---
+title: Presale Vault Formulas
+sidebarTitle: Formulas
+description: The main Presale Vault formulas for fixed-price sales, dynamic allocation, fees, refunds, and vesting.
+llmsDescription: "Reference for Presale Vault formulas from the presale program, covering smallest-unit integer accounting, basis-point and Q64.64 constants, sale success checks, deposit fee gross-up with rounding up, Fixed Price base bought and quote-needed calculations, registry sold-token caps, FCFS and Pro Rata registry allocation by deposit share, Pro Rata overflow quote refunds, refundable deposit-fee calculations, failed-sale refunds, creator quote withdrawal caps, collectible fees, immediate release, lock duration, linear vesting, cumulative claimable tokens, and Token-2022 transfer fee considerations."
+---
+
+Presale Vault performs calculations in smallest token units. Display decimals are a UI concern; on-chain math uses integer arithmetic, checked overflow handling, and deterministic rounding.
+
+# Constants
+
+```math
+\text{BPS\_DENOMINATOR} = 10{,}000
+```
+
+```math
+\text{Q64\_SCALE} = 2^{64}
+```
+
+Deposit fee bps are capped at `5,000`. Immediate release bps are capped at `10,000`.
+
+# Sale success
+
+A sale is completed when the current timestamp is at or after `presale_end_time` and total net deposits meet the minimum cap:
+
+```math
+\text{completed} = \text{total\_deposit} \ge \text{presale\_minimum\_cap}
+```
+
+If total deposits are below the minimum cap after the sale ends, the sale is failed.
+
+# Deposit fee
+
+The deposit amount tracked for allocation excludes the deposit fee. If a buyer deposits a net amount `D` into a registry with fee rate `f` bps, the gross amount required before Token-2022 transfer fees is rounded up:
+
+```math
+\text{gross} =
+\left\lceil
+\frac{D \times 10{,}000}{10{,}000 - f}
+\right\rceil
+```
+
+```math
+\text{deposit\_fee} = \text{gross} - D
+```
+
+The fee is tracked separately on the escrow, registry, and presale. In Pro Rata, the fee attributable to refunded overflow quote is refundable.
+
+# Fixed Price
+
+Fixed Price mode stores `q_price` as a Q64.64 value:
+
+```math
+\text{q\_price} = \text{quote smallest units per base smallest unit} \times 2^{64}
+```
+
+For a net quote deposit `D`, bought base units are rounded down:
+
+```math
+\text{base\_bought} =
+\left\lfloor
+\frac{D \times 2^{64}}{\text{q\_price}}
+\right\rfloor
+```
+
+When the program needs the quote amount for a base amount, quote is rounded up:
+
+```math
+\text{quote\_needed} =
+\left\lceil
+\frac{\text{base\_amount} \times \text{q\_price}}{2^{64}}
+\right\rceil
+```
+
+For each registry, total sold base token is capped by registry supply:
+
+```math
+\text{registry\_sold} =
+\min(\text{base\_bought\_from\_registry\_deposits},\ \text{registry\_supply})
+```
+
+The buyer's cumulative claimable amount is then based on their share of `registry_sold`, after applying the unlock schedule.
+
+# FCFS allocation
+
+For FCFS, each registry with at least one deposit sells its full registry supply. A buyer's cumulative allocation before vesting is:
+
+```math
+\text{user\_allocation} =
+\left\lfloor
+\frac{\text{registry\_supply} \times \text{user\_deposit}}
+{\text{registry\_total\_deposit}}
+\right\rfloor
+```
+
+Registries with zero deposits sell zero base token, so their supply is unsold.
+
+# Pro Rata allocation and overflow
+
+Pro Rata uses the same registry-level allocation formula as FCFS:
+
+```math
+\text{user\_allocation} =
+\left\lfloor
+\frac{\text{registry\_supply} \times \text{user\_deposit}}
+{\text{registry\_total\_deposit}}
+\right\rfloor
+```
+
+Overflow quote is calculated at the presale level:
+
+```math
+\text{remaining\_quote} =
+\max(\text{total\_deposit} - \text{presale\_maximum\_cap},\ 0)
+```
+
+Each registry receives a share of that remaining quote:
+
+```math
+\text{registry\_remaining\_quote} =
+\left\lfloor
+\frac{\text{remaining\_quote} \times \text{registry\_total\_deposit}}
+{\text{presale\_total\_deposit}}
+\right\rfloor
+```
+
+Each buyer receives a share of the registry refund:
+
+```math
+\text{user\_refund} =
+\left\lfloor
+\frac{\text{registry\_remaining\_quote} \times \text{user\_deposit}}
+{\text{registry\_total\_deposit}}
+\right\rfloor
+```
+
+Refundable deposit fee for Pro Rata overflow is calculated proportionally from the registry's collected fee:
+
+```math
+\text{registry\_refund\_fee} =
+\left\lfloor
+\frac{\text{registry\_total\_fee} \times \text{registry\_remaining\_quote}}
+{\text{registry\_total\_deposit}}
+\right\rfloor
+```
+
+```math
+\text{user\_refund\_fee} =
+\left\lfloor
+\frac{\text{user\_total\_fee} \times \text{registry\_refund\_fee}}
+{\text{registry\_total\_fee}}
+\right\rfloor
+```
+
+# Failed sale refund
+
+If the sale fails, each buyer can withdraw their full remaining net deposit and deposit fee:
+
+```math
+\text{failed\_sale\_refund} = \text{user\_deposit} + \text{user\_deposit\_fee}
+```
+
+The creator can withdraw the base-token supply from a failed sale.
+
+# Creator withdrawal
+
+After a successful sale, the creator can withdraw quote token once:
+
+```math
+\text{creator\_quote\_withdrawal} =
+\min(\text{total\_deposit},\ \text{presale\_maximum\_cap})
+```
+
+Deposit fees are collected through a separate instruction after completion. For Fixed Price and FCFS, the collectible fee is total deposit fee. For Pro Rata, the collectible fee excludes refundable overflow fee.
+
+# Unlock and vesting
+
+First, split the sold allocation into immediate and vested portions:
+
+```math
+\text{immediate\_amount} =
+\left\lfloor
+\frac{\text{total\_sold\_token} \times \text{immediate\_release\_bps}}
+{10{,}000}
+\right\rfloor
+```
+
+```math
+\text{vested\_amount} = \text{total\_sold\_token} - \text{immediate\_amount}
+```
+
+The immediate portion is included only once the current timestamp is at or after `immediate_release_timestamp`.
+
+The vested portion starts at:
+
+```math
+\text{vesting\_start\_time} = \text{presale\_end\_time} + \text{lock\_duration}
+```
+
+and ends at:
+
+```math
+\text{vesting\_end\_time} = \text{vesting\_start\_time} + \text{vest\_duration}
+```
+
+If `vest_duration` is zero, the vested portion becomes claimable at `vesting_start_time`. Otherwise it unlocks linearly:
+
+```math
+\text{dripped\_vested\_amount} =
+\left\lfloor
+\frac{\text{vested\_amount} \times \min(\text{elapsed\_seconds},\ \text{vest\_duration})}
+{\text{vest\_duration}}
+\right\rfloor
+```
+
+The user's cumulative claimable token is their deposit share of the released amounts:
+
+```math
+\text{user\_claimable} =
+\left\lfloor
+\frac{(\text{released\_immediate} + \text{dripped\_vested\_amount}) \times \text{user\_deposit}}
+{\text{registry\_total\_deposit}}
+\right\rfloor
+```
+
+The next claim is cumulative claimable minus already claimed and pending claim amounts.
+
+# Transfer fees
+
+If the base or quote mint is a supported Token-2022 mint with Transfer Fee enabled, transfers may require additional amount on deposit and may deliver less than the transferred amount on withdrawal or claim. Presale Vault accounts for transfer-fee-inclusive and transfer-fee-exclusive amounts when moving tokens, but allocation math is based on the net deposit tracked by the program.
