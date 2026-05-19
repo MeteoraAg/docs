@@ -1,0 +1,274 @@
+---
+title: "DLMM TypeScript SDK Examples"
+sidebarTitle: "SDK Examples"
+description: "Build practical @meteora-ag/dlmm TypeScript flows for swaps, positions, liquidity, fee and reward claims, limit orders, and permissionless v2 pool creation."
+llmsDescription: "Practical @meteora-ag/dlmm TypeScript examples for developer integrations. Covers SDK setup, creating a DLMM pool client, quote-and-swap flows, partial fill quote handling, creating positions and adding liquidity by strategy, adding liquidity to existing positions, fetching user positions, removing liquidity with claim-and-close behavior, claiming fees and rewards, placing and canceling limit orders, checking bins before limit order placement, creating permissionless v2 pools with PresetParameter2, and when to use customizable permissionless pool creation."
+---
+
+These examples are based on the current `ts-client` source in the public DLMM SDK repository. They focus on transaction construction patterns. For the full method catalog, see the [SDK Reference](/developer-guides/dlmm/typescript-sdk/sdk-functions).
+
+## Setup
+
+```typescript
+import DLMM, { StrategyType } from "@meteora-ag/dlmm";
+import { Connection, Keypair, PublicKey, sendAndConfirmTransaction } from "@solana/web3.js";
+import BN from "bn.js";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const user = Keypair.fromSecretKey(/* your signer bytes */);
+const lbPair = new PublicKey("...");
+
+const pool = await DLMM.create(connection, lbPair, {
+  cluster: "mainnet-beta",
+});
+```
+
+Use `cluster: "devnet"` for devnet. The SDK defaults to the public DLMM program ID; only pass a custom `programId` when Meteora has provided a compatible deployment or test harness.
+
+## Quote And Swap
+
+The swap flow is:
+
+1. Load the pool.
+2. Fetch bin arrays in the swap direction.
+3. Quote using current pool state.
+4. Build the transaction with the quote's bin arrays and minimum output.
+5. Sign and send.
+
+```typescript
+const swapYtoX = true;
+const inAmount = new BN(5_000_000);
+const slippageBps = new BN(50);
+
+const binArrays = await pool.getBinArrayForSwap(swapYtoX, 4);
+const quote = pool.swapQuote(
+  inAmount,
+  swapYtoX,
+  slippageBps,
+  binArrays,
+  false,
+);
+
+const [inToken, outToken] = swapYtoX
+  ? [pool.tokenY.mint.address, pool.tokenX.mint.address]
+  : [pool.tokenX.mint.address, pool.tokenY.mint.address];
+
+const tx = await pool.swap({
+  inToken,
+  outToken,
+  inAmount: quote.consumedInAmount,
+  minOutAmount: quote.minOutAmount,
+  lbPair: pool.pubkey,
+  user: user.publicKey,
+  binArraysPubkey: quote.binArraysPubkey,
+});
+
+const signature = await sendAndConfirmTransaction(connection, tx, [user]);
+```
+
+<Tip>
+  Use `quote.consumedInAmount` when partial fill is enabled. It may be lower than your requested input amount if the pool cannot consume the full input under the quote constraints.
+</Tip>
+
+## Create A Position And Add Liquidity
+
+For most LP flows, initialize the position and add liquidity in one transaction. The SDK initializes required bin arrays and token accounts when needed.
+
+```typescript
+const activeBin = await pool.getActiveBin();
+const position = Keypair.generate();
+
+const minBinId = activeBin.binId - 10;
+const maxBinId = activeBin.binId + 10;
+
+const tx = await pool.initializePositionAndAddLiquidityByStrategy({
+  positionPubKey: position.publicKey,
+  user: user.publicKey,
+  totalXAmount: new BN(1_000_000),
+  totalYAmount: new BN(1_000_000),
+  strategy: {
+    minBinId,
+    maxBinId,
+    strategyType: StrategyType.Spot,
+  },
+});
+
+const signature = await sendAndConfirmTransaction(connection, tx, [
+  user,
+  position,
+]);
+```
+
+Use `StrategyType.Spot`, `StrategyType.BidAsk`, or `StrategyType.Curve` depending on the distribution you want. The product-level behavior of these strategies is covered in [DLMM Strategies and Use Cases](/core-products/dlmm/strategies-and-use-cases).
+
+## Add Liquidity To An Existing Position
+
+```typescript
+const tx = await pool.addLiquidityByStrategy({
+  positionPubKey: position.publicKey,
+  user: user.publicKey,
+  totalXAmount: new BN(500_000),
+  totalYAmount: new BN(500_000),
+  strategy: {
+    minBinId,
+    maxBinId,
+    strategyType: StrategyType.Spot,
+  },
+});
+
+await sendAndConfirmTransaction(connection, tx, [user]);
+```
+
+For large ranges, use `addLiquidityByStrategyChunkable` or the multiple-position helpers documented in the [SDK Reference](/developer-guides/dlmm/typescript-sdk/sdk-functions).
+
+## Fetch User Positions
+
+```typescript
+const { userPositions } = await pool.getPositionsByUserAndLbPair(
+  user.publicKey,
+);
+
+for (const position of userPositions) {
+  console.log(position.publicKey.toBase58());
+  console.log(position.positionData.lowerBinId);
+  console.log(position.positionData.upperBinId);
+}
+```
+
+Use `DLMM.getAllLbPairPositionsByUser(connection, user, opt)` when you need all DLMM positions for a wallet across pools.
+
+## Remove Liquidity, Claim, And Close
+
+`removeLiquidity` returns one or more transactions because wide positions may need chunking.
+
+```typescript
+const txs = await pool.removeLiquidity({
+  position: position.publicKey,
+  user: user.publicKey,
+  fromBinId: minBinId,
+  toBinId: maxBinId,
+  bps: new BN(10_000),
+  shouldClaimAndClose: true,
+});
+
+for (const tx of txs) {
+  await sendAndConfirmTransaction(connection, tx, [user]);
+}
+```
+
+`bps: 10_000` removes 100% of liquidity. Set `shouldClaimAndClose` only when the position should claim accrued fees/rewards and close after the remove flow.
+
+## Claim Fees And Rewards
+
+```typescript
+const txs = await pool.claimAllRewardsByPosition({
+  owner: user.publicKey,
+  position: position.publicKey,
+});
+
+for (const tx of txs) {
+  await sendAndConfirmTransaction(connection, tx, [user]);
+}
+```
+
+Use `claimSwapFee`, `claimAllSwapFee`, `claimLMReward`, `claimAllLMRewards`, `claimAllRewards`, or `claimAllRewardsByPosition` depending on whether you are claiming one position, one reward index, or a wallet-wide set of positions.
+
+## Place A Limit Order
+
+Limit orders deposit token X on the ask side and token Y on the bid side. The SDK creates missing bin arrays, initializes bitmap extension accounts when needed, wraps SOL when needed, and builds the `place_limit_order` instruction.
+
+```typescript
+const limitOrder = Keypair.generate();
+await pool.refetchStates();
+
+const activeId = pool.lbPair.activeId;
+const isAskSide = true;
+const binIds = [activeId + 1, activeId + 20];
+const amountPerBin = new BN(1_000_000);
+
+const tx = await pool.placeLimitOrder({
+  owner: user.publicKey,
+  sender: user.publicKey,
+  payer: user.publicKey,
+  limitOrder: limitOrder.publicKey,
+  params: {
+    isAskSide,
+    relativeBin: null,
+    bins: binIds.map((id) => ({ id, amount: amountPerBin })),
+  },
+});
+
+await sendAndConfirmTransaction(connection, tx, [user, limitOrder]);
+```
+
+Before placing a limit order into existing bins, check whether the bins already contain pending limit order liquidity on the opposite side:
+
+```typescript
+const { bins } = await pool.getBinsBetweenLowerAndUpperBound(
+  Math.min(...binIds),
+  Math.max(...binIds),
+);
+```
+
+Cancel by reading non-empty order bins and passing those bin IDs:
+
+```typescript
+const { limitOrderData } = await pool.getLimitOrder(limitOrder.publicKey);
+const binIdsToCancel = limitOrderData.limitOrderBinData
+  .filter((bin) => !bin.empty)
+  .map((bin) => bin.binId);
+
+const cancelTx = await pool.cancelLimitOrder({
+  limitOrderPubkey: limitOrder.publicKey,
+  owner: user.publicKey,
+  rentReceiver: user.publicKey,
+  binIds: binIdsToCancel,
+});
+
+await sendAndConfirmTransaction(connection, cancelTx, [user]);
+```
+
+## Create A Permissionless V2 Pool
+
+Use `createLbPair2` for new permissionless pools. It reads `PresetParameter2`, supports SPL Token and Token-2022, and derives the pool PDA from the preset and token pair.
+
+```typescript
+import { NATIVE_MINT } from "@solana/spl-token";
+import { DLMM } from "@meteora-ag/dlmm";
+import { PublicKey, sendAndConfirmTransaction } from "@solana/web3.js";
+import BN from "bn.js";
+
+const tokenX = new PublicKey("...");
+const tokenY = NATIVE_MINT;
+const presetParameter2 = new PublicKey("...");
+
+const presetState = await DLMM.getAllPresetParameters(connection, {
+  cluster: "devnet",
+});
+
+const binStep = presetState.presetParameter2.find((preset) =>
+  preset.publicKey.equals(presetParameter2),
+)?.account.binStep;
+
+if (!binStep) {
+  throw new Error("PresetParameter2 not found");
+}
+
+const activeId = new BN(DLMM.getBinIdFromPrice(0.000008, binStep, true));
+
+const tx = await DLMM.createLbPair2(
+  connection,
+  user.publicKey,
+  tokenX,
+  tokenY,
+  presetParameter2,
+  activeId,
+  { cluster: "devnet" },
+);
+
+await sendAndConfirmTransaction(connection, tx, [user]);
+```
+
+Use `createCustomizablePermissionlessLbPair2` when the creator must configure activation behavior, base fee parameters, `ConcreteFunctionType`, or `CollectFeeMode`.
+
+For a complete map of public SDK scripts, examples, CLI commands, and `commons` helpers, see the [DLMM overview](/developer-guides/dlmm#repository-map).

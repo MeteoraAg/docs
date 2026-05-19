@@ -1,0 +1,77 @@
+---
+title: "DLMM Program Accounts"
+sidebarTitle: "Accounts"
+description: "Reference the public lb_clmm account model used by DLMM integrations, including pools, bin arrays, positions, limit orders, oracles, presets, badges, and operators."
+llmsDescription: "Reference for public DLMM program accounts exposed through the IDL and TypeScript SDK. Covers LbPair, BinArray, BinArrayBitmapExtension, PositionV2, LimitOrder, Oracle, PresetParameter, PresetParameter2, TokenBadge, ClaimFeeOperator, Operator, Token-2022 account handling, SDK access methods, dynamic position data, and why integrations should use SDK wrappers instead of assuming fixed account sizes."
+---
+
+This page summarizes the account model used by `lb_clmm`. For exact layouts, use the IDL and generated TypeScript types exported by `@meteora-ag/dlmm`.
+
+<Note>
+  The `lb_clmm` program source is not public. Account details here are limited to what is exposed through the public IDL, SDK types, and decoded on-chain accounts.
+</Note>
+
+## Account Summary
+
+| Account | Purpose | Common SDK access |
+| --- | --- | --- |
+| `LbPair` | Pool state: mints, reserves, active bin, fee parameters, reward info, oracle, bitmap, status, activation settings, creator, pair type, and Token-2022 flags. | `DLMM.create`, `DLMM.createMultiple`, `DLMM.getLbPairs` |
+| `BinArray` | Container for consecutive bins. Each bin stores token amounts, liquidity supply, fee state, reward state, and limit order counters. | `getBinArrays`, `getBinArrayForSwap`, `getBinsAroundActiveBin` |
+| `BinArrayBitmapExtension` | Extends the pool bitmap for initialized bin arrays outside the default range. | Fetched automatically by `DLMM.create` |
+| `PositionV2` | LP position state for an owner and bin range. Stores shares, fee/reward checkpoints, operator, fee owner, lock release point, and permission bits. | `getPosition`, `getPositionsByUserAndLbPair`, `getAllLbPairPositionsByUser` |
+| `LimitOrder` | Dynamic owner account for limit order bins. | `getLimitOrder`, `getLimitOrderByUserAndLbPair`, `placeLimitOrder` |
+| `Oracle` | Observation account used for pool oracle reads. | `getOracle`, `increaseOracleLength` |
+| `PresetParameter` | Legacy fee/preset configuration for pool creation. | `getAllPresetParameters` |
+| `PresetParameter2` | Current pool creation preset with `bin_step`, `base_factor`, `base_fee_power_factor`, function type, and collect fee mode. | `getAllPresetParameters`, `getPairPubkeyIfExists` |
+| `TokenBadge` | Admin allowlist account for Token-2022 mints that require explicit approval. | Used during Token-2022 pool creation |
+| `ClaimFeeOperator` / `Operator` | Operator/admin accounts for restricted flows. | Operator instructions and CPI integrations |
+
+## LbPair
+
+`LbPair` is the root pool account. It includes:
+
+- `parameters` and `v_parameters` for static and variable fee calculations.
+- `active_id` and `bin_step` for the current price bin and price spacing.
+- `token_x_mint`, `token_y_mint`, `reserve_x`, and `reserve_y`.
+- `reward_infos`, with up to two reward vaults and funders.
+- `oracle`, `bin_array_bitmap`, and optional `BinArrayBitmapExtension`.
+- `pair_type`, `status`, `activation_type`, `activation_point`, and `pre_activation_duration`.
+- `creator`, `creator_pool_on_off_control`, and Token-2022 program flags.
+
+## BinArray And Bins
+
+A `BinArray` covers a fixed sequence of bin IDs. Clients usually derive the required bin array indexes from:
+
+- The position range for liquidity operations.
+- The active bin and swap direction for swaps.
+- Non-contiguous bin IDs for limit order and advanced flows.
+
+Use SDK helpers such as `binIdToBinArrayIndex`, `getBinArrayLowerUpperBinId`, `getBinArraysRequiredByPositionRange`, and `getBinArrayInfoForNonContiguousBinIds` when constructing custom flows.
+
+## PositionV2
+
+`PositionV2` is the current position account format. It supports:
+
+- `u128` liquidity shares.
+- Dynamic extension data for wide positions.
+- Position operator authority.
+- A dedicated `fee_owner`.
+- Lock release point.
+- Permissionless operation bits for selected position actions.
+
+The base account stores the default bin count. When a position grows beyond that count, additional `PositionBinData` is appended to the account. This is why integrations should use SDK wrappers instead of assuming a fixed account size.
+
+## LimitOrder
+
+Limit orders use a fixed account header plus dynamic `LimitOrderBinData` entries. Each entry stores:
+
+- `amount`
+- `age`
+- `bin_id`
+- `is_ask`
+
+The program can close an empty limit order account with `close_limit_order_if_empty`.
+
+## Token-2022 Accounts
+
+The SDK detects token program ownership and transfer-hook extra account metas for pool tokens and reward tokens. When building custom instructions, include the remaining accounts required by Token-2022 extensions, especially transfer hooks and transfer fees.

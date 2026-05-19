@@ -1,0 +1,124 @@
+---
+title: "DLMM Program Instructions"
+sidebarTitle: "Instructions"
+description: "Reference public lb_clmm instruction families and the SDK methods used for pool creation, bin arrays, positions, liquidity, swaps, rewards, limit orders, and admin flows."
+llmsDescription: "Instruction-family reference for the public DLMM lb_clmm interface. Covers pool creation instructions, bin array initialization, position creation and resizing, liquidity add and remove flows, v2 Token-2022-aware liquidity paths, swap and exact-out swap instructions, fee and reward claims, reward funding, limit order placement and cancellation, admin and operator controls, and the corresponding @meteora-ag/dlmm SDK methods developers should prefer."
+---
+
+The `lb_clmm` IDL exposes many instructions. Integrations should prefer the TypeScript SDK for transaction construction unless they are building CPI or low-level transaction flows.
+
+<Note>
+  This page documents the public instruction interface from the IDL and SDK. The deployed program's Rust source and handler internals are not open sourced.
+</Note>
+
+## Pool Creation
+
+| Instruction | Use |
+| --- | --- |
+| `initialize_lb_pair` | Legacy permissionless SPL Token pool creation. |
+| `initialize_lb_pair2` | Current permissionless v2 pool creation with Token-2022 support and `PresetParameter2`. |
+| `initialize_permission_lb_pair` | Operator-controlled pool creation for permissioned launches. |
+| `initialize_customizable_permissionless_lb_pair` | Customizable permissionless pool creation for SPL Token pools. |
+| `initialize_customizable_permissionless_lb_pair2` | Customizable permissionless pool creation with Token-2022 support. |
+| `initialize_preset_parameter` | Admin/operator preset initialization. |
+| `initialize_token_badge` | Admin allowlist for Token-2022 mints that require a badge. |
+
+Use SDK methods such as `createLbPair`, `createLbPair2`, `createCustomizablePermissionlessLbPair`, and `createCustomizablePermissionlessLbPair2`.
+
+## Bin Arrays
+
+| Instruction | Use |
+| --- | --- |
+| `initialize_bin_array` | Creates a bin array and initializes bin prices. |
+| `initialize_bin_array_bitmap_extension` | Creates the bitmap extension for far bin array indexes. |
+| `close_bin_array` | Closes an empty bin array. |
+
+`initialize_bin_array` is compute-heavy. If you construct it manually, add a compute budget instruction.
+
+## Positions
+
+| Instruction | Use |
+| --- | --- |
+| `initialize_position` | Legacy position initialization. |
+| `initialize_position2` | Current idempotent `PositionV2` initialization. |
+| `initialize_position_pda` | Initializes a position PDA. |
+| `initialize_position_by_operator` | Operator-driven position initialization. |
+| `increase_position_length` / `increase_position_length2` | Expands a dynamic position. |
+| `decrease_position_length` | Shrinks a dynamic position. |
+| `update_position_operator` | Changes the operator authority. |
+| `set_permissionless_operation_bits` | Enables selected permissionless position actions. |
+| `close_position`, `close_position2`, `close_position_if_empty` | Close position accounts when eligible. |
+
+For wide positions, use SDK methods such as `quoteExtendPosition`, `createExtendedEmptyPosition`, `increasePositionLength`, and `decreasePositionLength`.
+
+## Liquidity
+
+| Instruction family | Use |
+| --- | --- |
+| `add_liquidity*` | Adds liquidity by explicit bin amounts, strategy, weights, or one-sided parameters. |
+| `add_liquidity*2` | v2 liquidity flows with Token-2022 and dynamic-position support. |
+| `remove_liquidity*` | Removes liquidity by bin amounts, range, or all liquidity. |
+| `rebalance_liquidity` | Combines add, remove, claim, resize, and shrink behavior in one flow. |
+
+The SDK provides higher-level methods including `initializePositionAndAddLiquidityByStrategy`, `addLiquidityByStrategy`, `addLiquidityByStrategyChunkable`, `addLiquidityByWeight2`, `removeLiquidity`, `simulateRebalancePosition`, and `rebalancePosition`.
+
+## Swaps
+
+| Instruction | Use |
+| --- | --- |
+| `swap` | Legacy exact-in swap. |
+| `swap2` | Current exact-in swap with Token-2022 account support. |
+| `swap_exact_out` / `swap_exact_out2` | Exact-out swap flows. |
+| `swap_with_price_impact` / `swap_with_price_impact2` | Swap with price-impact controls. |
+
+Quote before sending:
+
+```typescript
+const quote = dlmmPool.swapQuote(
+  inAmount,
+  true,
+  new BN(50),
+  binArrays,
+)
+```
+
+## Fees And Rewards
+
+| Instruction | Use |
+| --- | --- |
+| `claim_fee` / `claim_fee2` | Claims swap fees for a position. |
+| `claim_reward` / `claim_reward2` | Claims one reward index for a position. |
+| `initialize_reward` | Initializes a reward mint for liquidity mining pools. |
+| `fund_reward` | Funds reward emissions. |
+| `update_reward_duration` | Updates reward duration. |
+| `update_reward_funder` | Updates reward funder. |
+| `withdraw_ineligible_reward` | Withdraws undistributable rewards. |
+| `withdraw_protocol_fee` | Withdraws protocol fees. |
+| `zap_protocol_fee` | Operator zap flow for protocol fees. |
+
+SDK helpers include `claimSwapFee`, `claimAllSwapFee`, `claimLMReward`, `claimAllLMRewards`, `claimAllRewards`, and `claimAllRewardsByPosition`.
+
+## Limit Orders
+
+| Instruction | Use |
+| --- | --- |
+| `place_limit_order` | Places an order at one or more bins. |
+| `cancel_limit_order` | Cancels an existing order. |
+| `close_limit_order_if_empty` | Closes the account after all order bins are empty. |
+
+Use `quoteCreateLimitOrder`, `placeLimitOrder`, `cancelLimitOrder`, `getLimitOrder`, and `getLimitOrderByUserAndLbPair`.
+
+## Admin And Operator Controls
+
+| Instruction | Use |
+| --- | --- |
+| `set_pair_status` | Admin/operator status control. |
+| `set_pair_status_permissionless` | Creator-controlled status flow for eligible pools. |
+| `set_activation_point` | Updates activation point. |
+| `set_pre_activation_duration` | Updates pre-activation duration. |
+| `set_pre_activation_swap_address` | Updates the address allowed to swap before activation. |
+| `update_base_fee_parameters` | Updates base fee parameters. |
+| `update_dynamic_fee_parameters` | Updates variable/dynamic fee parameters. |
+| `update_fees_and_rewards` / `update_fees_and_reward2` | Refreshes fee and reward state. |
+| `go_to_a_bin` | Admin/operator active-bin movement. |
+| `increase_oracle_length` | Expands oracle observation capacity. |
