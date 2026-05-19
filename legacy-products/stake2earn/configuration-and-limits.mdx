@@ -1,0 +1,144 @@
+---
+title: "Stake2Earn Configuration and Limits"
+sidebarTitle: "Configuration and Limits"
+description: "Review Stake2Earn setup requirements, supported tokens, production limits, admin updates, list behavior, and operational edge cases."
+llmsDescription: "Stake2Earn configuration and limits reference covering initialize_vault parameters, DAMM v1 constant-product pool requirements, lock escrow owner checks, supported quote mints, stake mint validation, top-list and full-balance-list limits, fee drip and unstake cooldown ranges, join window cap, claim fee cadence, admin update permissions, private access-gated builds, and user interface guidance."
+---
+
+This page summarizes the constraints that matter when configuring or integrating Stake2Earn.
+
+## Vault Requirements
+
+| Requirement | Source Behavior |
+| --- | --- |
+| Pool type | The pool must be a DAMM v1 `ConstantProduct` pool. |
+| Stake mint | Must be one side of the pool and must not be wrapped SOL or USDC. |
+| Quote mint | Must be one side of the pool and must be wrapped SOL or USDC. |
+| Lock escrow | Must belong to the pool and have the Stake2Earn vault PDA as owner. |
+| Vault PDA | Derived from the program vault seed and the DAMM v1 pool address. |
+| Token vaults | Associated token accounts for the vault PDA, one for the stake mint and one for the quote mint. |
+
+Supported production quote mints:
+
+| Asset | Mint |
+| --- | --- |
+| Wrapped SOL | `So11111111111111111111111111111111111111112` |
+| USDC | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
+
+<Warning>
+  The program validates the lock escrow owner and pool relationship. It does not make Stake2Earn a generic staking product for unrelated tokens or pool types.
+</Warning>
+
+## Initialization Parameters
+
+| Parameter | Production Range | Notes |
+| --- | ---: | --- |
+| `top_list_length` | 5 to 1,000 | Number of stakers eligible for newly released fees. |
+| `seconds_to_full_unlock` | 6 hours to 31 days | Duration used to drip collected fees. |
+| `unstake_lock_duration` | 6 hours to 31 days | Cooldown applied to newly requested unstakes. |
+| `start_fee_distribute_timestamp` | Current time to 31 days in the future | Optional. If omitted, current time is used. Past timestamps are invalid. |
+
+The start timestamp creates a join window before rewards begin releasing. During this window, claimed fees can accumulate as locked fees, but released amount is zero until `current_time > start_fee_distribute_timestamp`.
+
+## Account and List Limits
+
+| Account or List | Production Limit | Purpose |
+| --- | ---: | --- |
+| Top-staker list | 1,000 stakers | Holds the current eligible reward set. |
+| Full-balance list | 10,000 stakers | Tracks candidate balances for top-list promotion. |
+| Stake escrow | One per vault-owner pair | Stores active stake, pending fees, checkpoints, and unstake accounting. |
+| Unstake account | One per request | Stores amount and release time, then closes on cancel or withdraw. |
+
+When a stake escrow is created, the program attempts to add it to the full-balance list while there is capacity. After the full-balance list reaches its hard limit, a staker outside the list can reclaim the smallest listed index only if their active stake is larger and the transaction supplies the required smallest stake escrow account.
+
+## Instruction Behavior
+
+Stake2Earn does not update continuously by itself. State changes happen when instructions are sent.
+
+| Instruction | Who Can Call | Main Behavior |
+| --- | --- | --- |
+| `initialize_vault` | Creator or payer | Creates the vault, token vaults, top-staker list, and full-balance list for a supported DAMM v1 pool and lock escrow. |
+| `initialize_stake_escrow` | Payer for an owner | Creates one stake escrow for a vault-owner pair and grows list accounts as needed. |
+| `stake` | Stake escrow owner | Attempts to claim and drip fees, updates the user's pending rewards if eligible, transfers stake tokens into the vault, and syncs list state. |
+| `claim_fee` | Stake escrow owner | Attempts to claim and drip fees, updates pending rewards, transfers quote rewards up to `max_fee`, restakes the stake-mint side, and syncs list state. |
+| `request_unstake` | Stake escrow owner | Attempts to claim and drip fees, updates pending rewards, removes active stake into a new unstake account, and syncs list state. |
+| `cancel_unstake` | Stake escrow owner | Attempts to claim and drip fees, closes the unstake account, returns the amount to active stake, and syncs list state. |
+| `withdraw` | Stake escrow owner | After the release time, transfers the unstaked amount back to the user and closes the unstake account. |
+| `claim_fee_crank` | Permissionless | Attempts to claim and drip fees for the vault without updating a specific user's stake escrow. |
+
+## Ranking Rules
+
+Stake2Earn ranks stakers by active `stake_amount`.
+
+| Situation | Result |
+| --- | --- |
+| Larger active stake | Ranks higher. |
+| Equal active stake | Earlier full-balance-list index ranks higher. |
+| Entering top list | Fee checkpoints reset to current cumulative values. |
+| Leaving top list | Pending rewards are updated before the user is marked out. |
+| Requesting unstake | Active stake decreases immediately and the leaderboard can update in the same instruction. |
+| Claiming base rewards | Base-token rewards are restaked and can improve rank. |
+
+## Fee Collection Rules
+
+Stake2Earn can collect fees from the connected DAMM v1 lock escrow when fee accounting runs.
+
+| Rule | Production Behavior |
+| --- | --- |
+| First claim | Allowed when both token sides have pending claimable fees. |
+| Subsequent claims | Require at least 5 minutes since the previous lock-escrow claim. |
+| Zero pending side | If either pending token fee is zero, the lock-escrow claim is skipped. |
+| Dripping without new claim | Existing locked fees can still drip even when no new lock-escrow fee is claimed. |
+| No effective stake | Locked fees are preserved for future stakers and `last_updated_at` is moved forward. |
+
+<Info>
+  Fee updates are triggered by user actions and by the permissionless `claim_fee_crank` instruction. Interfaces should not assume fee accounting updates continuously without transactions.
+</Info>
+
+## Claim Rules
+
+| Rule | Behavior |
+| --- | --- |
+| Quote side | Transferred to the user's quote token account, capped by `max_fee`. |
+| Stake side | Claimed in full and added to active stake. |
+| Partial quote claim | Any unclaimed quote reward remains pending. |
+| Checkpoint update | Pending rewards are updated before claim logic runs when the user is in the top list. |
+
+Because the stake side is restaked, claiming can change top-staker ordering.
+
+## Unstake Rules
+
+| Action | Behavior |
+| --- | --- |
+| Request unstake | Requires enough active stake. Removes the amount from active stake immediately and creates an `Unstake` account. |
+| Cancel unstake | Closes the `Unstake` account and returns the amount to active stake. |
+| Withdraw | Allowed only after the recorded release time. Transfers stake tokens back to the user and closes the `Unstake` account. |
+
+Updating `unstake_lock_duration` does not rewrite existing unstake accounts. Existing records keep the release time calculated when they were created.
+
+## Admin-Controlled Updates
+
+Approved admin keys can update these values:
+
+| Setting | Constraint |
+| --- | --- |
+| `unstake_lock_duration` | Must remain between 6 hours and 31 days and must differ from the old value. |
+| `seconds_to_full_unlock` | Must remain between 6 hours and 31 days, must differ from the old value, and must be preceded by a valid `claim_fee_crank` for the same vault in the same transaction. |
+
+The program has a private-build access check for vault and stake-escrow initialization, gated by an access mint. That check is behind the `private` feature flag and is not part of the default public program path.
+
+## Interface Checklist
+
+A useful Stake2Earn interface should show:
+
+- vault pool, stake mint, quote mint, and lock escrow;
+- configured top-staker count and the user's current top-list status;
+- active stake, total active stake, and effective top-list stake;
+- the minimum visible stake needed to enter or remain in the top list;
+- locked fees, released-fee history, and last fee-claim time where available;
+- pending quote rewards and the `max_fee` value used for claims;
+- base-token rewards that will be restaked on claim;
+- requested unstake amounts, release times, and cancel or withdraw availability;
+- clear messaging that only top stakers earn newly released fees.
+
+Avoid promising fixed APY or guaranteed rewards. Rewards depend on trading volume, lock-escrow fee availability, fee claim timing, drip timing, leaderboard position, active stake, and integer rounding.

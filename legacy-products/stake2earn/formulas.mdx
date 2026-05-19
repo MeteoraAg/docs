@@ -1,0 +1,256 @@
+---
+title: "Stake2Earn Formulas"
+sidebarTitle: "Formulas"
+description: "Understand Stake2Earn formulas for top-staker eligibility, fee drips, fee-per-stake accounting, pending rewards, claims, restaking, and unstake cooldowns."
+llmsDescription: "Explains Stake2Earn formulas from the stake-for-fee program including top-staker eligibility, effective stake amount, locked fee release, Q64 fee-per-stake accounting, pending fee updates, quote-token claims with max_fee, base-token restaking, total active stake, cooldown release time, and integer rounding."
+---
+
+Stake2Earn uses cumulative stake-weighted accounting. Fees released during an update are shared across the current top-staker list according to active stake amount.
+
+All token amounts are integer raw token units. UI values should apply the relevant token decimals.
+
+## Key Terms
+
+| Term | Meaning |
+| --- | --- |
+| `stake_amount` | A user's active staked amount in raw project-token units. |
+| `top_list_length` | Number of stakers eligible for newly released fees. Production range: 5 to 1,000. |
+| `effective_stake_amount` | Sum of active stake amounts in the current top-staker list. |
+| `locked_fee_a`, `locked_fee_b` | Collected token A and token B fees that have not fully released yet. |
+| `seconds_to_full_unlock` | Duration used to drip locked fees. Production range: 6 hours to 31 days. |
+| `cumulative_fee_per_liquidity` | Cumulative released fee per unit of eligible stake, scaled by `2^64`. |
+| `checkpoint` | User's last accounted cumulative fee-per-stake value. |
+| `fee_pending` | User rewards already accounted but not fully claimed. |
+| `unstake_lock_duration` | Cooldown duration before a requested unstake can be withdrawn. |
+
+## Top-Staker Eligibility
+
+Only active stake in the top-staker list earns newly released fees.
+
+```math
+\text{Eligible Stakers} = \text{Top } N \text{ stakers by active stake}
+```
+
+```math
+N = \text{top\_list\_length}
+```
+
+Production deployments enforce:
+
+```math
+5 \leq N \leq 1{,}000
+```
+
+If two active stake amounts are equal, the earlier full-balance-list index ranks higher.
+
+## Effective Stake Amount
+
+The effective stake amount is the denominator for reward splitting.
+
+```math
+\text{Effective Stake Amount} =
+\sum_{i \in \text{Top Stakers}} \text{Stake Amount}_i
+```
+
+If the effective stake amount is zero, released-fee accounting does not advance. The program preserves locked fees for future stakers and updates `last_updated_at` to the current time.
+
+## Fee Collection Gate
+
+When fee accounting runs, the program may claim new fees from the DAMM v1 lock escrow.
+
+After the first claim, production deployments require:
+
+```math
+\text{Current Time} - \text{Last Claim Fee At} \geq 300 \text{ seconds}
+```
+
+The program also skips the lock-escrow claim if either pending token fee is zero:
+
+```math
+\text{Pending Fee A} = 0 \quad \text{or} \quad \text{Pending Fee B} = 0
+```
+
+Even when no new lock-escrow fee is claimed, existing locked fees can still drip during the update.
+
+## Fee Distribution Start
+
+Fees are not released until after the configured start timestamp.
+
+```math
+\text{Current Time} > \text{Start Fee Distribute Timestamp}
+```
+
+At initialization, `last_updated_at` is set to the start timestamp. If the current time is less than or equal to the start timestamp, newly claimed fees are added to locked fees but released amount is zero.
+
+## Fee Drip Release
+
+Each token side is released separately. For one token:
+
+```math
+\text{Locked Fee}_{new} =
+\text{Locked Fee}_{old} + \text{Newly Claimed Fee}
+```
+
+```math
+\text{Seconds Elapsed} =
+\text{Current Time} - \text{Last Updated At}
+```
+
+If elapsed time is greater than or equal to the full unlock duration:
+
+```math
+\text{Released Fee} = \text{Locked Fee}_{new}
+```
+
+Otherwise:
+
+```math
+\text{Released Fee} =
+\left\lfloor
+\frac{\text{Locked Fee}_{new} \times \text{Seconds Elapsed}}
+{\text{Seconds To Full Unlock}}
+\right\rfloor
+```
+
+The program then subtracts the released amount:
+
+```math
+\text{Remaining Locked Fee} =
+\text{Locked Fee}_{new} - \text{Released Fee}
+```
+
+## Fee Per Stake
+
+Released fees increase a cumulative fee-per-stake value for the current top-staker list. The program uses `SCALE_OFFSET = 64`.
+
+```math
+\text{Delta Fee Per Stake} =
+\left\lfloor
+\frac{\text{Released Fee} \times 2^{64}}
+{\text{Effective Stake Amount}}
+\right\rfloor
+```
+
+```math
+\text{Cumulative Fee Per Stake}_{new} =
+\text{Cumulative Fee Per Stake}_{old} + \text{Delta Fee Per Stake}
+```
+
+Token A and token B have separate cumulative values.
+
+## Pending User Rewards
+
+A user accrues new pending rewards only while their stake escrow is marked as in the top list.
+
+```math
+\text{Unaccounted Fee Per Stake} =
+\text{Current Cumulative Fee Per Stake} - \text{User Checkpoint}
+```
+
+```math
+\text{New Pending Fee} =
+\left\lfloor
+\frac{\text{User Active Stake} \times \text{Unaccounted Fee Per Stake}}
+{2^{64}}
+\right\rfloor
+```
+
+```math
+\text{User Pending Fee}_{new} =
+\text{User Pending Fee}_{old} + \text{New Pending Fee}
+```
+
+```math
+\text{User Checkpoint}_{new} =
+\text{Current Cumulative Fee Per Stake}
+```
+
+When a user enters the top-staker list, their checkpoints are set to the current cumulative values. When a user leaves the top-staker list, their pending rewards are updated before they are marked out.
+
+## Claim and Restake
+
+The vault knows which pool token is the stake mint. The stake-mint side is restaked; the quote-mint side is transferred to the user.
+
+If token A is the stake mint:
+
+```math
+\text{Restake Amount} = \text{Pending Fee A}
+```
+
+```math
+\text{Quote Claim Amount} = \min(\text{Pending Fee B}, \text{max\_fee})
+```
+
+If token B is the stake mint:
+
+```math
+\text{Restake Amount} = \text{Pending Fee B}
+```
+
+```math
+\text{Quote Claim Amount} = \min(\text{Pending Fee A}, \text{max\_fee})
+```
+
+After claim:
+
+```math
+\text{Active Stake}_{new} =
+\text{Active Stake}_{old} + \text{Restake Amount}
+```
+
+The quote side can remain partially pending when `max_fee` is lower than the available quote reward. The stake-mint side is claimed in full and restaked.
+
+## Total Active Stake
+
+The vault's total active stake changes when users stake, claim restaked base rewards, request unstake, or cancel unstake.
+
+```math
+\text{Total Active Stake}_{new} =
+\text{Total Active Stake}_{old} + \text{Stake Amount}
+```
+
+```math
+\text{Total Active Stake}_{new} =
+\text{Total Active Stake}_{old} + \text{Restake Amount}
+```
+
+```math
+\text{Total Active Stake}_{new} =
+\text{Total Active Stake}_{old} - \text{Unstake Amount}
+```
+
+```math
+\text{Total Active Stake}_{new} =
+\text{Total Active Stake}_{old} + \text{Canceled Unstake Amount}
+```
+
+## Unstake Cooldown
+
+A requested unstake records a release time:
+
+```math
+\text{Release Time} =
+\text{Request Time} + \text{Unstake Lock Duration}
+```
+
+Withdrawal is allowed only when:
+
+```math
+\text{Current Time} \geq \text{Release Time}
+```
+
+Production deployments enforce:
+
+```math
+6 \text{ hours} \leq \text{Unstake Lock Duration} \leq 31 \text{ days}
+```
+
+<Warning>
+  Requested unstake amounts stop counting as active stake immediately. They do not earn rewards, do not help leaderboard rank, and cannot be withdrawn until the release time is reached.
+</Warning>
+
+## Rounding and Precision
+
+Stake2Earn uses `2^64` scaling for fee-per-stake accounting, but all transfers and stored pending rewards are integer token amounts. Division rounds down. Small residual value can remain in cumulative accounting or locked-fee balances when released fees do not divide evenly across active top-list stake.
+
+For interfaces, display rewards as estimates until claimed. Exact values depend on fee collection timing, drip timing, leaderboard state, active stake, token decimals, `max_fee`, and integer rounding.
