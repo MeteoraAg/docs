@@ -1,0 +1,214 @@
+---
+title: "Dynamic Vault Formulas"
+sidebarTitle: "Formulas"
+description: "The core Dynamic Vault formulas for LP shares, unlocked amount, locked profit, strategy profit and loss, and performance-fee LP minting."
+llmsDescription: "Dynamic Vault formulas based on the vault program, covering smallest-unit integer accounting, unlocked amount, locked profit degradation denominator 1e12, default six-hour degradation, deposit LP minting, zero-supply deposits, withdrawal amount, withdrawal unmint amount, rebalance total liquidity update, gain and loss, locked-profit updates, 5% performance fee, fee unlock amount, and minted fee LP tokens."
+---
+
+Dynamic Vault performs accounting in smallest token units using checked integer arithmetic. Display decimals are a UI concern. Division rounds down unless a strategy handler explicitly requests rounded-up collateral conversion.
+
+<Note>
+  The formulas below describe the on-chain accounting model. Strategy-specific conversions, such as JupLend collateral-to-liquidity exchange-rate math, are handled by the strategy handler.
+</Note>
+
+## Core Values
+
+| Value | Meaning |
+| --- | --- |
+| `total_amount` | Vault liquidity tracked by the program, including the token vault and strategy liquidity. |
+| `token_vault.amount` | Underlying token amount currently in the vault reserve. |
+| `strategy.current_liquidity` | Underlying liquidity value last recorded for a strategy. |
+| `lp_mint.supply` | Total supply of vault LP tokens. |
+| `last_updated_locked_profit` | Locked profit after the latest locked-profit update. |
+| `last_report` | Timestamp of the latest locked-profit update. |
+| `locked_profit_degradation` | Per-second unlock rate. |
+
+## Locked Profit
+
+Dynamic Vault uses a denominator of:
+
+```math
+\text{LOCKED\_PROFIT\_DEGRADATION\_DENOMINATOR} = 1{,}000{,}000{,}000{,}000
+```
+
+The default degradation rate fully unlocks locked profit over 6 hours:
+
+```math
+\text{defaultDegradation} =
+\left\lfloor
+\frac{1{,}000{,}000{,}000{,}000}{6 \times 3{,}600}
+\right\rfloor
+```
+
+For a current timestamp:
+
+```math
+\text{duration} = \text{currentTime} - \text{lastReport}
+```
+
+```math
+\text{lockedFundRatio} = \text{duration} \times \text{lockedProfitDegradation}
+```
+
+If `lockedFundRatio` is greater than the denominator, locked profit is zero. Otherwise:
+
+```math
+\text{lockedProfit} =
+\left\lfloor
+\frac{
+\text{lastUpdatedLockedProfit}
+\times
+(1{,}000{,}000{,}000{,}000 - \text{lockedFundRatio})
+}{
+1{,}000{,}000{,}000{,}000
+}
+\right\rfloor
+```
+
+## Unlocked Amount
+
+The unlocked amount is used for deposit and withdrawal share calculations.
+
+```math
+\text{unlockedAmount} = \text{totalAmount} - \text{lockedProfit}
+```
+
+## Deposit LP Tokens
+
+For a non-empty LP supply:
+
+```math
+\text{lpTokensMinted} =
+\left\lfloor
+\frac{\text{depositAmount} \times \text{lpSupply}}{\text{unlockedAmount}}
+\right\rfloor
+```
+
+The program then increases `total_amount` by `depositAmount`.
+
+For zero LP supply, the program first adds the deposit to `total_amount`, then mints the current unlocked amount:
+
+```math
+\text{lpTokensMinted} = \text{unlockedAmountAfterDeposit}
+```
+
+This also covers the edge case where all LP tokens were previously burned but some profit remains locked.
+
+## Withdrawal Amount
+
+For a direct LP-token withdrawal:
+
+```math
+\text{withdrawAmount} =
+\left\lfloor
+\frac{\text{lpTokensBurned} \times \text{unlockedAmount}}{\text{lpSupply}}
+\right\rfloor
+```
+
+The program subtracts `withdrawAmount` from `total_amount`, transfers that amount from the token vault, and burns the user's LP tokens.
+
+For strategy-backed direct withdrawals, the program may refine the LP amount if the strategy cannot return the full desired amount:
+
+```math
+\text{refinedLpBurn} =
+\left\lfloor
+\frac{\text{actualOutAmount} \times \text{lpSupply}}{\text{unlockedAmount}}
+\right\rfloor
+```
+
+Precision loss in this path must be at most `1`.
+
+## Strategy Total Amount Update
+
+After a strategy action, the program updates vault total liquidity from before and after values:
+
+```math
+\text{newTotalAmount}
+=
+\text{oldTotalAmount}
++ \text{tokenVaultAfter}
++ \text{strategyLiquidityAfter}
+- \text{tokenVaultBefore}
+- \text{strategyLiquidityBefore}
+```
+
+Gain and loss are derived by comparing total amount before and after:
+
+```math
+\text{gain} = \max(\text{newTotalAmount} - \text{oldTotalAmount}, 0)
+```
+
+```math
+\text{loss} = \max(\text{oldTotalAmount} - \text{newTotalAmount}, 0)
+```
+
+## Locked Profit Update
+
+The program first calculates remaining locked profit at the current timestamp. Loss reduces remaining locked profit first:
+
+```math
+\text{lockedAfterLoss} =
+\max(\text{remainingLockedProfit} - \text{loss}, 0)
+```
+
+Gain is then added:
+
+```math
+\text{newLockedProfit} = \text{lockedAfterLoss} + \text{gain}
+```
+
+`last_report` is updated to the current timestamp.
+
+## Performance Fee
+
+The performance-fee constants are:
+
+```math
+\text{PERFORMANCE\_FEE\_NUMERATOR} = 500
+```
+
+```math
+\text{PERFORMANCE\_FEE\_DENOMINATOR} = 10{,}000
+```
+
+So the fee is 5% of positive strategy gain:
+
+```math
+f =
+\left\lfloor
+\frac{\text{gain} \times 500}{10{,}000}
+\right\rfloor
+```
+
+The program does not transfer this fee as underlying tokens. It mints LP tokens to the configured fee vault.
+
+Let:
+
+- `p` be the gain
+- `u` be the unlocked amount before the rebalance accounting update
+- `s` be the LP supply before fee minting
+- `f` be the fee amount above
+
+The amount of newly unlocked value attributed to the fee mint is:
+
+```math
+x =
+\left\lfloor
+\frac{f \times u}{p + u - f}
+\right\rfloor
+```
+
+The LP tokens minted to the fee vault are:
+
+```math
+\text{feeLpTokens} =
+\left\lfloor
+\frac{x \times s}{u}
+\right\rfloor
+```
+
+If fee LP tokens are minted, `x` is subtracted from `last_updated_locked_profit`. This keeps the virtual price stable at the moment the performance fee is minted, while future locked profit continues to unlock over time.
+
+<Info>
+  If gain is zero, or the unlocked amount is zero, no performance-fee LP tokens are minted.
+</Info>

@@ -1,102 +1,79 @@
 ---
 title: "Rebalance Crank"
 sidebarTitle: "Rebalance Crank"
-description: "How Hermes moves Dynamic Vault liquidity between the vault reserve and approved strategies while the vault updates profit, loss, fees, and locked profit."
-llmsDescription: "Product documentation for Dynamic Vault rebalance cranks, covering deposit_strategy, withdraw_strategy, before and after liquidity checks, profit and loss accounting, locked profit, performance fees, and sandwich attack prevention."
+description: "How Dynamic Vault strategy actions update liquidity, locked profit, losses, and LP-token performance fees."
+llmsDescription: "Dynamic Vault rebalance crank documentation based on rebalance_strategy_wrapper, covering deposit_strategy, withdraw_strategy, admin/operator permission checks, approved strategy validation, before and after liquidity snapshots, strategy current liquidity updates, gain and loss calculation, locked-profit updates, 5% performance fee minted as LP tokens, fee unlock adjustment, JupLend collateral conversion, and unsupported legacy strategy variants."
 ---
 
-A rebalance crank is the transaction that changes where vault liquidity sits.
+A rebalance crank is a strategy transaction submitted by the vault admin or operator. The vault program exposes two normal rebalance actions:
 
-When Hermes decides that liquidity should move, it submits one of the vault's strategy actions:
+- `deposit_strategy(amount)`
+- `withdraw_strategy(amount)`
 
-- `deposit_strategy`: move liquidity from the vault reserve into an approved strategy
-- `withdraw_strategy`: move liquidity from an approved strategy back into the vault reserve
+Both actions use the same accounting wrapper after the strategy handler runs.
 
-The on-chain program then recalculates the vault's total liquidity and applies profit, loss, locked profit, and fee logic.
+## Required Constraints
 
-<Frame>
-  <img src="/images/overview/other-products/dynamic-vault/rebalance-crank.png" />
-</Frame>
+Before a rebalance can complete:
 
-## What Happens During a Rebalance
+- the vault must be a rebalance vault
+- the signer must be the vault admin or operator
+- the strategy must already be listed on the vault
+- the token vault, LP mint, and fee vault must match the vault
+- the reserve and collateral vault must match the strategy
+- the strategy handler must support the strategy type
+
+In the current source, the implemented external lending handler is `JupLend`.
+
+## Accounting Flow
 
 <Steps>
-  <Step title="Hermes selects an action">
-    Hermes decides whether the vault should deposit into a strategy or withdraw from one based on yield and risk signals.
+  <Step title="Record before state">
+    The program records token vault liquidity, strategy current liquidity, vault total amount, unlocked amount, and LP supply.
   </Step>
-  <Step title="The vault checks permissions">
-    The transaction must come from the admin or configured operator, and the strategy must match the vault's approved strategy records.
+  <Step title="Run strategy action">
+    For deposits, tokens move from the token vault into the strategy. For withdrawals, strategy collateral is converted back into underlying tokens.
   </Step>
-  <Step title="Liquidity moves through the strategy handler">
-    The strategy handler performs the actual lending deposit or withdrawal through the connected protocol.
+  <Step title="Convert collateral to liquidity">
+    The strategy handler calculates current underlying liquidity from the strategy's collateral amount and exchange rate.
   </Step>
-  <Step title="The vault compares before and after balances">
-    The program measures liquidity in the vault reserve and strategy before and after the action.
+  <Step title="Update total amount">
+    The program updates `total_amount` from before and after token-vault and strategy-liquidity values.
   </Step>
-  <Step title="Profit, loss, and fees are applied">
-    Gains are added to locked profit and can trigger a performance fee. Losses reduce vault value and locked profit.
+  <Step title="Apply gain or loss">
+    Gain is added to locked profit. Loss is reported and reduces locked profit first.
+  </Step>
+  <Step title="Mint performance-fee LP tokens">
+    If gain is positive, the program calculates the 5% performance fee and mints LP tokens to the configured fee vault when the result is nonzero.
   </Step>
 </Steps>
 
-## Rebalance Accounting
-
-Before the rebalance:
+## Total Amount Update
 
 ```math
-beforeValue = tokenVaultBefore + strategyLiquidityBefore
+\text{newTotalAmount}
+=
+\text{oldTotalAmount}
++ \text{tokenVaultAfter}
++ \text{strategyLiquidityAfter}
+- \text{tokenVaultBefore}
+- \text{strategyLiquidityBefore}
 ```
 
-After the rebalance:
+Gain or loss is then measured from `oldTotalAmount` and `newTotalAmount`.
 
-```math
-afterValue = tokenVaultAfter + strategyLiquidityAfter
-```
+## Why Locked Profit Changes During Rebalance
 
-The vault's total amount is updated by the difference.
+Strategy actions are when the vault observes updated strategy value. If a strategy action increases total vault value, that gain is not made fully withdrawable immediately. It is added to locked profit and unlocks over time.
 
-```math
-newTotalAmount = oldTotalAmount + afterValue - beforeValue
-```
+If the strategy action reports a loss, that loss reduces remaining locked profit before affecting future unlocked value.
 
-If the value increased, the rebalance created a gain. If the value decreased, the rebalance recorded a loss.
+## Fee Behavior
 
-## Why Profit Is Locked
+The program charges a 5% performance fee only on positive gain. The fee is represented by newly minted vault LP tokens sent to the configured fee vault. Underlying tokens remain inside the vault system.
 
-If all rebalance profit became withdrawable immediately, a user could attempt to deposit right before a known profitable rebalance and withdraw right after it. That user would capture yield that was earned by existing vault LPs.
+See [Dynamic Vault Formulas](/legacy-products/dynamic-vault/formulas#performance-fee) for the exact fee minting formula.
 
-Dynamic Vault reduces this timing attack by locking newly reported profit and releasing it gradually.
-
-<Frame>
-  <img src="/images/overview/other-products/dynamic-vault/sandwich-attack-scenario.png" />
-</Frame>
-
-## How Profit Unlocking Works
-
-When profit is realized, the vault adds it to `last_updated_locked_profit`. Over time, the locked amount degrades until it becomes fully available in the vault's unlocked value.
-
-```math
-unlockedAmount = totalAmount - lockedProfit
-```
-
-The unlocked amount is used for deposit and withdrawal share calculations.
-
-<Frame>
-  <img src="/images/overview/other-products/dynamic-vault/drip-duration-example.png" />
-</Frame>
-
-## Product Benefit
-
-<CardGroup cols={2}>
-  <Card title="Protects Existing LPs" icon="shield" iconType="solid">
-    Profit unlocking makes it harder for opportunistic deposits to capture yield immediately after a rebalance.
-  </Card>
-  <Card title="Keeps Accounting On-Chain" icon="calculator" iconType="solid">
-    The vault program updates total amount, strategy liquidity, LP supply effects, and locked profit directly on-chain.
-  </Card>
-  <Card title="Allows Active Allocation" icon="arrows-rotate" iconType="solid">
-    Hermes can still move liquidity as markets change without requiring users to manually manage lending positions.
-  </Card>
-  <Card title="Constrains Operator Power" icon="lock" iconType="solid">
-    Rebalance cranks can only interact with approved vault strategies and must satisfy program account constraints.
-  </Card>
-</CardGroup>
+<Warning>
+  Rebalance transactions are not free-form transfers. They are constrained strategy actions. However, connected strategy behavior, available liquidity, exchange-rate conversions, and operator timing still affect the realized result.
+</Warning>

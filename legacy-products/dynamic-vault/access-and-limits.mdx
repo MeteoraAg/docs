@@ -1,0 +1,108 @@
+---
+title: "Dynamic Vault Access and Limits"
+sidebarTitle: "Access and Limits"
+description: "Dynamic Vault account model, permissions, supported strategy behavior, token support, and implementation limits."
+llmsDescription: "Dynamic Vault access and limits reference based on the vault program, covering Vault, Strategy, LockedProfitTracker, admin and operator permissions, enabled deposit gate, fee vault treasury ownership, reward account treasury ownership, max 30 strategies, max 10 strategy bumps, rebalance and idle vault constraints, JupLend support, unsupported legacy strategy variants, SPL Token-only vault token accounts, locked profit degradation bounds, withdrawal precision loss, JupLend precision loss, and strategy removal behavior."
+---
+
+This page summarizes the on-chain constraints that matter for integrators and operators. It focuses on what the deployed vault program enforces.
+
+## Main Accounts
+
+| Account | Important fields |
+| --- | --- |
+| `Vault` | `enabled`, `total_amount`, `token_vault`, `fee_vault`, `token_mint`, `lp_mint`, `strategies`, `base`, `admin`, `operator`, `locked_profit_tracker`. |
+| `Strategy` | `reserve`, `collateral_vault`, `strategy_type`, `current_liquidity`, `bumps`, `vault`, `is_disable`. |
+| `LockedProfitTracker` | `last_updated_locked_profit`, `last_report`, `locked_profit_degradation`. |
+
+## Program Addresses
+
+| Value | Address |
+| --- | --- |
+| Mainnet program | `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` |
+| Treasury owner | `9kZeN47U2dubGbbzMrzzoRAUvpuxVLRcjW9XiFpYjUo4` |
+| Rebalance vault base | `HWzXGcGHy4tcpYfaRDCyLNzXqBTv3E6BttpCH2vJxArv` |
+| Production initial admin/operator | `DHLXnJdACTY83yKwnUkeoDjqi4QBbsYGa1v8tJL76ViX` |
+
+Vault PDAs are derived from the token mint and vault base. In practice this means one rebalance vault PDA and one idle vault PDA per token mint for this program.
+
+<Note>
+  On non-test builds, the initializer payer can be anyone, but new vaults initialize `admin` and `operator` to the fixed production admin address above. Rebalance vault admin can later transfer admin or set a different operator.
+</Note>
+
+## Roles
+
+| Role | What it can do |
+| --- | --- |
+| User | Deposit into enabled vaults, withdraw by burning LP tokens, and use the strategy-backed withdrawal path when the required accounts are provided. |
+| Admin | Manage rebalance vault settings: enable or disable deposits, set operator, transfer admin, set fee vault, update locked-profit degradation, initialize/add/remove strategies, and submit strategy actions. |
+| Operator | Submit `deposit_strategy`, `withdraw_strategy`, and `claim_rewards` for rebalance vaults. The admin can also submit these actions. |
+| Treasury owner | Must own the configured fee vault and reward token accounts used by reward claims. |
+
+<Note>
+  The program's `enabled` flag gates deposits only. It does not block withdrawals.
+</Note>
+
+## Permissioned Instructions
+
+| Instruction | Permission and constraints |
+| --- | --- |
+| `enable_vault` | Admin only, rebalance vault only. |
+| `set_operator` | Admin only, rebalance vault only. |
+| `transfer_admin` | Current admin and new admin sign; rebalance vault only. |
+| `transfer_fee_vault` | Admin only; new fee vault must be for the vault LP mint and owned by the treasury address. |
+| `update_locked_profit_degradation` | Admin only; value must be greater than `0` and less than or equal to `1,000,000,000,000`. |
+| `initialize_strategy` | Admin only; rebalance vault only; fee vault must already be set. |
+| `add_strategy` | Admin only; strategy must belong to the vault and must not be disabled. |
+| `remove_strategy` | Admin only; withdraws all strategy collateral and requires remaining strategy liquidity to be at most `1` unit. |
+| `remove_strategy2` | Admin only; supports advance payment with `max_admin_pay_amount` and permanently disables the strategy. |
+| `deposit_strategy` / `withdraw_strategy` | Admin or operator; rebalance vault only; strategy must be listed on the vault. |
+| `claim_rewards` | Admin or operator; rebalance vault only; strategy must be listed; reward account must be treasury-owned. |
+
+## Strategy Limits
+
+| Limit | Value |
+| --- | --- |
+| Maximum strategies per vault | `30` |
+| Maximum bump values stored per strategy | `10` |
+| Supported external strategy handler in current source | `JupLend` |
+| JupLend deposit precision tolerance | At most `100` smallest units between requested deposit and calculated deposited liquidity. |
+| Strategy-backed withdrawal precision loss | At most `1` smallest unit. |
+
+The `StrategyType` enum still includes several legacy variants, but the handler dispatch for those variants panics as unsupported. Documentation should not describe those variants as active integrations unless the deployed program is updated.
+
+For `JupLend`, the reserve mint must match the vault token mint, the collateral mint must match the lending reserve's f-token mint, and the remaining accounts must satisfy Jupiter Lend's deposit or withdrawal account requirements. Jupiter Lend rewards are automatically reflected in the collateral token, so the current `JupLend` `claim_rewards` handler does not transfer a separate reward token.
+
+## Token Support
+
+Vault initialization, deposits, withdrawals, LP minting, and most token accounts use `anchor_spl::token`, the SPL Token program interface. The vault program does not include a general Token-2022 transfer-hook or transfer-fee handling path for user deposits and withdrawals.
+
+<Warning>
+  Treat Dynamic Vault as SPL Token based unless a specific deployed vault and integration has been separately verified. Do not assume Token-2022 extension support from this program.
+</Warning>
+
+## Rebalance Vault vs Idle Vault
+
+Rebalance vaults use Meteora's configured base address and can interact with strategy instructions. Idle vaults use the default base address and are constrained out of rebalance-only instructions.
+
+| Capability | Rebalance vault | Idle vault |
+| --- | --- | --- |
+| User deposit and withdraw | Yes | Yes |
+| Enable or disable deposits | Yes | No |
+| Set operator | Yes | No |
+| Transfer admin | Yes | No |
+| Transfer fee vault | Yes | No |
+| Initialize or add strategy | Yes | No |
+| Strategy deposit or withdrawal | Yes | No |
+| Claim strategy rewards | Yes | No |
+
+## Important Edge Cases
+
+- Deposits with `token_amount = 0` fail.
+- Deposits fail when `enabled = 0`; withdrawals do not.
+- Slippage is enforced with `minimum_lp_token_amount` on deposit and `min_out_amount` on withdrawal.
+- Strategy initialization fails if `fee_vault` is still the default public key.
+- A fee vault must be owned by the treasury address and must use the vault LP mint.
+- Reward claims must send rewards to a treasury-owned token account.
+- Losses from strategy actions reduce locked profit before new gain is added.
+- Strategy removal does not automatically claim rewards; comments in the source indicate rewards should be claimed separately when applicable.
