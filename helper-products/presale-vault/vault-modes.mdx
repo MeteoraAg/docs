@@ -1,0 +1,112 @@
+---
+title: Presale Vault Modes
+sidebarTitle: Vault Modes
+description: Compare the Fixed Price, FCFS, and Pro Rata modes supported by Presale Vault.
+llmsDescription: "Explains Presale Vault sale modes as implemented by the presale program. Covers Fixed Price mode with Q64.64 q_price, fixed-price extra params, configurable withdrawals, quote and base-unit rounding, registry supply caps, and early completion; FCFS mode with maximum-cap deposit limits, disabled withdrawals, full participating-registry supply distribution, and early completion; and Pro Rata mode with oversubscription, during-sale withdrawals, proportional allocation, overflow quote refunds, refundable overflow fees, and creator fee implications."
+---
+
+Presale Vault supports three sale modes. The mode controls deposit capacity, withdrawal support, token-allocation math, and when the sale can end.
+
+# Comparison
+
+| Mode | Price behavior | Deposit capacity | During-sale withdrawal | Token allocation |
+| --- | --- | --- | --- | --- |
+| Fixed Price | Creator sets a Q64.64 quote-per-base price | Cannot exceed the global maximum cap or available registry supply | Configurable | Based on fixed price, then vested |
+| FCFS | Final implied price depends on deposits and supply | Cannot exceed the global maximum cap | Disabled | Registry supply is split by deposit share |
+| Pro Rata | Final implied price depends on deposits and supply | Can exceed the global maximum cap, subject to buyer caps | Enabled | Registry supply is split by deposit share; overflow quote is refundable |
+
+# Fixed Price
+
+Fixed Price mode is for sales where buyers should know the quote-per-base price before participating.
+
+The creator creates a fixed-price extra-params account before initializing the vault. That account stores:
+
+- `q_price`, a Q64.64 price in quote-token smallest units per base-token smallest unit
+- `disable_withdraw`, which controls whether buyers can withdraw during the ongoing sale
+
+The program verifies that the configured price can buy at least one base-token unit for the relevant buyer caps, that the maximum cap can be fulfilled by the deposited base supply, and that the minimum and maximum caps buy different base-token amounts.
+
+## Deposit behavior
+
+Fixed Price deposits are capped by:
+
+- remaining global quote capacity
+- remaining personal and registry deposit capacity
+- remaining base-token supply in the buyer's registry
+
+The program may reduce a requested deposit to the largest amount that maps cleanly to purchasable base-token units. Fixed-price token amounts are rounded down in base-token units, and quote needed for those units is rounded up.
+
+## Claim behavior
+
+The sold amount for a registry is:
+
+```math
+\min\left(\left\lfloor \frac{\text{registry\_total\_deposit} \times 2^{64}}{\text{q\_price}} \right\rfloor,\ \text{registry\_supply}\right)
+```
+
+Each buyer's claimable amount is their share of that sold amount, subject to the unlock schedule.
+
+# FCFS
+
+FCFS mode is for capped sales where deposits should stop once the sale reaches the maximum cap.
+
+Deposits are capped by:
+
+- remaining global quote capacity
+- remaining personal and registry deposit capacity
+
+FCFS does not support during-sale withdrawals. If early completion is not disabled, the program updates the presale end time to the current timestamp once total deposits reach the maximum cap.
+
+## Claim behavior
+
+For each registry that received deposits, the full registry supply is sold and split by deposit share:
+
+```math
+\text{user\_allocation} =
+\left\lfloor
+\frac{\text{registry\_supply} \times \text{user\_deposit}}
+{\text{registry\_total\_deposit}}
+\right\rfloor
+```
+
+A registry with no deposits is not treated as sold, so its supply is unsold base token.
+
+# Pro Rata
+
+Pro Rata mode is for sales where buyers should be able to participate throughout the sale window even if demand exceeds the maximum cap.
+
+Deposits are not capped by the global maximum cap. They are still capped by the buyer's remaining deposit quota. Pro Rata supports during-sale withdrawals.
+
+## Claim and refund behavior
+
+Token allocation uses the same registry-level share formula as FCFS:
+
+```math
+\text{user\_allocation} =
+\left\lfloor
+\frac{\text{registry\_supply} \times \text{user\_deposit}}
+{\text{registry\_total\_deposit}}
+\right\rfloor
+```
+
+If total deposits exceed the maximum cap, the excess quote token is refundable after the sale completes. The creator can withdraw only up to `presale_maximum_cap`; buyers withdraw the remaining quote token proportionally.
+
+Deposit fees on the refunded portion are also refundable. The creator's collectible fee in Pro Rata is the total fee minus the fee attributed to overflow quote.
+
+<Note>
+  All three modes can be used with any whitelist mode. Registry and personal-cap constraints are covered in the [Configuration Guide](/helper-products/presale-vault/configuration-guide).
+</Note>
+
+# Choosing a mode
+
+<CardGroup cols={3}>
+  <Card title="Fixed Price" icon="tag" iconType="solid">
+    Use when the sale needs an explicit price and predictable buyer communication.
+  </Card>
+  <Card title="FCFS" icon="stopwatch" iconType="solid">
+    Use when the sale should be hard-capped and deposits are meant to be committed.
+  </Card>
+  <Card title="Pro Rata" icon="scale-balanced" iconType="solid">
+    Use when the sale may be oversubscribed and unused quote should be refunded fairly.
+  </Card>
+</CardGroup>

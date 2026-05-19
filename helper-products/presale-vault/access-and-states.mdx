@@ -1,0 +1,92 @@
+---
+title: "Presale Vault Access and States"
+sidebarTitle: "Access and States"
+description: "Review Presale Vault accounts, access models, escrow creation paths, operator permissions, Merkle roots, lifecycle gates, and close conditions."
+llmsDescription: "Explains Presale Vault accounts and permissions based on the presale program, covering Presale, PresaleRegistry, Escrow, FixedPricePresaleExtraArgs, Operator, MerkleRootConfig, PermissionedServerMetadata, base and quote token vaults, presale authority PDA, permissionless escrow creation, authority-created escrows, Merkle-proof escrows, personal deposit caps, operator creation and revocation, Merkle root versioning and close rules, permissioned server metadata, deposit and withdrawal gates, claim gates, creator withdrawal, fee collection, unsold base-token actions, and escrow close conditions."
+---
+
+Presale Vault uses a small set of program accounts to separate sale configuration, participant state, allowlist data, and token custody. This page is a program-level map for integrators who need to understand which account owns which responsibility.
+
+## Core Accounts
+
+| Account | What It Stores |
+| --- | --- |
+| `Presale` | Sale owner, base mint, quote mint, token vaults, mode, whitelist mode, caps, timing, vesting, total deposits, fees, claim totals, token program flags, registries, and one-time lifecycle flags. |
+| `PresaleRegistry` | Per-registry supply, total deposits, escrow count, claimed and refunded totals, buyer deposit range, and deposit fee bps. Registries are stored inside the `Presale` account. |
+| `Escrow` | A buyer's position: owner, registry index, net deposit, deposit fee, personal cap, pending claim amount, claimed amount, remaining-quote withdrawal flag, and timestamps. |
+| `FixedPricePresaleExtraArgs` | Fixed Price extra params: `q_price`, owner, presale, and whether buyer withdrawals are disabled. |
+| `Operator` | Permissioned authority mapping between a creator and an operator owner. |
+| `MerkleRootConfig` | Merkle root, presale, and version for permissioned Merkle-proof escrows. |
+| `PermissionedServerMetadata` | Optional server URL for retrieving Merkle proofs or authority-mode transaction data off-chain. |
+
+The base-token and quote-token vaults are token accounts controlled by the program's presale authority PDA. The program checks that vault and mint accounts match the `Presale` state before moving tokens.
+
+## Access Models
+
+Presale Vault supports three whitelist modes.
+
+### Permissionless
+
+Permissionless sales let anyone create an escrow while the sale is ongoing. The escrow uses the default registry index `0`, and the escrow's personal cap defaults to the registry's buyer maximum.
+
+### Permission with Authority
+
+Authority-mode sales require an `Operator` account. The operator owner signs escrow creation, and the operator must belong to the presale creator. The escrow creation instruction assigns:
+
+- buyer wallet
+- registry index
+- personal deposit cap
+
+Operator accounts are scoped by creator and operator owner, not by a single presale. The creator can revoke an operator account, which closes it back to the creator.
+
+### Permission with Merkle Proof
+
+Merkle-mode sales require a `MerkleRootConfig`. The buyer provides a proof for a leaf containing:
+
+- buyer wallet
+- registry index
+- personal deposit cap
+
+The Merkle root config is created by the presale owner while the sale is not started or ongoing, and only for presales using the Merkle whitelist mode. Root configs are versioned, so a creator can publish a new version if the allowlist data changes.
+
+<Note>
+  The program validates the proof and cap data on-chain, but it does not prevent the same wallet from appearing in multiple registries. Creators and launchpads should prevent unintended duplicate eligibility off-chain.
+</Note>
+
+## Permissioned Server Metadata
+
+For permissioned sales, the creator can publish an optional `PermissionedServerMetadata` account with a server URL. The URL can point users to Merkle proofs or authority-mode transaction data.
+
+This account is only allowed for permissioned whitelist modes and can be created while the sale is not started or ongoing. The creator can close it in any sale state.
+
+## Lifecycle Gates
+
+| Action | Gate |
+| --- | --- |
+| Initialize presale | Params, token support, registries, mode-specific rules, and base-token funding must validate. |
+| Create escrow | Sale must be ongoing. Whitelist mode and registry index must match the selected creation path. |
+| Deposit | Sale must be ongoing. Deposit is capped by the mode, registry, personal cap, and fixed-price supply where applicable. |
+| Withdraw during sale | Sale must be ongoing. Pro Rata allows withdrawals, FCFS disallows them, and Fixed Price depends on `disable_withdraw`. |
+| Claim | Sale must be completed. The claim amount is cumulative and subtracts already claimed and pending amounts. |
+| Withdraw remaining quote | Allowed after failed sales, or after completed Pro Rata sales for overflow quote. Each escrow can do this once. |
+| Creator withdraw | Allowed after completed or failed sales. The creator can withdraw once. |
+| Collect deposit fee | Allowed only after completed sales, and only once. |
+| Perform unsold base-token action | Allowed only after completed sales, only if unsold base tokens exist, and only once. |
+
+## Creator Settlement
+
+After a completed sale, the creator can withdraw raised quote token once. The withdrawal is capped by the sale's maximum cap, which is especially important for oversubscribed Pro Rata sales.
+
+After a failed sale, the creator can withdraw the base-token supply instead.
+
+Deposit fees are collected separately. In Fixed Price and FCFS, the creator can collect total deposit fees after completion. In Pro Rata, the collectible fee excludes the fee attributed to overflow quote that buyers can refund. See [Presale Vault Formulas](/helper-products/presale-vault/formulas) for the exact withdrawal and fee formulas.
+
+## Close Conditions
+
+Escrow accounts can only be closed once they have no remaining economic claim:
+
+- during an ongoing sale, the escrow must have zero deposit and zero deposit fee
+- after a failed sale, the escrow must have withdrawn remaining quote, unless it has zero deposit and zero fee
+- after a completed sale, refundable quote must be withdrawn when applicable, and all tokens claimable through the vesting end must be claimed
+
+Merkle root configs can be closed by the creator when the presale is not ongoing. Fixed-price extra params can be closed by their owner. Permissioned server metadata can be closed by the presale owner in any sale state.

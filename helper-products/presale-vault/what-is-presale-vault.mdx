@@ -1,142 +1,115 @@
 ---
-title: What's Presale Vault?
-description: Presale Vault is Meteora's flexible token presale infrastructure for running fixed price, FCFS, or pro rata sales with configurable access, caps, fees, refunds, and vesting.
+title: "What is Presale Vault?"
+sidebarTitle: "What is Presale Vault?"
+description: "Learn how Meteora's Presale Vault helps teams run standalone token presales with fixed-price, FCFS, and pro rata modes, permissioned access, registry buckets, refunds, fees, and vesting."
+llmsDescription: "Overview of Meteora Presale Vault based on the presale program, explaining standalone token presales, base and quote token vaults, Fixed Price, FCFS, and Pro Rata modes, presale registries, permissionless and permissioned escrow creation, Merkle-proof allowlists, deposit fees, buyer caps, unlock and vesting behavior, unsold base-token actions, lifecycle stages, Token-2022 support, account and permission references, and how Presale Vault differs from Alpha Vault."
 ---
 
-<Warning>This program is still in beta and is subject to breaking changes.</Warning>
+<Warning>
+  Presale Vault is still in beta and is subject to breaking changes.
+</Warning>
 
-Presale Vault is Meteora's launch infrastructure for projects and launchpads that want to run a token sale before market trading begins.
+Presale Vault is Meteora's on-chain infrastructure for teams that want to run a standalone token sale before market trading begins.
 
-It lets a creator sell a base token to supporters in exchange for a quote token such as SOL, USDC, USDT, or any supported SPL token. Buyers deposit during the sale window, the vault tracks each buyer's contribution, and once the presale ends, buyers can claim their allocation based on the selected sale mode and unlock schedule.
-
-Unlike a trading pool, Presale Vault is purpose-built for the pre-launch moment: raising capital, allocating token supply, gating access, managing oversubscription, and giving projects a cleaner way to distribute tokens before listing.
+A creator deposits the token being sold into a program-owned base vault. Buyers deposit a quote token during the sale window. If the sale succeeds, buyers claim the sold token according to the selected sale mode and unlock schedule. If the sale fails, buyers can withdraw their deposited quote token and refundable fees.
 
 <Info>
-  Presale Vault does not automatically deploy raised capital into liquidity after the sale. After completion, the creator withdraws the raised quote tokens and handles liquidity deployment separately.
+  Presale Vault runs on the mainnet program `presSVxnf9UU8jMxhgSMqaRwNiT36qeBdNeTRKjTdbj`.
 </Info>
 
-# Why use Presale Vault?
+## Why Presale Vault Exists
 
-Presales usually force projects to choose between speed, fairness, and control. Presale Vault is designed to give teams all three.
+Pre-market token sales need more than a deposit address. Teams often need caps, allowlists, multiple participant tiers, predictable refund rules, vesting, and clean post-sale accounting before a token is listed on a live market.
+
+Presale Vault brings those sale mechanics into one on-chain flow. A creator or launchpad can configure the sale terms up front, buyers participate through escrow accounts, and the program handles allocation, refunds, claims, fees, and unsold-token handling according to the configured mode.
 
 <CardGroup cols={2}>
-  <Card title="Launch with the right sale mechanic" icon="sliders" iconType="solid">
-    Choose Fixed Price, First-Come, First-Serve (FCFS), or Pro Rata depending on whether your launch needs price certainty, urgency, or fair allocation under heavy demand.
+  <Card title="Standalone Fundraising" icon="coins" iconType="solid">
+    Run a token sale before market trading begins, without requiring an AMM pool or automatic liquidity deployment.
   </Card>
-  <Card title="Segment your community" icon="users" iconType="solid">
-    Create up to 5 participation buckets with their own token allocation, buyer caps, minimum deposits, and deposit fee settings.
+  <Card title="Multiple Sale Modes" icon="shuffle" iconType="solid">
+    Choose Fixed Price, FCFS, or Pro Rata depending on whether the sale needs a known price, capped urgency, or proportional allocation under oversubscription.
   </Card>
-  <Card title="Gate access when needed" icon="shield-check" iconType="solid">
-    Run a public sale, a curated whitelist, or a scalable Merkle-proof allowlist for larger campaigns.
+  <Card title="Participant Buckets" icon="users" iconType="solid">
+    Use 1 to 5 registries to separate allocations, deposit fee bps, and buyer deposit ranges.
   </Card>
-  <Card title="Control unlocks after the sale" icon="lock" iconType="solid">
-    Configure immediate release, lock periods, and linear vesting to reduce instant sell pressure and align buyers with the project.
+  <Card title="Permissioned Access" icon="shield-check" iconType="solid">
+    Support public participation, operator-created escrows, or Merkle-proof allowlists with per-buyer registry and cap data.
+  </Card>
+  <Card title="Refund and Fee Accounting" icon="receipt" iconType="solid">
+    Track net deposits and deposit fees separately, including failed-sale refunds and Pro Rata overflow refunds.
+  </Card>
+  <Card title="Unlock Control" icon="lock" iconType="solid">
+    Configure immediate release, lock duration, and linear vesting for tokens bought in a successful sale.
   </Card>
 </CardGroup>
 
-# What Presale Vault is best for
+## How Presale Vault Works
 
-Presale Vault is especially useful when a project or launchpad wants to:
+A Presale Vault launch has two main phases.
 
-- raise before a token lists on a liquidity pool
-- give early supporters a dedicated allocation
-- run a fair sale that can handle more demand than supply
-- create different tiers for partners, allowlisted wallets, communities, or public users
-- charge transparent deposit fees for launchpad monetization
-- reduce post-launch volatility through locks and vesting
-- use any SPL or Token-2022 asset as either the sale token or contribution token
+During the **sale phase**, the creator initializes the vault, funds the base-token vault, and buyers create escrow accounts. Deposits are accepted only while the sale is ongoing. The selected mode controls whether deposits are capped at the maximum cap, whether buyers can withdraw during the sale, and how allocations are calculated.
 
-# Who is it for?
+During the **settlement phase**, the sale is either completed or failed. Completed sales allow buyer claims, creator quote withdrawal, deposit-fee collection, Pro Rata overflow refunds when applicable, and one-time unsold base-token handling. Failed sales allow buyers to withdraw their quote deposit and fee, while the creator can withdraw the unsold base supply.
 
-## Token creators
+| Stage | What Happens |
+| --- | --- |
+| Initialize vault | The creator sets the mode, whitelist mode, caps, timing, registries, unlock schedule, and unsold-token action. The base vault is funded with the total registry supply. |
+| Create escrows | Buyers need an escrow before depositing. Permissionless escrows use registry `0`; permissioned escrows include registry and personal cap data. |
+| Deposit quote | Buyers deposit net quote token plus any registry deposit fee and Token-2022 transfer fee. The program records the net amount used for allocation. |
+| Sale ends | The sale completes if total net deposits meet the minimum cap. Fixed Price and FCFS can end early at the maximum cap unless disabled. |
+| Settle buyers | Completed sales allow claims. Failed sales allow full remaining quote and fee refunds. Completed Pro Rata sales allow proportional overflow quote and fee refunds. |
+| Settle creator | The creator can withdraw raised quote after completion, withdraw base supply after failure, and collect non-refundable deposit fees after completion. |
+| Handle unsold supply | After completion, unsold base token can be returned to the creator or burned once, depending on the configured action. |
 
-Creators use Presale Vault to package a token sale around their launch strategy. You decide how much to raise, how much token supply to sell, who can participate, how much each buyer can deposit, and when buyers can claim.
-
-## Launchpads
-
-Launchpads use Presale Vault as programmable sale infrastructure. A single integration can support multiple launch formats, whitelist models, fee structures, and token unlock designs.
-
-## Buyers
-
-Buyers get a transparent on-chain record of their deposits and claims. Depending on the mode, they may know the exact price upfront, compete for a capped allocation, or participate in a fair pro rata sale where excess demand is refunded.
-
-# Core product building blocks
-
-## Sale window
-
-Every Presale Vault has a start time and end time. Buyers can only deposit while the vault is ongoing. The sale must meet its minimum cap to succeed. If it does not, buyers can withdraw their deposited quote tokens.
-
-## Minimum and maximum raise
-
-The minimum cap defines the funding level required for the sale to be considered successful. The maximum cap defines the target raise ceiling. Fixed Price and FCFS sales stop accepting deposits once the cap is reached, unless early completion is disabled. Pro Rata sales can be oversubscribed and refund unused quote tokens after the sale.
-
-## Token supply allocation
-
-The creator allocates a specific amount of base tokens to the presale. In dynamic-price modes, the allocated supply for each bucket is distributed among participating buyers based on their share of deposits. In Fixed Price mode, the fixed price determines how much of the allocated supply is actually sold.
-
-## Buyer buckets
-
-A Presale Vault can have up to 5 registries, or buckets. Each bucket can have its own:
-
-- token supply allocation
-- minimum buyer deposit
-- maximum buyer deposit
-- deposit fee
-
-This makes it possible to design separate lanes for different audiences, such as strategic partners, community OGs, NFT holders, KYC users, or a public round.
-
-<Note>
-  Multiple buckets require a permissioned setup, because the launch needs to know which buyer belongs to which bucket.
-</Note>
-
-## Access control
-
-Presale Vault supports three access models:
-
-- **Permissionless**: anyone can create an escrow and deposit.
-- **Permissioned with authority**: the creator or an approved operator creates escrows for approved buyers.
-- **Permissioned with Merkle proof**: buyers prove they are on an allowlist using a Merkle proof, which scales better for large whitelists.
-
-## Unlock and vesting
-
-Creators can choose how quickly purchased tokens become claimable:
-
-- release 100% immediately
-- release part of the allocation immediately and vest the rest
-- lock all tokens first, then vest them linearly
-- set the immediate release timestamp between the sale end and vesting end
-
-This lets teams balance early access with healthier post-launch market structure.
-
-## Unsold token handling
-
-If not all allocated base tokens are sold, the creator configures what happens to the unsold amount:
-
-- **Refund**: return unsold tokens to the creator.
-- **Burn**: permanently remove unsold tokens.
-
-# Presale Vault vs Alpha Vault
-
-Presale Vault and Alpha Vault both support early token distribution, but they solve different launch problems.
-
-- **Presale Vault** runs a standalone token sale. Buyers deposit into a presale vault and later claim presale tokens. The raised capital is withdrawn by the creator after the sale.
-- **Alpha Vault** is paired with a Launch Pool. Users deposit SOL or USDC into the vault, and the vault buys from the pool before public trading starts.
-
-Use Presale Vault when the goal is to run a configurable fundraising round. Use Alpha Vault when the goal is to give supporters first access to buy from a launch pool before the broader market opens.
-
-# Learn more
+## Product Building Blocks
 
 <CardGroup cols={2}>
-  <Card title="Workflow" icon="diagram-project" href="/helper-products/presale-vault/workflow">
-    See the full creator and buyer journey from setup to claims.
+  <Card title="Presale Vault Modes" href="/helper-products/presale-vault/vault-modes" icon="shuffle">
+    Compare Fixed Price, FCFS, and Pro Rata behavior around deposit capacity, withdrawals, allocation, and refunds.
   </Card>
-  <Card title="Presale Vault Modes" icon="shuffle" href="/helper-products/presale-vault/presale-vault-modes">
-    Compare Fixed Price, FCFS, and Pro Rata sale mechanics.
+  <Card title="Presale Vault Configuration Guide" href="/helper-products/presale-vault/configuration-guide" icon="gear">
+    Review the main setup constraints around tokens, timing, caps, registries, access, fees, vesting, and unsold-token handling.
   </Card>
-  <Card title="Presale Vault Formulas" icon="calculator" href="/helper-products/presale-vault/presale-vault-formulas">
-    Understand allocation, refunds, fees, and vesting in plain English.
+  <Card title="Presale Vault Token 2022 Support" href="/helper-products/presale-vault/token-2022-support" icon="certificate">
+    See supported Token-2022 extensions, transfer-fee behavior, transfer hooks, and memo-transfer handling.
   </Card>
-  <Card title="Configuration Guide" icon="gear" href="/helper-products/presale-vault/configuration-guide">
-    Review the key decisions a project should make before launching.
+  <Card title="Presale Vault Access and States" href="/helper-products/presale-vault/access-and-states" icon="key">
+    Review state accounts, escrow creation paths, operator permissions, Merkle roots, lifecycle gates, and close conditions.
   </Card>
 </CardGroup>
+<CardGroup cols={1}>
+  <Card title="Presale Vault Formulas" href="/helper-products/presale-vault/formulas" icon="calculator">
+    Understand the core formulas for Q64.64 fixed price, dynamic allocation, deposit fees, refunds, creator withdrawal, and vesting.
+  </Card>
+</CardGroup>
+
+## Who Presale Vault Is For
+
+<AccordionGroup>
+  <Accordion title="Launchpads">
+    Presale Vault is useful for launchpads that want repeatable presale infrastructure with configurable sale modes, permissioned access, registries, deposit fees, refunds, and vesting.
+  </Accordion>
+  <Accordion title="Token Creators">
+    Creators can run a standalone fundraising round before listing, decide who can participate, define per-buyer limits, configure unlocks, and settle raised quote tokens after the sale.
+  </Accordion>
+  <Accordion title="Buyers">
+    Buyers get an escrow account that tracks their registry, net deposit, deposit fee, personal cap, pending claim amount, claimed tokens, and remaining-quote withdrawal status.
+  </Accordion>
+  <Accordion title="Ecosystem Integrators">
+    Wallets, launch interfaces, dashboards, and indexers can follow a clear lifecycle: vault initialization, escrow creation, deposits, completion or failure, claims, refunds, and creator settlement.
+  </Accordion>
+</AccordionGroup>
+
+## Presale Vault vs Alpha Vault
+
+Presale Vault and Alpha Vault both support early token access, but they solve different launch problems.
+
+- **Presale Vault** runs a standalone token sale. Buyers deposit quote tokens into a presale vault and later claim the sold token. The creator withdraws raised quote tokens after a successful sale.
+- **Alpha Vault** is paired with a launch pool. Users deposit into the vault so the vault can buy from that pool before public trading starts.
+
+Use Presale Vault when the goal is a configurable fundraising round. Use Alpha Vault when the goal is first access to buy from a launch pool.
+
+<Warning>
+  Presale Vault does not automatically create liquidity or list the token after the sale. Launch teams should plan creator withdrawal, fee collection, refunds, unsold-token handling, and any post-sale liquidity deployment before deposits open.
+</Warning>
