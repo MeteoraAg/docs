@@ -113,8 +113,10 @@ DAMM v1 pools route token balances through Dynamic Vaults. That means the pool o
 Virtual price is a useful way to understand whether a pool share is becoming more valuable over time.
 
 ```math
-\text{virtual price} = \frac{\text{total pool value}}{\text{LP token supply}}
+\text{virtual price} = \frac{D}{\text{LP token supply}}
 ```
+
+`D` is the curve invariant computed from the pool's vault-backed token amounts. For constant-product pools, DAMM v1 uses `sqrt(x * y)`. For stable pools, it uses the StableSwap invariant.
 
 Virtual price can rise when:
 
@@ -135,10 +137,10 @@ DAMM v1 charges trading fees on swaps. A simplified fee calculation is:
 DAMM v1 also supports protocol fees:
 
 ```math
-\text{protocol fee} = \text{input amount} \times \frac{\text{protocol fee numerator}}{\text{protocol fee denominator}}
+\text{protocol fee} = \text{trading fee} \times \frac{\text{protocol fee numerator}}{\text{protocol fee denominator}}
 ```
 
-The remaining fee value benefits LPs because it stays with the pool and increases the value backing LP tokens.
+The protocol fee is computed from the total trading fee. The remaining fee value benefits LPs because it stays with the pool and increases the value backing LP tokens.
 
 <Info>
   DAMM v1's fee math has a minimum-fee behavior for non-zero trades when the calculated fee would otherwise round down to zero. This prevents tiny trades from bypassing fees entirely.
@@ -170,9 +172,9 @@ A simple fee efficiency metric annualizes recent swap fees against pool liquidit
 
 This helps LPs compare how much fee activity a pool is generating relative to the amount of liquidity supplied.
 
-## Farm rewards
+## External farm rewards
 
-DAMM v1 farms distribute reward tokens to staked LP tokens over time. A simplified reward rate is:
+External DAMM v1 farms distribute reward tokens to staked LP tokens over time. Farming is a separate reward layer around the AMM LP token, not core swap logic inside the AMM program. A simplified reward rate is:
 
 ```math
 \text{reward rate} = \frac{\text{funded reward amount}}{\text{reward duration}}
@@ -190,7 +192,7 @@ A user's pending reward is based on their staked balance:
 \text{user reward} = \text{staked LP tokens} \times \text{reward per token since last update}
 ```
 
-DAMM v1 farms can support up to two reward tokens. If the pool has no staked LP tokens during part of a reward period, reward accounting waits until there is active stake instead of distributing to nobody.
+DAMM v1 farm integrations have historically supported up to two reward tokens. Check the farm program and campaign configuration for exact reward-accounting behavior.
 
 ## LM APR
 
@@ -205,13 +207,3 @@ Where:
 - `farm reward per day` is the daily token emission value in USD.
 - `farm TVL` is the value of LP tokens staked in the farm.
 - `pool TVL` is the value of all token A and token B liquidity in the pool.
-
-## The product takeaway
-
-DAMM v1 is not just one formula. It is a stack:
-
-- Curve math determines how swaps price trades.
-- Fee math determines how value is captured from volume.
-- Vault math determines how eligible idle assets can earn yield.
-- Farm math determines how external incentives are distributed.
-- Virtual price connects those value sources back to LP share value.

@@ -1,10 +1,11 @@
 ---
-title: "LST Pools"
+title: "DAMM v1 LST Pools"
+sidebarTitle: "LST Pools"
 description: "Learn how DAMM v1 LST pools support SOL/LST liquidity with stable-pool pricing, depeg-aware value tracking, and additional yield opportunities."
-llmsDescription: "Product documentation for DAMM v1 LST pools, covering SOL/LST pool design, LST virtual price tracking, depeg-aware stable pools, LP benefits, LST protocol benefits, Dynamic Vault yield, and when LST pools are useful."
+llmsDescription: "Documentation for DAMM v1 LST pools, covering SOL/LST pool design, LST virtual price tracking, depeg-aware stable pools, LP benefits, LST protocol benefits, Dynamic Vault yield, and when LST pools are useful."
 ---
 
-DAMM v1 LST pools are stable-style pools built for liquid staking token markets. They help users swap between SOL and supported LSTs while giving LST protocols a way to build deeper, more sustainable liquidity.
+DAMM v1 LST pools are permissioned stable-style pools built for supported liquid staking token markets. They help users swap between SOL and an LST while letting the AMM account for the LST's changing SOL value.
 
 An LST, or liquid staking token, represents staked SOL plus accumulated staking rewards. Because staking rewards accrue over time, many LSTs are designed to become worth slightly more SOL over time. That makes a simple 1:1 pool incomplete: the pool needs to understand that the LST side may appreciate.
 
@@ -23,7 +24,7 @@ DAMM v1 LST pools were built to support that market structure:
 
 In a standard AMM, a SOL/LST pool can create impermanent loss for LPs if the LST reliably appreciates against SOL. The pool may treat the assets as if they should remain 1:1 even though staking rewards gradually change the fair relationship.
 
-DAMM v1 addresses this with a depeg-aware stable pool design. The pool can update a base virtual price for the LST side and use that value when calculating stable-swap balances.
+DAMM v1 addresses this with a depeg-aware stable pool design. In the AMM program, depeg pools require token A to be native SOL and token B to be the staking or interest-bearing token. The pool can update a cached base virtual price for the LST side and use that value when calculating stable-swap balances.
 
 Conceptually:
 
@@ -34,7 +35,7 @@ Conceptually:
 This lets the pool price swaps based on the LST's underlying value rather than assuming one LST is always equal to one SOL.
 
 <Info>
-  DAMM v1 includes depeg handling for supported LST designs, including integrations around staking-pool style virtual price data.
+  DAMM v1 depeg support is implemented for Marinade mSOL, Lido/Solido stSOL, and generic SPL stake-pool tokens. Permissionless stable pools do not support depeg mode.
 </Info>
 
 ## How DAMM v1 LST pools work
@@ -42,7 +43,7 @@ This lets the pool price swaps based on the LST's underlying value rather than a
 A DAMM v1 LST pool combines three ideas:
 
 1. **Stable-pool pricing** concentrates liquidity around the expected SOL/LST relationship.
-2. **Virtual price tracking** accounts for the LST's changing value over time.
+2. **Virtual price tracking** accounts for the LST's changing value over time. The cached value refreshes only after the cache is older than 10 minutes.
 3. **Vault-backed liquidity** allows eligible idle assets to participate in Dynamic Vault yield where supported.
 
 The user experience stays simple. Users swap between SOL and the LST. LPs deposit liquidity and receive LP tokens. The pool handles the value adjustment internally.
@@ -73,7 +74,7 @@ DAMM v1 LST pools help protocols:
 
 ## Dynamic Vault yield for LST pools
 
-Some DAMM v1 LST pool assets can connect to Dynamic Vaults. When supported, idle SOL or stablecoin-side liquidity may be allocated into external lending strategies while the pool remains available for swaps and withdrawals.
+Some DAMM v1 LST pool assets can connect to Dynamic Vaults. When supported, idle liquidity may be allocated into external strategies while the pool remains available for swaps and withdrawals.
 
 This matters because LST liquidity can be strategic and long-lived. Vault yield can help keep LPs engaged during periods when swap volume is not enough on its own.
 
