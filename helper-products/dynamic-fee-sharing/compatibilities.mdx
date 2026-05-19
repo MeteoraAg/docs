@@ -1,24 +1,25 @@
 ---
 title: "Dynamic Fee Sharing Compatibilities"
 sidebarTitle: "Compatibilities"
-description: "Review which vault types, token types, recipient counts, and Meteora fee-claim integrations are compatible with Dynamic Fee Sharing."
-llmsDescription: "Explains Dynamic Fee Sharing compatibility in product language: supports SPL Token and supported Token 2022 mints, 2 to 5 recipients, PDA and non-PDA vaults, manual funding, PDA funding by claiming fees, DAMM v2 claim position fee and claim reward actions, DBC creator and partner surplus withdrawals, creator and partner trading fee claims, generic DBC trading fee claim, and migration fee withdrawal."
+description: "Review Dynamic Fee Sharing limits, supported token mints, vault types, funding paths, and whitelisted source-program actions."
+llmsDescription: "Reference page for Dynamic Fee Sharing compatibility from source code: recipient count 2 to 5, non-zero shares, non-default addresses, duplicate addresses not rejected, SPL Token and Token 2022 mints with only TransferFeeConfig, MetadataPointer, and TokenMetadata extensions, Non-PDA and PDA fee vaults, manual fund_fee, PDA-only fund_by_claiming_fee, share-holder signer requirement, and whitelisted DAMM v2 and Dynamic Bonding Curve actions."
 ---
 
-Dynamic Fee Sharing is intentionally narrow: it is built to split fees safely between a small group of recipients. This page summarizes what is compatible with the product and when to use each path.
+Dynamic Fee Sharing is intentionally narrow. This page is the compatibility reference for what the current program accepts.
 
 ## Compatibility Overview
 
 | Area | Supported |
 | --- | --- |
 | Recipient count | 2 to 5 recipients per fee vault |
-| Share values | Non-zero positive shares for each recipient |
-| Token standard | SPL Token and supported Token 2022 mints |
+| Share values | Non-zero `u32` shares for each user entry |
+| Recipient address | Non-default public key |
+| Token standard | SPL Token and Token 2022 mints with supported extensions only |
 | Vault types | Non-PDA fee vault and PDA fee vault |
 | Funding methods | Manual funding and supported claim-by-integration funding |
-| Compatible products | Supported DAMM v2 and DBC fee-claim actions |
+| Claim-by-integration source programs | Whitelisted DAMM v2 and Dynamic Bonding Curve actions |
 
-## Recipient Compatibility
+## Recipient Limits
 
 A fee vault supports **2 to 5 recipients**.
 
@@ -28,10 +29,10 @@ Each recipient needs:
 - A non-zero share value.
 - A recipient index used when claiming.
 
-Dynamic Fee Sharing is best for small, known recipient groups. It is not designed as a mass payout tool for hundreds or thousands of wallets.
+The program rejects the default public key as a recipient address. It does not reject duplicate recipient addresses, so clients and teams should treat uniqueness as an operational requirement unless duplicate entries are intentional.
 
 <Warning>
-  Recipient addresses and shares should be finalized before vault creation. The program stores the configured recipient list in the fee vault and does not expose a general edit-recipient flow.
+  The program stores the configured recipient list in the fee vault and does not expose a general edit-recipient or edit-share instruction.
 </Warning>
 
 ## Token Compatibility
@@ -43,19 +44,19 @@ Supported token types include:
 - Standard SPL Token mints.
 - Token 2022 mints with supported extensions.
 
-For Token 2022, the program supports mints that use these extensions:
+For Token 2022, the program accepts mints whose extension list contains only:
 
-- Transfer Fee Config
-- Metadata Pointer
-- Token Metadata
+- `TransferFeeConfig`
+- `MetadataPointer`
+- `TokenMetadata`
 
-If a Token 2022 mint uses unsupported extensions, the vault rejects it.
+If a Token 2022 mint uses any other extension, initialization fails with `InvalidMint`.
 
 <Info>
   If a project wants to split fees for multiple token mints, it should create one fee vault per token mint.
 </Info>
 
-## Vault Type Compatibility
+## Vault Types
 
 Dynamic Fee Sharing supports two fee vault types.
 
@@ -64,19 +65,7 @@ Dynamic Fee Sharing supports two fee vault types.
 | Non-PDA fee vault | Manual fee funding | Standalone fee-sharing agreements. |
 | PDA fee vault | Manual fee funding and supported claim-by-integration funding | Protocol-integrated fee sharing tied to a base account. |
 
-### Non-PDA Fee Vault
-
-A Non-PDA fee vault is flexible and standalone. It can receive manually funded fees and distribute them to recipients.
-
-Use it when the source of fees is external to Dynamic Fee Sharing or when the team wants to manage funding manually.
-
-### PDA Fee Vault
-
-A PDA fee vault is deterministic. It is derived from a base account and token mint, which makes it useful for protocol integrations.
-
-PDA fee vaults are required for funding by claiming supported fees because the vault needs to sign the compatible source-program claim action.
-
-## Funding Compatibility
+## Funding Paths
 
 Dynamic Fee Sharing supports two funding paths.
 
@@ -84,22 +73,20 @@ Dynamic Fee Sharing supports two funding paths.
 
 Manual funding works for both Non-PDA and PDA fee vaults.
 
-A funder transfers the fee token into the vault. The vault records the net amount and updates fee-per-share accounting.
-
-Use manual funding when:
-
-- Fees come from an external source.
-- The team wants to batch payouts.
-- The fee source is not on the supported claim-by-integration list.
-- The vault should behave like a transparent distribution account.
+A funder signs for the source token account. The program transfers `min(max_amount, source_balance)` into the token vault, records the net amount for supported transfer-fee mints, and updates fee-per-share accounting.
 
 ### Funding by Claiming Fees
 
 Funding by claiming fees works for PDA fee vaults and only for whitelisted source-program actions.
 
-The vault calls a supported fee-claim action, receives the claimed fee tokens into its token vault, and then adds those claimed tokens to the fee-sharing accounting.
+The vault calls a supported fee-claim action, receives claimed tokens into its token vault, and then adds the token-vault balance increase to fee-sharing accounting.
 
-Use this when the fee vault is part of a supported Meteora integration and should collect claimable fees directly.
+Additional requirements:
+
+- The `source_program` and instruction discriminator must match a whitelisted action.
+- The whitelisted token-vault account index must point to the fee vault's token vault.
+- The signer must be one of the configured share-holder addresses.
+- The fee vault must be a PDA vault.
 
 ## Compatible Source Programs and Actions
 
@@ -109,37 +96,26 @@ Dynamic Fee Sharing currently whitelists supported actions from DAMM v2 and DBC.
 
 Supported DAMM v2 claim actions include:
 
-| Action | Product Meaning |
-| --- | --- |
-| Claim Position Fee | Claim trading fees from a DAMM v2 position into the fee vault. |
-| Claim Reward | Claim DAMM v2 reward emissions into the fee vault. |
+| Whitelisted Action | Token Vault Account Index | Product Meaning |
+| --- | --- | --- |
+| `ClaimPositionFee` | `4` | Claim trading fees from a DAMM v2 position into the fee vault. |
+| `ClaimReward` | `5` | Claim DAMM v2 reward emissions into the fee vault. |
 
 ### Dynamic Bonding Curve (DBC)
 
 Supported DBC claim and withdrawal actions include:
 
-| Action | Product Meaning |
-| --- | --- |
-| Creator Withdraw Surplus | Route creator surplus from a completed DBC launch into the fee vault. |
-| Partner Withdraw Surplus | Route partner surplus from a completed DBC launch into the fee vault. |
-| Claim Creator Trading Fee | Route creator trading fees into the fee vault. |
-| Claim Trading Fee | Route eligible DBC trading fees into the fee vault. |
-| Withdraw Migration Fee | Route eligible migration fees into the fee vault. |
+| Whitelisted Action | Token Vault Account Index | Product Meaning |
+| --- | --- | --- |
+| `CreatorWithdrawSurplus` | `3` | Route creator surplus into the fee vault. |
+| `ClaimCreatorTradingFee` | `3` | Route creator trading fees into the fee vault. |
+| `PartnerWithdrawSurplus` | `3` | Route partner surplus into the fee vault. |
+| `ClaimTradingFee` | `4` | Route eligible DBC trading fees into the fee vault. |
+| `WithdrawMigrationFee` | `3` | Route eligible migration fees into the fee vault. |
 
 <Note>
-  Dynamic Fee Sharing only supports claim-by-integration actions that are explicitly whitelisted by the program. Manual funding remains available for other fee sources as long as the token mint is supported.
+  The token-vault index is part of the program's whitelist check. If an integration changes account ordering, Dynamic Fee Sharing must whitelist the matching action and account index before that claim path works.
 </Note>
-
-## Compatibility by Use Case
-
-| Use Case | Recommended Setup |
-| --- | --- |
-| Standalone partner payout | Non-PDA vault with manual funding. |
-| Treasury-funded recurring split | Non-PDA or PDA vault with manual funding. |
-| DAMM v2 position fee sharing | PDA vault with supported DAMM v2 claim action. |
-| DAMM v2 reward sharing | PDA vault with supported DAMM v2 reward claim action. |
-| DBC creator or partner revenue split | PDA vault with supported DBC claim or withdrawal action. |
-| Multi-token revenue sharing | Separate fee vault per token mint. |
 
 ## What Is Not a Fit
 
@@ -150,5 +126,6 @@ Dynamic Fee Sharing may not be the right product when:
 - The token mint uses unsupported Token 2022 extensions.
 - The fee source requires an unsupported cross-program claim action.
 - The payout requires complex conditional logic instead of fixed shares.
+- The setup needs owner-managed edits, admin withdrawals, or vault closure through the current program.
 
 For those cases, teams should either use manual operational flows or build a custom distribution layer around their requirements.
