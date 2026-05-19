@@ -1,0 +1,255 @@
+---
+title: "Dynamic Fee Sharing Formulas"
+sidebarTitle: "Formulas"
+description: "Understand Dynamic Fee Sharing share math, fixed-point fee-per-share accounting, claimable amounts, rounding, and transfer-fee behavior."
+llmsDescription: "Explains formulas used by the Dynamic Fee Sharing program: u32 total shares, u64 funded amounts, Token 2022 transfer-fee excluded funding, Q64.64 fee_per_share using amount << 64 divided by total_share, claimable fee using share times fee-per-share delta shifted right by 64, floor rounding, total funded fee, fee claimed, and vault dust."
+---
+
+Dynamic Fee Sharing uses cumulative share accounting. Funding increases the value of each share, and each recipient stores a checkpoint for the share value they have already claimed.
+
+<Note>The program performs integer arithmetic. This page shows the same formulas in product terms, with the important units and rounding behavior called out.</Note>
+
+## Units
+
+| Value | Program Unit |
+| --- | --- |
+| `share` | `u32` relative weight for one user entry. Must be greater than `0`. |
+| `total_share` | `u32` sum of all configured shares. |
+| `funded_amount` | `u64` amount added to vault accounting. |
+| `fee_per_share` | `u128` cumulative Q64.64-style value. |
+| `PRECISION_SCALE` | `64`, meaning calculations scale by `2^64`. |
+| `fee_claimed` | `u64` gross amount claimed by one user entry. |
+
+## Total Shares
+
+The vault adds all recipient shares together.
+
+```math
+\text{Total Share} = \sum_i \text{Recipient Share}_i
+```
+
+Each recipient's expected proportion is:
+
+```math
+\text{Recipient Proportion} = \frac{\text{Recipient Share}}{\text{Total Share}}
+```
+
+Example:
+
+| Recipient | Share | Percentage |
+| --- | --- | --- |
+| Creator | 50 | 50% |
+| Partner | 30 | 30% |
+| Treasury | 20 | 20% |
+
+The total share is 100, so the shares map directly to percentages. The same split could also be represented as 5, 3, and 2 shares.
+
+## Manual Funding Amount
+
+Manual funding takes `max_amount`, but the program never transfers more than the source token account currently holds:
+
+```math
+\text{Transfer Amount} =
+\min(\text{max\_amount}, \text{source token account balance})
+```
+
+If `Transfer Amount = 0`, the instruction fails.
+
+For standard SPL Token mints, the funded amount is the transfer amount:
+
+```math
+\text{Funded Amount} = \text{Transfer Amount}
+```
+
+For supported Token 2022 transfer-fee mints, the program calculates the transfer fee for the current epoch and accounts for the amount excluding that fee:
+
+```math
+\text{Funded Amount} =
+\text{Transfer Amount} - \text{Transfer Fee}
+```
+
+This prevents funding accounting from crediting more tokens than the token vault receives.
+
+## Claim-By-Integration Funding
+
+When a PDA vault funds itself through `fund_by_claiming_fee`, the program measures the token vault balance before and after the whitelisted CPI.
+
+```math
+\text{Claimed Amount} =
+\text{Token Vault Balance After} - \text{Token Vault Balance Before}
+```
+
+If `Claimed Amount > 0`, the vault adds that amount to fee accounting:
+
+```math
+\text{Funded Amount} = \text{Claimed Amount}
+```
+
+If the balance does not increase, the program does not update fee accounting or emit a fund event.
+
+## Fee Per Share
+
+Each time new fees enter the vault, the vault increases the cumulative fee-per-share value.
+
+Conceptually:
+
+```math
+\text{Fee Per Share Increase} = \frac{\text{Funded Amount}}{\text{Total Share}}
+```
+
+In the program:
+
+```math
+\text{Fee Per Share Increase} =
+\left\lfloor
+\frac{\text{Funded Amount} \times 2^{64}}{\text{Total Share}}
+\right\rfloor
+```
+
+Then it updates the cumulative value:
+
+```math
+\text{New Fee Per Share} =
+\text{Previous Fee Per Share} + \text{Fee Per Share Increase}
+```
+
+The vault also increases `total_funded_fee`:
+
+```math
+\text{Total Funded Fee}_{new} =
+\text{Total Funded Fee}_{old} + \text{Funded Amount}
+```
+
+## Claimable Fee
+
+Each recipient stores a checkpoint: the fee-per-share value they had already claimed up to.
+
+When the recipient claims, the vault calculates the difference between the current fee-per-share and that recipient's checkpoint.
+
+```math
+\text{Unclaimed Fee Per Share} =
+\text{Current Fee Per Share} - \text{Recipient Checkpoint}
+```
+
+Then the vault multiplies that delta by the recipient's share:
+
+```math
+\text{Claimable Fee} =
+\left\lfloor
+\frac{\text{Recipient Share} \times \text{Unclaimed Fee Per Share}}{2^{64}}
+\right\rfloor
+```
+
+After the claim, the recipient's checkpoint and total claimed amount are updated:
+
+```math
+\text{Recipient Checkpoint} = \text{Current Fee Per Share}
+```
+
+```math
+\text{Fee Claimed}_{new} =
+\text{Fee Claimed}_{old} + \text{Claimable Fee}
+```
+
+This is how the vault prevents double-claiming while still allowing recipients to claim independently.
+
+<Warning>
+  The checkpoint updates even when `Claimable Fee` rounds down to `0`. For very small funding amounts or very large total-share values, claiming too early can round the user's current entitlement to zero and advance their checkpoint.
+</Warning>
+
+## Worked Example
+
+Assume a vault has three recipients:
+
+| Recipient | Share |
+| --- | --- |
+| Creator | 50 |
+| Partner | 30 |
+| Treasury | 20 |
+
+Total share:
+
+```math
+50 + 30 + 20 = 100
+```
+
+A funder adds 1,000 USDC into the vault.
+
+The expected distribution is:
+
+```math
+\text{Creator} =
+1{,}000 \times \frac{50}{100} = 500
+```
+
+```math
+\text{Partner} =
+1{,}000 \times \frac{30}{100} = 300
+```
+
+```math
+\text{Treasury} =
+1{,}000 \times \frac{20}{100} = 200
+```
+
+If the creator claims first, the creator receives 500 USDC and the creator's checkpoint updates. The partner and treasury can claim later; their balances remain claimable because their checkpoints have not moved.
+
+## Multiple Funding Events
+
+Dynamic Fee Sharing supports repeated funding.
+
+Example:
+
+| Event | Net Funded Amount |
+| --- | --- |
+| Funding 1 | 1,000 USDC |
+| Funding 2 | 500 USDC |
+| Funding 3 | 250 USDC |
+
+Total funded fee:
+
+```math
+\text{Total Funded Fee} = 1,000 + 500 + 250 = 1,750
+```
+
+A 30% recipient would be entitled to:
+
+```math
+1{,}750 \times 30\% = 525 \text{ USDC}
+```
+
+If that recipient already claimed 300 USDC after the first funding event, the next claim would be around 225 USDC, subject to integer rounding.
+
+## Remaining Vault Balance
+
+For standard SPL Token mints, the token vault balance usually represents funded fees that have not yet been claimed, plus small rounding dust.
+
+Simplified formula:
+
+```math
+\text{Remaining Vault Balance} =
+\text{Total Funded Fee} - \sum_i \text{Total Claimed By Recipient}_i
+```
+
+Because token amounts are integers and `fee_per_share` increments are floored, small dust can remain when funded amounts do not divide evenly across shares.
+
+## Transfer-Fee Token Claims
+
+For supported Token 2022 transfer-fee mints, manual funding credits the net amount received by the token vault. Claims are different: the program calculates a gross `Claimable Fee` and transfers that amount from the token vault to the recipient token account. If the mint charges a transfer fee on that outgoing transfer, the recipient token account may receive less than the gross claimed amount.
+
+```math
+\text{Net Received By Recipient} =
+\text{Claimable Fee} - \text{Outgoing Transfer Fee}
+```
+
+The program's `fee_claimed` field tracks the gross claimed amount.
+
+## Rounding and Precision
+
+The program uses high-precision fee-per-share accounting by scaling calculations with `2^64`. This helps preserve precision for small funding amounts and large total-share values. The program includes a property test that checks small funded amounts still produce a non-zero `fee_per_share` even when `total_share` is `u32::MAX`.
+
+Even with high precision, final claim amounts are integer token amounts. If a funded amount cannot be split perfectly between recipients, dust can remain in the vault.
+
+<Note>
+  For product planning, choose share weights that are easy to communicate. Percent-style totals such as 100, 1,000, or 10,000 are usually easier for teams and recipients to reason about.
+</Note>
