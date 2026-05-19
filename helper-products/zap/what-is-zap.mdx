@@ -1,149 +1,97 @@
 ---
 title: "What is Zap?"
 sidebarTitle: "What is Zap?"
-description: "Learn how Meteora Zap lets users convert tokens and manage Meteora AMM positions through simpler zap-in, zap-out, and rebalance flows."
-llmsDescription: "Product overview of Meteora Zap, explaining Zap as a helper program for zapping into and out of Meteora AMM positions, converting claimed fees or removed liquidity through DLMM, DAMM v2, or Jupiter, supporting DAMM v2 zap-in, DLMM zap-in for new and existing positions, zap-out percentages, user ledger accounting, whitelisted swap routes, slippage controls, and position management use cases."
+description: "Learn how Meteora Zap coordinates supported zap-in and zap-out flows for DAMM v2 and DLMM positions."
+llmsDescription: "Overview of Meteora Zap, a helper program for DAMM v2 and DLMM position flows. Covers the Zap program ID, user ledger accounting, DAMM v2 zap-in, DLMM zap-in for initialized and uninitialized positions, Zap Out through whitelisted DAMM v2, DLMM, and Jupiter v6 instructions, and important limits such as no route building, no arbitrary router support, no DLMM withdraw or claim step inside Zap In, and caller-provided slippage settings."
 ---
 
-Zap is Meteora's position action layer for turning multi-step AMM operations into cleaner user flows. It helps users move between tokens and liquidity positions without manually handling every swap, deposit, withdrawal, and account update themselves.
+## Overview
 
-In plain English: Zap lets a user bring one asset, convert it into the right pool assets, and add liquidity. It also lets a user exit or harvest from a position, then immediately convert the output into the token they actually want.
+Zap is Meteora's helper program for position workflows that need token accounting, a supported swap, or a follow-up liquidity action.
+
+In practice, Zap has two jobs:
+
+- **Zap In**: use tracked token amounts to add liquidity to a supported DAMM v2 or DLMM position flow.
+- **Zap Out**: detect tokens received during the current flow and swap a selected percentage through a whitelisted route.
 
 <Info>
-  Zap runs on the mainnet and devnet program `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz`.
+  Zap runs on the program `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz`.
 </Info>
 
 <Note>
-  Zap is a helper product. It does not replace DAMM v2, DLMM, or Jupiter. It coordinates supported actions around those products so users can get a smoother position-management experience.
+  Zap is deliberately narrow. It only supports the instructions and routes described in this section; it is not a general-purpose Solana router.
 </Note>
 
-## Why Zap Exists
-
-Liquidity positions often require more than one transaction-level action.
-
-A user may need to:
-
-- Swap into the correct token mix before adding liquidity.
-- Add liquidity to a DAMM v2 position.
-- Create a DLMM position and deposit into a bin range.
-- Rebalance an existing DLMM position around the current price.
-- Remove liquidity, claim fees, or claim rewards, then convert the output token.
-- Choose how much of a newly received token balance should be swapped.
-
-Without Zap, frontends and users need to stitch those actions together manually. Zap gives Meteora products a shared helper layer that can track intermediate balances, apply supported swap routes, and complete the position action with fewer user-facing steps.
+## Core Features
 
 <CardGroup cols={2}>
-  <Card title="One-Asset Entry" icon="right-to-bracket" iconType="solid">
-    Start with one asset, swap into the required token mix, and deposit into a supported Meteora position flow.
+  <Card title="User Ledger" icon="clipboard-list" iconType="solid">
+    Zap In flows use a user-owned ledger PDA to track token A/B or token X/Y amounts before and after swaps or deposits.
   </Card>
-  <Card title="Clean Position Exits" icon="right-from-bracket" iconType="solid">
-    Remove liquidity or claim position outputs, then immediately swap the resulting tokens through supported routes.
+  <Card title="DAMM v2 Zap In" icon="right-to-bracket" iconType="solid">
+    Zap can add DAMM v2 liquidity, optionally swap the surplus side through DAMM v2, then add remaining liquidity again.
   </Card>
-  <Card title="DLMM Rebalancing" icon="arrows-rotate" iconType="solid">
-    Move an existing DLMM position into a new range around the market instead of manually withdrawing, swapping, and redepositing.
+  <Card title="DLMM Zap In" icon="layer-group" iconType="solid">
+    Zap can initialize a new DLMM position or deposit into an existing position with Spot, Curve, or Bid-Ask distribution parameters.
   </Card>
-  <Card title="Route Flexibility" icon="route" iconType="solid">
-    Zap out through supported Meteora AMMs or Jupiter v6 routes, depending on the user's desired conversion path.
-  </Card>
-  <Card title="Balance Tracking" icon="clipboard-list" iconType="solid">
-    A temporary ledger tracks token balances between swap and deposit steps so the final liquidity action uses the right amounts.
-  </Card>
-  <Card title="User Protection Controls" icon="shield-check" iconType="solid">
-    Supported flows include percentage-based zap out, max swap amount, active-bin slippage, and price-change checks where relevant.
+  <Card title="Zap Out" icon="right-from-bracket" iconType="solid">
+    Zap can rewrite the amount field in a prepared DAMM v2, DLMM, or Jupiter v6 swap instruction and invoke it for the detected balance increase.
   </Card>
 </CardGroup>
 
-## What Zap Can Do
+## What Zap Supports
 
-Zap supports two product directions: **Zap In** and **Zap Out**.
+| Area | Supported by the Zap program |
+| --- | --- |
+| DAMM v2 Zap In | Add liquidity, calculate the surplus side, swap through DAMM v2 `swap2`, then add remaining liquidity. |
+| DLMM Zap In | New and existing positions through DLMM `rebalance_liquidity`. |
+| DLMM strategies | `Spot`, `Curve`, and `BidAsk`. |
+| Zap Out routes | DAMM v2 swap, DLMM `swap2`, Jupiter v6 route, and Jupiter v6 shared-account route. |
+| Ledger accounting | One PDA per owner using the `user_ledger` seed. |
+| Token 2022 transfer fees | Transfer-fee-aware net amount calculations in Zap In liquidity math. |
 
-### Zap In
+## What Zap Does Not Do
 
-Zap In helps a user convert available tokens into the token mix needed for a position, then deposit those tokens into a supported Meteora AMM.
+Zap does not choose the user's pool, route, quote, position range, or slippage settings. Frontends and integrators still prepare those decisions before calling the program.
 
-Supported product flows include:
+Zap also does not guarantee the best route or exact final output. Swap execution still depends on pool liquidity, price movement, route accounts, token behavior, and the slippage checks used by the underlying program.
 
-- Zap into a DAMM v2 position.
-- Zap into a new DLMM position.
-- Zap into an existing DLMM position.
-- Rebalance an existing DLMM position by depositing into a new bin range.
-
-### Zap Out
-
-Zap Out helps a user convert tokens received from another action, such as a removal, fee claim, or reward claim.
-
-A typical Zap Out flow starts after a user's token account receives tokens. Zap calculates the balance increase, applies the chosen zap-out percentage, and swaps the selected amount through a supported route.
-
-Supported swap paths include:
-
-- DAMM v2 swap.
-- DLMM swap.
-- Jupiter v6 route.
-- Jupiter v6 shared-account route.
-
-## How Zap Fits Into Meteora
-
-Zap sits beside Meteora's AMM products.
+## How It Works
 
 ```text
-User action
-   |
-   |-- Swap through DAMM v2, DLMM, or Jupiter
-   |-- Track intermediate balances with a ledger
-   |-- Add liquidity, rebalance, or convert outputs
-   |
-Supported Meteora position outcome
+Frontend prepares accounts, quote, range, and payload
+        |
+Zap validates ownership, route type, and supplied limits
+        |
+Zap updates ledger balances or detects received tokens
+        |
+Zap CPIs into DAMM v2, DLMM, or a whitelisted Zap Out route
 ```
 
-It is especially useful for frontends, integrators, and power users who want position actions to feel like a single guided flow instead of a manual sequence of swaps and deposits.
+For Zap In, the frontend records the token amounts in a user ledger before calling the DAMM v2 or DLMM Zap In instruction. For Zap Out, the frontend supplies a prepared swap instruction payload, and Zap replaces the amount field with the percentage of tokens received during the current flow.
 
-## Who Zap Is For
+## Product Fit
 
-<AccordionGroup>
-  <Accordion title="Liquidity providers">
-    LPs can enter positions with fewer manual token conversions, rebalance DLMM positions more easily, and exit into the token they prefer to hold.
-  </Accordion>
-  <Accordion title="Token teams and launch operators">
-    Teams can offer cleaner liquidity flows for communities, market makers, and operators who need to add or move liquidity quickly during active market periods.
-  </Accordion>
-  <Accordion title="Frontends and aggregators">
-    Integrators can build higher-level actions such as "add with SOL", "rebalance", or "exit to USDC" on top of supported Meteora products.
-  </Accordion>
-  <Accordion title="Active position managers">
-    Users managing DLMM ranges can rebalance around the active price without manually reconstructing every withdrawal, swap, and redeposit action.
-  </Accordion>
-</AccordionGroup>
+Zap is useful when a user intent maps cleanly to one of the supported flows:
 
-## What Zap Is Best For
+- Add liquidity to a DAMM v2 position using amounts already tracked in the ledger.
+- Create a DLMM position and deposit into a selected bin range.
+- Add to or reposition an existing DLMM position with a supported strategy.
+- Claim, withdraw, or otherwise receive tokens, then convert a selected percentage through a supported Zap Out route.
 
-Zap is best for workflows where the user knows the desired outcome, but the path there requires multiple token and position operations.
+For unsupported AMMs, unsupported Jupiter instructions, custom token behavior, or complex conditional execution, use the underlying program or route directly.
 
-Good examples:
-
-- Add liquidity to SOL-USDC with only SOL.
-- Add liquidity to a MET-USDC pool using SOL as the starting asset.
-- Create a DLMM position and deposit into a chosen bin range.
-- Rebalance an out-of-range DLMM position around the current active bin.
-- Claim or withdraw from a position, then convert the output through DAMM v2, DLMM, or Jupiter.
-- Exit a position into one preferred token instead of manually holding both sides.
-
-## Learn More
+## Read Next
 
 <CardGroup cols={2}>
-  <Card title="Zap Workflow" href="/helper-products/zap/workflow" icon="diagram-project" iconType="solid">
-    Follow the product lifecycle for zap in, zap out, and DLMM rebalance flows.
-  </Card>
-  <Card title="Zap In and Zap Out" href="/helper-products/zap/zap-in-and-zap-out" icon="arrows-right-left" iconType="solid">
-    Compare the main Zap modes and when each one is useful.
-  </Card>
   <Card title="Zap Compatibilities" href="/helper-products/zap/compatibilities" icon="plug" iconType="solid">
-    Review supported Meteora products, swap routes, position flows, and constraints.
+    Review supported instructions, routes, accounts, access controls, and not-fit cases.
   </Card>
-  <Card title="Position Management Guide" href="/helper-products/zap/position-management-guide" icon="sliders" iconType="solid">
-    Design smoother entry, exit, and rebalance experiences using Zap.
+  <Card title="Zap Formulas and Limits" href="/helper-products/zap/formulas" icon="calculator" iconType="solid">
+    See the percentage, slippage, price, and DLMM strategy math used by the program.
   </Card>
 </CardGroup>
 
 <Warning>
-  Zap makes position workflows easier, but users are still taking AMM and swap-route risk. Price movement, liquidity depth, route execution, slippage settings, and token behavior can affect the final result.
+  Zap simplifies supported workflows, but users still take AMM, route, price movement, and token behavior risk.
 </Warning>
