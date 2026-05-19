@@ -1,174 +1,101 @@
 ---
 title: "Launch Design Guide"
 sidebarTitle: "Launch Design Guide"
-description: "Choose Alpha Vault modes, caps, vesting, whitelists, and launch settings based on the kind of token launch experience you want to create."
-llmsDescription: "Product guide for choosing Alpha Vault launch settings: Pro Rata versus FCFS, max buy cap versus max deposit cap, individual wallet caps, permissionless versus whitelist access, deposit windows, pre-activation buying, vesting schedules, refund expectations, supporter alignment, anti-sniper goals, and launch communication."
+description: "Choose Alpha Vault mode, caps, access model, timing, crank plan, and vesting settings based on the behavior enforced by the program."
+llmsDescription: "Launch design guidance for Alpha Vault using source-backed constraints: Pro Rata versus FCFS, max buying cap, max depositing cap, individual and permissioned caps, deposit timing buffers, pre-activation fills, one-year lock and vesting limits, permissionless escrow fees, crank fees, Token 2022 transfer-fee effects, and launch messaging."
 ---
 
-Alpha Vault is flexible by design. The same product can support a broad community allocation, a scarce first-come early access window, a curated whitelist, or a partner allocation.
+Alpha Vault is configurable, but the best launch designs are simple enough for users to understand before they deposit.
 
-This guide helps teams choose the right settings before opening deposits.
+## Start With the Allocation Goal
 
-## Start With the Launch Goal
-
-Before choosing parameters, decide what the vault is meant to optimize for.
-
-| Launch Goal | Recommended Direction |
+| Goal | Better fit |
 | --- | --- |
-| Broad community participation | Pro Rata, permissionless or large whitelist, clear refund messaging. |
-| Scarce early-access allocation | FCFS, hard cap, individual wallet caps. |
-| Curated supporter list | Merkle proof whitelist or authority-managed access. |
-| Bot-resistant public launch | Pro Rata with a clear deposit window and vesting schedule. |
-| Small strategic allocation | Authority-managed whitelist with wallet-specific caps. |
-| Strong holder alignment | Longer lock or vesting period after the vault buy. |
+| Broad participation when demand may exceed capacity | Pro Rata |
+| Hard accepted-deposit cap | FCFS |
+| Large allowlist with wallet-specific caps | Merkle proof |
+| Small curated allocation | Authority-managed escrows |
+| Open community access | Permissionless, usually Pro Rata |
+| Stronger post-launch alignment | Later `start_vesting_point` or longer linear vesting |
 
-## Choose the Vault Mode
+## Choose the Mode
 
-### Choose Pro Rata When Fairness Matters More Than Speed
+Use **Pro Rata** when oversubscription is likely and the team wants users to have time to deposit without racing for capacity. Pro Rata lets total deposits exceed `max_buying_cap`, then allocates the vault result proportionally.
 
-Pro Rata is best when the team wants users to have time to join without turning the deposit window into a gas race.
+Use **FCFS** when the team wants a hard cap on accepted deposits. FCFS is easier to explain, but it makes speed and wallet caps much more important.
 
-Use Pro Rata when:
+<Warning>
+  FCFS without a practical per-wallet cap can concentrate the vault in the earliest depositors.
+</Warning>
 
-- Demand may exceed the vault's intended buying power.
-- The project wants to include more wallets.
-- Oversubscription is expected.
-- Users should be able to withdraw before the deposit window closes.
-- Refunds are acceptable and can be communicated clearly.
+## Set Caps Deliberately
 
-Product positioning: **"Everyone gets a proportional share of the vault result."**
-
-### Choose FCFS When Scarcity and Simplicity Matter More
-
-FCFS is best when the team wants a hard accepted-deposit cap and a simple message: deposits are accepted until the vault is full.
-
-Use FCFS when:
-
-- The project wants the vault to fill to a clear cap.
-- The allocation is intentionally scarce.
-- Users understand that speed matters.
-- The project can use individual caps or whitelist caps to avoid concentration.
-- The team does not want overflow refund mechanics.
-
-Product positioning: **"Capacity is limited. Once the vault is full, deposits stop."**
-
-## Choose the Right Cap
-
-Alpha Vault uses different cap concepts depending on the mode.
-
-| Cap | Applies To | Product Meaning |
+| Cap | Applies to | Design question |
 | --- | --- | --- |
-| Max buy cap | Pro Rata | Maximum quote amount the vault can use to buy from the pool. |
-| Max deposit cap | FCFS | Maximum quote amount the vault can accept. |
-| Individual cap | Mainly FCFS and whitelists | Maximum quote amount a wallet can deposit. |
-| Whitelist cap | Whitelisted launches | Wallet-specific max cap for eligible users. |
+| `max_buying_cap` | Pro Rata | How much quote should the vault be allowed to swap? |
+| `max_depositing_cap` | FCFS | How much quote should the vault accept in total? |
+| `individual_depositing_cap` | Permissionless FCFS | How much can one wallet contribute? |
+| Escrow `max_cap` | Merkle proof and authority-managed access | What is each eligible wallet's quota? |
 
-A good cap should be large enough to make the vault meaningful, but not so large that the vault dominates the launch pool or creates unwanted sell pressure when tokens unlock.
+For Pro Rata, the buy cap shapes pool impact. For FCFS, the deposit cap shapes both participation and pool impact because total deposits are the max swappable amount.
 
-## Decide Whether to Use a Whitelist
+## Plan Timing
 
-Use a whitelist if the vault is meant for a specific audience.
+Alpha Vault timing follows the pool activation type: slot or timestamp.
 
-Whitelists are useful when allocation should be based on prior contribution, campaign participation, partner eligibility, NFT ownership, loyalty points, or other off-chain criteria.
+Important timing points:
 
-Do not use a whitelist if the goal is a public community window and the team does not need to restrict access. In that case, permissionless Pro Rata is often easier for users to understand.
+- `depositing_point`: first point when users can create escrows and deposit.
+- `last_join_point`: final point when escrow creation and deposits are allowed.
+- `pre_activation_start_point`: first point when the vault can fill.
+- `last_buying_point`: final point when the vault can fill.
+- `start_vesting_point`: first point when users can claim bought tokens.
+- `end_vesting_point`: point when all bought tokens have unlocked.
 
-## Set the Deposit Window
+On mainnet, the program caps lock duration and vesting duration at roughly one year. FCFS config creation also requires a minimum deposit duration buffer of `3,000` slots for slot-based launches or `1,200` seconds for timestamp-based launches.
 
-The deposit window should be long enough for real users to see the announcement, understand the rules, and deposit without panic.
+## Prepare the Fill Plan
 
-When choosing the window, consider:
+Vault fills are permissionless and can be performed by crankers during pre-activation. A non-whitelisted cranker pays a fixed `0.0001 SOL` crank fee to the Meteora treasury account.
 
-- Time zones of the target community.
-- How much education the launch needs.
-- Whether users need time to bridge or prepare quote token.
-- Whether a whitelist proof or UI eligibility check is involved.
-- The required buffer between the deposit close and pool activation.
+Launch teams should plan:
 
-A rushed deposit window weakens the product benefit. If users feel forced to race, the launch starts to look like the public activation problem Alpha Vault is meant to improve.
+- Who will crank fills.
+- Whether crankers should be fee-whitelisted.
+- The maximum amount used in each fill instruction.
+- How the pool's launch liquidity and price curve react to the vault's buy.
+- What happens if only part of the intended quote is swapped before `last_buying_point`.
 
-## Design Vesting Around the Community Promise
+<Note>
+  The fill instructions use `minimum_amount_out = 0` when calling the underlying pool swap. Pool setup, fill timing, and crank operations are therefore important parts of the launch design.
+</Note>
 
-Alpha Vault can release tokens immediately or gradually over time.
+## Design Vesting Clearly
 
-Shorter vesting is easier to understand and feels more liquid for participants. Longer vesting can create stronger alignment but may reduce user appetite if it feels too restrictive.
+Claims unlock linearly from `start_vesting_point` through `end_vesting_point`, with inclusive endpoints. Setting both points equal effectively makes the full bought-token allocation claimable at the start point.
 
-Use vesting when the team wants to:
+Use longer vesting only when it matches the community promise. Users should know before depositing when claims start and when the allocation fully unlocks.
 
-- Reward long-term supporters.
-- Reduce immediate post-launch sell pressure.
-- Discourage purely extractive early buyers.
-- Create a cleaner narrative around committed participation.
+## Account for Token Behavior
 
-<Info>
-  Vesting should match the launch story. If the vault is marketed as a supporter allocation, vesting can reinforce alignment. If it is marketed as a simple early-access sale, long vesting may need stronger explanation.
-</Info>
+Alpha Vault uses checked token transfers through the token program stored by the connected pool. DLMM and DAMM v2 pools can indicate SPL Token or Token 2022 token programs. DAMM v1 pool utility code uses the SPL Token program.
 
-## Plan Refund Communication
+If a Token 2022 mint charges transfer fees, the program records deposits net of transfer fees and emits outbound claim or refund amounts net of transfer fees. If a destination account requires transfer memos, claim and refund transfers must include the expected memo program account.
 
-Refunds are a feature, not an afterthought.
+## Launch Messaging Checklist
 
-Users should know whether refunds are possible before they deposit.
+A clear launch announcement should include:
 
-For Pro Rata launches, communicate:
+- Connected pool type: DLMM, DAMM v1, or DAMM v2.
+- Accepted quote token.
+- Vault mode: Pro Rata or FCFS.
+- Access model: permissionless, Merkle proof, or authority-managed.
+- Deposit open and close points.
+- Vault cap and wallet caps.
+- Whether Pro Rata users can withdraw before `last_join_point`.
+- When the vault can buy.
+- Claim start and full unlock point.
+- Refund timing and conditions.
+- Token transfer-fee behavior, if the quote or launch token uses Token 2022 fees.
 
-- Deposits can exceed the max buy cap.
-- Only part of each deposit may be used.
-- Overflow quote can be refunded proportionally.
-- Token allocation depends on the vault's final buy result.
-
-For FCFS launches, communicate:
-
-- The vault stops accepting deposits at the cap.
-- Accepted deposits are intended to be used for buying.
-- Users cannot withdraw after depositing.
-- There is no overflow refund by design.
-
-## Avoid Common Launch Mistakes
-
-<AccordionGroup>
-  <Accordion title="Using FCFS without wallet caps">
-    A single wallet can potentially fill the vault. If broad distribution matters, use individual caps, whitelist caps, or Pro Rata.
-  </Accordion>
-  <Accordion title="Opening deposits before whitelist data is ready">
-    For Merkle proof launches, make sure eligibility data and proof hosting are ready before deposits open.
-  </Accordion>
-  <Accordion title="Making vesting too complicated">
-    Users should understand when tokens unlock and how much they can claim. Simpler schedules are easier to market and support.
-  </Accordion>
-  <Accordion title="Not explaining refund timing">
-    Users need to know when unused quote can be withdrawn and why the refundable amount may depend on total deposits and vault fills.
-  </Accordion>
-  <Accordion title="Setting caps without considering pool impact">
-    The vault buy moves the launch pool price before public trading. Teams should choose caps that fit their desired launch dynamics.
-  </Accordion>
-</AccordionGroup>
-
-## Recommended Defaults by Launch Type
-
-| Launch Type | Suggested Alpha Vault Design |
-| --- | --- |
-| Public community launch | Pro Rata, permissionless, clear max buy cap, simple vesting. |
-| High-demand allowlist | Pro Rata, Merkle proof whitelist, wallet-specific caps. |
-| Limited early-access round | FCFS, individual cap, short deposit window. |
-| Partner or contributor allocation | Authority-managed whitelist, explicit wallet caps. |
-| Long-term supporter campaign | Pro Rata or whitelist, vesting aligned with community expectations. |
-
-## Launch Messaging Template
-
-A clear announcement should answer these questions:
-
-```text
-Alpha Vault mode: Pro Rata or FCFS
-Accepted token: SOL / USDC / other quote token
-Access: Permissionless or whitelisted
-Deposit window: Start and end time
-Vault cap: Max buy cap or max deposit cap
-Wallet cap: If applicable
-Withdrawal rule: Whether deposits can be withdrawn before close
-Claim schedule: Immediate, locked, or vesting
-Refund rule: When unused quote can be claimed
-Connected pool: DLMM, DAMM v1, or DAMM v2
-```
-
-If users can explain the vault in one sentence after reading the announcement, the launch is in good shape.
+Good Alpha Vault launches are specific. Users should understand what can happen if the vault is oversubscribed, partially filled, or subject to token transfer fees.

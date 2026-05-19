@@ -1,0 +1,76 @@
+---
+title: "Alpha Vault Modes"
+sidebarTitle: "Vault Modes"
+description: "Compare Alpha Vault Pro Rata and FCFS modes, including caps, withdrawals, overflow refunds, and how deposits are accepted."
+llmsDescription: "Explains Alpha Vault Pro Rata and FCFS modes from source-backed behavior. Pro Rata accepts deposits up to user quota, can exceed max buying cap, allows user withdrawals through last join point, and can refund overflow. FCFS caps total accepted deposits at max depositing cap, applies per-user quota, does not support normal withdrawal, and uses total deposit as max swappable amount."
+---
+
+Alpha Vault supports two vault modes: **Pro Rata** and **FCFS**.
+
+Both modes collect quote token before launch and let the vault buy from a connected Launch Pool during pre-activation. The difference is how each mode accepts deposits, applies caps, and handles unused quote.
+
+## Mode Comparison
+
+| Product Area | Pro Rata | FCFS |
+| --- | --- | --- |
+| Main cap | `max_buying_cap` | `max_depositing_cap` |
+| Max swappable amount | `min(total_deposit, max_buying_cap)` | `total_deposit` |
+| Total deposits can exceed buying power | Yes | No, deposits are limited by remaining vault capacity |
+| Normal user withdrawal | Allowed through `last_join_point` | Not available |
+| Overflow withdrawal | Available after `last_join_point` and through `last_buying_point` when total deposits exceed max swappable amount | Not expected by design |
+| Per-wallet cap | Ignored for permissionless Pro Rata because the vault returns `u64::MAX` as the individual cap | Applied in permissionless FCFS and permissioned vaults |
+| Best fit | Broad participation and oversubscription | Hard capacity and scarce early access |
+
+## Pro Rata Mode
+
+Pro Rata mode is designed for launches where demand may exceed the amount the vault should buy.
+
+Users can deposit during the deposit window. The vault can accept more quote than `max_buying_cap`, but it can only swap up to:
+
+```math
+\min(\text{total\_deposit}, \text{max\_buying\_cap})
+```
+
+If total deposits exceed the max buying cap, every depositor participates proportionally and the excess quote becomes refundable.
+
+### Withdrawal Rules
+
+Pro Rata has two withdrawal paths:
+
+| Timing | What can be withdrawn |
+| --- | --- |
+| From `depositing_point` through `last_join_point` | A user can withdraw their deposited quote, up to the requested amount. |
+| After `last_join_point` and through `last_buying_point` | A user can withdraw their proportional deposit overflow, if the vault is oversubscribed. |
+| After `last_buying_point` | A user uses `withdraw_remaining_quote` to withdraw their final remaining quote, minus any overflow already withdrawn. |
+
+<Info>
+  Pro Rata allocation is proportional to deposit size. A larger deposit increases a user's share, but the vault still cannot swap more than `max_buying_cap`.
+</Info>
+
+## FCFS Mode
+
+FCFS means **First Come, First Served**. It is designed for launches that want a hard cap on accepted quote.
+
+When a user deposits, the program limits the accepted amount by:
+
+- The user's requested amount after transfer-fee adjustment.
+- The remaining vault capacity: `max_depositing_cap - total_deposit`.
+- The user's remaining quota from the vault individual cap or permissioned escrow cap.
+
+Once the vault reaches `max_depositing_cap`, additional deposits fail because the accepted deposit amount becomes zero.
+
+FCFS does not expose the normal user withdrawal instruction. Accepted deposits are intended to remain in the vault until the fill and refund lifecycle completes.
+
+<Warning>
+  Permissionless FCFS should use a meaningful `individual_depositing_cap` if broad distribution matters. Without a low enough cap, early wallets can consume most or all vault capacity.
+</Warning>
+
+## Shared Behavior
+
+Both modes use the same claim and final refund accounting:
+
+- Users receive a share of bought tokens based on `escrow.total_deposit / vault.total_deposit`.
+- Claims unlock linearly from `start_vesting_point` through `end_vesting_point`.
+- After the pool's `last_buying_point`, users can withdraw quote that was not swapped.
+
+Both modes can be paired with permissionless, Merkle proof, or authority-managed escrow creation. Permissioned escrows use the escrow's `max_cap` as the user's quota.
