@@ -1,0 +1,172 @@
+---
+title: "Zap Formulas and Limits"
+sidebarTitle: "Formulas and Limits"
+description: "Review the formulas, units, rounding behavior, and limits used by the Zap program."
+llmsDescription: "Formula and limits reference for Meteora Zap. Covers Zap Out percentage and max swap amount, payload amount replacement, ledger balance deltas, DAMM v2 sqrt price slippage in basis points with ceiling rounding, DAMM v2 surplus-side swap search, transfer-fee-excluded amounts, DLMM bin range calculations, active-bin side selection through favor_x_in_active_id, Spot, Curve, and BidAsk strategy behavior, and key validation limits."
+---
+
+Zap uses integer arithmetic and delegates most AMM math to DAMM v2 or DLMM. This page covers the calculations Zap performs directly.
+
+## Zap Out Amount
+
+Zap Out starts from the increase in the user's input token account:
+
+```math
+\text{balance increase} = \text{post balance} - \text{pre balance}
+```
+
+If `pre_user_token_balance >= post balance`, Zap returns successfully and does not invoke a swap.
+
+The swap amount is:
+
+```math
+\text{swap amount} =
+\min\left(
+\left\lfloor\frac{\text{balance increase} \times \text{percentage}}{100}\right\rfloor,
+\text{max swap amount}
+\right)
+```
+
+For `percentage = 100`, Zap uses the full balance increase before applying the max-swap cap.
+
+| Parameter | Limit |
+| --- | --- |
+| `percentage` | Must be `1` through `100`. |
+| `max_swap_amount` | Caps the calculated swap amount. |
+| `payload_data` | Must contain at least the first 8 discriminator bytes for the route check. |
+| `offset_amount_in` | Must allow 8 bytes to fit inside `payload_data`. |
+
+Zap writes the final swap amount into `payload_data` as a little-endian `u64`.
+
+## Ledger Delta Updates
+
+When Zap updates a ledger after a balance-changing CPI, it applies the token account delta to the current ledger amount:
+
+```math
+\text{new ledger amount}
+=
+\text{old ledger amount}
++ \text{post token balance}
+- \text{pre token balance}
+```
+
+For `update_ledger_balance_after_swap`, the recorded amount is capped:
+
+```math
+\text{recorded amount}
+=
+\min(\text{post token balance} - \text{pre token balance}, \text{max transfer amount})
+```
+
+The balance delta uses saturating subtraction, so if the current token balance is below the supplied pre-balance, the delta is `0`.
+
+## Transfer-Fee-Excluded Amounts
+
+Zap In uses transfer-fee-excluded token amounts when calculating DAMM v2 liquidity and DLMM strategy parameters:
+
+```math
+\text{net amount} = \text{gross amount} - \text{transfer fee}
+```
+
+For SPL Token mints and Token 2022 mints without a transfer fee extension, the transfer fee is treated as `0`. For Token 2022 transfer-fee mints, Zap uses the current epoch's configured fee.
+
+## DAMM v2 Price Slippage
+
+DAMM v2 Zap In checks the pool sqrt price after the optional balancing swap:
+
+```math
+\text{sqrt price change bps}
+=
+\left\lceil
+\frac{|\text{post sqrt price} - \text{pre sqrt price}| \times 10{,}000}
+{\text{pre sqrt price}}
+\right\rceil
+```
+
+The instruction fails if:
+
+```math
+\text{sqrt price change bps} > \text{max sqrt price change bps}
+```
+
+`max_sqrt_price_change_bps` is supplied by the caller as a `u32`.
+
+## DAMM v2 Surplus-Side Swap
+
+DAMM v2 Zap In compares how much liquidity the ledger's token A and token B amounts can provide. The side that can provide more liquidity is considered surplus:
+
+| Comparison | Swap direction |
+| --- | --- |
+| `liquidity_from_a > liquidity_from_b` | Swap A to B. |
+| `liquidity_from_a <= liquidity_from_b` | Swap B to A. |
+
+Zap then uses a binary search of up to `20` iterations to estimate an exact-in swap amount that makes the remaining user amounts closer to the pool ratio. The search accounts for DAMM v2 fee mode, dynamic fee, reserves, compounding fee behavior, and transfer-fee-excluded token amounts.
+
+The internal DAMM v2 fee simulation supports these base fee modes:
+
+- `FeeTimeSchedulerLinear`
+- `FeeTimeSchedulerExponential`
+- `FeeMarketCapSchedulerLinear`
+- `FeeMarketCapSchedulerExponential`
+- `RateLimiter`
+
+If the calculation fails or produces a zero input or output amount, Zap skips the swap and returns successfully.
+
+## DLMM Range
+
+DLMM Zap In receives `min_delta_id` and `max_delta_id` relative to the current active bin. The program requires:
+
+```math
+\text{min delta id} \le \text{max delta id}
+```
+
+For a new position, Zap initializes the DLMM position with:
+
+```math
+\text{lower bin id} = \text{current active id} + \text{min delta id}
+```
+
+```math
+\text{width} = \text{max delta id} - \text{min delta id} + 1
+```
+
+The strategy math uses the pair's current `active_id` and `bin_step`.
+
+## Active Bin Side Selection
+
+`favor_x_in_active_id` controls which side receives the active bin when a range crosses the active bin.
+
+| `favor_x_in_active_id` | Y-side end | X-side start |
+| --- | --- | --- |
+| `true` | `-1` | `0` |
+| `false` | `0` | `1` |
+
+This matters because bins below the active area use token Y, bins above it use token X, and the active bin can be assigned to either side.
+
+## DLMM Strategy Shapes
+
+Zap computes DLMM `AddLiquidityParams` for three strategy types:
+
+| Strategy | Program behavior |
+| --- | --- |
+| `Spot` | Token Y is divided evenly across Y-side bins. Token X is weighted by inverse bin price across X-side bins. |
+| `Curve` | Liquidity is concentrated toward the active area. The slope terms are negative on each side and integer division rounds amounts down. |
+| `BidAsk` | Liquidity is weighted toward the range edges. The slope terms are positive on each side, except single-bin ranges use the single-bin formula. |
+
+The computed signed parameters are stored as absolute `u64` values plus a bit flag that marks which of `x0`, `y0`, `delta_x`, or `delta_y` was negative.
+
+<Note>
+  Zap's DLMM strategy math is parameter generation for DLMM `rebalance_liquidity`. DLMM still performs its own validation and liquidity accounting during the CPI.
+</Note>
+
+## Error Conditions
+
+| Error | Common cause |
+| --- | --- |
+| `InvalidZapOutParameters` | Zap Out percentage is `0` or greater than `100`. |
+| `AmmIsNotSupported` | Zap Out program/discriminator pair is not whitelisted. |
+| `InvalidOffset` | `offset_amount_in + 8` exceeds payload length. |
+| `InvalidPosition` | New DLMM position account is already initialized or is the owner/rent payer account. |
+| `ExceededSlippage` | DAMM v2 sqrt price moved beyond `max_sqrt_price_change_bps`. |
+| `InvalidDlmmZapInParameters` | `min_delta_id > max_delta_id`. |
+| `UnsupportedFeeMode` | DAMM v2 fee mode cannot be handled by Zap's swap amount calculation. |
