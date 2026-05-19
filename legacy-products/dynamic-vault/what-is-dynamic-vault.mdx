@@ -1,116 +1,112 @@
 ---
 title: "What is Dynamic Vault?"
 sidebarTitle: "What is Dynamic Vault?"
-description: "Learn how Meteora Dynamic Vault turns idle single-token liquidity into a programmable yield layer for users, AMMs, wallets, and protocols."
-llmsDescription: "Product overview of Meteora Dynamic Vault, explaining single-asset vault deposits, LP share tokens, Hermes keeper rebalancing, lending strategies, locked profit, performance fees, risk controls, and how Dynamic Vault supports yield-bearing liquidity across Solana applications."
+description: "Understand Meteora Dynamic Vault as a legacy single-asset vault program for LP shares, strategy allocation, locked profit, and performance-fee accounting."
+llmsDescription: "Overview of Meteora Dynamic Vault based on the vault program, covering single-token deposits, LP share tokens, rebalance and idle vault types, token vault reserves, approved strategy accounts, JupLend strategy support, Hermes/operator rebalances, locked profit, 5% LP-token performance fee minting, admin and operator controls, SPL Token support, and important implementation limits."
 ---
 
-Dynamic Vault is Meteora's single-asset yield infrastructure for Solana. It lets users and protocols deposit one token, receive a vault LP token that represents their share of the vault, and have the underlying liquidity dynamically allocated across approved yield strategies.
+Dynamic Vault is Meteora's legacy single-asset vault program. A user deposits one SPL token into a vault, receives vault LP tokens, and later burns those LP tokens to withdraw a proportional share of the vault's unlocked token value.
 
-The product was built around a simple idea: **idle liquidity should not stay idle**. Wallet balances, AMM reserves, protocol treasuries, and user deposits can all sit in the same asset vault and earn lending yield while remaining withdrawable.
+For rebalance vaults, liquidity can also be deployed from the vault reserve into approved strategy accounts. The program handles the on-chain accounting: deposits, withdrawals, LP minting and burning, strategy allowlisting, total liquidity updates, locked profit, performance-fee minting, and permission checks.
 
 <Info>
   Dynamic Vault runs on the mainnet program `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi`.
 </Info>
 
-## Why Dynamic Vault Exists
-
-Most DeFi liquidity is productive only when it is actively deployed. A USDC balance sitting inside a wallet or protocol reserve is liquid, but it is not earning. A lending position can earn, but it creates operational overhead: integrations, monitoring, risk parameters, liquidity checks, APY comparisons, and rebalancing.
-
-Dynamic Vault packages those responsibilities into a shared vault layer.
-
-<Frame>
-  <img src="/images/overview/other-products/dynamic-vault/dynamic-vault.png" />
-</Frame>
-
-Instead of every application building its own lending allocator, applications can plug into Dynamic Vault. Users deposit into a vault for a specific token, Hermes monitors connected strategies, and the vault program records shares, strategy balances, fees, and profit unlocking on-chain.
-
 ## What Dynamic Vault Does
 
 <CardGroup cols={2}>
-  <Card title="Single-Asset Deposits" icon="vault" iconType="solid">
-    Each vault is created for one token mint, such as USDC or SOL. Depositors enter with that asset and receive vault LP tokens that represent their proportional ownership.
+  <Card title="Single-Token Vaults" icon="vault" iconType="solid">
+    Each vault is tied to one token mint. The vault reserve token account and LP mint are program-derived accounts for that vault.
   </Card>
-  <Card title="Dynamic Yield Allocation" icon="chart-line" iconType="solid">
-    Liquidity can be routed into approved lending strategies, then moved again when yield or risk conditions change.
+  <Card title="LP Share Accounting" icon="receipt" iconType="solid">
+    Deposits mint LP tokens, withdrawals burn LP tokens, and share calculations use the vault's unlocked amount.
   </Card>
-  <Card title="Protocol-Friendly Liquidity" icon="plug" iconType="solid">
-    AMMs, wallets, treasuries, and other applications can integrate the vault layer instead of managing separate lending positions.
+  <Card title="Approved Strategies" icon="list-check" iconType="solid">
+    Rebalance vaults can hold up to 30 strategy accounts. Strategy deposits and withdrawals must use a strategy already recorded on the vault.
   </Card>
-  <Card title="On-Chain Accounting" icon="calculator" iconType="solid">
-    Deposits, withdrawals, LP share minting, strategy balances, profit updates, and performance fees are enforced by the vault program.
+  <Card title="Profit Locking" icon="lock" iconType="solid">
+    Profit reported during strategy actions is added to locked profit and released over time before it becomes part of the unlocked amount.
   </Card>
-  <Card title="Hermes Keeper Operations" icon="robot" iconType="solid">
-    Hermes is the off-chain operator layer that watches lending markets and submits rebalance cranks to the vault program.
+  <Card title="LP-Token Fees" icon="percent" iconType="solid">
+    Profitable strategy actions can mint vault LP tokens to the configured fee vault instead of transferring underlying tokens out.
   </Card>
-  <Card title="Risk-Aware Design" icon="shield" iconType="solid">
-    Strategies are approved by admins, operator permissions are constrained, withdrawals can pull from strategies when needed, and profits unlock gradually to reduce timing attacks.
+  <Card title="Admin and Operator Roles" icon="key" iconType="solid">
+    Admins manage vault configuration and strategies. The admin or configured operator can submit strategy rebalances and reward claims.
   </Card>
 </CardGroup>
 
-## How Dynamic Vault Works
+## Vault Types
 
-A Dynamic Vault has three core layers.
+The program supports two vault types.
+
+| Type | Program behavior |
+| --- | --- |
+| Rebalance vault | Uses Meteora's configured base address, can enable or disable deposits, can set an operator, can configure a fee vault, can add strategies, and can rebalance into supported strategies. |
+| Idle vault | Uses the default base address and holds all liquidity in the vault reserve. Strategy, operator, enable, fee-vault, and admin-management instructions are constrained to rebalance vaults. |
+
+Most Dynamic Vault product documentation refers to **rebalance vaults**, because those are the vaults that can send liquidity to lending strategies.
+
+## Lifecycle
 
 <Steps>
-  <Step title="Users or protocols deposit a supported token">
-    A depositor sends the underlying asset into the vault. The vault mints LP tokens based on the depositor's proportional share of the currently unlocked vault value.
+  <Step title="A vault is initialized for one token mint">
+    The program creates the vault account, token vault, and LP mint. The LP mint uses the same decimals as the underlying token mint.
   </Step>
-  <Step title="The vault keeps liquid reserves and tracks strategies">
-    The token vault holds available liquidity. Approved strategies hold deployed liquidity. The vault tracks the total amount across both places.
+  <Step title="Users deposit the underlying token">
+    Deposits transfer tokens into the token vault and mint LP tokens to the user. Deposits fail when the vault is disabled or when the minted LP amount is below the user's minimum.
   </Step>
-  <Step title="Hermes evaluates lending opportunities">
-    Hermes monitors connected lending venues, available liquidity, APY, utilization, reserve depth, and risk thresholds.
+  <Step title="Approved operators rebalance strategies">
+    For rebalance vaults, the admin or operator can move liquidity between the token vault and an approved strategy account.
   </Step>
-  <Step title="Rebalance cranks move liquidity">
-    When a rebalance is needed, Hermes submits a deposit or withdrawal strategy transaction. The vault updates total liquidity, strategy balances, profit, loss, and fees.
+  <Step title="The program updates profit, loss, and fees">
+    After a strategy action, the program compares before and after liquidity, updates total amount, records gain or loss, updates locked profit, and mints performance-fee LP tokens when applicable.
   </Step>
   <Step title="Users withdraw by burning LP tokens">
-    Withdrawals burn vault LP tokens and return the user's share of the unlocked vault value. If the vault reserve does not hold enough liquidity, the program can withdraw directly from an approved strategy first.
+    Withdrawals calculate the user's share of unlocked value. A direct withdrawal uses the token vault; a separate withdrawal path can pull from a strategy first when reserve liquidity is short.
   </Step>
 </Steps>
 
-```text
-Deposit token -> Receive vault LP token -> Hermes allocates liquidity -> Yield accrues -> Withdraw by burning LP token
-```
+## Current Strategy Support
+
+The `StrategyType` enum contains legacy names from earlier integrations, but most variants now return unsupported behavior. In the current source code, the external lending strategy handler implemented for active deposits and withdrawals is `JupLend`.
+
+<Note>
+  The `Vault` strategy handler exists for internal compatibility, especially the advanced strategy-removal path, but it is not a yield destination for new strategy deposits.
+</Note>
+
+## Risk Considerations
+
+Dynamic Vault reduces some operational risk by keeping strategy actions inside program-approved flows, but it does not remove the risks of yield-bearing vaults.
+
+| Risk | What to understand |
+| --- | --- |
+| Variable yield | Returns depend on connected lending markets, utilization, available strategies, and operator timing. |
+| Strategy risk | Liquidity deployed through a strategy is exposed to the connected lending protocol and its account state. |
+| Liquidity risk | Withdrawals depend on liquidity in the token vault or what can be withdrawn from a strategy at that moment. |
+| Operator risk | Hermes or any configured operator can only use approved flows, but delayed or poor rebalancing can still affect allocation quality. |
+| Program risk | Dynamic Vault, its strategy handlers, and connected programs can carry smart contract and integration risk. |
+
+<Warning>
+  Yield is not guaranteed. Risk controls and permission checks bound what the vault can do, but they do not make lending strategies risk-free.
+</Warning>
 
 ## Product Building Blocks
 
 <CardGroup cols={2}>
-  <Card title="Workflow" href="/legacy-products/dynamic-vault/workflow" icon="diagram-project">
-    Follow the full product lifecycle from vault creation to deposits, strategy allocation, rebalancing, and withdrawals.
-  </Card>
   <Card title="Hermes" href="/legacy-products/dynamic-vault/hermes/what-is-hermes" icon="robot">
-    Learn how the keeper layer monitors lending markets and submits rebalance actions.
+    Understand the off-chain operator role and how it interacts with the on-chain vault constraints.
   </Card>
+  <Card title="Dynamic Vault Access and Limits" href="/legacy-products/dynamic-vault/access-and-limits" icon="key">
+    Review vault accounts, roles, instructions, token support, strategy limits, and important constraints.
+  </Card>
+</CardGroup>
+<CardGroup cols={1}>
   <Card title="Dynamic Vault Formulas" href="/legacy-products/dynamic-vault/dynamic-vault-formulas" icon="calculator">
-    Understand the product math behind LP shares, withdrawals, locked profit, and performance fees.
-  </Card>
-  <Card title="Design Goals" href="/legacy-products/dynamic-vault/design-goals" icon="bullseye">
-    See the principles behind Dynamic Vault: safety, liquidity, yield optimization, and easy integration.
-  </Card>
-  <Card title="Risk Management" href="/legacy-products/dynamic-vault/risk-management" icon="shield">
-    Review the operational and lending risk controls built into the vault design.
+    See the formulas for LP shares, unlocked amount, locked profit, strategy profit and loss, and performance fees.
   </Card>
 </CardGroup>
 
-## Who Dynamic Vault Is For
-
-<AccordionGroup>
-  <Accordion title="Liquidity providers">
-    LPs can deposit a single asset into a vault and receive a share token that tracks their ownership of the vault's unlocked value.
-  </Accordion>
-  <Accordion title="AMMs and trading products">
-    Protocols can connect reserve liquidity to Dynamic Vault so assets can earn yield when they are not actively needed for swaps.
-  </Accordion>
-  <Accordion title="Wallets and frontends">
-    Consumer apps can offer a simple yield experience without building lending allocation infrastructure from scratch.
-  </Accordion>
-  <Accordion title="Treasuries and ecosystem teams">
-    Teams with idle single-token balances can route liquidity through a controlled vault layer instead of manually managing lending positions.
-  </Accordion>
-</AccordionGroup>
-
-<Warning>
-  Dynamic Vault is a legacy product and depends on approved strategies, operator configuration, connected lending markets, and real-time liquidity conditions. Yield is not fixed, and risk controls reduce risk rather than remove it.
-</Warning>
+<Note>
+  Dynamic Vault is a legacy product. Supported strategies are limited by the deployed program and current operator configuration.
+</Note>
