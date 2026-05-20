@@ -6,84 +6,98 @@ llmsDescription: "Developer changelog for DLMM integrations. Tracks public lb_cl
 rss: true
 ---
 
-Track DLMM developer-facing releases here.
+<Tip>
+  Track DLMM releases here.
+</Tip>
 
 <Update
-  label="May 2026"
-  description="lb_clmm 0.12.0 — Limit Orders and Quote Token Fee"
-  rss="DLMM 0.12.0 adds limit orders and quote token fee, with breaking changes for swap quotes, swap account layouts, pool function types, and indexers. SDK 1.9.5, CLI 0.6.3, commons 0.3.3."
+  label="lb_clmm 0.12.0"
+  description="Limit Orders and Quote Token Fee"
+  rss="DLMM 0.12.0 adds limit orders and quote token fee, with breaking changes for swap quotes, swap account layouts, pool function types, and indexers. SDK 1.9.8, CLI 0.6.3, commons 0.3.3."
 >
+  <Info>
+    Mainnet deployment for Release 0.12.0 is planned for May 21, 2026, at 11:00 AM UTC+8 (Wednesday).
+  </Info>
+
   <Warning>
-    **Breaking release.** If you build swap instructions manually, run custom swap quotes, index swap events, or assume all pools support liquidity mining (LM), plan an upgrade before mainnet deployment.
+    **Breaking release.** If you build swap instructions manually, run DLMM swap quotes, or index certain DLMM events, please plan an upgrade before mainnet deployment.
   </Warning>
 
   ## Release summary
 
   | Component | Version | PR |
   | --- | --- | --- |
-  | On-chain program (`lb_clmm`) | `0.12.0` | — |
-  | TypeScript SDK (`@meteora-ag/dlmm`) | `1.9.5` | [dlmm-sdk #273](https://github.com/MeteoraAg/dlmm-sdk/pull/273) |
+  | Program | `0.12.0` | — |
+  | TypeScript SDK | `1.9.8` | [dlmm-sdk #273](https://github.com/MeteoraAg/dlmm-sdk/pull/273) |
   | CLI | `0.6.3` | [dlmm-sdk #273](https://github.com/MeteoraAg/dlmm-sdk/pull/273) |
-  | Commons (Rust quotes) | `0.3.3` | [dlmm-sdk #273](https://github.com/MeteoraAg/dlmm-sdk/pull/273) |
+  | Commons | `0.3.3` | [dlmm-sdk #273](https://github.com/MeteoraAg/dlmm-sdk/pull/273) |
 
-  **What shipped:** limit orders (bid/ask), **collect fee mode** (fee on input token vs token Y only), Token-2022 `add_liquidity_by_weight2`, permissionless `claim_fee` when enabled by the position owner, and updated swap quote math.
+  ## What We Shipped 
+  - Limit Orders
+  - Quote Token Fee
 
-  <Info>
-    **Full changelog (Notion):** [Limit Order and Quote Token Fee](https://meteoraag.notion.site/Changelog-Limit-Order-and-Quote-Token-Fee-345cd1ff2111800cb99bce237364e71c?pvs=73) — use this for exhaustive notes beyond this page.
-  </Info>
+  ## What To Do
 
-  ## Who needs to act
-
-  | Integration | Why | What to do |
-  | --- | --- | --- |
-  | **Apps using the TypeScript SDK** | New APIs, quote changes, removed types | Upgrade to `@meteora-ag/dlmm@1.9.5+`, re-test swaps and pool creation |
-  | **Trading terminals (swap UI)** | Swap quote math and max bins per instruction changed | Re-run quote tests; split large routes if you hit the 260-bin cap |
-  | **Indexers / analytics** | `swap` / `swap2` behavior and events changed | Index **`Swap2Evt`** (not legacy swap events); decode `FeeParameterUpdate.base_fee_power_factor` |
-  | **Low-level instruction builders** | Account mutability and remaining-accounts layout changed | Mark bitmap extension **writable** on `swap` / `swap2`; add `TransferHookReferral` when using `host_fee_in` |
-  | **Pool / preset creators** | New fields on initialize and preset accounts | Pass `concreteFunctionType` and `collectFeeMode` when creating pairs or presets |
-  | **LM-only integrations** | Legacy pools without rewards become limit-order pools | Read `functionType` per pair before enabling rewards or limit orders |
-
-  ## Upgrade checklist
-
-  Pick the path that matches your stack. Complete every item that applies.
-
-  ### All integrations
-
-  1. Pin versions: program `0.12.0`, SDK `1.9.5`, CLI `0.6.3`, commons `0.3.3` (or later).
-  2. Regenerate or refresh clients from the [published IDL](https://github.com/MeteoraAg/dlmm-sdk/blob/main/idls/dlmm.json) if you do not use the official SDK.
-  3. For each pool you touch, resolve **function type** (`Undetermined` → LM if rewards exist, else limit order) before calling LM or limit-order APIs.
-
-  ### TypeScript SDK (`@meteora-ag/dlmm`)
-
-  ```bash
-  npm install @meteora-ag/dlmm@1.9.5 @solana/web3.js
-  ```
-
-  1. Replace removed `Position` (v1) usage — v1 positions no longer exist on chain.
-  2. Remove calls to `updateBinArray` (removed).
-  3. Re-test `swapQuote`, `swapQuoteExactOut`, and any code using `swapExactOutQuoteAtBin` (`amountIn` now includes fees).
-  4. When creating pools, pass `concreteFunctionType` and `collectFeeMode` to `createCustomizablePermissionlessLbPair`.
-  5. When looking up pools, pass the same filters to `getPairPubkeyIfExists` if you need a specific pair variant.
-  6. For limit orders: use `placeLimitOrder`, `cancelLimitOrder`, `closeLimitOrderIfEmpty`, `getLimitOrder`, `getLimitOrderByUserAndLbPair`, `quoteCreateLimitOrder` — only on **limit-order** pairs.
-
-  ### Trading terminals and custom quote engines
-
-  1. Re-validate quotes for: `swap`, `swap_exact_out`, `swap_with_price_impact`, `swap2`, `swap_exact_out2`, `swap_with_price_impact2`.
-  2. Account for **limit order liquidity** and **collect fee mode** (`InputOnly` vs `OnlyY`) in quote math — use SDK `1.9.5+` or commons `0.3.3+` rather than reimplementing.
-  3. Cap or split routes: max bins per swap instruction is **260** (was 280).
-  4. If you use `host_fee_in` on `swap2` / `swap_exact_out2` / `swap_with_price_impact2`, update `RemainingAccountsInfo` (see [Breaking changes](#breaking-changes-program)).
-
-  ### Indexers and event pipelines
-
-  1. Subscribe to **`Swap2Evt`** for swap activity on DLMM pools (pivot away from legacy swap event indexing where applicable).
-  2. Extend `FeeParameterUpdate` decoders with `base_fee_power_factor`.
-  3. Treat bitmap extension accounts on `swap` / `swap2` as **state-changing** (writable) in your account metadata.
-
-  ### Low-level / CPI builders
-
-  1. Pass bitmap extension as **mutable** on `swap` and `swap2`.
-  2. Include `AccountsType::TransferHookReferral` in `RemainingAccountsInfo` when the instruction has `host_fee_in`, plus any transfer-hook accounts required for the referral mint.
-  3. Update `initialize_preset_parameter` builders: `collect_fee_mode` + `concrete_function_type` (replaces the old `function_type` input).
+  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrators</th>
+          <th>What Changed</th>
+          <th>What To Do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Swap Routers</strong></td>
+          <td>
+            <ul>
+              <li>Swap quote computation</li>
+              <li><code>swap</code> and <code>swap2</code> bitmap extension mutability</li>
+              <li>Remaining-accounts layout changed</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>If you are using the Typescript SDK, upgrade to <code>@meteora-ag/dlmm@1.9.5-rc.4</code> to test.</li>
+              <li>If you are using Rust, update your quote logic based on the new quote math in <code>commons@0.3.3</code></li>
+              <li>Mark bitmap extension <strong>writable</strong> on <code>swap</code> / <code>swap2</code></li>
+              <li>If you are using <code>host_fee_in</code> account that is Token-2022 mint with Transfer Hook, add <code>TransferHookReferral</code> and any transfer-hook accounts</li>
+            </ul>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Trading Terminals</strong></td>
+          <td>
+            <ul>
+              <li><code>FeeParameterUpdate</code> event parsing</li>
+              <li><code>Swap2Evt</code> event parsing</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Update your event parsing logic to decode the updated events</li>
+            </ul>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Partners</strong></td>
+          <td>
+            <ul>
+              <li>New limit order functions</li>
+              <li>Breaking changes to <code>createCustomizablePermissionlessLbPair</code> and <code>getPairPubkeyIfExists</code></li>
+              <li>Swap quote computation</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Bump your SDK version to <code>@meteora-ag/dlmm@1.9.5-rc.4</code></li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 
   ## Program: `lb_clmm` `0.12.0`
 
@@ -91,130 +105,94 @@ Track DLMM developer-facing releases here.
 
   ### Added
 
-  | Instruction / account | When to use |
-  | --- | --- |
-  | `add_liquidity_by_weight2` | Same as `add_liquidity_by_weight` but supports **Token-2022** mints. Prefer for new Token-2022 integrations. |
-  | `set_permissionless_operation_bits` | Position owner enables permissionless ops (e.g. permissionless `claim_fee`). |
-  | `place_limit_order` | Place bid or ask limit orders on limit-order pools. |
-  | `cancel_limit_order` | Cancel an active limit order. |
-  | `close_limit_order_if_empty` | Close the limit order account when all bins are empty. |
-  | `close_bin_array` | Close an invalid or empty bin array when eligible. |
-  | `PresetParameter.collect_fee_mode` | New field; existing accounts default to **`CollectFeeMode::InputOnly`**. |
-  | `LbPair::StaticParameters.collect_fee_mode` | New field; existing pairs default to **`CollectFeeMode::InputOnly`**. |
-
-  **Collect fee mode (on chain):**
-
-  | Mode | Meaning |
-  | --- | --- |
-  | `InputOnly` (0) | Fees collected from the swap **input** token (previous default behavior). |
-  | `OnlyY` (1) | Fees collected in **token Y** only (quote-token / single-sided fee collection). |
+  - New endpoint `add_liquidity_by_weight2`, that is same as `add_liquidity_by_weight` but supports token2022
+  - New endpoint `set_permissionless_operation_bits` to allow position owner to enable permissionless authorization on some operations such as `claim_fee`
+  - New endpoint `place_limit_order` to allow user to place limit orders for either bid or ask side.
+  - New endpoint `cancel_limit_order` to cancel limit order.
+  - New endpoint `close_limit_order_if_empty` to close a limit order if it's empty.
+  - New endpoint `close_bin_array` to close an invalid bin array.
+  - Account `PresetParameter` added new `collect_fee_mode` field. All the existing `PresetParameter` account will have default `CollectFeeMode::OnlyInput`.
+  - Account `LbPair::StaticParameters` added new `collect_fee_mode` field. All existing LbPair account will have default `CollectFeeMode::OnlyInput`.
 
   ### Changed
 
-  - **Permissionless `claim_fee`:** allowed when the position owner set the corresponding permissionless operation bit.
-  - **Existing pairs without LM rewards:** migrated to **limit-order** pools; they **no longer support LM**. This is **not reversible**.
-  - **`initialize_permissioned_lb_pair`:** `InitPermissionPairIx.protocol_share` is unused (treated as padding).
-  - **`go_to_a_bin`:** reverts if the pool is disabled or before activation. Operators can bypass by passing operator-associated accounts in remaining accounts.
+  - Allow permissionless claim_fee if position owner enabled it
+  - All the existing `LbPair` accounts without any liquidity mining rewards will be defaulted to limit order supported pool and doesn't support LM anymore. This is not revert-able.
+  - Updated `initialize_permissioned_lb_pair` parameter `InitPermissionPairIx` field `protocol_share` to `padding0` because it was no longer in use
+  - Endpoint `go_to_a_bin` will revert if the pool is disabled / before activation. The restriction can be bypassed by operator by passing operator associated accounts through remaining accounts.
 
   ### Removed
 
-  - `reset_pool_tombstone_fields`
-  - `reset_bin_array_tombstone_fields`
-  - `reset_position_tombstone_fields`
+  - Remove endpoint `reset_pool_tombstone_fields`, `reset_bin_array_tombstone_fields`, `reset_position_tombstone_fields`
 
-  <a id="breaking-changes-program" />
+  ### Breaking Changes
 
-  ### Breaking changes (program)
-
-  | Area | What changed | What you should do |
-  | --- | --- | --- |
-  | **Pool function type** | `FunctionType` no longer defaults to `LiquidityMining`. Existing `LbPair` accounts are `Undetermined`. At runtime: if LM rewards are initialized → behaves as **LM**; otherwise → **limit order**. | Before LM rewards or limit-order flows, read `functionType` (or use SDK helpers). Do not assume all legacy pools are LM. |
-  | **Swap quotes** | Collect fee mode + limit order liquidity change quote results. | Affects `swap`, `swap_exact_out`, `swap_with_price_impact`, `swap2`, `swap_exact_out2`, `swap_with_price_impact2`. Upgrade SDK/commons or re-derive quotes. |
-  | **Max bins per swap** | Limit order logic uses more CU. | Max bins per instruction: **280 → 260**. Split swaps or reduce per-tx bin traversal. |
-  | **`swap` / `swap2` accounts** | Bitmap extension must be **mutable**. | Limit orders flip liquidity tracking bits during swaps. Mark the bitmap extension account writable in custom builders. |
-  | **`FeeParameterUpdate` event** | New field `base_fee_power_factor`. | Update event decoders and downstream fee logic. |
-  | **`initialize_preset_parameter`** | Requires `collect_fee_mode`; uses `concrete_function_type` instead of `function_type`. | Update preset-creation transactions and IDL clients. |
-  | **`RemainingAccountsInfo`** | New `AccountsType::TransferHookReferral`. | For `swap2`, `swap_exact_out2`, `swap_with_price_impact2` **with `host_fee_in`**: append `TransferHookReferral` to the slice and include transfer-hook accounts for the **referral mint**. |
-
-  **Function type reference (SDK):**
+  - Endpoint `initialize_preset_parameter` added new `collect_fee_mode` field.
+  - Endpoint `initialize_preset_parameter` field function_type enum type has been changed to concrete_function_type.
+  - Enum `FunctionType` no longer defaulted to `FunctionType::LiquidityMining`. All existing on chain `LbPair` account will defaulted to `FunctionType::Undetermined`. With `FunctionType::Undetermined`, if there's liquidity reward initialized, it will be `FunctionType::LiquidityMining`, else will be `FunctionType::LimitOrder`
+  - Swap quote mechanism due to introducing of collect fee mode on in/out side, and limit order mechanism. Affected endpoints are `swap`, `swap_exact_out`, `swap_with_price_impact`, `swap2`, `swap_exact_out2` and `swap_with_price_impact2`.
+  - Due to new limit order logic (consuming more CU), max bins to swap in 1 instruction changes from 280 bins to 260 bins
+  - Endpoint `swap` and `swap2` bitmap extension account will be `mutable` due to limit order logic require flipping of liquidity tracking bits.
+  - Event `FeeParameterUpdate` added new field `base_fee_power_factor`
+  - `AccountsType` enum variants introduces `TransferHookReferral`. Clients building `swap2`, `swap_exact_out2` and `swap_with_price_impact2` instructions must update their `RemainingAccountsInfo` slices to include `AccountsType::TransferHookReferral` when the swap has `host_fee_in` account. Additionally, any required transfer hook accounts for the referral mint must also be provided in the instruction.
 
   ```typescript
-  enum FunctionType {
-    Undetermined = 0,      // Resolved at runtime: LM if rewards exist, else limit order
+  enum ConcreteFunctionType {
+    LimitOrder = 0,
     LiquidityMining = 1,
-    LimitOrder = 2,
   }
 
-  enum ConcreteFunctionType {
-    LimitOrder = 0,        // Use when creating new limit-order pools
-    LiquidityMining = 1,
+  enum CollectFeeMode {
+    InputOnly = 0,
+    OnlyY = 1,
   }
   ```
 
-  ## TypeScript SDK: `@meteora-ag/dlmm` `1.9.5`
+  ## TypeScript SDK: `@meteora-ag/dlmm` `1.9.8`
 
   [SDK PR #273](https://github.com/MeteoraAg/dlmm-sdk/pull/273)
 
+  <Tip>
+    Early testing: [`@meteora-ag/dlmm@1.9.5-rc.4`](https://www.npmjs.com/package/@meteora-ag/dlmm/v/1.9.5-rc.4).<br /> Production: [`@meteora-ag/dlmm@1.9.8`](https://www.npmjs.com/package/@meteora-ag/dlmm/v/1.9.8). 
+  </Tip>
+
   ### Added
 
-  | API | Use for |
-  | --- | --- |
-  | `placeLimitOrder` | Build a transaction to place bid/ask limit orders (limit-order pairs only). |
-  | `cancelLimitOrder` | Cancel selected bins in a limit order. |
-  | `closeLimitOrderIfEmpty` | Close an empty limit order account. |
-  | `enablePositionPermissionlessClaimFee` | Let the position owner allow others to call `claim_fee`. |
-  | `getLimitOrderByUserAndLbPair` | List a wallet's limit orders for a pair. |
-  | `getLimitOrder` | Fetch one limit order by pubkey. |
-  | `addLiquidityByWeight2` | Token-2022 weight-based liquidity. |
-  | `quoteCreateLimitOrder` | Estimate cost to open a limit order. |
+  - Added function `placeLimitOrder` to place a new limit order. Only applicable for pair with function type of LimitOrder.
+  - Added function `cancelLimitOrder` to cancel an existing limit order.
+  - Added function `closeLimitOrderIfEmpty` to close a limit order if it's empty.
+  - Added function `enablePositionPermissionlessClaimFee`. This allow non position owner to invoke claim fee instruction for other's position.
+  - Added function `getLimitOrderByUserAndLbPair` to get all limit orders of a user for a given pair.
+  - Added function `getLimitOrder` to get limit order data by limit order pubkey.
+  - Added function `addLiquidityByWeight2` which support token 2022 add liquidity by weight.
+  - Added function `quoteCreateLimitOrder` which returns the cost for creating a Limit Order
 
-  ### Breaking changes
+  ### Breaking Changes
 
-  | API | Change | Action |
-  | --- | --- | --- |
-  | `createCustomizablePermissionlessLbPair` | New args: `concreteFunctionType`, `collectFeeMode`. | Pass `ConcreteFunctionType.LimitOrder` or `.LiquidityMining` and `CollectFeeMode.InputOnly` or `.OnlyY`. |
-  | `getPairPubkeyIfExists` | New optional filters: `concreteFunctionType`, `collectFeeMode`. | Pass filters when multiple pair variants can share the same mint pair. |
-
-  ### Changed
-
-  - `swapQuote` and `swapQuoteExactOut` include limit order liquidity and collect fee mode.
-  - `swapExactOutQuoteAtBin`: returned `amountIn` **includes fees** (was excluding fees in some cases).
+  - Added `concreteFunctionType`, `collectFeeMode` parameters in `createCustomizablePermissionlessLbPair` function. This allow user to create pair with function of LimitOrder or LiquidityMining and collect fee in InputToken, or TokenY (single sided fee).
+  - Added `concreteFunctionType`, `collectFeeMode` parameters in `getPairPubkeyIfExists` function. This allow user to query existing pair with addition filter of function type and collect fee mode.
 
   ### Removed
 
-  - `Position` type (v1) — no v1 positions remain on chain.
-  - `updateBinArray` — unused; remove call sites.
+  - `Position` type (v1) removed, there's no more v1 position on chain anymore.
+  - `updateBinArray` function removed since it's not used anywhere.
 
-  <Tip>
-    RC for early testing: [`@meteora-ag/dlmm@1.9.5-rc.3`](https://www.npmjs.com/package/@meteora-ag/dlmm/v/1.9.5-rc.3). Prefer stable **`1.9.5`** for production.
-  </Tip>
+  ### Changes
 
-  **Example: create a limit-order pool with input-only fees**
-
-  ```typescript
-  import DLMM, {
-    CollectFeeMode,
-    ConcreteFunctionType,
-  } from "@meteora-ag/dlmm";
-
-  // When calling createCustomizablePermissionlessLbPair, pass for example:
-  const concreteFunctionType = ConcreteFunctionType.LimitOrder;
-  const collectFeeMode = CollectFeeMode.InputOnly;
-  ```
+  - Update logic of `swapQuote` and `swapQuoteExactOut` to limit order and collect fee mode.
+  - `swapExactOutQuoteAtBin` function's 'amountIn` now include fee.
 
   ## CLI: `0.6.3`
 
   [CLI PR #273](https://github.com/MeteoraAg/dlmm-sdk/pull/273)
 
-  | Command | Purpose |
-  | --- | --- |
-  | `place_limit_order` | Place a limit order on a pair. |
-  | `cancel_limit_order` | Cancel an existing limit order. |
-  | `close_limit_order_if_empty` | Close an empty limit order account. |
-  | `get_limit_orders` | List limit orders for a user on a pair. |
-  | `set_permissionless_operation_bits` | Set permissionless operation bits on a position. |
+  ### Added
 
-  Build and inspect: `cargo build && target/debug/cli --help`
+  - Added `place_limit_order` command to place limit orders
+  - Added `cancel_limit_order` command to cancel existing limit orders
+  - Added `close_limit_order_if_empty` command to close empty limit order account
+  - Added `get_limit_orders` command to query limit orders for a user on a specific pair
+  - Added `set_permissionless_operation_bits` command to set operation bits on a position
 
   ## Commons: `0.3.3`
 
@@ -222,18 +200,10 @@ Track DLMM developer-facing releases here.
 
   ### Added
 
-  - `DynamicPosition` (`dynamic_position.rs`) — parse dynamic position accounts.
-  - `LimitOrder` (`limit_order.rs`) — parse limit order accounts.
+  - Added `DynamicPosition` in `dynamic_position.rs` to support parsing on position account
+  - Added `LimitOrder` in `limit_order.rs` to support parsing on limit order account
 
   ### Changed
 
-  - `quote_exact_in()` and `quote_exact_out()` support limit order liquidity (align with program `0.12.0`).
-
-  Run quote tests: `cargo t -p commons --test '*'`
-
-  ## Deployment notes
-
-  - **Devnet:** program deployed at `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`.
-  - **Operator actions (mainnet):** DLMM protocol fee updated to **10%**; preset parameters updated for limit-order and quote-token fee compatibility.
-  - **Mainnet:** coordinate with Meteora announcements before relying on limit-order or new fee-mode behavior in production.
+  - `quote_exact_in()` and `quote_exact_out()` now support limit order liquidity
 </Update>
