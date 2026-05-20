@@ -1,9 +1,10 @@
 ---
-title: Integrate with DBC
-description: Everything you need to know to integrate with Meteora's DBC Program
+title: "DBC Trading Terminal Integration"
+sidebarTitle: "Trading Terminal"
+description: "Index DBC pool state, chart swaps from EvtSwap2, calculate progress, fees, liquidity, migration state, and referral behavior."
 ---
 
-Trading Terminals can easily integrate with Meteora DBC by following this guide that explains in detail how to get the necessary data from indexing the DBC program.
+Trading terminals should integrate DBC from program account state and DBC swap events. Avoid deriving price from token transfer logs because DBC fee behavior can make transfer amounts differ from the curve amounts used for price and charts.
 
 ## Bonding Curve Progress
 
@@ -13,7 +14,7 @@ Trading Terminals can easily integrate with Meteora DBC by following this guide 
 bondingCurveProgress = poolState.quoteReserve / poolConfigState.migration_quote_threshold
 ```
 
-There are 2 ways you can get the quote reserve:
+There are 3 ways you can get the quote reserve:
 
 1. From the `poolState.quoteReserve` state in a DBC pool.
 2. From the `nextSqrtPrice` in the swap CPI logs.
@@ -61,7 +62,7 @@ pub fn get_quote_token_from_sqrt_price(next_sqrt_price: u128, config: &PoolConfi
 }
 ```
 
-Alternatively, you can use the `getQuoteReserveFromNextSqrtPrice` function in the [DBC TypeScript SDK](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/docs.md#getQuoteReserveFromNextSqrtPrice) as it is the typescript version of the above function.
+Alternatively, you can use the `getQuoteReserveFromNextSqrtPrice` function in the [DBC TypeScript SDK](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/docs.md#getQuoteReserveFromNextSqrtPrice). It mirrors the Rust helper above.
 
 #### 3. Directly from `EvtSwap2` swap CPI logs
 
@@ -288,8 +289,8 @@ When a DBC pool graduates to DAMM v2, the fee collection behavior depends on the
 
 ### Meteora's DBC Migration Keepers
 
-- We run a total of 2 DBC Migration Keepers to migrate the DBC pools. These migration keepers each have their individual threshold requirements of >= 750 USD worth of `quoteReserve` to migrate the pool provided `quoteReserve >= migrationQuoteThreshold`.
-- You can check out the migration keepers [here](/developer-guide/guides/dbc/overview#migration-keeper).
+- We run 2 DBC migration keepers for mainnet pools. Each keeper has its own quote reserve requirements, and the pool must also satisfy `quoteReserve >= migrationQuoteThreshold`.
+- You can check the migration keeper details [here](/developer-guides/dbc#migration-keepers).
 - If you would like to clear our tokens that are stuck (such that their `quoteReserve` is less than 750 USD worth of `quoteToken`), you can use the [Manual Migrator](https://migrator.meteora.ag/) to manually migrate the pool.
 
 ### How to Identify Launchpads Using DBC

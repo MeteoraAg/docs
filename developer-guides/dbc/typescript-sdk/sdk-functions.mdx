@@ -1,7 +1,170 @@
 ---
-title: SDK Functions
-description: DBC
+title: "DBC TS SDK Reference"
+sidebarTitle: "SDK Reference"
+description: "Package exports, services, transaction builders, quote helpers, state readers, PDA helpers, math helpers, and validation helpers in @meteora-ag/dynamic-bonding-curve-sdk."
+llmsDescription: "Detailed SDK reference for @meteora-ag/dynamic-bonding-curve-sdk from public source: DynamicBondingCurveClient, PartnerService, PoolService, CreatorService, MigrationService, StateService, buildCurve helpers, PDA helpers, config helpers, swap quote math, fee math, curve math, validation helpers, constants, enums, and Rust quote crate notes."
 ---
+
+This page is based on the public TypeScript package `@meteora-ag/dynamic-bonding-curve-sdk` and the Rust quote crate in `dynamic-bonding-curve/dynamic-bonding-curve-sdk`. It documents the public package surface first, then gives detailed method references for the service functions used by most integrations.
+
+```typescript
+import {
+    DynamicBondingCurveClient,
+    ActivationType,
+    BaseFeeMode,
+    CollectFeeMode,
+    MigrationFeeOption,
+    MigrationOption,
+    SwapMode,
+    TokenDecimal,
+    TokenType,
+    buildCurveWithMarketCap,
+    deriveDbcPoolAddress,
+    getQuoteReserveFromNextSqrtPrice,
+} from '@meteora-ag/dynamic-bonding-curve-sdk'
+```
+
+## Package Surface
+
+The package entrypoint exports:
+
+| Export | Description |
+| --- | --- |
+| `DynamicBondingCurveClient` | Main client. Owns `partner`, `pool`, `creator`, `migration`, `state`, connection, and commitment fields. |
+| `types` | IDL account/types, service params, config params, swap params, quote result types, build curve params, enums, and account aliases. |
+| `constants` | Program IDs, fee limits, curve limits, defaults, DAMM migration config keys, and protocol percentages. |
+| `helpers` | PDA derivation, curve/config builders, token account helpers, validation helpers, conversion helpers, and Anchor program constructors. |
+| `services` | `PartnerService`, `PoolService`, `CreatorService`, `MigrationService`, `StateService`, and `DynamicBondingCurveProgram`. |
+| `math` | Curve math, swap quote math, fee math, safe math, fixed-point helpers, fee scheduler, rate limiter, and dynamic fee helpers. |
+| `DynamicBondingCurveTypes` | Generated TypeScript type for the DBC Anchor IDL. |
+| `DynamicBondingCurveIdl` | Raw DBC Anchor IDL JSON. |
+
+## Version And Dependencies
+
+The local SDK package is `@meteora-ag/dynamic-bonding-curve-sdk` version `1.5.7`.
+
+Important runtime dependencies:
+
+| Package | Use |
+| --- | --- |
+| `@coral-xyz/anchor` | Program client, IDL account/type aliases, and BN-compatible program calls. |
+| `@solana/web3.js` | Connections, public keys, transactions, instructions, keypairs, and sysvars. |
+| `@solana/spl-token` | ATA creation, SPL Token, Token-2022, wrapped SOL, and token account helpers. |
+| `bn.js` | Raw integer token amounts, fee numerators, sqrt prices, and Q64.64 math. |
+| `decimal.js` | Human-readable price, market cap, and tokenomics calculations. |
+
+## Program IDs
+
+| Constant | Address |
+| --- | --- |
+| `DYNAMIC_BONDING_CURVE_PROGRAM_ID` | `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN` |
+| `DAMM_V1_PROGRAM_ID` | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` |
+| `DAMM_V2_PROGRAM_ID` | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
+| `VAULT_PROGRAM_ID` | `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` |
+| `LOCKER_PROGRAM_ID` | `LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn` |
+| `METAPLEX_PROGRAM_ID` | `metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s` |
+
+## Core Types
+
+| Type | Description |
+| --- | --- |
+| `DynamicCurveProgram` | Anchor `Program&lt;DynamicBondingCurveIDL&gt;`. |
+| `ConfigParameters` | Full on-chain config parameter struct passed to `create_config`. |
+| `PoolConfig` | Partner config account state. |
+| `VirtualPool` | DBC pool account state. |
+| `PartnerMetadata`, `VirtualPoolMetadata` | Optional metadata account types. |
+| `MeteoraDammMigrationMetadata`, `LockEscrow` | Migration and locker state account types. |
+| `PoolFeesConfig`, `BaseFeeConfig`, `DynamicFeeConfig` | On-chain fee config types. |
+| `SwapResult`, `SwapResult2` | Program swap result structs. |
+| `SwapQuoteResult`, `SwapQuote2Result` | SDK quote result types with slippage fields. |
+| `BuildCurveBaseParams` | Shared input shape for all `buildCurve*` helpers. |
+| `CreateConfigParams`, `CreatePoolParams`, `SwapParams`, `Swap2Params` | Main transaction-builder parameter types. |
+| `MigrateToDammV1Params`, `MigrateToDammV2Params`, `DammLpTokenParams` | Migration flow parameter types. |
+| `MigrateToDammV2Response` | DAMM v2 migration response containing the transaction and generated position NFT keypairs. |
+
+## Enums
+
+| Enum | Values |
+| --- | --- |
+| `ActivationType` | `Slot = 0`, `Timestamp = 1` |
+| `TokenType` | `SPL = 0`, `Token2022 = 1` |
+| `CollectFeeMode` | `QuoteToken = 0`, `OutputToken = 1` |
+| `MigratedCollectFeeMode` | `QuoteToken = 0`, `OutputToken = 1`, `Compounding = 2` |
+| `DammV2DynamicFeeMode` | `Disabled = 0`, `Enabled = 1` |
+| `DammV2BaseFeeMode` | `FeeTimeSchedulerLinear = 0`, `FeeTimeSchedulerExponential = 1`, `RateLimiter = 2`, `FeeMarketCapSchedulerLinear = 3`, `FeeMarketCapSchedulerExponential = 4` |
+| `MigrationOption` | `MET_DAMM = 0`, `MET_DAMM_V2 = 1` |
+| `BaseFeeMode` | `FeeSchedulerLinear = 0`, `FeeSchedulerExponential = 1`, `RateLimiter = 2` |
+| `MigrationFeeOption` | `FixedBps25 = 0`, `FixedBps30 = 1`, `FixedBps100 = 2`, `FixedBps200 = 3`, `FixedBps400 = 4`, `FixedBps600 = 5`, `Customizable = 6` |
+| `TokenDecimal` | `SIX = 6`, `SEVEN = 7`, `EIGHT = 8`, `NINE = 9` |
+| `TradeDirection` | `BaseToQuote = 0`, `QuoteToBase = 1` |
+| `Rounding` | `Up`, `Down` |
+| `TokenUpdateAuthorityOption` | `CreatorUpdateAuthority`, `Immutable`, `PartnerUpdateAuthority`, `CreatorUpdateAndMintAuthority`, `PartnerUpdateAndMintAuthority` |
+| `SwapMode` | `ExactIn = 0`, `PartialFill = 1`, `ExactOut = 2` |
+
+## Important Constants
+
+| Constant | Meaning |
+| --- | --- |
+| `MAX_CURVE_POINT` | Maximum curve points supported by the SDK config helpers. |
+| `MIN_SQRT_PRICE`, `MAX_SQRT_PRICE` | Supported sqrt price range. |
+| `FEE_DENOMINATOR` | Fee numerator denominator, `1_000_000_000`. |
+| `MIN_FEE_BPS`, `MAX_FEE_BPS` | Base fee bounds in basis points. |
+| `MIN_FEE_NUMERATOR`, `MAX_FEE_NUMERATOR` | Base fee bounds in program precision. |
+| `MAX_RATE_LIMITER_DURATION_IN_SECONDS`, `MAX_RATE_LIMITER_DURATION_IN_SLOTS` | Rate limiter duration caps. |
+| `DYNAMIC_FEE_*_DEFAULT` | Defaults used by `getDynamicFeeParams`. |
+| `PROTOCOL_FEE_PERCENT`, `HOST_FEE_PERCENT` | Trading fee split percentages. |
+| `SWAP_BUFFER_PERCENTAGE` | Buffer used by helper quote flows. |
+| `MAX_MIGRATION_FEE_PERCENTAGE`, `MAX_CREATOR_MIGRATION_FEE_PERCENTAGE` | Migration fee bounds. |
+| `MIN_LOCKED_LIQUIDITY_BPS`, `SECONDS_PER_DAY`, `MAX_LOCK_DURATION_IN_SECONDS` | LP lock and vesting constraints. |
+| `PROTOCOL_POOL_CREATION_FEE_PERCENT`, `MIN_POOL_CREATION_FEE`, `MAX_POOL_CREATION_FEE` | Pool creation fee rules. |
+| `MIN_MIGRATED_POOL_FEE_BPS`, `MAX_MIGRATED_POOL_FEE_BPS` | DAMM v2 migrated pool fee bounds. |
+| `DAMM_V1_MIGRATION_FEE_ADDRESS`, `DAMM_V2_MIGRATION_FEE_ADDRESS` | Predefined DAMM fee config keys for migration. |
+| `DEFAULT_MIGRATED_POOL_FEE_PARAMS`, `DEFAULT_LIQUIDITY_VESTING_INFO_PARAMS`, `DEFAULT_MIGRATED_POOL_MARKET_CAP_FEE_SCHEDULER_PARAMS` | Default config helper values. |
+
+## Creating A Client
+
+### `new DynamicBondingCurveClient`
+
+```typescript
+new DynamicBondingCurveClient(
+    connection: Connection,
+    commitment: Commitment
+)
+```
+
+Creates a client with the following service namespaces:
+
+| Field | Service | Use |
+| --- | --- | --- |
+| `partner` | `PartnerService` | Partner config, partner metadata, partner fee claims, partner surplus, and pool creation fee claims. |
+| `pool` | `PoolService` | Pool creation, config-and-pool flows, first-buy flows, swap builders, and quote wrappers. |
+| `creator` | `CreatorService` | Pool metadata, creator fee claims, creator surplus, migration fee withdrawal, and creator transfer. |
+| `migration` | `MigrationService` | Locker creation, DAMM v1/v2 migration, LP lock/claim flows, and leftover withdrawal. |
+| `state` | `StateService` | Pool/config/account reads, pool discovery, fee metrics, progress, metadata, and migration metadata. |
+
+### `DynamicBondingCurveClient.create`
+
+```typescript
+static create(
+    connection: Connection,
+    commitment: Commitment = 'confirmed'
+): DynamicBondingCurveClient
+```
+
+Convenience constructor for the same client.
+
+## Service Method Map
+
+The sections below provide detailed signatures and examples. This map is the quick index:
+
+| Service | Methods |
+| --- | --- |
+| `partner` | `createConfig`, `createPartnerMetadata`, `claimPartnerTradingFee`, `claimPartnerTradingFee2`, `partnerWithdrawMigrationFee`, `partnerWithdrawSurplus`, `claimPartnerPoolCreationFee` |
+| `pool` | `createPool`, `createConfigAndPool`, `createConfigAndPoolWithFirstBuy`, `createPoolWithFirstBuy`, `createPoolWithPartnerAndCreatorFirstBuy`, `swap`, `swapQuote`, `swap2`, `swapQuote2` |
+| `migration` | `createLocker`, `withdrawLeftover`, `createDammV1MigrationMetadata`, `migrateToDammV1`, `lockDammV1LpToken`, `claimDammV1LpToken`, `migrateToDammV2` |
+| `creator` | `createPoolMetadata`, `claimCreatorTradingFee`, `claimCreatorTradingFee2`, `creatorWithdrawSurplus`, `creatorWithdrawMigrationFee`, `transferPoolCreator` |
+| `state` | `getPoolConfig`, `getPoolConfigs`, `getPoolConfigsByOwner`, `getPool`, `getPools`, `getPoolsByConfig`, `getPoolsByCreator`, `getPoolByBaseMint`, `getPoolMigrationQuoteThreshold`, `getPoolQuoteTokenCurveProgress`, `getPoolBaseTokenCurveProgress`, `getPoolMetadata`, `getPartnerMetadata`, `getDammV1LockEscrow`, `getDammV1MigrationMetadata`, `getPoolFeeMetrics`, `getPoolFeeBreakdown`, `getPoolsFeesByConfig`, `getPoolsFeesByCreator` |
+| `program` | `getProgram` |
 
 ## Partner Functions
 
@@ -1785,7 +1948,7 @@ Creates a config key and a token pool and buys the token immediately.
 ```typescript
 async createConfigAndPoolWithFirstBuy(params: CreateConfigAndPoolWithFirstBuyParams): Promise<{
     createConfigTx: Transaction
-    createPoolTx: Transaction
+    createPoolWithFirstBuyTx: Transaction
 }>
 ```
 
@@ -1908,7 +2071,7 @@ interface CreateConfigAndPoolWithFirstBuyParams {
 An object of transactions containing:
 
 - `createConfigTx`: config creation transaction
-- `createPoolTx`: pool creation transaction, with first-buy instructions included when `firstBuyParam` is provided and `buyAmount > 0`
+- `createPoolWithFirstBuyTx`: pool creation transaction, with first-buy instructions included when `firstBuyParam` is provided and `buyAmount > 0`
 
 **Example**
 
@@ -2024,8 +2187,8 @@ const transactions = await client.pool.createConfigAndPoolWithFirstBuy({
 
 - The payer must be the same as the payer in the `CreateConfigAndPoolWithFirstBuyParam` params.
 - The `createConfigTx` requires the payer and config to sign the transaction.
-- The `createPoolTx` requires the payer, poolCreator, and baseMint to sign the transaction. If `firstBuyParam` is provided, it also requires buyer/payer signatures for the appended first-buy instructions.
-- If the `firstBuyParam` is not provided, `createPoolTx` includes only pool-creation instructions.
+- The `createPoolWithFirstBuyTx` requires the payer, poolCreator, and baseMint to sign the transaction. If `firstBuyParam` is provided, it also requires buyer/payer signatures for the appended first-buy instructions.
+- If the `firstBuyParam` is not provided, `createPoolWithFirstBuyTx` includes only pool-creation instructions.
 - The `receiver` parameter is an optional account. If provided, the token will be sent to the receiver address.
 
 ---
@@ -2037,9 +2200,7 @@ Creates a new pool with the config key and buys the token immediately.
 **Function**
 
 ```typescript
-async createPoolWithFirstBuy(params: CreatePoolWithFirstBuyParams): Promise<{
-    createPoolTx: Transaction
-}>
+async createPoolWithFirstBuy(params: CreatePoolWithFirstBuyParams): Promise<Transaction>
 ```
 
 **Parameters**
@@ -2068,7 +2229,7 @@ interface CreatePoolWithFirstBuyParams {
 
 **Returns**
 
-An object containing `createPoolTx`, where first-buy instructions are included when `firstBuyParam` is provided and `buyAmount > 0`.
+A pool creation transaction, with first-buy instructions included when `firstBuyParam` is provided and `buyAmount > 0`.
 
 **Example**
 
@@ -2245,21 +2406,21 @@ const currentPoint = await getCurrentPoint(
     poolConfigState.activationType
 )
 
-const quote = await client.pool.swapQuote({
-    virtualPool: virtualPoolState.account,
+const quote = client.pool.swapQuote({
+    virtualPool: virtualPoolState,
     config: poolConfigState,
     swapBaseForQuote: false,
     amountIn,
     slippageBps: 50,
     hasReferral: false,
+    eligibleForFirstSwapWithMinFee: false,
     currentPoint,
-    swapMode: SwapMode.PartialFill,
 })
 
 const transaction = await client.pool.swap({
     owner: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
-    amountIn: new BN(1000000000),
-    minimumAmountOut: new BN(0),
+    amountIn,
+    minimumAmountOut: quote.minimumAmountOut,
     swapBaseForQuote: false,
     pool: new PublicKey('abcdefghijklmnopqrstuvwxyz1234567890'),
     referralTokenAccount: null,
@@ -2288,19 +2449,20 @@ Gets the exact swap out quotation in between quote and base swaps (only ExactIn)
 **Function**
 
 ```typescript
-swapQuote(params: SwapQuoteParams): Promise<SwapResult>
+swapQuote(params: SwapQuoteParams): SwapQuoteResult
 ```
 
 **Parameters**
 
 ```typescript
 interface SwapQuoteParams {
-    virtualPool: VirtualPool // The virtual pool address
-    config: PoolConfig // The pool config address
+    virtualPool: VirtualPool // The virtual pool account data
+    config: PoolConfig // The pool config account data
     swapBaseForQuote: boolean // True for base->quote, false for quote->base
     amountIn: BN // The amount of tokens to swap in
     slippageBps?: number // The slippage in bps
     hasReferral: boolean // Whether to include a referral fee
+    eligibleForFirstSwapWithMinFee: boolean // Whether this quote is eligible for first-swap minimum fee
     currentPoint: BN // The current point
 }
 ```
@@ -2323,28 +2485,25 @@ const currentPoint = await getCurrentPoint(
     poolConfigState.activationType
 )
 
-const quote = await client.pool.swapQuote({
+const quote = client.pool.swapQuote({
     virtualPool: virtualPoolState,
     config: poolConfigState,
     swapBaseForQuote: false,
     amountIn,
     slippageBps: 50,
     hasReferral: false,
+    eligibleForFirstSwapWithMinFee: false,
     currentPoint,
 })
 ```
 
 **Notes**
 
-- The `swapMode` parameter determines the type of swap:
-    - `SwapMode.ExactIn`: Swap exact input amount
-    - `SwapMode.PartialFill`: Allow partial fills
-    - `SwapMode.ExactOut`: Swap for exact output amount
+- `swapQuote` is the exact-in quote helper for the original swap path. Use `swapQuote2` when quoting `ExactIn`, `ExactOut`, or `PartialFill` modes.
 - The `amountIn` is the amount of tokens you want to swap, denominated in the smallest unit and token decimals. (e.g., lamports for SOL).
-- The `slippageBps` parameter protects against slippage. Set it to a value slightly lower than the expected output.
-- The `referralTokenAccount` parameter is an optional token account. If provided, the referral fee will be applied to the transaction.
-
----
+- The returned `minimumAmountOut` includes the requested `slippageBps` tolerance.
+- Set `hasReferral` to true when the eventual swap transaction includes a referral account.
+- `eligibleForFirstSwapWithMinFee` is used for creator first-buy flows when the config enables first swap with minimum fee.
 
 ---
 
@@ -2355,7 +2514,7 @@ Swaps between base and quote or quote and base on the Dynamic Bonding Curve with
 **Function**
 
 ```typescript
-swap2(params: Swap2Params): Promise<Transaction>
+async swap2(params: Swap2Params): Promise<Transaction>
 ```
 
 **Parameters**
@@ -2404,13 +2563,14 @@ const currentPoint = await getCurrentPoint(
     poolConfigState.activationType
 )
 
-const quote = await client.pool.swapQuote2({
-    virtualPool: virtualPoolState.account,
+const quote = client.pool.swapQuote2({
+    virtualPool: virtualPoolState,
     config: poolConfigState,
     swapBaseForQuote: false,
     amountIn,
     slippageBps: 50,
     hasReferral: false,
+    eligibleForFirstSwapWithMinFee: false,
     currentPoint,
     swapMode: SwapMode.PartialFill,
 })
@@ -2448,17 +2608,18 @@ Gets the exact swap out quotation in between quote and base swaps with specific 
 **Function**
 
 ```typescript
-swapQuote2(params: SwapQuote2Params): Promise<SwapResult2>
+swapQuote2(params: SwapQuote2Params): SwapQuote2Result
 ```
 
 **Parameters**
 
 ```typescript
 interface SwapQuote2Params {
-    virtualPool: VirtualPool // The virtual pool address
-    config: PoolConfig // The pool config address
+    virtualPool: VirtualPool // The virtual pool account data
+    config: PoolConfig // The pool config account data
     swapBaseForQuote: boolean // True for base->quote, false for quote->base
     hasReferral: boolean // Whether to include a referral fee
+    eligibleForFirstSwapWithMinFee: boolean // Whether this quote is eligible for first-swap minimum fee
     currentPoint: BN // The current point
     slippageBps?: number // The slippage in bps
 } & (
@@ -2495,13 +2656,14 @@ const currentPoint = await getCurrentPoint(
     poolConfigState.activationType
 )
 
-const quote = await client.pool.swapQuote2({
-    virtualPool: virtualPoolState.account,
+const quote = client.pool.swapQuote2({
+    virtualPool: virtualPoolState,
     config: poolConfigState,
     swapBaseForQuote: false,
     amountIn,
     slippageBps: 50,
     hasReferral: false,
+    eligibleForFirstSwapWithMinFee: false,
     currentPoint,
     swapMode: SwapMode.PartialFill,
 })
@@ -2513,9 +2675,11 @@ const quote = await client.pool.swapQuote2({
     - `SwapMode.ExactIn`: Swap exact input amount
     - `SwapMode.PartialFill`: Allow partial fills
     - `SwapMode.ExactOut`: Swap for exact output amount
-- The `amountIn` is the amount of tokens you want to swap, denominated in the smallest unit and token decimals. (e.g., lamports for SOL).
-- The `slippageBps` parameter protects against slippage. Set it to a value slightly lower than the expected output.
-- The `referralTokenAccount` parameter is an optional token account. If provided, the referral fee will be applied to the transaction.
+- For exact-in and partial-fill quotes, the result includes `minimumAmountOut`; for exact-out quotes, the result includes `maximumAmountIn`.
+- The `amountIn` and `amountOut` values are denominated in the token's smallest unit. For example, SOL amounts are denominated in lamports.
+- The returned slippage field is derived from the optional `slippageBps` parameter.
+- Set `hasReferral` to true when the eventual swap transaction includes a referral account.
+- `eligibleForFirstSwapWithMinFee` is used for creator first-buy flows when the config enables first swap with minimum fee.
 
 ---
 
@@ -2785,7 +2949,7 @@ Migrates the Dynamic Bonding Curve pool to DAMM V2.
 **Function**
 
 ```typescript
-async migrateToDammV2(params: MigrateToDammV2Params): Promise<Transaction>
+async migrateToDammV2(params: MigrateToDammV2Params): Promise<MigrateToDammV2Response>
 ```
 
 **Parameters**
@@ -2800,16 +2964,22 @@ interface MigrateToDammV2Params {
 
 **Returns**
 
-- A transaction that can be signed and sent to the network.
+An object containing:
+
+- `transaction`: the migration transaction that can be signed and sent to the network.
+- `firstPositionNftKeypair`: the generated first DAMM V2 position NFT mint keypair.
+- `secondPositionNftKeypair`: the generated second DAMM V2 position NFT mint keypair.
 
 **Example**
 
 ```typescript
-const transaction = await client.migration.migrateToDammV2({
+const migrationResponse = await client.migration.migrateToDammV2({
     payer: new PublicKey('boss1234567890abcdefghijklmnopqrstuvwxyz'),
     virtualPool: new PublicKey('abcdefghijklmnopqrstuvwxyz1234567890'),
     dammConfig: new PublicKey('7F6dnUcRuyM2TwR8myT1dYypFXpPSxqwKNSFNkxyNESd'),
 })
+
+const transaction = migrationResponse.transaction
 ```
 
 **Notes**
@@ -3139,7 +3309,7 @@ async getPoolConfigs(): Promise<ProgramAccount<PoolConfig>[]>
 **Returns**
 
 - An array of configs created by various users.
-- Check return type <a href ="https://docs.meteora.ag/developer-guide/guides/dbc/typescript-sdk/sdk-functions#getpoolconfig">here</a>.
+- Check return type <a href ="https://docs.meteora.ag/developer-guides/dbc/typescript-sdk/sdk-functions#getpoolconfig">here</a>.
 
 **Example**
 
@@ -3168,7 +3338,7 @@ owner: PublicKey | string // The owner's wallet address
 **Returns**
 
 - An array of configs owned by the specified wallet.
-- Check return type <a href ="https://docs.meteora.ag/developer-guide/guides/dbc/typescript-sdk/sdk-functions#getpoolconfig">here</a>.
+- Check return type <a href ="https://docs.meteora.ag/developer-guides/dbc/typescript-sdk/sdk-functions#getpoolconfig">here</a>.
 
 **Example**
 
@@ -3185,7 +3355,7 @@ Gets the details of a specific pool.
 **Function**
 
 ```typescript
-async getPool(poolAddress: PublicKey | string): Promise<VirtualPool | null>
+async getPool(poolAddress: PublicKey | string): Promise<VirtualPool>
 ```
 
 **Parameters**
@@ -3196,7 +3366,7 @@ poolAddress: PublicKey | string // The address of the pool
 
 **Returns**
 
-- A `VirtualPool` object containing the pool's details, or null if not found.
+- A `VirtualPool` object containing the pool's details. The SDK type is `Promise<VirtualPool>`; callers should still handle a missing account defensively because the underlying account fetch uses `fetchNullable`.
 
 ```typescript
 type VolatilityTracker = {
@@ -3266,7 +3436,7 @@ async getPools(): Promise<ProgramAccount<VirtualPool>[]>
 **Returns**
 
 - An array of all virtual pools created through DBC.
-- Check return type of VirtualPool <a href="https://docs.meteora.ag/developer-guide/guides/dbc/typescript-sdk/sdk-functions#getpool">here</a>.
+- Check return type of VirtualPool <a href="https://docs.meteora.ag/developer-guides/dbc/typescript-sdk/sdk-functions#getpool">here</a>.
 
 **Example**
 
@@ -3295,7 +3465,7 @@ configAddress: PublicKey | string // The address of the config key
 **Returns**
 
 - It give all `virtual pools` created with a specific config key.
-- Check return type of VirtualPool <a href="https://docs.meteora.ag/developer-guide/guides/dbc/typescript-sdk/sdk-functions#getpool">here</a>.
+- Check return type of VirtualPool <a href="https://docs.meteora.ag/developer-guides/dbc/typescript-sdk/sdk-functions#getpool">here</a>.
 
 **Example**
 
@@ -3324,7 +3494,7 @@ creatorAddress: PublicKey | string // The address of the creator
 **Returns**
 
 - It give all `virtual pools` created with a specific wallet address.
-- Check return type of VirtualPool <a href="https://docs.meteora.ag/developer-guide/guides/dbc/typescript-sdk/sdk-functions#getpool">here</a>.
+- Check return type of VirtualPool <a href="https://docs.meteora.ag/developer-guides/dbc/typescript-sdk/sdk-functions#getpool">here</a>.
 
 **Example**
 
@@ -3353,7 +3523,7 @@ baseMint: PublicKey | string // The address of the base mint
 **Returns**
 
 - A `VirtualPool` object containing the pool's details, or null if not found.
-- Check return type of VirtualPool <a href="https://docs.meteora.ag/developer-guide/guides/dbc/typescript-sdk/sdk-functions#getpool">here</a>.
+- Check return type of VirtualPool <a href="https://docs.meteora.ag/developer-guides/dbc/typescript-sdk/sdk-functions#getpool">here</a>.
 
 **Example**
 
@@ -3450,7 +3620,7 @@ const progress = await client.state.getPoolBaseTokenCurveProgress(poolAddress)
 ### getPoolMetadata
 
 - Gets the metadata for a specific pool.
-- Can only be used if metadata is set using <a href ="https://docs.meteora.ag/developer-guide/guides/dbc/typescript-sdk/sdk-functions#createpoolmetadata">createPoolMetadata</a> function.
+- Can only be used if metadata is set using <a href ="https://docs.meteora.ag/developer-guides/dbc/typescript-sdk/sdk-functions#createpoolmetadata">createPoolMetadata</a> function.
 
 **Function**
 
@@ -3493,13 +3663,13 @@ Gets the metadata for a specific partner.
 **Function**
 
 ```typescript
-async getPartnerMetadata(walletAddress: PublicKey | string): Promise<PartnerMetadata[]>
+async getPartnerMetadata(partnerAddress: PublicKey | string): Promise<PartnerMetadata[]>
 ```
 
 **Parameters**
 
 ```typescript
-walletAddress: PublicKey | string // The partner's wallet address
+partnerAddress: PublicKey | string // The partner's wallet address
 ```
 
 **Returns**
@@ -3531,7 +3701,7 @@ Gets the lock escrow details for a DAMM V1 pool.
 **Function**
 
 ```typescript
-async getDammV1LockEscrow(lockEscrowAddress: PublicKey | string): Promise<LockEscrow>
+async getDammV1LockEscrow(lockEscrowAddress: PublicKey | string): Promise<LockEscrow | null>
 ```
 
 **Parameters**
@@ -3542,7 +3712,7 @@ lockEscrowAddress: PublicKey | string // The address of the lock escrow
 
 **Returns**
 
-- A `LockEscrow` object containing the lock escrow details.
+- A `LockEscrow` object containing the lock escrow details, or null if the escrow account does not exist.
 
 ```typescript
 type lockEscrow = {
@@ -3619,7 +3789,7 @@ Gets the fee metrics for a specific pool.
 **Function**
 
 ```typescript
-async getPoolFeeMetrics(poolAddress: PublicKey): Promise<{
+async getPoolFeeMetrics(poolAddress: PublicKey | string): Promise<{
     current: {
         partnerBaseFee: BN
         partnerQuoteFee: BN
@@ -3636,7 +3806,7 @@ async getPoolFeeMetrics(poolAddress: PublicKey): Promise<{
 **Parameters**
 
 ```typescript
-poolAddress: PublicKey // The address of the pool
+poolAddress: PublicKey | string // The address of the pool
 ```
 
 **Returns**
@@ -3673,7 +3843,7 @@ Gets the fee breakdown for a specific pool.
 **Function**
 
 ```typescript
-async getPoolFeeBreakdown(poolAddress: PublicKey): Promise<
+async getPoolFeeBreakdown(poolAddress: PublicKey | string): Promise<
 {
     creator: {
         unclaimedBaseFee: BN
@@ -3697,7 +3867,7 @@ async getPoolFeeBreakdown(poolAddress: PublicKey): Promise<
 **Parameters**
 
 ```typescript
-poolAddress: PublicKey // The address of the pool
+poolAddress: PublicKey | string // The address of the pool
 ```
 
 **Returns**
@@ -3740,13 +3910,13 @@ Gets all fees for pools linked to a specific config key.
 **Function**
 
 ```typescript
-async getPoolsFeesByConfig(configAddress: PublicKey): Promise<Array<FeeMetrics>>
+async getPoolsFeesByConfig(configAddress: PublicKey | string): Promise<Array<FeeMetrics>>
 ```
 
 **Parameters**
 
 ```typescript
-configAddress: PublicKey // The address of the pool config
+configAddress: PublicKey | string // The address of the pool config
 ```
 
 **Returns**
@@ -3780,13 +3950,13 @@ Gets all fees for pools linked to a specific creator.
 **Function**
 
 ```typescript
-async getPoolsFeesByCreator(creatorAddress: PublicKey): Promise<Array<FeeMetrics>>
+async getPoolsFeesByCreator(creatorAddress: PublicKey | string): Promise<Array<FeeMetrics>>
 ```
 
 **Parameters**
 
 ```typescript
-creatorAddress: PublicKey // The address of the creator
+creatorAddress: PublicKey | string // The address of the creator
 ```
 
 **Returns**
@@ -4240,3 +4410,246 @@ const quoteReserve = getQuoteReserveFromNextSqrtPrice(
 
 - The `nextSqrtPrice` is the next sqrt price that you can fetch from swap cpi logs.
 - The `config` is the pool config that the token pool used to launch.
+
+## PDA Helper Exports
+
+These helpers are exported from `helpers/pda.ts`.
+
+| Helper | Description |
+| --- | --- |
+| `deriveDbcEventAuthority` | Derives the DBC Anchor event authority PDA. |
+| `deriveDammV1EventAuthority` | Derives the DAMM v1 Anchor event authority PDA. |
+| `deriveDammV2EventAuthority` | Derives the DAMM v2 Anchor event authority PDA. |
+| `deriveLockerEventAuthority` | Derives the locker program Anchor event authority PDA. |
+| `deriveDbcPoolAuthority` | Derives the DBC pool authority PDA. |
+| `deriveDammV1PoolAuthority` | Derives the DAMM v1 pool authority PDA. |
+| `deriveDammV2PoolAuthority` | Derives the DAMM v2 pool authority PDA. |
+| `deriveDbcPoolAddress` | Derives a virtual pool PDA from quote mint, base mint, and config. |
+| `deriveDammV1PoolAddress` | Derives a DAMM v1 pool PDA from DAMM config and token mints. |
+| `deriveDammV2PoolAddress` | Derives a DAMM v2 pool PDA from DAMM config and token mints. |
+| `deriveMintMetadata` | Derives a Metaplex metadata PDA for a mint. |
+| `derivePartnerMetadata` | Derives the partner metadata PDA for a fee claimer. |
+| `deriveDbcPoolMetadata` | Derives virtual pool metadata PDA. |
+| `deriveDammV1MigrationMetadataAddress` | Derives DAMM v1 migration metadata PDA for a virtual pool. |
+| `deriveDammV2MigrationMetadataAddress` | Derives legacy/deprecated DAMM v2 migration metadata PDA. |
+| `deriveDbcTokenVaultAddress` | Derives a DBC token vault PDA from mint and pool. |
+| `deriveDammV1VaultLPAddress` | Derives the dynamic vault LP token account for a DAMM v1 migration vault. |
+| `deriveDammV2TokenVaultAddress` | Derives a DAMM v2 token vault PDA. |
+| `deriveVaultAddress` | Derives a dynamic vault PDA for a token mint. |
+| `deriveVaultPdas` | Returns the dynamic vault and LP mint PDAs for a token mint. |
+| `deriveTokenVaultKey` | Derives token vault key from a vault key. |
+| `deriveVaultLpMintAddress` | Derives LP mint PDA for a dynamic vault. |
+| `deriveDammV1LpMintAddress` | Derives DAMM v1 LP mint PDA for a DAMM pool. |
+| `derivePositionAddress` | Derives DAMM v2 position PDA from a position NFT mint. |
+| `derivePositionNftAccount` | Derives the position NFT token account for a position NFT mint and owner. |
+| `deriveDammV1LockEscrowAddress` | Derives a DAMM v1 lock escrow address. |
+| `deriveDammV2LockEscrowAddress` | Derives a DAMM v2 lock escrow address. |
+| `deriveEscrow` | Derives a locker escrow PDA from a base key. |
+| `deriveDammV1ProtocolFeeAddress` | Derives DAMM v1 protocol fee PDA for a token mint and pool. |
+| `deriveBaseKeyForLocker` | Derives the locker base key for a DBC virtual pool. |
+
+## Config And Tokenomics Helper Exports
+
+These helpers are exported from `helpers/common.ts` and are useful when building configs, displaying tokenomics, or indexing pool progress.
+
+| Helper | Description |
+| --- | --- |
+| `getFirstKey`, `getSecondKey` | Sort two public keys in the same order expected by DAMM derivations. |
+| `getAccountData` | Fetches and decodes one Anchor account by account name. |
+| `getAccountCreationTimestamp` | Gets the first transaction timestamp for an account. |
+| `getAccountCreationTimestamps` | Batch helper for account creation timestamps. |
+| `getTotalTokenSupply` | Computes total token supply from token config inputs. |
+| `getPriceFromSqrtPrice` | Converts Q64.64 sqrt price into a human-readable price. |
+| `getSqrtPriceFromPrice` | Converts a human-readable price into Q64.64 sqrt price. |
+| `createSqrtPrices` | Converts an array of human-readable prices into sorted sqrt prices. |
+| `getSqrtPriceFromMarketCap` | Computes sqrt price from market cap and token supply inputs. |
+| `getBaseTokenForSwap` | Computes base token amount sold between two sqrt prices over the configured curve. |
+| `getMigrationQuoteAmountFromMigrationQuoteThreshold` | Converts migration quote threshold into quote amount after migration fee handling. |
+| `getMigrationQuoteThresholdFromMigrationQuoteAmount` | Inverse of `getMigrationQuoteAmountFromMigrationQuoteThreshold`. |
+| `getProtocolMigrationFee` | Computes protocol migration fee from migration quote amount. |
+| `getMigrationBaseToken` | Computes base token amount moved into the migrated pool. |
+| `getTotalVestingAmount` | Computes total locked vesting amount from cliff and per-period amounts. |
+| `getLiquidity` | Computes liquidity from price range and token amounts. |
+| `getFirstCurve` | Builds the first curve segment from price and token inputs. |
+| `getTotalSupplyFromCurve` | Computes total supply represented by curve segments. |
+| `getMigrationThresholdPrice` | Computes the migration threshold price for a config. |
+| `getCurveBreakdown` | Returns detailed per-segment curve, reserve, and price breakdown data. |
+| `getSwapAmountWithBuffer` | Adds the SDK swap buffer to an amount. |
+| `getPercentageSupplyOnMigration` | Computes supply percentage migrated to the graduated pool. |
+| `calculateAdjustedPercentageSupplyOnMigration` | Adjusts migration supply percentage for migration fee and leftover settings. |
+| `getMigrationQuoteAmount` | Computes migration quote amount for tokenomics previews. |
+| `getFeeSchedulerParams` | Builds `BaseFee` scheduler parameters from starting/ending fee bps and duration. |
+| `calculateFeeSchedulerEndingBaseFeeBps` | Computes ending fee bps from scheduler params. |
+| `getRateLimiterParams` | Builds `BaseFee` rate limiter parameters. |
+| `getDynamicFeeParams` | Builds default dynamic fee parameters. |
+| `getStartingBaseFeeBpsFromBaseFeeParams` | Extracts starting fee bps from SDK base fee params. |
+| `computeSqrtPriceStepBps` | Computes sqrt-price step bps for market-cap fee scheduler params. |
+| `getMigratedPoolMarketCapFeeSchedulerParams` | Builds DAMM v2 market-cap fee scheduler params. |
+| `getLockedVestingParams` | Builds locked vesting params from human-readable token amount and duration inputs. |
+| `getLiquidityVestingInfoParams` | Builds DAMM v2 LP vesting params and derives per-period frequency. |
+| `getTwoCurve` | Builds a two-segment curve helper output. |
+| `checkRateLimiterApplied` | Checks whether a config uses an active rate limiter setup. |
+| `getBaseFeeParams` | Builds base fee params from scheduler or rate limiter settings. |
+| `getQuoteReserveFromNextSqrtPrice` | Computes quote reserve from `nextSqrtPrice` and config. |
+| `getTokenomics` | Returns tokenomics details for config previews and launch pages. |
+| `getMigratedPoolFeeParams` | Builds DAMM v2 migrated pool fee params, including compounding and market-cap scheduler options. |
+| `getCurrentPoint` | Returns the current slot or timestamp for a config activation type. |
+| `prepareSwapAmountParam` | Converts SDK `Swap2Params` into on-chain `amount0`, `amount1`, and `swapMode` fields. |
+| `getVestingLockedLiquidityBpsAtNSeconds` | Computes locked LP bps at a point in time for a vesting schedule. |
+| `calculateLockedLiquidityBpsAtTime` | Computes total locked liquidity bps from permanent locks plus LP vesting. |
+
+## Utility And Token Helper Exports
+
+| Helper | Description |
+| --- | --- |
+| `convertToLamports` | Converts UI token amount into raw token amount with decimals. |
+| `fromDecimalToBN`, `convertDecimalToBN` | Convert `Decimal` values into `BN` raw integers. |
+| `createProgramAccountFilter` | Builds a memcmp filter for `getProgramAccounts`. |
+| `isNativeSol` | Checks whether a mint is native SOL. |
+| `isDefaultLockedVesting` | Checks whether locked vesting config is the all-zero default. |
+| `bpsToFeeNumerator` | Converts fee bps into program fee numerator. |
+| `feeNumeratorToBps` | Converts program fee numerator into bps. |
+| `getOrCreateATAInstruction` | Returns an ATA address and an optional idempotent create instruction. |
+| `wrapSOLInstruction` | Builds instructions to create and fund a wrapped SOL account. |
+| `unwrapSOLInstruction` | Builds an instruction to close a wrapped SOL account. |
+| `findAssociatedTokenAddress` | Derives an associated token account address. |
+| `getTokenDecimals` | Reads mint decimals from an RPC account. |
+| `getTokenType` | Detects whether a mint is SPL Token or Token-2022. |
+| `getTokenProgram` | Returns SPL Token or Token-2022 program ID for a `TokenType`. |
+| `prepareTokenAccountTx` | Builds token account setup instructions for swap and claim flows. |
+| `cleanUpTokenAccountTx` | Builds token account cleanup instructions, usually for temporary wrapped SOL accounts. |
+| `createDbcProgram` | Creates an Anchor program client for DBC. |
+| `createVaultProgram` | Creates an Anchor program client for Dynamic Vault. |
+| `createDammV1Program` | Creates an Anchor program client for DAMM v1. |
+| `createDammV2Program` | Creates an Anchor program client for DAMM v2. |
+| `createInitializePermissionlessDynamicVaultIx` | Builds a Dynamic Vault `initialize` instruction and returns vault, token vault, and LP mint PDAs. |
+| `createLockEscrowIx` | Builds a DAMM v1 lock escrow instruction. |
+
+## Validation Helper Exports
+
+These helpers mirror SDK-side checks used before building config, pool, and swap transactions.
+
+| Helper | Description |
+| --- | --- |
+| `validatePoolFees` | Validates base fee and optional dynamic fee config. |
+| `validateFeeScheduler` | Validates linear or exponential fee scheduler params. |
+| `validateFeeRateLimiter` | Validates rate limiter params and activation duration limits. |
+| `validateDynamicFee` | Validates dynamic fee config. |
+| `validateCollectFeeMode` | Validates pre-graduation collect fee mode. |
+| `validateMigrationAndTokenType` | Validates migration option against token type. |
+| `validateActivationType` | Validates slot/timestamp activation mode. |
+| `validateMigrationFeeOption` | Validates fixed/custom migration fee option. |
+| `validateTokenDecimals` | Validates supported token decimals. |
+| `validateLPPercentages` | Validates partner/creator/permanent/vesting LP percentages. |
+| `validateCurve` | Validates curve point ordering, liquidity, and price bounds. |
+| `validateTokenSupply` | Validates pre/post migration token supply settings. |
+| `validateTokenUpdateAuthorityOptions` | Validates token update authority option. |
+| `validatePoolCreationFee` | Validates pool creation fee bounds. |
+| `validateLiquidityVestingInfo` | Validates DAMM v2 LP vesting params. |
+| `validateMinimumLockedLiquidity` | Validates minimum day-one locked liquidity. |
+| `validateMigratedCollectFeeMode` | Validates DAMM v2 collect fee mode. |
+| `validateCompoundingFeeBps` | Validates compounding fee bps rules. |
+| `validateMigratedPoolFee` | Validates custom DAMM v2 migrated pool fee params. |
+| `validateConfigParameters` | Runs the full config validation suite. |
+| `validateBaseTokenType` | Validates pool base token type against mint/program data. |
+| `validateSwapAmount` | Validates swap amount is greater than zero. |
+| `validateMigratedPoolBaseFeeMode` | Validates DAMM v2 migrated pool base fee mode and scheduler requirements. |
+| `validateMarketCapFeeSchedulerRequiresPoolFeeBps` | Validates market-cap scheduler requires non-zero migrated pool fee bps. |
+| `validateMigrationFee` | Validates partner/creator migration fee percentages. |
+| `validateBalance` | Validates SOL or token account balance before swap/build flows. |
+
+## Curve Math Exports
+
+These functions are exported from `math/curve.ts` and implement the same core curve equations used by quote helpers.
+
+| Function | Description |
+| --- | --- |
+| `getInitialLiquidityFromDeltaQuote` | Computes liquidity from quote delta and sqrt price range. |
+| `getInitialLiquidityFromDeltaBase` | Computes liquidity from base delta and sqrt price range. |
+| `getDeltaAmountBaseUnsigned` | Computes base token delta for a liquidity amount and sqrt price range. |
+| `getDeltaAmountBaseUnsigned256` | 256-bit-style base delta helper for large intermediate values. |
+| `getDeltaAmountBaseUnsignedUnchecked` | Lower-level base delta helper without the same validation wrapper. |
+| `getDeltaAmountQuoteUnsigned` | Computes quote token delta for a liquidity amount and sqrt price range. |
+| `getDeltaAmountQuoteUnsigned256` | 256-bit-style quote delta helper for large intermediate values. |
+| `getDeltaAmountQuoteUnsignedUnchecked` | Lower-level quote delta helper without the same validation wrapper. |
+| `getNextSqrtPriceFromInput` | Computes next sqrt price from an exact input amount. |
+| `getNextSqrtPriceFromOutput` | Computes next sqrt price from an exact output amount. |
+| `getNextSqrtPriceFromQuoteAmountOutRoundingDown` | Quote-output next price helper. |
+| `getNextSqrtPriceFromBaseAmountOutRoundingUp` | Base-output next price helper. |
+| `getNextSqrtPriceFromBaseAmountInRoundingUp` | Base-input next price helper. |
+| `getNextSqrtPriceFromQuoteAmountInRoundingDown` | Quote-input next price helper. |
+
+## Swap Quote Math Exports
+
+These functions are exported from `math/swapQuote.ts`. Most app integrations should call `client.pool.swapQuote` or `client.pool.swapQuote2`; use these lower-level helpers when you already have hydrated `VirtualPool` and `PoolConfig` state.
+
+| Function | Description |
+| --- | --- |
+| `getSwapResult` | Legacy exact-in swap result helper used by `swapQuote`. |
+| `swapQuote` | Legacy exact-in quote helper with slippage output. |
+| `getSwapResultFromExactInput` | Computes raw `SwapResult2` for exact-in swaps. |
+| `getSwapResultFromPartialInput` | Computes raw `SwapResult2` for partial-fill swaps. |
+| `calculateBaseToQuoteFromAmountIn` | Computes base-to-quote curve movement from exact input. |
+| `calculateQuoteToBaseFromAmountIn` | Computes quote-to-base curve movement from exact input. |
+| `getSwapResultFromExactOutput` | Computes raw `SwapResult2` for exact-output swaps. |
+| `calculateBaseToQuoteFromAmountOut` | Computes base-to-quote curve movement from exact output. |
+| `calculateQuoteToBaseFromAmountOut` | Computes quote-to-base curve movement from exact output. |
+| `swapQuoteExactIn` | Public exact-in quote helper used by `swapQuote2`. |
+| `swapQuotePartialFill` | Public partial-fill quote helper used by `swapQuote2`. |
+| `swapQuoteExactOut` | Public exact-out quote helper used by `swapQuote2`. |
+
+## Fee Math Exports
+
+| Function/Class | Description |
+| --- | --- |
+| `toNumerator` | Converts fee bps into program fee numerator for a denominator. |
+| `getFeeMode` | Determines whether fees are on input or output for a trade direction and collect fee mode. |
+| `getTotalFeeNumeratorFromIncludedFeeAmount` | Computes base plus dynamic fee numerator for included-fee input. |
+| `getTotalFeeNumeratorFromExcludedFeeAmount` | Computes base plus dynamic fee numerator for excluded-fee amount. |
+| `getTotalFeeNumerator` | Adds base and dynamic fee numerators and caps at max fee. |
+| `getFeeOnAmount` | Splits fee from an amount and returns amount after fee plus trading/protocol/referral fee. |
+| `getExcludedFeeAmount` | Converts included-fee amount into excluded-fee amount and fee. |
+| `getIncludedFeeAmount` | Converts excluded-fee amount into included-fee amount and fee. |
+| `splitFees` | Splits a fee amount into trading, protocol, and referral portions. |
+| `FeeRateLimiter` | Base fee handler for rate limiter mode. |
+| `FeeScheduler` | Base fee handler for fee scheduler modes. |
+| `getBaseFeeHandler` | Returns the correct base fee handler for a base fee mode. |
+| `isDynamicFeeEnabled` | Checks whether dynamic fee is enabled. |
+| `getVariableFeeNumerator` | Computes dynamic fee numerator from volatility tracker state. |
+| `getFeeSchedulerMaxBaseFeeNumerator` | Computes scheduler max base fee numerator. |
+| `getFeeSchedulerMinBaseFeeNumerator` | Computes scheduler min base fee numerator. |
+| `getBaseFeeNumeratorByPeriod` | Computes fee numerator for a scheduler period. |
+| `getFeeNumeratorOnLinearFeeScheduler` | Linear scheduler fee helper. |
+| `getFeeNumeratorOnExponentialFeeScheduler` | Exponential scheduler fee helper. |
+| `getBaseFeeNumerator` | Computes current fee scheduler base fee numerator. |
+| `isRateLimiterApplied` | Checks whether rate limiter is active for the current point and trade direction. |
+| `isZeroRateLimiter`, `isNonZeroRateLimiter` | Rate limiter config checks. |
+| `getMaxIndex` | Computes maximum rate limiter fee index. |
+| `getMaxOutAmountWithMinBaseFee` | Computes amount available at minimum base fee. |
+| `getCheckedAmounts` | Computes checked excluded/included rate limiter amounts. |
+| `getFeeNumeratorFromExcludedAmount` | Rate limiter fee numerator from excluded amount. |
+| `getRateLimiterExcludedFeeAmount` | Computes excluded amount under rate limiter. |
+| `getFeeNumeratorFromIncludedAmount` | Rate limiter fee numerator from included amount. |
+| `getRateLimiterMinBaseFeeNumerator` | Computes minimum base fee numerator for rate limiter mode. |
+
+## Fixed Point And Safe Math Exports
+
+| Function/Class | Description |
+| --- | --- |
+| `SafeMath` | BN arithmetic wrapper with checked add, sub, mul, div, shift, and comparison helpers. |
+| `pow` | Fixed-point power helper. |
+| `mulDiv` | Multiplies two BN values then divides with selected rounding. |
+| `mulShr` | Multiplies two BN values then shifts right. |
+| `sqrt` | Integer square root helper. |
+
+## Rust Quote Crate
+
+The Rust crate at `dynamic-bonding-curve/dynamic-bonding-curve-sdk` exports three quote modules:
+
+| Module | Main function | Description |
+| --- | --- | --- |
+| `quote_exact_in` | `quote_exact_in` | Program-aligned exact-input quote. |
+| `quote_exact_out` | `quote_exact_out` | Program-aligned exact-output quote. |
+| `quote_partial_fill` | `quote_partial_fill` | Program-aligned partial-fill quote for end-of-curve swaps. |
+
+The TypeScript equivalents are `swapQuoteExactIn`, `swapQuoteExactOut`, and `swapQuotePartialFill`. Use the Rust crate when your integration is Rust-based or when writing program-side tests that should mirror on-chain quote logic.

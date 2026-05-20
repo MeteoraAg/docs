@@ -1,245 +1,161 @@
 ---
-title: Overview
+title: "DBC Developer Guide"
+sidebarTitle: "Overview"
+description: "Entry point for Dynamic Bonding Curve integrations: program docs, TypeScript SDK, Rust quote helpers, Go SDK, trading terminal notes, and migration flows."
+llmsDescription: "DBC developer guide overview. Routes to program architecture/accounts/instructions/errors, @meteora-ag/dynamic-bonding-curve-sdk, Rust integration, Go SDK, config guide, and trading terminal integration. Lists the dynamic_bonding_curve program ID and SDK repository paths."
 ---
 
-Before getting started building on DBC, you should read the following resource to get a better understanding of how Meteora's DBC works:
+Dynamic Bonding Curve (DBC) is Meteora's token launch primitive for creating a virtual reserve pool, trading through a configured bonding curve, and migrating finished pools to DAMM v1 or DAMM v2.
+
+For product-level concepts, fee behavior, migration design, and formulas, start with the core product docs.
 
 <CardGroup cols={2}>
-  <Card title="What's DBC?" icon="question" iconType="solid" href="/core-products/dbc">
-    DBC is Meteora's first bonding curve pool product that allows you to initialize a virtual reserve pool and migrate to either a DAMM v1 or DAMM v2 pool.
+  <Card title="Learn More About DBC" icon="book-open" iconType="solid" href="/core-products/dbc/what-is-dbc">
+    Overview of DBC, universal curves, launch configurations, fees, surplus, leftover tokens, and migration.
   </Card>
-  <Card title="DBC Curve Configs" icon="gear" iconType="solid" href="/developer-guide/guides/dbc/bonding-curve-configs">
-    Each DBC pool is a PDA of token mints + config. A DBC Curve Config Key contains all the settings that will dictate the behavior of your DBC pool, which includes bonding curve shape, pre-graduation fees, post-graduation fees, and more.
+  <Card title="DBC Formulas" icon="calculator" iconType="solid" href="/core-products/dbc/formulas">
+    Formulas for price, curve progress, reserves, fees, and migration calculations.
   </Card>
 </CardGroup>
 
----
-
-# DBC Program
-
-At Meteora, we’ve developed a `Node.js <> Typescript SDK`, a `Rust SDK` and a `Go SDK` to make deploying and managing your DBC virtual pool easier. The following sections includes information on installing and using the SDKs. It also covers where to find the latest code, and how to contribute to these repositories.
-
-## Program Details
+## Integration
 
 <CardGroup cols={2}>
-  <Card title="DBC Program" icon="rust" iconType="solid" href="https://github.com/MeteoraAg/dynamic-bonding-curve">
-    Meteora DBC Program
+  <Card title="Program Architecture" icon="cog" iconType="solid" href="/developer-guides/dbc/program/architecture">
+    Program design, configs, virtual pools, swaps, fees, migration, and integration boundaries.
   </Card>
-  <Card title="DBC IDL" icon="code" iconType="solid" href="https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/src/idl/dynamic-bonding-curve/idl.json">
-    Meteora DBC Program IDL
+  <Card title="Program Accounts" icon="table-cells" iconType="solid" href="/developer-guides/dbc/program/accounts">
+    Account model for pool configs, virtual pools, vaults, metadata, operators, and migration accounts.
+  </Card>
+  <Card title="Program Instructions" icon="list" iconType="solid" href="/developer-guides/dbc/program/instructions">
+    Instruction families for partners, creators, swaps, migration, fee claims, and operators.
+  </Card>
+  <Card title="Program Errors" icon="triangle-exclamation" iconType="solid" href="/developer-guides/dbc/program/errors">
+    Anchor custom errors, messages, and common integration causes.
+  </Card>
+  <Card title="Bonding Curve Configs" icon="sliders" iconType="solid" href="/developer-guides/dbc/bonding-curve-configs">
+    Config field reference for fees, curves, vesting, migration, and graduated-pool behavior.
+  </Card>
+  <Card title="Trading Terminal Integration" icon="chart-line" iconType="solid" href="/developer-guides/dbc/integrate-with-dbc">
+    Index pool progress, chart swaps, compute fees, read `EvtSwap2`, and avoid transfer-log price errors.
+  </Card>
+  <Card title="TypeScript SDK" icon="code" iconType="solid" href="/developer-guides/dbc/typescript-sdk/getting-started">
+    Official TypeScript SDK for config creation, pool creation, quotes, swaps, migration, and state reads.
+  </Card>
+  <Card title="Rust Integration" icon="terminal" iconType="solid" href="/developer-guides/dbc/rust-sdk/integration">
+    Rust quote helpers and program-side integration notes for `dynamic_bonding_curve`.
+  </Card>
+  <Card title="Go SDK" icon="golang" iconType="solid" href="/developer-guides/dbc/go-sdk/integration">
+    Go SDK examples for pool reads, swaps, fee claims, and creator transfer flows.
   </Card>
 </CardGroup>
 
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Network</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Program ID</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Mainnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Devnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+## Program IDs
 
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Authority</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Address</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Pool Authority</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+The `dynamic_bonding_curve` program ID is the same on mainnet and devnet:
 
-## Official SDKs
+| Network | Program ID |
+| --- | --- |
+| Mainnet Beta | `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN` |
+| Devnet | `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN` |
+
+The pool authority PDA used by the program is:
+
+| Authority | Address |
+| --- | --- |
+| Pool Authority | `FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM` |
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="/developer-guide/guides/dbc/typescript-sdk/getting-started">
-    Official Meteora DBC Typescript SDK
+  <Card title="DBC Program" icon="github" iconType="solid" href="https://github.com/MeteoraAg/dynamic-bonding-curve">
+    Anchor program source for `dynamic_bonding_curve`.
   </Card>
-  <Card title="Rust SDK" icon="rust" iconType="solid" href="/developer-guide/guides/dbc/rust-sdk/integration">
-    Official Meteora DBC Rust SDK
-  </Card>
-  <Card title="Go SDK" icon="golang" iconType="solid" href="/developer-guide/guides/dbc/go-sdk/integration">
-    Official Meteora DBC Go SDK
+  <Card title="DBC IDL" icon="file-code" iconType="solid" href="https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/src/idl/dynamic-bonding-curve/idl.json">
+    Published Anchor IDL used by the TypeScript SDK.
   </Card>
 </CardGroup>
 
----
+## Resources
 
-# Swap Modes
+Use these repositories for implementation references:
 
-DBC supports two swap instructions:
+| Repository | Use |
+| --- | --- |
+| [`MeteoraAg/dynamic-bonding-curve`](https://github.com/MeteoraAg/dynamic-bonding-curve) | On-chain Anchor program, Rust math, account states, instructions, migration handlers, and tests. |
+| [`MeteoraAg/dynamic-bonding-curve-sdk`](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/tree/main/packages/dynamic-bonding-curve) | Official TypeScript SDK, IDLs, math helpers, state services, transaction builders, examples, and tests. |
+| [`MeteoraAg/dbc-go`](https://github.com/MeteoraAg/dbc-go) | Go SDK helpers and runnable examples for backends and indexers. |
 
-| Instruction | Modes |
-|---|---|
-| `swap` | ExactIn only |
-| `swap2` | ExactIn (0), PartialFill (1), ExactOut (2) |
+| Path | Use |
+| --- | --- |
+| `programs/dynamic-bonding-curve/src/lib.rs` | Public instruction entry points and access-control boundaries. |
+| `programs/dynamic-bonding-curve/src/state` | `PoolConfig`, `VirtualPool`, metadata, operator, and fee state layouts. |
+| `programs/dynamic-bonding-curve/src/curve.rs` | Curve math for sqrt price, reserve deltas, and swap movement. |
+| `packages/dynamic-bonding-curve/src/client.ts` | Main `DynamicBondingCurveClient` entry point. |
+| `packages/dynamic-bonding-curve/src/services` | Transaction builders for pool, partner, creator, migration, program, and state reads. |
+| `packages/dynamic-bonding-curve/src/math` | TypeScript quote, curve, fee scheduler, rate limiter, and dynamic fee math. |
+| `dbc-go/examples` | Go examples for pool creation, swaps, state reads, fee claims, and creator transfer. |
 
-`swap2` includes additional information in the `EvtSwap2` event such as `quoteReserveAmount`, `migrationThreshold`, and `includedFeeInputAmount`.
+## Common Flows
 
-<Note>For pools with Rate Limiter enabled (`baseFeeMode == 2`), the `SYSVAR_INSTRUCTIONS_PUBKEY` must be included in the remaining accounts of the swap instruction.</Note>
+| Task | Primary SDK path |
+| --- | --- |
+| Create a config | `client.partner.createConfig` or `client.pool.createConfigAndPool*` helpers |
+| Build a curve | `buildCurve`, `buildCurveWithMarketCap`, `buildCurveWithTwoSegments`, `buildCurveWithLiquidityWeights`, `buildCurveWithMidPrice`, `buildCurveWithCustomSqrtPrices` |
+| Create a pool | `client.pool.createPool` |
+| Quote a swap | `client.pool.swapQuote` or `client.pool.swapQuote2` |
+| Execute a swap | `client.pool.swap` or `client.pool.swap2` |
+| Claim trading fees | `client.partner.claimPartnerTradingFee2` or `client.creator.claimCreatorTradingFee2` |
+| Migrate to DAMM v1 | `createDammV1MigrationMetadata`, optional `createLocker`, `migrateToDammV1`, then LP lock/claim helpers |
+| Migrate to DAMM v2 | Optional `createLocker`, then `migrateToDammV2` |
 
-# Pool Creator Transfer
+## Migration Keepers
 
-Pool creators can transfer their creator rights to a new address using the `transfer_pool_creator` instruction. This transfers all creator privileges including fee claiming rights and surplus withdrawal.
+Meteora runs migration keepers on mainnet to migrate eligible DBC pools when the bonding curve is complete and the pool has enough quote-side liquidity.
 
----
+| Keeper | Requirement |
+| --- | --- |
+| [`CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY`](https://solscan.io/account/CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY) | `pool_config.migration_quote_threshold` is 10 SOL, 750 USDC, or 1500 JUP. |
+| [`DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW`](https://solscan.io/account/DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW) | `pool_config.migration_quote_threshold` is at least 750 USD worth of quote token. |
 
-# Migration
-
-DBC pools can be migrated to either a DAMM v1 or DAMM v2 pool. The DAMM v1 and DAMM v2 pools are both derived from the `baseMint`, `quoteMint` and `dammConfig`.
-
-### Flow of migration
-
-#### DAMM V1
-
-1. `createDammV1MigrationMetadata`
-2. `createLocker` (if the token has locked vesting)
-3. `migrateToDammV1`
-4. `lockDammV1LpToken` (if `creatorPermanentLockedLiquidityPercentage` or `partnerPermanentLockedLiquidityPercentage` > 0)
-5. `claimDammV1LpToken` (if `creatorLiquidityPercentage` or `partnerLiquidityPercentage` > 0)
-
-#### Liquidity Vesting (DAMM V2 only)
-
-If `partnerLiquidityVestingInfoParams` or `creatorLiquidityVestingInfoParams` are configured, vesting is handled directly via LP positions during migration. No separate `migration_metadata` account is required.
-
-#### DAMM V2
-
-1. `createLocker` (if the token has locked vesting)
-2. `migrateToDammV2`
-
-<Note>DAMM v2 migration now uses positions directly for vesting, removing the need for a separate `migration_metadata` account. This simplifies the migration flow and reduces the number of accounts and transactions required.</Note>
+<Note>
+  Migration keepers run on mainnet. The [Manual Migrator](https://migrator.meteora.ag) supports both mainnet and devnet.
+</Note>
 
 ## DAMM Fee Config Keys
 
-The following section depicts the `dammConfig` key for each pool type.
+The SDK exposes these arrays as `DAMM_V1_MIGRATION_FEE_ADDRESS` and `DAMM_V2_MIGRATION_FEE_ADDRESS`.
 
-### DAMM v1 Migration Fee Config Keys:
+### DAMM v1
 
-<Note>Accessible via `DAMM_V1_MIGRATION_FEE_ADDRESS[i]` in the DBC Typescript SDK.</Note>
+| Option | Fee | Config key |
+| --- | --- | --- |
+| `0` | 25 bps | `8f848CEy8eY6PhJ3VcemtBDzPPSD4Vq7aJczLZ3o8MmX` |
+| `1` | 30 bps | `HBxB8Lf14Yj8pqeJ8C4qDb5ryHL7xwpuykz31BLNYr7S` |
+| `2` | 100 bps | `7v5vBdUQHTNeqk1HnduiXcgbvCyVEZ612HLmYkQoAkik` |
+| `3` | 200 bps | `EkvP7d5yKxovj884d2DwmBQbrHUWRLGK6bympzrkXGja` |
+| `4` | 400 bps | `9EZYAJrcqNWNQzP2trzZesP7XKMHA1jEomHzbRsdX8R2` |
+| `5` | 600 bps | `8cdKo87jZU2R12KY1BUjjRPwyjgdNjLGqSGQyrDshhud` |
 
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Migration Fee Option</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Config Key</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">0</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">8f848CEy8eY6PhJ3VcemtBDzPPSD4Vq7aJczLZ3o8MmX</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">1</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">HBxB8Lf14Yj8pqeJ8C4qDb5ryHL7xwpuykz31BLNYr7S</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">2</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">7v5vBdUQHTNeqk1HnduiXcgbvCyVEZ612HLmYkQoAkik</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">3</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">EkvP7d5yKxovj884d2DwmBQbrHUWRLGK6bympzrkXGja</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">4</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">9EZYAJrcqNWNQzP2trzZesP7XKMHA1jEomHzbRsdX8R2</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">5</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">8cdKo87jZU2R12KY1BUjjRPwyjgdNjLGqSGQyrDshhud</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+### DAMM v2
 
-### DAMM v2 Migration Fee Config Keys:
+| Option | Fee | Config key |
+| --- | --- | --- |
+| `0` | 25 bps | `7F6dnUcRuyM2TwR8myT1dYypFXpPSxqwKNSFNkxyNESd` |
+| `1` | 30 bps | `2nHK1kju6XjphBLbNxpM5XRGFj7p9U8vvNzyZiha1z6k` |
+| `2` | 100 bps | `Hv8Lmzmnju6m7kcokVKvwqz7QPmdX9XfKjJsXz8RXcjp` |
+| `3` | 200 bps | `2c4cYd4reUYVRAB9kUUkrq55VPyy2FNQ3FDL4o12JXmq` |
+| `4` | 400 bps | `AkmQWebAwFvWk55wBoCr5D62C6VVDTzi84NJuD9H7cFD` |
+| `5` | 600 bps | `DbCRBj8McvPYHJG1ukj8RE15h2dCNUdTAESG49XpQ44u` |
+| `6` | Customizable | `A8gMrEPJkacWkcb3DGwtJwTe16HktSEfvwtuDh2MCtck` |
 
-<Note>Accessible via `DAMM_V2_MIGRATION_FEE_ADDRESS[i]` in the DBC Typescript SDK.</Note>
+## Commands
 
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-center py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Migration Fee Option</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Config Key</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">0</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">7F6dnUcRuyM2TwR8myT1dYypFXpPSxqwKNSFNkxyNESd</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">1</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">2nHK1kju6XjphBLbNxpM5XRGFj7p9U8vvNzyZiha1z6k</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">2</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">Hv8Lmzmnju6m7kcokVKvwqz7QPmdX9XfKjJsXz8RXcjp</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">3</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">2c4cYd4reUYVRAB9kUUkrq55VPyy2FNQ3FDL4o12JXmq</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">4</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">AkmQWebAwFvWk55wBoCr5D62C6VVDTzi84NJuD9H7cFD</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">5</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">DbCRBj8McvPYHJG1ukj8RE15h2dCNUdTAESG49XpQ44u</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="text-center py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">6</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">A8gMrEPJkacWkcb3DGwtJwTe16HktSEfvwtuDh2MCtck</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+| Task | Command |
+| --- | --- |
+| Build TypeScript SDK | `cd packages/dynamic-bonding-curve && bun install && bun run build` |
+| Run TypeScript SDK tests | `cd packages/dynamic-bonding-curve && bun test` |
+| Run Go examples | `go run examples/<file-name>.go` |
+| Run program tests | `anchor test` from the `dynamic-bonding-curve` repository |
 
-## Migration Keeper
-
-We run 2 migration keepers to automatically migrate DBC pools to DAMM pools.
-
-<Note>The Migration Keepers only runs on **Mainnet**.</Note>
-
-Keeper addresses that we are running:
-
-1. [CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY](https://solscan.io/account/CQdrEsYAxRqkwmpycuTwnMKggr3cr9fqY8Qma4J9TudY)
-- `pool_config.migration_quote_threshold` either requires:
-  - 10 SOL
-  - 750 USDC
-  - 1500 JUP
-
-2. [DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW](https://solscan.io/account/DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW)
-- `pool_config.migration_quote_threshold` requires:
-  - \>= 750 USD (`quote_mint` token)
-
-## Manual Migrator
-
-We have also created a [Manual Migrator](https://migrator.meteora.ag) user interface that allows you to manually migrate your DBC pool to a DAMM pool.
-
-<Note>The Manual Migrator runs on both **Mainnet** and **Devnet**.</Note>
-
-<Warning>Depending on your DBC Config Key, the migration process will require you to sign more than one transaction to call each instruction.</Warning>
+<Note>
+  Some SDK tests depend on local validator fixtures and deployed program artifacts. For production integrations, simulate transactions and test on devnet before sending mainnet transactions.
+</Note>

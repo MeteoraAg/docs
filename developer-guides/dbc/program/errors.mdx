@@ -1,0 +1,87 @@
+---
+title: "DBC Program Errors"
+sidebarTitle: "Errors"
+description: "Anchor custom errors for the dynamic_bonding_curve program and common integration causes."
+llmsDescription: "DBC PoolError reference: MathOverflow, InvalidFee, ExceededSlippage, InvalidActivationType, InvalidQuoteMint, InvalidMigrationFeeOption, InvalidCurve, NotEnoughLiquidity, PoolIsCompleted, PoolIsIncompleted, migration, rate limiter, first swap, zap, and compounding errors."
+---
+
+The DBC program returns Anchor custom errors from `PoolError`. The table below lists the enum names, messages, and common integration causes.
+
+| Error | Message | Common cause |
+| --- | --- | --- |
+| `MathOverflow` | Math operation overflow | Amounts, prices, or liquidity values exceed supported integer bounds. |
+| `InvalidFee` | Invalid fee setup | Base fee, dynamic fee, or fee scheduler parameters are inconsistent. |
+| `ExceededSlippage` | Exceeded slippage tolerance | Swap output is below `minimumAmountOut`, or exact-out input exceeds the limit. |
+| `ExceedMaxFeeBps` | Exceeded max fee bps | Fee numerator is above the program maximum. |
+| `InvalidAdmin` | Invalid admin | Signer is not an admin for an admin-only instruction. |
+| `AmountIsZero` | Amount is zero | Swap, claim, or migration amount is zero where a positive amount is required. |
+| `TypeCastFailed` | Type cast error | Integer conversion failed. |
+| `InvalidActivationType` | Invalid activation type | Activation type is not slot (`0`) or timestamp (`1`). |
+| `InvalidQuoteMint` | Invalid quote mint | Quote mint does not match the config or supported path. |
+| `InvalidCollectFeeMode` | Invalid collect fee mode | Collect fee mode is not quote token (`0`) or output token (`1`). |
+| `InvalidMigrationFeeOption` | Invalid migration fee option | Migration fee option is outside the supported range, or custom option is used with the wrong destination. |
+| `InvalidInput` | Invalid input | Generic parameter validation failure. |
+| `NotEnoughLiquidity` | Not enough liquidity | Swap or migration needs more liquidity than the curve/pool can provide. |
+| `PoolIsCompleted` | Pool is completed | Attempted a pre-migration action after the curve is complete. |
+| `PoolIsIncompleted` | Pool is incompleted | Attempted migration or post-completion action before the threshold is reached. |
+| `InvalidMigrationOption` | Invalid migration option | Migration option is not DAMM v1 (`0`) or DAMM v2 (`1`). |
+| `InvalidTokenDecimals` | Invalid token decimals | Token decimals are outside supported bounds. |
+| `InvalidTokenType` | Invalid token type | Token type is not SPL Token or Token-2022, or is incompatible with the chosen migration. |
+| `InvalidFeePercentage` | Invalid fee percentage | Partner/creator migration fee split is outside allowed bounds. |
+| `InvalidQuoteThreshold` | Invalid quote threshold | Migration quote threshold is zero or invalid. |
+| `InvalidTokenSupply` | Invalid token supply | Pre/post migration supply values are inconsistent. |
+| `InvalidCurve` | Invalid curve | Curve points are empty, unsorted, out of price range, or have invalid liquidity. |
+| `NotPermitToDoThisAction` | Not permit to do this action | Signer is not the expected partner, creator, or authorized actor. |
+| `InvalidOwnerAccount` | Invalid owner account | Token account owner does not match expected authority. |
+| `InvalidConfigAccount` | Invalid config account | Config account does not match the pool or instruction. |
+| `SurplusHasBeenWithdraw` | Surplus has been withdraw | Surplus was already claimed. |
+| `LeftoverHasBeenWithdraw` | Leftover has been withdraw | Leftover tokens were already claimed. |
+| `TotalBaseTokenExceedMaxSupply` | Total base token is exceeded max supply | Config or pool creation would exceed allowed base supply. |
+| `UnsupportNativeMintToken2022` | Unsupport native mint token 2022 | Native mint was used with an unsupported Token-2022 path. |
+| `InsufficientLiquidityForMigration` | Insufficient liquidity for migration | Pool does not have enough liquidity to initialize the destination DAMM pool. |
+| `MissingPoolConfigInRemainingAccount` | Missing pool config in remaining account | Required config account was not supplied in remaining accounts. |
+| `InvalidVestingParameters` | Invalid vesting parameters | Vesting schedule is malformed or has invalid totals. |
+| `InvalidLeftoverAddress` | Invalid leftover address | Leftover receiver is missing or invalid when required. |
+| `InsufficientLiquidity` | Liquidity in bonding curve is insufficient | Curve segment cannot support the requested movement. |
+| `InvalidFeeScheduler` | Invalid fee scheduler | Scheduler periods, duration, or reduction factor are invalid. |
+| `InvalidCreatorTradingFeePercentage` | Invalid creator trading fee percentage | Creator trading fee share is outside allowed bounds. |
+| `InvalidNewCreator` | Invalid new creator | New creator address is invalid or equals the old creator. |
+| `InvalidTokenAuthorityOption` | Invalid token authority option | Token authority mode is outside supported values. |
+| `InvalidAccount` | Invalid account for the instruction | Account does not match expected PDA, mint, vault, or owner. |
+| `InvalidMigratorFeePercentage` | Invalid migrator fee percentage | Migrator fee setting is outside allowed range. |
+| `MigrationFeeHasBeenWithdraw` | Migration fee has been withdraw | Partner or creator migration fee was already withdrawn. |
+| `InvalidBaseFeeMode` | Invalid base fee mode | Base fee mode is not linear scheduler, exponential scheduler, or rate limiter. |
+| `InvalidFeeRateLimiter` | Invalid fee rate limiter | Rate limiter fields are missing or invalid. |
+| `FailToValidateSingleSwapInstruction` | Fail to validate single swap instruction in rate limiter | Instruction sysvar validation failed for rate limiter mode. |
+| `InvalidMigratedPoolFee` | Invalid migrated pool fee params | DAMM v2 graduated-pool fee params are invalid. |
+| `UndeterminedError` | Undertermined error | Generic fallback error. |
+| `RateLimiterNotSupported` | Rate limiter not supported | Rate limiter was used in an unsupported context. |
+| `AmountLeftIsNotZero` | Amount left is not zero | Exact-in path did not consume the expected amount. Use partial fill when appropriate. |
+| `NextSqrtPriceIsSmallerThanStartSqrtPrice` | Next sqrt price is smaller than start sqrt price | Swap movement would cross below the curve start. |
+| `InvalidMinBaseFee` | Invalid min base fee | Minimum base fee is below the program requirement. |
+| `AccountInvariantViolation` | Account invariant violation | Account state failed an internal invariant check. |
+| `InvalidPoolCreationFee` | Invalid pool creation fee | Pool creation fee is outside allowed bounds. |
+| `PoolCreationFeeHasBeenClaimed` | Pool creation fee has been claimed | Pool creation fee was already claimed. |
+| `Unauthorized` | Not permit to do this action | Signer lacks the required authority. |
+| `ZeroPoolCreationFee` | Pool creation fee is zero | Attempted to claim a zero pool creation fee. |
+| `InvalidMigrationLockedLiquidity` | Invalid migration locked liquidity | Liquidity distribution does not satisfy locked-liquidity requirements. |
+| `InvalidFeeMarketCapScheduler` | Invalid fee market cap scheduler | DAMM v2 market-cap fee scheduler params are invalid. |
+| `FirstSwapValidationFailed` | Fail to validate first swap with minimum fee | First-swap-with-min-fee transaction context failed validation. |
+| `IncorrectATA` | Incorrect ATA | Associated token account does not match expected owner/mint. |
+| `InsufficientPoolLamports` | Pool has insufficient lamports to perform the operation | Pool account cannot pay required lamports for the operation. |
+| `InvalidPermission` | Invalid permission | Operator permission bits are invalid. |
+| `InvalidWithdrawProtocolFeeZapAccounts` | Invalid withdraw protocol fee zap accounts | Protocol zap account list is malformed. |
+| `MintRestrictedFromZap` | SOL,USDC protocol fee cannot be withdrawn via zap | Restricted mint was used with zap. |
+| `InvalidZapOutParameters` | Invalid zap out parameters | Zap output parameters are invalid. |
+| `CpiDisabled` | CPI disabled | Protocol zap CPI is disabled. |
+| `MissingZapOutInstruction` | Missing zap out instruction | Required zap instruction was not found. |
+| `InvalidZapAccounts` | Invalid zap accounts | Zap accounts do not match expected route. |
+| `InvalidCompoundingParameters` | Invalid compounding parameters | DAMM v2 compounding fee settings are invalid. |
+
+## Debugging Checklist
+
+1. Confirm the pool config matches the virtual pool's `config`.
+2. Recompute PDAs with SDK helpers instead of hand-entering addresses.
+3. For swaps, quote immediately before building the transaction and pass explicit slippage bounds.
+4. For rate limiter or first-swap-with-min-fee pools, include the instruction sysvar account.
+5. For migration, confirm `quote_reserve >= migration_quote_threshold` and use the migration flow for the configured destination.

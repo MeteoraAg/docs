@@ -1,0 +1,81 @@
+---
+title: "DBC Program Instructions"
+sidebarTitle: "Instructions"
+description: "Instruction families for DBC partners, creators, swaps, migration, fee claims, operators, and state transitions."
+llmsDescription: "DBC instruction map for dynamic_bonding_curve: create_config, create_partner_metadata, initialize_virtual_pool_with_spl_token, initialize_virtual_pool_with_token2022, swap, swap2, migration_meteora_damm_create_metadata, migrate_meteora_damm, migration_damm_v2, claims, withdrawals, operators."
+---
+
+The DBC program groups instructions by role. The TypeScript SDK exposes these through `client.partner`, `client.pool`, `client.creator`, `client.migration`, and `client.state`.
+
+## Partner Instructions
+
+| Instruction | SDK path | Purpose |
+| --- | --- | --- |
+| `create_config` | `client.partner.createConfig` | Create a partner config that controls pool fees, curve shape, migration settings, token behavior, and fee recipients. |
+| `create_partner_metadata` | `client.partner.createPartnerMetadata` | Create metadata for a partner fee claimer. |
+| `claim_trading_fee` | `client.partner.claimPartnerTradingFee` / `claimPartnerTradingFee2` | Claim partner trading fees from a virtual pool. |
+| `claim_partner_pool_creation_fee` | `client.partner.claimPartnerPoolCreationFee` | Claim partner share of pool creation fees. |
+| `partner_withdraw_surplus` | `client.partner.partnerWithdrawSurplus` | Withdraw partner quote surplus after migration when allowed. |
+
+## Creator Instructions
+
+| Instruction | SDK path | Purpose |
+| --- | --- | --- |
+| `initialize_virtual_pool_with_spl_token` | `client.pool.createPool` | Create a DBC pool with an SPL Token base mint. |
+| `initialize_virtual_pool_with_token2022` | `client.pool.createPool` | Create a DBC pool with a Token-2022 base mint. |
+| `create_virtual_pool_metadata` | `client.creator.createPoolMetadata` | Create optional pool metadata. |
+| `claim_creator_trading_fee` | `client.creator.claimCreatorTradingFee` / `claimCreatorTradingFee2` | Claim creator trading fees from a virtual pool. |
+| `creator_withdraw_surplus` | `client.creator.creatorWithdrawSurplus` | Withdraw creator surplus after migration when allowed. |
+| `transfer_pool_creator` | `client.creator.transferPoolCreator` | Transfer creator rights and creator fee claim authority to a new address. |
+
+## Swap Instructions
+
+| Instruction | Modes | Notes |
+| --- | --- | --- |
+| `swap` | Exact in | Legacy/simple exact-in path. |
+| `swap2` | Exact in, partial fill, exact out | Preferred for trading integrations because it emits richer swap data. |
+
+`swap2` uses `SwapParameters2`:
+
+| Field | Meaning |
+| --- | --- |
+| `amount_0` | Input amount for exact-in/partial-fill, or requested output amount depending on mode. |
+| `amount_1` | Slippage bound: minimum output for exact-in/partial-fill, or maximum input for exact-out. |
+| `swap_mode` | `0` exact in, `1` partial fill, `2` exact out. |
+
+<Note>
+  For rate limiter pools and first-swap-with-min-fee validation, the instruction sysvar account is required in remaining accounts. Use the SDK builders unless you are intentionally constructing raw instructions.
+</Note>
+
+## Migration Instructions
+
+| Instruction | Destination | Purpose |
+| --- | --- | --- |
+| `migration_meteora_damm_create_metadata` | DAMM v1 | Create migration metadata before DAMM v1 migration. |
+| `create_locker` | DAMM v1/v2 support flow | Create the lock escrow when locked vesting is configured. |
+| `migrate_meteora_damm` | DAMM v1 | Migrate a completed DBC pool to DAMM v1. |
+| `migrate_meteora_damm_lock_lp_token` | DAMM v1 | Lock permanent LP allocation for partner or creator. |
+| `migrate_meteora_damm_claim_lp_token` | DAMM v1 | Claim partner or creator LP allocation. |
+| `migration_damm_v2_create_metadata` | DAMM v2 | Deprecated. DAMM v2 migration no longer needs a separate metadata account. |
+| `migration_damm_v2` | DAMM v2 | Migrate a completed DBC pool to DAMM v2. |
+| `withdraw_migration_fee` | DAMM v1/v2 | Withdraw partner or creator migration fee. |
+| `withdraw_leftover` | DAMM v1/v2 | Withdraw leftover base tokens after migration. |
+
+## Operator Instructions
+
+| Instruction | Purpose |
+| --- | --- |
+| `create_operator_account` | Admin creates an operator with permission bits. |
+| `close_operator_account` | Admin closes an operator account. |
+| `claim_protocol_fee` | Authorized operator claims protocol trading fees. |
+| `claim_protocol_pool_creation_fee` | Authorized operator claims protocol pool creation fees. |
+| `close_claim_protocol_fee_operator` | Admin closes a protocol fee claim operator. |
+| `zap_protocol_fee` | Authorized operator zaps protocol fees through the protocol zap flow. |
+
+## Recommended Transaction Construction
+
+1. Use the TypeScript SDK transaction builders for public integrations.
+2. Use `swapQuote` or `swapQuote2` before building swap transactions.
+3. Keep slippage values explicit in user-signed transactions.
+4. Simulate before sending, especially for migration and fee-claim flows.
+5. If constructing raw instructions, compare account order against the IDL or SDK-generated instruction.
