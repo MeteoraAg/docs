@@ -1,6 +1,396 @@
 ---
 title: "DLMM Rust Integration Library"
 sidebarTitle: "Library"
-description: "Compose with DLMM from another Solana program using the public IDL, SDK-generated account lists, remaining accounts, Token-2022 handling, and devnet validation."
-llmsDescription: "Guide for Rust CPI integrations with DLMM. Explains that lb_clmm source is not open sourced, identifies the public IDL and TypeScript SDK as the integration contract, lists what is and is not public, gives the public program ID, recommends a CPI workflow, maps v2 instructions to SDK methods, explains remaining accounts, Token-2022 transfer hook accounts, bin arrays, bitmap extensions, reward accounts, compute planning, swap CPI account shape, and how to compare CPI account order against SDK-generated instructions."
+description: "dlmm-sdk commons: off-chain quotes, PDAs, decoding, and program-test helpers."
+llmsDescription: "Rust commons crate in MeteoraAg/dlmm-sdk. Swap quotes, PDA helpers, Token-2022 remaining accounts, and integration tests—off-chain only, not CPI."
 ---
+
+Use the `commons` crate when you need Rust tooling around DLMM.
+
+## Source
+
+The library lives in the SDK repository:
+
+| Path | Use |
+| --- | --- |
+| `commons/src/lib.rs` | Crate entrypoint, generated `dlmm` program module, account exports, and helper re-exports. |
+| `commons/src/quote.rs` | Exact-in and exact-out swap quote logic, bin-array discovery for swaps, transfer-fee-aware amount handling, and limit order support. |
+| `commons/src/pda.rs` | PDA derivation helpers for pools, positions, bin arrays, reserves, rewards, presets, badges, operators, and event authority. |
+| `commons/src/extensions` | Convenience traits for `LbPair`, `Bin`, `BinArray`, bitmap extension, positions, dynamic positions, and limit orders. |
+| `commons/src/token_2022.rs` | Token-2022 transfer fee calculations and transfer-hook remaining account helpers. |
+| `commons/src/account_filters.rs` | `getProgramAccounts` filters for positions and limit orders. |
+| `commons/tests/integration` | Program-test examples for swap quotes, Token-2022 swaps, and limit-order-aware quotes. |
+
+## Install
+
+If your project is in the same workspace as `dlmm-sdk`, depend on the local
+crate by path:
+
+```toml
+[dependencies]
+commons = { path = "../dlmm-sdk/commons" }
+```
+
+The crate uses the generated Anchor client module from the DLMM IDL:
+
+```rust
+use commons::dlmm;
+use commons::dlmm::accounts::{BinArray, BinArrayBitmapExtension, LbPair};
+use commons::{derive_bin_array_pda, quote_exact_in, BinArrayExtension, LbPairExtension};
+```
+
+## What It Provides
+
+| Module | Main exports | Use |
+| --- | --- | --- |
+| `dlmm` | Generated accounts, instructions, args, and types from the DLMM IDL. | Build off-chain instructions or decode IDL account layouts. |
+| `quote` | `quote_exact_in`, `quote_exact_out`, `get_bin_array_pubkeys_for_swap`. | Quote swaps in Rust before building a transaction. |
+| `pda` | `derive_lb_pair_with_preset_parameter_key`, `derive_bin_array_pda`, `derive_position_pda`, `derive_reserve_pda`, and related helpers. | Derive DLMM PDAs without duplicating seed logic. |
+| `extensions` | `LbPairExtension`, `BinArrayExtension`, `BinExtension`, `PositionExtension`, `DynamicPosition`, `LimitOrderExtension`. | Work with decoded account data using higher-level methods. |
+| `token_2022` | Transfer-fee math and transfer-hook account helpers. | Build Token-2022-aware quotes and remaining account lists. |
+| `account_filters` | `position_filter_by_wallet_and_pair`, `limit_order_filter_by_owner_and_pair`. | Query user positions and limit orders with memcmp filters. |
+| `rpc_client_extension` | `RpcClientExtension`. | Fetch and deserialize accounts with one async helper. |
+
+## Program ID
+
+The generated `dlmm` module points at the public DLMM program:
+
+```rust
+use commons::dlmm;
+
+let program_id = dlmm::ID;
+```
+
+Mainnet and devnet use the same public program ID:
+
+```rust
+pub const DLMM_PROGRAM_ID: &str = "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo";
+```
+
+## Account Decoding
+
+The generated `commons::dlmm` module exposes IDL account types such as
+`LbPair`, `BinArray`, `BinArrayBitmapExtension`, `PositionV2`, and
+`LimitOrder`.
+
+Use `pod_read_unaligned_skip_disc` for zero-copy account layouts that start with
+the Anchor 8-byte discriminator:
+
+```rust
+use commons::dlmm::accounts::LbPair;
+use commons::pod_read_unaligned_skip_disc;
+use solana_sdk::account::Account;
+
+fn decode_lb_pair(account: &Account) -> anyhow::Result<LbPair> {
+    pod_read_unaligned_skip_disc::<LbPair>(&account.data)
+}
+```
+
+The helper checks that the account data is long enough, skips the discriminator,
+and reads exactly `size_of::<T>()` bytes.
+
+## PDA Helpers
+
+Use `commons::pda` helpers instead of duplicating DLMM seeds:
+
+```rust
+use commons::{
+    derive_bin_array_pda, derive_bin_array_bitmap_extension, derive_event_authority_pda,
+    derive_oracle_pda, derive_position_pda, derive_reserve_pda,
+};
+use solana_sdk::pubkey::Pubkey;
+
+let lb_pair = Pubkey::new_unique();
+let owner = Pubkey::new_unique();
+let token_x_mint = Pubkey::new_unique();
+
+let (oracle, _) = derive_oracle_pda(lb_pair);
+let (bitmap_extension, _) = derive_bin_array_bitmap_extension(lb_pair);
+let (bin_array, _) = derive_bin_array_pda(lb_pair, 0);
+let (reserve_x, _) = derive_reserve_pda(token_x_mint, lb_pair);
+let (position, _) = derive_position_pda(lb_pair, owner, -34, 69);
+let (event_authority, _) = derive_event_authority_pda();
+```
+
+Common derivation helpers:
+
+| Helper | Derives |
+| --- | --- |
+| `derive_lb_pair_with_preset_parameter_key` | Current v2 permissionless pool PDA using `PresetParameter2`. |
+| `derive_lb_pair_pda2` | Legacy-style pool PDA from mints, `bin_step`, and `base_factor`. |
+| `derive_customizable_permissionless_lb_pair` | Customizable permissionless pool PDA. |
+| `derive_permission_lb_pair_pda` | Permissioned pool PDA. |
+| `derive_position_pda` | Position PDA from pool, base, lower bin ID, and width. |
+| `derive_bin_array_pda` | Bin array PDA by pool and bin array index. |
+| `derive_bin_array_bitmap_extension` | Bitmap extension PDA for out-of-default-range bin arrays. |
+| `derive_reserve_pda` | Pool reserve PDA for a token mint. |
+| `derive_reward_vault_pda` | Reward vault PDA for a reward index. |
+| `derive_token_badge_pda` | Token badge PDA for Token-2022 pool creation. |
+
+## Bin Arrays
+
+DLMM liquidity is organized in bin arrays. `BinArrayExtension` gives you the
+same index and coverage helpers used by the quote code:
+
+```rust
+use commons::BinArrayExtension;
+use commons::dlmm::accounts::BinArray;
+
+let bin_array_index = BinArray::bin_id_to_bin_array_index(active_bin_id)?;
+let (lower_bin_id, upper_bin_id) =
+    BinArray::get_bin_array_lower_upper_bin_id(bin_array_index)?;
+
+let account_metas =
+    BinArray::get_bin_array_account_metas_coverage(lower_bin_id, upper_bin_id, lb_pair)?;
+```
+
+For swaps, use `get_bin_array_pubkeys_for_swap`. It walks the pool bitmap and,
+when supplied, the bitmap extension:
+
+```rust
+use commons::quote::get_bin_array_pubkeys_for_swap;
+
+let swap_for_y = true;
+let bin_arrays = get_bin_array_pubkeys_for_swap(
+    lb_pair_pubkey,
+    &lb_pair_state,
+    bitmap_extension.as_ref(),
+    swap_for_y,
+    3,
+)?;
+```
+
+`swap_for_y = true` means token X is swapped for token Y. `swap_for_y = false`
+means token Y is swapped for token X.
+
+## Swap Quotes
+
+The quote functions simulate DLMM swap execution against decoded account state.
+They support:
+
+- Current pool status and activation checks.
+- Base and variable fee updates.
+- Bin traversal and bitmap extension lookup.
+- Limit-order liquidity when the pool supports it.
+- Token-2022 transfer fees on input and output mints.
+
+### Exact-In
+
+```rust
+use commons::quote::quote_exact_in;
+use std::collections::HashMap;
+
+let quote = quote_exact_in(
+    lb_pair_pubkey,
+    &lb_pair_state,
+    amount_in,
+    swap_for_y,
+    bin_arrays_by_pubkey,
+    bitmap_extension.as_ref(),
+    &clock,
+    &mint_x_account,
+    &mint_y_account,
+)?;
+
+println!(
+    "amount_out={} fee={} protocol_fee={}",
+    quote.amount_out, quote.fee, quote.protocol_fee
+);
+```
+
+### Exact-Out
+
+```rust
+use commons::quote::quote_exact_out;
+
+let quote = quote_exact_out(
+    lb_pair_pubkey,
+    &lb_pair_state,
+    amount_out,
+    swap_for_y,
+    bin_arrays_by_pubkey,
+    bitmap_extension.as_ref(),
+    &clock,
+    &mint_x_account,
+    &mint_y_account,
+)?;
+
+println!(
+    "amount_in={} fee={} protocol_fee={}",
+    quote.amount_in, quote.fee, quote.protocol_fee
+);
+```
+
+`bin_arrays_by_pubkey` is a `HashMap<Pubkey, BinArray>` keyed by the bin array
+accounts you fetched for the route. If the quote returns `Active bin array not
+found` or `Pool out of liquidity`, fetch more bin arrays in the swap direction.
+
+## Building Swap Instructions
+
+The generated `dlmm::client` module can build account metas and instruction
+data. The integration tests in `commons/tests/integration/test_swap.rs` show the
+full pattern.
+
+```rust
+use anchor_lang::InstructionData;
+use anchor_lang::ToAccountMetas;
+use commons::dlmm;
+use commons::dlmm::types::RemainingAccountsInfo;
+use commons::derive_event_authority_pda;
+use solana_sdk::instruction::{AccountMeta, Instruction};
+
+let (event_authority, _) = derive_event_authority_pda();
+
+let mut accounts = dlmm::client::accounts::Swap2 {
+    lb_pair,
+    oracle,
+    bin_array_bitmap_extension: Some(bitmap_extension),
+    reserve_x,
+    reserve_y,
+    user_token_in,
+    user_token_out,
+    token_x_mint,
+    token_y_mint,
+    host_fee_in: None,
+    user,
+    token_x_program,
+    token_y_program,
+    program: dlmm::ID,
+    event_authority,
+    memo_program: spl_memo::ID,
+}
+.to_account_metas(None);
+
+accounts.extend(bin_array_pubkeys.into_iter().map(|pubkey| {
+    AccountMeta::new(pubkey, false)
+}));
+
+let ix = Instruction {
+    program_id: dlmm::ID,
+    accounts,
+    data: dlmm::client::args::Swap2 {
+        amount_in,
+        min_amount_out,
+        remaining_accounts_info: RemainingAccountsInfo { slices: vec![] },
+    }
+    .data(),
+};
+```
+
+For Token-2022 transfer hooks, populate `remaining_accounts_info` and append the
+extra account metas described in the next section.
+
+## Token-2022
+
+`commons::token_2022` handles two separate concerns:
+
+| Helper | Use |
+| --- | --- |
+| `get_epoch_transfer_fee` | Read the active transfer-fee config for a mint account and epoch. |
+| `calculate_transfer_fee_excluded_amount` | Convert a transfer-fee-included amount into the amount that reaches the receiver. |
+| `calculate_transfer_fee_included_amount` | Compute the pre-fee amount required for a target post-fee amount. |
+| `get_extra_account_metas_for_transfer_hook` | Fetch transfer-hook extra account metas for one mint. |
+| `get_potential_token_2022_related_ix_data_and_accounts` | Build `RemainingAccountsSlice` data and account metas for liquidity or reward actions. |
+
+For v2 instructions that may transfer Token-2022 mints, pass the extra account
+metas after the main accounts and encode the matching `RemainingAccountsInfo`:
+
+```rust
+use commons::{
+    get_potential_token_2022_related_ix_data_and_accounts, ActionType,
+};
+use commons::dlmm::types::RemainingAccountsInfo;
+
+let token_2022_accounts =
+    get_potential_token_2022_related_ix_data_and_accounts(
+        &lb_pair_state,
+        rpc_client,
+        ActionType::Liquidity,
+    )
+    .await?;
+
+let remaining_accounts_info = if let Some((slices, metas)) = token_2022_accounts {
+    accounts.extend(metas);
+    RemainingAccountsInfo { slices }
+} else {
+    RemainingAccountsInfo { slices: vec![] }
+};
+```
+
+Use `ActionType::Reward(index)` when building remaining accounts for a reward
+claim or reward-aware flow.
+
+## Position And Limit Order Reads
+
+Use `DynamicPosition::parse` when you need a backend-friendly view of a
+position. It combines the base `PositionV2` account, dynamic extension bytes,
+pool state, bin arrays, fee checkpoints, and reward checkpoints.
+
+```rust
+use commons::dlmm::accounts::PositionV2;
+use commons::{pod_read_unaligned_skip_disc, DynamicPosition};
+use std::collections::HashMap;
+
+let position = pod_read_unaligned_skip_disc::<PositionV2>(&position_account.data)?;
+let parsed = DynamicPosition::parse(
+    &position,
+    &position_account.data,
+    &lb_pair_state,
+    &bin_arrays_by_index,
+    current_timestamp,
+)?;
+
+println!(
+    "x={} y={} fee_x={} fee_y={}",
+    parsed.total_x_amount, parsed.total_y_amount, parsed.fee_x, parsed.fee_y
+);
+```
+
+Use account filters when scanning positions or limit orders:
+
+```rust
+use commons::{limit_order_filter_by_owner_and_pair, position_filter_by_wallet_and_pair};
+
+let position_filters = position_filter_by_wallet_and_pair(owner, lb_pair);
+let limit_order_filters = limit_order_filter_by_owner_and_pair(owner, lb_pair);
+```
+
+## Testing
+
+The `commons` crate includes integration tests that load DLMM program fixtures
+and serialized account data into `solana-program-test`:
+
+| Test | What it covers |
+| --- | --- |
+| `tests/integration/test_swap.rs` | Exact-in and exact-out swap quotes and generated `Swap2` / `SwapExactOut2` instructions. |
+| `tests/integration/test_swap_token2022.rs` | Token-2022 swap behavior. |
+| `tests/integration/test_swap_quote_with_limit_order.rs` | Quote behavior when limit order liquidity is part of the pool. |
+
+Run the commons tests from the SDK repository:
+
+```bash
+cargo test -p commons --test integration
+```
+
+## Best Practices
+
+| Practice | Detail |
+| --- | --- |
+| Fetch fresh state before quoting | Quotes depend on `active_id`, fees, bin liquidity, limit orders, token transfer fees, and the current clock. |
+| Fetch enough bin arrays | `get_bin_array_pubkeys_for_swap` takes a count. Larger swaps may need more arrays, but every extra array increases account and compute pressure. |
+| Include bitmap extension when needed | Pass `Some(&bitmap_extension)` when route discovery can leave the default bitmap range. |
+| Keep slippage explicit | Use `quote.amount_out` or `quote.amount_in` to derive user-facing `min_amount_out` or `max_in_amount`; do not send unbounded swaps. |
+| Treat Token-2022 separately | Transfer fees change quoted amounts, and transfer hooks require extra account metas and matching `RemainingAccountsInfo`. |
+| Compare with TypeScript SDK output | When in doubt, build the same transaction with `@meteora-ag/dlmm` and compare account order, remaining accounts, and instruction data. |
+
+## References
+
+| Source | What to inspect |
+| --- | --- |
+| `commons/src/lib.rs` | Public exports and generated `dlmm` module. |
+| `commons/src/quote.rs` | Swap quote implementation and bin-array route discovery. |
+| `commons/src/token_2022.rs` | Token-2022 transfer fee and transfer-hook helpers. |
+| `commons/src/extensions` | Account extension traits and parsed position helpers. |
+| `commons/tests/integration` | End-to-end examples using generated account metas and instruction args. |
+| [DLMM TypeScript SDK Reference](/developer-guides/dlmm/typescript-sdk/reference) | TypeScript SDK behavior to compare against Rust transactions. |
+| [DLMM Rust Integration CPI](/developer-guides/dlmm/rust-integration/cpi) | On-chain CPI guidance and account-order debugging workflow. |
