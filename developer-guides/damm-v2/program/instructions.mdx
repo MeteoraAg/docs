@@ -1,0 +1,78 @@
+---
+title: "DAMM v2 Instructions And Operations"
+sidebarTitle: "Instructions"
+description: "Map DAMM v2 cp-amm instructions to SDK methods and understand account planning, constraints, and operational gotchas."
+llmsDescription: "Instruction reference for the public Meteora DAMM v2 cp-amm program. Maps user, pool creation, swap, liquidity, position, lock, reward, operator, and admin instructions to TypeScript SDK methods, explains account planning, token vault and mint constraints, position NFT ownership checks, rate-limiter remaining accounts, Token 2022 handling, swap modes, and which instructions are intended for public app integrations versus protocol operators."
+---
+
+Prefer the TypeScript SDK for transaction construction. Use this page when you build generated clients, CPI calls, custom indexers, or low-level transactions.
+
+## Public User Operations
+
+| Instruction | TypeScript SDK | Purpose |
+| --- | --- | --- |
+| `initialize_pool` | `createPool` | Create a pool from a static config |
+| `initialize_pool_with_dynamic_config` | `createCustomPoolWithDynamicConfig` | Create a pool from a dynamic config with pool-specific parameters |
+| `initialize_customizable_pool` | `createCustomPool` | Create a customizable launch pool without a config PDA |
+| `create_position` | `createPosition` | Mint a Token 2022 position NFT and initialize position state |
+| `add_liquidity` | `addLiquidity` | Add liquidity to an existing position |
+| `remove_liquidity` | `removeLiquidity`, `removeAllLiquidity` | Withdraw unlocked liquidity |
+| `swap` | `swap` | Exact-in swap path |
+| `swap2` | `swap2` | Exact-in, partial-fill, or exact-out swap path |
+| `claim_position_fee` | `claimPositionFee`, `claimPositionFee2` | Claim pending LP fees |
+| `lock_position` | `lockPosition` | Lock liquidity with external vesting |
+| `lock_inner_position` | SDK lock flows | Lock liquidity using embedded position vesting |
+| `refresh_vesting` | `refreshVesting` | Release vested liquidity into unlocked liquidity |
+| `permanent_lock_position` | `permanentLockPosition` | Move unlocked liquidity into permanent lock |
+| `claim_reward` | `claimReward` | Claim pending liquidity mining rewards |
+| `split_position`, `split_position2` | `splitPosition`, `splitPosition2` | Split liquidity and accounting state into another position |
+| `close_position` | `closePosition` | Close an empty position account |
+
+## Swap Modes
+
+`swap2` accepts `SwapMode`:
+
+| Mode | Parameter meaning |
+| --- | --- |
+| `ExactIn` | `amount_0` is input amount; `amount_1` is minimum output |
+| `PartialFill` | `amount_0` is input amount; `amount_1` is minimum output; execution may stop at pool bounds |
+| `ExactOut` | `amount_0` is desired output; `amount_1` is maximum input |
+
+New integrations should prefer `swap2` and SDK `getQuote2` because they share exact-in, partial-fill, and exact-out semantics.
+
+## Account Planning Notes
+
+| Operation | Important constraints |
+| --- | --- |
+| Swaps | Pool must match token vaults. User input/output accounts are mutable. Token program accounts must match each mint. Referral account is optional. |
+| Rate-limiter swaps | Include `SYSVAR_INSTRUCTIONS_PUBKEY` as a remaining account in low-level builders. The SDK adds it when it identifies a rate-limiter pool. |
+| Add/remove liquidity | Position must belong to pool. The position NFT token account must hold exactly one NFT and be owned by the signer. |
+| Claims | Fee and reward claims update checkpoints before transferring tokens. Token 2022 transfer fees can affect received amounts. |
+| Pool creation | Token A and B are sorted for PDA derivation, but the created pool stores canonical token A/B fields. |
+| Token 2022 | Use the correct token program for each mint and include token badge requirements where applicable. |
+
+## Operator And Admin Operations
+
+Some public instructions are protocol-operator flows, not general app flows:
+
+| Instruction group | Purpose |
+| --- | --- |
+| Config management | `create_config`, `create_dynamic_config`, `close_config`, `fix_config_fee_params` |
+| Token badge management | `create_token_badge`, `close_token_badge` |
+| Pool operations | `set_pool_status`, `update_pool_fees`, `fix_pool_fee_params`, `fix_pool_layout_version` |
+| Protocol fees | `claim_protocol_fee`, `zap_protocol_fee` |
+| Reward administration | `initialize_reward`, `update_reward_duration`, `update_reward_funder` |
+| Operator accounts | `create_operator_account`, `close_operator_account` |
+
+If you are not an authorized operator, build against the user operations and SDK helpers instead of attempting these transactions.
+
+## Indexing Events
+
+Use `EvtSwap2` for swap records. For fee decoding:
+
+| Source | Decoder family |
+| --- | --- |
+| Initialize events | Borsh fee decoders |
+| Pool state | Pod-aligned fee decoders |
+
+For chart prices, use event fields that account for DAMM v2 fee behavior. SPL token transfer logs alone are not a reliable execution-price source.

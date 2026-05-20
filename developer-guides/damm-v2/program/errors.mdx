@@ -1,0 +1,111 @@
+---
+title: "DAMM v2 Program Errors"
+sidebarTitle: "Errors"
+description: "PoolError codes, messages, and common integration causes for the DAMM v2 cp-amm program."
+llmsDescription: "cp-amm Anchor error reference from PoolError in MeteoraAg/damm-v2. Includes Anchor custom error decoding, PoolError code table, SDK-side validation errors, and troubleshooting notes for swaps, liquidity, rewards, vesting, Token 2022, rate limiter, operator, and compounding fee integrations."
+---
+
+This page lists the Anchor custom errors returned by the DAMM v2 `cp-amm` program.
+
+<Tip>
+  Anchor custom program errors start at `6000`. When a transaction log contains `custom program error: 0x1771`, convert the hex value to decimal to find the matching code. For example, `0x1771` is `6001`, which maps to `InvalidFee`.
+</Tip>
+
+## Error Codes
+
+| Code | Name | Message | Common cause |
+| --- | --- | --- | --- |
+| `6000` | `MathOverflow` | Math operation overflow | Checked arithmetic overflowed during fee, price, swap, reward, or liquidity math. |
+| `6001` | `InvalidFee` | Invalid fee setup | Base, dynamic, protocol, referral, or compounding fee parameters failed validation. |
+| `6002` | `ExceededSlippage` | Exceeded slippage tolerance | The output, input, or liquidity amount was worse than the caller's threshold. Refresh the quote. |
+| `6003` | `PoolDisabled` | Pool disabled | The pool status does not allow the requested action. |
+| `6004` | `ExceedMaxFeeBps` | Exceeded max fee bps | Fee settings exceed the pool version's maximum fee. |
+| `6005` | `InvalidAdmin` | Invalid admin | An admin or operator-only action was signed by an unauthorized account. |
+| `6006` | `AmountIsZero` | Amount is zero | Swap, liquidity, reward, or fee amount is zero. |
+| `6007` | `TypeCastFailed` | Type cast error | A numeric conversion failed after large integer math. |
+| `6008` | `UnableToModifyActivationPoint` | Unable to modify activation point | A config or pool activation point can no longer be changed. |
+| `6009` | `InvalidAuthorityToCreateThePool` | Invalid authority to create the pool | The signer is not allowed to create a pool from the selected config. |
+| `6010` | `InvalidActivationType` | Invalid activation type | Activation type is not slot or timestamp. |
+| `6011` | `InvalidActivationPoint` | Invalid activation point | Activation point is invalid for the selected activation type or launch state. |
+| `6012` | `InvalidQuoteMint` | Quote token must be SOL,USDC | A restricted quote-mint path received a non-supported quote mint. |
+| `6013` | `InvalidFeeCurve` | Invalid fee curve | Fee schedule parameters do not produce a valid curve. |
+| `6014` | `InvalidPriceRange` | Invalid Price Range | Minimum, maximum, or initial square-root price is outside the allowed range. |
+| `6015` | `PriceRangeViolation` | Trade is over price range | Swap or liquidity math would move outside pool price bounds. |
+| `6016` | `InvalidParameters` | Invalid parameters | Generic validation failure for instruction parameters. |
+| `6017` | `InvalidCollectFeeMode` | Invalid collect fee mode | The collect fee mode byte or mode/config combination is unsupported. |
+| `6018` | `InvalidInput` | Invalid input | Generic input guard failed, often from token order, amount, or mode mismatch. |
+| `6019` | `CannotCreateTokenBadgeOnSupportedMint` | Cannot create token badge on supported mint | A token badge was requested for a mint that does not need one. |
+| `6020` | `InvalidTokenBadge` | Invalid token badge | Token badge account is missing, wrong, or does not match the mint. |
+| `6021` | `InvalidMinimumLiquidity` | Invalid minimum liquidity | Pool creation or liquidity change would violate minimum liquidity. |
+| `6022` | `InvalidVestingInfo` | Invalid vesting information | Vesting schedule fields are invalid or inconsistent. |
+| `6023` | `InsufficientLiquidity` | Insufficient liquidity | The pool or position cannot satisfy the requested swap or withdrawal. |
+| `6024` | `InvalidVestingAccount` | Invalid vesting account | External vesting account does not match the position or expected PDA. |
+| `6025` | `InvalidPoolStatus` | Invalid pool status | Status byte is invalid or status update is not allowed. |
+| `6026` | `UnsupportNativeMintToken2022` | Unsupported native mint token2022 | Native SOL mint was used through the Token 2022 path. |
+| `6027` | `InvalidRewardIndex` | Invalid reward index | Reward index is outside the two supported reward slots. |
+| `6028` | `InvalidRewardDuration` | Invalid reward duration | Reward campaign duration is outside allowed bounds. |
+| `6029` | `RewardInitialized` | Reward already initialized | The selected reward slot has already been initialized. |
+| `6030` | `RewardUninitialized` | Reward not initialized | Claim, fund, or update targeted an uninitialized reward slot. |
+| `6031` | `InvalidRewardVault` | Invalid reward vault | Reward vault account does not match the pool reward slot. |
+| `6032` | `MustWithdrawnIneligibleReward` | Must withdraw ineligible reward | Ineligible reward must be withdrawn before the next reward action. |
+| `6033` | `IdenticalRewardDuration` | Reward duration is the same | Reward duration update used the existing duration. |
+| `6034` | `RewardCampaignInProgress` | Reward campaign in progress | Reward duration update was attempted before the campaign ended. |
+| `6035` | `IdenticalFunder` | Identical funder | Reward funder update used the current funder. |
+| `6036` | `InvalidFunder` | Invalid funder | Signer or funder account does not match reward authority requirements. |
+| `6037` | `RewardNotEnded` | Reward not ended | Ineligible reward withdrawal was attempted before campaign end. |
+| `6038` | `FeeInverseIsIncorrect` | Fee inverse is incorrect | Fee inverse calculation failed validation. |
+| `6039` | `PositionIsNotEmpty` | Position is not empty | Close was attempted while liquidity, fees, rewards, or locks remain. |
+| `6040` | `InvalidPoolCreatorAuthority` | Invalid pool creator authority | Config creator authority is invalid or mismatched. |
+| `6041` | `InvalidConfigType` | Invalid config type | Static and dynamic config paths were mixed incorrectly. |
+| `6042` | `InvalidPoolCreator` | Invalid pool creator | Pool creator account does not satisfy config or operator constraints. |
+| `6043` | `RewardVaultFrozenSkipRequired` | Reward vault is frozen, must skip reward to proceed | Reward vault is frozen and the caller did not use the skip-reward path. |
+| `6044` | `InvalidSplitPositionParameters` | Invalid parameters for split position | Split numerator, target position, or liquidity state is invalid. |
+| `6045` | `UnsupportPositionHasVestingLock` | Unsupported split position has vesting lock | Split operation is not supported for the current vesting lock state. |
+| `6046` | `SamePosition` | Same position | Source and destination position are the same. |
+| `6047` | `InvalidBaseFeeMode` | Invalid base fee mode | Base fee mode is not one of the supported scheduler modes. |
+| `6048` | `InvalidFeeRateLimiter` | Invalid fee rate limiter | Rate limiter fee parameters failed validation. |
+| `6049` | `FailToValidateSingleSwapInstruction` | Fail to validate single swap instruction in rate limiter | Rate-limiter swap did not include the instructions sysvar or violated single-swap checks. |
+| `6050` | `InvalidFeeTimeScheduler` | Invalid fee scheduler | Time scheduler fee parameters failed validation. |
+| `6051` | `UndeterminedError` | Undetermined error | Fallback error for unexpected internal state. |
+| `6052` | `InvalidPoolVersion` | Invalid pool version | Pool layout or fee version is unsupported by the requested path. |
+| `6053` | `InvalidAuthority` | Invalid authority to do that action | Signer does not own or control the position, pool, config, or operator action. |
+| `6054` | `InvalidPermission` | Invalid permission | Operator permission bits do not allow the requested action. |
+| `6055` | `InvalidFeeMarketCapScheduler` | Invalid fee market cap scheduler | Market-cap scheduler parameters failed validation. |
+| `6056` | `CannotUpdateBaseFee` | Cannot update base fee | Base fee update is not allowed for the current pool or mode. |
+| `6057` | `InvalidDynamicFeeParameters` | Invalid dynamic fee parameters | Dynamic fee configuration failed bounds checks. |
+| `6058` | `InvalidUpdatePoolFeesParameters` | Invalid update pool fees parameters | Pool fee update parameters are inconsistent or unauthorized. |
+| `6059` | `MissingOperatorAccount` | Missing operator account | Operator-only instruction did not include the required operator PDA. |
+| `6060` | `IncorrectATA` | Incorrect ATA | Associated token account does not match the expected mint or owner. |
+| `6061` | `InvalidZapOutParameters` | Invalid zap out parameters | Protocol-fee zap parameters are invalid. |
+| `6062` | `InvalidWithdrawProtocolFeeZapAccounts` | Invalid withdraw protocol fee zap accounts | Zap protocol-fee accounts are missing or mismatched. |
+| `6063` | `MintRestrictedFromZap` | SOL,USDC protocol fee cannot be withdrawn via zap | Restricted fee mint was used in the zap protocol-fee path. |
+| `6064` | `CpiDisabled` | CPI disabled | A disallowed CPI path was attempted. |
+| `6065` | `MissingZapOutInstruction` | Missing zap out instruction | Zap protocol-fee flow did not include the required downstream instruction. |
+| `6066` | `InvalidZapAccounts` | Invalid zap accounts | Zap accounts do not match the whitelisted route or expected account set. |
+| `6067` | `InvalidCompoundingFeeBps` | Invalid compounding fee bps | Compounding fee bps is outside allowed bounds or incompatible with collect fee mode. |
+
+## SDK Validation Errors
+
+The TypeScript SDK also raises local validation errors before a transaction is built. These are JavaScript errors rather than on-chain Anchor errors.
+
+| SDK error | Common cause |
+| --- | --- |
+| `DepositTokenNotAcceptedError` | Deposit was attempted on the side that the current price range cannot accept. |
+| `SameTokenMintsError` | Pool creation or swap input uses the same mint for both sides. |
+| `InvalidPriceRangeError` | Initial, minimum, or maximum price is outside DAMM v2 bounds. |
+| `InvalidCollectFeeModeError` | Unsupported collect fee mode or incompatible pool parameters. |
+| `InvalidBaseFeeModeError` | Unsupported base fee mode. |
+| `InvalidFeeTimeSchedulerError` | Time scheduler parameters are invalid. |
+| `InvalidFeeRateLimiterError` | Rate limiter parameters are invalid. |
+| `InvalidFeeMarketCapSchedulerError` | Market-cap scheduler parameters are invalid. |
+| `InvalidDynamicFeeParametersError` | Dynamic fee parameters are invalid. |
+| `InvalidSplitPositionParametersError` | Split ratio or target position setup is invalid. |
+
+## Debugging Checklist
+
+1. Convert the custom error from hex to decimal, then find the code in the table.
+2. Re-fetch pool, config, position, and token mint state immediately before quoting or building a transaction.
+3. For swaps, use `getQuote2` with the same `SwapMode` and slippage inputs used by `swap2`.
+4. For rate-limiter pools, make sure low-level builders include `SYSVAR_INSTRUCTIONS_PUBKEY`.
+5. For Token 2022 mints, pass the correct token program and token badge accounts where required.
+6. For reward and lock flows, verify position NFT ownership and pending vesting/reward state before submitting.

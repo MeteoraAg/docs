@@ -1,64 +1,52 @@
 ---
-title: Integration
-description: DAMM v2
+title: "DAMM v2 Go Integration"
+sidebarTitle: "Go"
+description: "Use the public DAMM v2 Go examples to read pools, positions, position NFTs, and unclaimed rewards."
+llmsDescription: "Go integration guide for Meteora DAMM v2. Explains the public damm-v2-go examples repository, its solana-go based account readers, program constants, pool and position deserialization helpers, available examples for pool position user-position and reward reads, setup steps, limitations, and when to prefer the TypeScript SDK or generated IDL clients for transaction construction."
 ---
 
-The `damm-v2-go` provides a convenient way to interact with the DAMM v2 instructions directly.
+The public [`damm-v2-go`](https://github.com/MeteoraAg/damm-v2-go) repository provides Go examples for reading DAMM v2 state with `solana-go`. It is currently best treated as example code for account reads and deserialization rather than a full transaction SDK.
 
-Before you begin, here are some important resources:
-
-<CardGroup cols={1}>
-  <Card title="Go SDK" icon="golang" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-go">
-    Meteora DAMM v2 Go SDK
-  </Card>
-</CardGroup>
-
-# Getting Started
-
-To use the Go SDK and test locally, you can use the following command:
-
-## Clone the repository
+## Setup
 
 ```bash
 git clone https://github.com/MeteoraAg/damm-v2-go.git
-```
-
-## Install dependencies
-
-```bash
+cd damm-v2-go
 go mod tidy
 ```
 
-## Run the examples
-
-<Note> Before running the examples, you need to set the private keys and public keys in the examples. </Note>
+Before running examples, set the RPC endpoint and addresses in the example file you are using. Some examples also require uncommenting the local `main()` function.
 
 ```bash
-go run examples/<file-name>.go
+go run examples/get_pool.go
 ```
 
-# Examples
+## Available Examples
 
-<CardGroup cols={2}>
-  <Card title="Claim Position Fee" icon="coins" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-go/blob/main/examples/claim_position_fee.go">
-    Example showing how to claim accumulated fees from a position
-  </Card>
-  <Card title="Get All Position NFT Accounts by Owner" icon="wallet" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-go/blob/main/examples/get_all_position_nft_account_by_owner.go">
-    Retrieve all position NFT accounts owned by a specific user
-  </Card>
-  <Card title="Get Pool" icon="water" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-go/blob/main/examples/get_pool.go">
-    Fetch pool information and current state
-  </Card>
-  <Card title="Get Position" icon="location-dot" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-go/blob/main/examples/get_position.go">
-    Get detailed information about a specific position
-  </Card>
-  <Card title="Get Positions by User" icon="user" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-go/blob/main/examples/get_positions_by_user.go">
-    Retrieve all positions associated with a user account
-  </Card>
-  <Card title="Get Unclaim Reward" icon="gift" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-go/blob/main/examples/get_unclaim_reward.go">
-    Check unclaimed rewards available for a position
-  </Card>
-  <Card title="Get User Position by Pool" icon="users" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-go/blob/main/examples/get_user_position_by_pool.go">
-    Find user positions within a specific pool
-  </Card>
-</CardGroup>
+| Example | Use |
+| --- | --- |
+| `get_pool.go` | Fetch and deserialize a pool account |
+| `get_position.go` | Fetch and deserialize a position account |
+| `get_positions_by_user.go` | Resolve position NFTs and fetch positions for a wallet |
+| `get_user_position_by_pool.go` | Filter a user's positions by pool |
+| `get_all_position_nft_account_by_owner.go` | Read position NFT token accounts by owner |
+| `get_unclaim_reward.go` | Calculate unclaimed reward information |
+| `claim_position_fee.go` | Example transaction flow for claiming position fees |
+
+The Go constants include the public DAMM v2 program ID:
+
+```go
+const DammV2ProgramID = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
+```
+
+## Integration Notes
+
+| Topic | Guidance |
+| --- | --- |
+| Account validation | Example readers check Anchor discriminators before deserializing pool and position data. |
+| Position ownership | User-position lookup starts from Token 2022 position NFT accounts owned by the wallet. |
+| Transaction builders | Prefer the TypeScript SDK unless you are comfortable maintaining low-level Go instruction builders from the IDL. |
+| Module path | The local `go.mod` may not match the public repository name. Check the upstream repo before importing it as a library. |
+| State freshness | Fetch pool accounts directly for transaction-critical reads; use the API for discovery and chart data. |
+
+For custom Go clients, generate from the public [cp_amm IDL](https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json) and cross-check account layouts against [Accounts](/developer-guides/damm-v2/program/accounts).

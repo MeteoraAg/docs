@@ -1,76 +1,113 @@
 ---
-title: Getting Started
-description: DAMM v2
+title: "DAMM v2 TypeScript SDK Getting Started"
+sidebarTitle: "Getting Started"
+description: "Install and initialize @meteora-ag/cp-amm-sdk, fetch DAMM v2 state, quote swaps, and build transactions."
+llmsDescription: "Getting started guide for the public Meteora DAMM v2 TypeScript SDK package @meteora-ag/cp-amm-sdk. Covers package installation, initialization with Solana web3.js, public resources, version notes, fetching pool and config state, quote-first swap flow, transaction builder usage, Token 2022 metadata inputs, rate-limiter account handling, and public testing expectations."
 ---
 
-This guide provides instructions on how to get started with building on Meteora's DAMM v2 program using the DAMM v2 TypeScript SDK.
+Use the TypeScript SDK for most DAMM v2 integrations. It wraps the public IDL, derives PDAs, fetches account state, calculates quotes, handles Token 2022 transfer-fee adjustments, and builds transactions for pools, swaps, liquidity, positions, locks, and rewards.
 
-Before you begin, here are some important resources:
-
-<CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-sdk">
-    Meteora DAMM v2 Typescript SDK
-  </Card>
-  <Card title="DAMM v2 NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/cp-amm-sdk">
-    Meteora DAMM v2 NPM Package
-  </Card>
-</CardGroup>
-
-# Installation
-
-To use the SDK in your project, install it using your preferred package manager:
-
-<Tabs>
-  <Tab title="npm">
-    ```bash
-    npm install @meteora-ag/cp-amm-sdk @solana/web3.js
-    ```
-  </Tab>
-  <Tab title="pnpm">
-    ```bash
-    pnpm install @meteora-ag/cp-amm-sdk @solana/web3.js
-    ```
-  </Tab>
-  <Tab title="yarn">
-    ```bash
-    yarn add @meteora-ag/cp-amm-sdk @solana/web3.js
-    ```
-  </Tab>
-</Tabs>
-
-# Initialization
-
-Once installed, you can initialize the SDK in your TypeScript/JavaScript project like this:
-
-```typescript
-import { Connection } from "@solana/web3.js";
-import { CpAmm } from "@meteora-ag/cp-amm-sdk";
-
-// Initialize a connection to the Solana network (e.g., Mainnet)
-const connection = new Connection("https://api.mainnet-beta.solana.com");
-
-// Create a new instance of the CpAmm SDK
-const cpAmm = new CpAmm(connection);
-```
-
-# Testing the SDK (for contributors)
-
-If you have cloned the SDK repository and want to run the built-in tests:
+## Install
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Run tests
-pnpm test
+npm install @meteora-ag/cp-amm-sdk @solana/web3.js @coral-xyz/anchor bn.js
 ```
 
-# Development Resources
+```bash
+pnpm add @meteora-ag/cp-amm-sdk @solana/web3.js @coral-xyz/anchor bn.js
+```
 
-## Faucets
+```bash
+yarn add @meteora-ag/cp-amm-sdk @solana/web3.js @coral-xyz/anchor bn.js
+```
 
-<CardGroup cols={1}>
-  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.raccoons.dev/">
-    <p>When working on devnet, you might need test tokens. Here is a helpful faucet.</p>
-  </Card>
-</CardGroup>
+The local SDK reference used for this guide is `@meteora-ag/cp-amm-sdk@1.4.3`.
+
+## Initialize
+
+```typescript
+import { Connection, PublicKey } from "@solana/web3.js";
+import { CpAmm } from "@meteora-ag/cp-amm-sdk";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com", "confirmed");
+const cpAmm = new CpAmm(connection);
+
+const pool = new PublicKey("POOL_ADDRESS");
+const poolState = await cpAmm.fetchPoolState(pool);
+```
+
+## Common Flow
+
+| Task | Prefer |
+| --- | --- |
+| Fetch config or pool state | `fetchConfigState`, `fetchPoolState`, `fetchPoolFees` |
+| Discover pools or positions | `getAllPools`, `getAllPositionsByPool`, `getPositionsByUser`, or the DAMM v2 API |
+| Quote a swap | `getQuote2` for exact-in, partial-fill, and exact-out support |
+| Build a swap | `swap2` for new integrations; `swap` is exact-in only |
+| Create pools | `createPool`, `createCustomPool`, or `createCustomPoolWithDynamicConfig` |
+| Add/remove liquidity | `getDepositQuote`, `addLiquidity`, `getWithdrawQuote`, `removeLiquidity` |
+| Manage position ownership | `createPosition`, `lockPosition`, `permanentLockPosition`, `splitPosition2`, `closePosition` |
+| Rewards | `initializeReward`, `fundReward`, `claimReward`, `withdrawIneligibleReward` |
+
+## Quote Before You Build
+
+```typescript
+import { BN } from "@coral-xyz/anchor";
+import { SwapMode } from "@meteora-ag/cp-amm-sdk";
+
+const quote = cpAmm.getQuote2({
+  inputTokenMint,
+  poolState,
+  currentPoint:
+    poolState.activationType === 0
+      ? new BN(await connection.getSlot())
+      : new BN(Math.floor(Date.now() / 1000)),
+  slippage: 0.5,
+  tokenADecimal: 9,
+  tokenBDecimal: 6,
+  hasReferral: false,
+  swapMode: SwapMode.ExactIn,
+  amountIn: new BN(1_000_000),
+});
+```
+
+Use the returned `minimumAmountOut` or `maximumAmountIn` in the transaction builder. For Token 2022 transfer-fee tokens, pass the mint information fields supported by the quote helpers when you need transfer-fee-aware output.
+
+## Build Transactions
+
+SDK transaction methods return a `Transaction` or transaction builder promise. You still choose the payer, recent blockhash, signing flow, and submission path for your app.
+
+```typescript
+const tx = await cpAmm.swap2({
+  payer: wallet.publicKey,
+  pool,
+  inputTokenMint,
+  outputTokenMint,
+  tokenAMint: poolState.tokenAMint,
+  tokenBMint: poolState.tokenBMint,
+  tokenAVault: poolState.tokenAVault,
+  tokenBVault: poolState.tokenBVault,
+  tokenAProgram,
+  tokenBProgram,
+  referralTokenAccount: null,
+  poolState,
+  swapMode: SwapMode.ExactIn,
+  amountIn: new BN(1_000_000),
+  minimumAmountOut: quote.minimumAmountOut!,
+});
+```
+
+<Note>
+  Rate-limiter pools require the instructions sysvar account on low-level swap builders. The TypeScript SDK detects rate-limiter pools in `swap` and `swap2` when it has `poolState`; pass `poolState` to avoid an extra RPC read and to keep account planning explicit.
+</Note>
+
+## Public Testing
+
+The SDK repository includes public Vitest and Bankrun tests. They use the public SDK source and a local program fixture, so they are best for SDK contributors and regression testing. App integrators should also test against devnet or their own local validator flow before shipping transaction code.
+
+```bash
+git clone https://github.com/MeteoraAg/damm-v2-sdk.git
+cd damm-v2-sdk
+pnpm install
+pnpm test
+```
