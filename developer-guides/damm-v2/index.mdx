@@ -1,99 +1,134 @@
 ---
-title: Overview
+title: "DAMM v2 Developer Guide"
+sidebarTitle: "Overview"
+description: "Start building with Meteora DAMM v2 using the cp-amm program, TypeScript SDK, Rust quote SDK, Go examples, CPI integrations, and data API."
+llmsDescription: "Developer overview for Meteora DAMM v2 and the public cp-amm program. Explains the guide scope, public-source boundary, program IDs, package and API URLs, integration surfaces, recommended build path, and links to program, SDK, CPI, Go, Rust, API, product, audit, IDL, and changelog resources without duplicating product economics or LP strategy documentation."
 ---
 
-Before getting started building on DAMM v2, you should read the following resource to get a better understanding of how Meteora's DAMM v2 works:
+DAMM v2 is Meteora's configurable constant-product AMM on Solana. To learn more about DAMM v2 such as fee behavior, formulas, Token 2022 support, NFT positions, liquidity mining, and LP strategy, you can read the following documentations:
 
 <CardGroup cols={2}>
-  <Card title="What is DAMM v2?" icon="question" iconType="solid" href="/core-products/damm-v2">
-    DAMM v2 is one of Meteora's advanced AMM product that allows you to provide concentrated or spot or single-sided liquidity to a pool and in return minting an NFT that represents your position.
+  <Card title="Learn more about DAMM v2" icon="book-open" iconType="solid" href="/core-products/damm-v2/what-is-damm-v2">
+    Overview of DAMM v2, fee behavior, formulas, Token 2022 support, NFT positions, liquidity mining, and LP strategy.
   </Card>
-  <Card title="DAMM v2 Configs" icon="gear" iconType="solid" href="/developer-guide/guides/damm-v2/pool-fee-configs">
-    Each DAMM v2 pool is a PDA of token mints + config. There are 2 main types of DAMM v2 configs: Static config and Dynamic config.
+  <Card title="DAMM v2 Formulas" icon="calculator" iconType="solid" href="/core-products/damm-v2/formulas">
+    Formulas and definitions for price, liquidity, fee, and impermanent loss concepts.
   </Card>
 </CardGroup>
 
----
-
-# DAMM v2 Program
-
-At Meteora, we’ve developed a `Node.js <> Typescript SDK`, a `Rust SDK` and a `Go SDK` to make deploying and managing your DAMM v2 liquidity pool easier. The following sections includes information on installing and using the SDKs. It also covers where to find the latest code, and how to contribute to these repositories.
-
-## Program Details
+## Integration
 
 <CardGroup cols={2}>
-  <Card title="DAMM v2 Program" icon="rust" iconType="solid" href="https://github.com/MeteoraAg/damm-v2">
-    Meteora DAMM v2 Program
+  <Card
+    title="Program Architecture"
+    icon="cog"
+    iconType="solid"
+    href="/developer-guides/damm-v2/program/architecture"
+  >
+    Program design, pool creation paths, liquidity modes, fees, Token-2022, and integration boundaries.
   </Card>
-  <Card title="DAMM v2 IDL" icon="code" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json">
-    Meteora DAMM v2 Program IDL
+  <Card
+    title="Program Accounts"
+    icon="table-cells"
+    iconType="solid"
+    href="/developer-guides/damm-v2/program/accounts"
+  >
+    Account model for configs, pools, position NFTs, rewards, vesting, token badges, and operators.
+  </Card>
+  <Card
+    title="Program Instructions"
+    icon="list"
+    iconType="solid"
+    href="/developer-guides/damm-v2/program/instructions"
+  >
+    Instruction families for pool creation, liquidity, swaps, rewards, locks, operator flows, and admin flows.
+  </Card>
+  <Card
+    title="Program Errors"
+    icon="triangle-exclamation"
+    iconType="solid"
+    href="/developer-guides/damm-v2/program/errors"
+  >
+    Anchor custom error codes, enum names, messages, and common integration causes.
+  </Card>
+  <Card
+    title="TypeScript SDK"
+    icon="code"
+    iconType="solid"
+    href="/developer-guides/damm-v2/typescript-sdk/getting-started"
+  >
+    TypeScript SDK for interacting with all public DAMM v2 user flows.
+  </Card>
+  <Card
+    title="Rust Integration"
+    icon="terminal"
+    iconType="solid"
+    href="/developer-guides/damm-v2/rust-sdk/integration"
+  >
+    Rust quote math and Anchor CPI integration against the public `cp-amm` program.
+  </Card>
+  <Card
+    title="Go Integration"
+    icon="golang"
+    iconType="solid"
+    href="/developer-guides/damm-v2/go-sdk/integration"
+  >
+    Go examples for reading pools, positions, position NFTs, and unclaimed rewards.
+  </Card>
+</CardGroup>
+<CardGroup cols={1}>
+  <Card
+    title="DAMM v2 APIs"
+    icon="database"
+    iconType="solid"
+    href="/developer-guides/damm-v2/api-reference/overview"
+  >
+    Indexed read-only pool discovery, pool groups, OHLCV, volume, and protocol stats.
   </Card>
 </CardGroup>
 
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Network</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Program ID</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Mainnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Devnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+## IDs And Endpoints
 
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Authority</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Address</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Pool Authority</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+| Item | Value |
+| --- | --- |
+| Mainnet program ID | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
+| Devnet program ID | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
+| Pool authority PDA seed | `pool_authority` |
+| TypeScript package | `@meteora-ag/cp-amm-sdk` |
+| Current local SDK version | `1.4.3` |
+| Production API | `https://damm-v2.datapi.meteora.ag` |
+| Dev API | `https://damm-v2-api.dev.metdev.io` |
+| Production Swagger UI | `https://damm-v2.datapi.meteora.ag/swagger-ui/` |
+| Dev Swagger UI | `https://damm-v2-api.dev.metdev.io/swagger-ui/` |
 
-## Compounding Fee Mode
+## Recommended Build Path
 
-DAMM v2 v0.2.0 introduces a third fee collection mode (`collect_fee_mode = 2`).
+1. Read the [product overview](/core-products/damm-v2/what-is-damm-v2) only far enough to understand pool modes, fees, positions, and Token 2022 support.
+2. Use the [TypeScript SDK](/developer-guides/damm-v2/typescript-sdk/getting-started) for transactions and quotes unless you specifically need CPI or a generated client.
+3. Review [accounts](/developer-guides/damm-v2/program/accounts), [instructions](/developer-guides/damm-v2/program/instructions), and [errors](/developer-guides/damm-v2/program/errors) before building custom indexers, generated clients, or low-level integrations.
+4. Use [Rust CPI](/developer-guides/damm-v2/cpi/integration) for on-chain composition and [Rust SDK](/developer-guides/damm-v2/rust-sdk/integration) for off-chain Rust quote math.
+5. Use the [API reference](/developer-guides/damm-v2/api-reference/overview) for indexed data, charts, and discovery. Use on-chain state or SDK helpers for transaction-critical reads.
+6. Check the [developer changelog](/developer-guides/damm-v2/changelog) before upgrading program, SDK, or event decoders.
 
-| `collect_fee_mode` | Fee Token | Fee on Input? |
-|---|---|---|
-| 0 (BothToken) | Output token | No (fee on output) |
-| 1 (OnlyB) | Token B | Only for B→A trades |
-| 2 (Compounding) | Token B | Only for B→A trades |
-
-In Compounding mode, a percentage of the collected fee (set by `compounding_fee_bps` on the config) is automatically reinvested back into pool reserves rather than accruing to LP positions. This portion is reported as `compounding_fee` in `EvtSwap2`. The remaining claimable portion is reported as `claiming_fee`.
-
-<Note>
-Compounding mode pools use a constant-product formula with no concentrated liquidity range.
-</Note>
-
-## Official SDKs
+## Resource Map
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="/developer-guide/guides/damm-v2/typescript-sdk/getting-started">
-    Official Meteora DAMM v2 Typescript SDK
+  <Card title="cp-amm Program" icon="code" href="https://github.com/MeteoraAg/damm-v2/tree/main/programs/cp-amm">
+    Public Anchor program source for DAMM v2.
   </Card>
-  <Card title="Rust SDK" icon="rust" iconType="solid" href="/developer-guide/guides/damm-v2/rust-sdk/integration">
-    Official Meteora DAMM v2 Rust SDK
+  <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-sdk">
+    Public SDK for transactions, quotes, PDA derivation, and account fetching.
   </Card>
-  <Card title="Go SDK" icon="golang" iconType="solid" href="/developer-guide/guides/damm-v2/go-sdk/integration">
-    Official Meteora DAMM v2 Go SDK
+  <Card title="IDL" icon="file-code" href="https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json">
+    Published Anchor IDL used by generated clients and the TypeScript SDK.
+  </Card>
+  <Card title="Go Examples" icon="golang" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-go">
+    Public Go examples for reading DAMM v2 state.
+  </Card>
+  <Card title="Audit" icon="shield-check" href="/resources/audits/damm-v2">
+    DAMM v2 audit resources.
+  </Card>
+  <Card title="Product Docs" icon="book" href="/core-products/damm-v2/what-is-damm-v2">
+    Concepts, formulas, fees, LP positions, liquidity mining, and Token 2022 behavior.
   </Card>
 </CardGroup>

@@ -1,0 +1,63 @@
+---
+title: "DAMM v2 Rust CPI Integration"
+sidebarTitle: "Rust CPI"
+description: "Plan Anchor CPI integrations with the public DAMM v2 cp-amm program, accounts, remaining accounts, and generated clients."
+llmsDescription: "Rust CPI integration guide for the public Meteora DAMM v2 cp-amm program. Explains when to use CPI, generated-client and IDL options, account planning for swaps liquidity claims locks rewards and pool creation, rate-limiter instructions-sysvar remaining account behavior, Token 2022 token program handling, position NFT ownership checks, public source references, and testing guidance for Anchor localnet devnet and simulation workflows."
+---
+
+Use CPI when another on-chain program needs to compose with DAMM v2. For off-chain apps, bots, and launch scripts, the TypeScript SDK is usually simpler and safer.
+
+## Public Contract
+
+The CPI contract is the public `cp-amm` program and IDL:
+
+| Resource | Link |
+| --- | --- |
+| Program source | [MeteoraAg/damm-v2/programs/cp-amm](https://github.com/MeteoraAg/damm-v2/tree/main/programs/cp-amm) |
+| IDL | [cp_amm.json](https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json) |
+| Program ID | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
+
+You can generate a client from the IDL or depend on the public `cp-amm` crate from the DAMM v2 workspace when your build setup allows it.
+
+## Account Planning
+
+| Flow | Required planning |
+| --- | --- |
+| Swap | Pool authority, pool, user input/output token accounts, vaults, mints, payer, token programs, optional referral token account |
+| Rate-limiter swap | Add the instructions sysvar as a remaining account |
+| Add/remove liquidity | Pool, position, user token accounts, vaults, mints, position NFT token account, owner signer, token programs |
+| Claim fees | Position NFT ownership, destination token accounts, pool vaults, token programs |
+| Claim rewards | Reward vault and reward mint/program for the reward index |
+| Pool creation | Correct pool PDA, vault PDAs, position NFT mint/account, token programs, rent/system accounts, and config where applicable |
+
+Read token mint and vault addresses from pool state whenever possible. Avoid reconstructing token A/B assumptions from user input alone.
+
+## Remaining Accounts
+
+Rate-limiter pools reject swaps that do not include the instructions sysvar because the program validates single-swap behavior for that pool in the transaction.
+
+```rust
+solana_program::sysvar::instructions::ID
+```
+
+Token 2022 transfer-hook accounts are not a general DAMM v2 CPI surface for active transfer hooks. DAMM v2 supports Transfer Hook only when the hook program ID and authority are unset. See [Token 2022 support](/core-products/damm-v2/token-2022-support).
+
+## Generated Client Guidance
+
+1. Generate from the published IDL for stable account and instruction names.
+2. Keep the generated client version pinned with the program/SDK version you test against.
+3. Add explicit tests for `swap2` modes, Token 2022 transfer-fee mints, and rate-limiter pools if your program touches those paths.
+4. Treat operator-only instructions as unavailable unless your signer is authorized by Meteora operator state.
+
+## Testing
+
+Public options:
+
+| Test type | Recommendation |
+| --- | --- |
+| Unit quote tests | Use Rust SDK quote helpers or TypeScript SDK quote helpers for expected values |
+| Local CPI tests | Run Anchor/local validator with the public program build or a known fixture |
+| Devnet integration | Use the devnet program ID and devnet API for discovery |
+| Mainnet simulation | Simulate with real pool accounts before signing production transactions |
+
+If your test requires private launch fixtures or operator authorities, replace it with devnet pools, public examples, or local validator fixtures for documentation and CI.

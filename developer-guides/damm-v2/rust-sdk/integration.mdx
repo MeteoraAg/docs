@@ -1,44 +1,64 @@
 ---
-title: Integration
-description: DAMM v2
+title: "DAMM v2 Rust SDK Integration"
+sidebarTitle: "Rust SDK"
+description: "Use the public DAMM v2 Rust SDK for quote math, initial price calculations, and Rust-side integration tests."
+llmsDescription: "Rust SDK integration guide for Meteora DAMM v2. Documents the public rust-sdk crate in the damm-v2 repository, its quote_exact_in quote_exact_out quote_partial_fill_in and calculate_initial_sqrt_price modules, dependency expectations, local path usage, relationship to cp-amm account state, public fixtures and tests, and when to use it versus Anchor CPI or the TypeScript SDK."
 ---
 
-The `rust-sdk` provides a convenient way to interact with the DAMM v2 program.
+The DAMM v2 Rust SDK is part of the public [`damm-v2`](https://github.com/MeteoraAg/damm-v2/tree/main/rust-sdk) repository. It is focused on source-backed quote math and initial price calculations, not full transaction construction.
 
-Before you begin, here are some important resources:
+## What It Contains
 
-<CardGroup cols={1}>
-  <Card title="Rust SDK" icon="rust" iconType="solid" href="https://github.com/MeteoraAg/damm-v2/tree/main/rust-sdk">
-    Meteora DAMM v2 Rust SDK
-  </Card>
-</CardGroup>
+| Module | Purpose |
+| --- | --- |
+| `quote_exact_in` | Quote exact-input swaps from a `Pool` state |
+| `quote_exact_out` | Quote exact-output swaps |
+| `quote_partial_fill_in` | Quote partial-fill exact-input swaps |
+| `calculate_initial_sqrt_price` | Calculate concentrated or compounding pool initial square-root price and liquidity |
+| `utils` | Activation and swap-enabled helpers |
 
-# Getting Started
+## Dependency Setup
 
-To use the Rust SDK, you need to add it as a dependency in your `Cargo.toml` file. Since it's a local dependency in this workspace, you can add it by specifying its path:
+The crate is currently used as a workspace/local dependency:
 
 ```toml
 [dependencies]
-rust-sdk = { path = "../rust-sdk" } # Adjust the path accordingly
-cp-amm = { path = "../programs/cp-amm" } # The sdk also needs the cp-amm crate
-solana-sdk = "1.18.12" # For Pubkey
+rust-sdk = { path = "../rust-sdk" }
+cp-amm = { path = "../programs/cp-amm", features = ["no-entrypoint", "no-custom-entrypoint"] }
 ```
 
-# API Reference
+If you vendor or pin it from Git, keep the `rust-sdk` and `cp-amm` revisions aligned so account structs, fee logic, and quote math match.
 
-## `get_quote`
+## Quote Inputs
 
-Calculates the result of a swap for a given pool.
+Rust quote helpers expect a deserialized `cp_amm::state::Pool` and current chain context:
 
-### Parameters
+| Input | Why it matters |
+| --- | --- |
+| `Pool` | Contains price, liquidity, reserves, fee state, activation settings, and collect fee mode |
+| Current timestamp | Used by timestamp-activated fees and dynamic fee updates |
+| Current slot | Used by slot-activated fees |
+| Swap amount and direction | Determines exact-in, partial-fill, or exact-out result |
+| Referral flag | Changes protocol/referral fee split |
 
-- `pool: &Pool`: A reference to the `Pool` state account, deserialized from on-chain data.
-- `current_timestamp: u64`: The current blockchain timestamp.
-- `current_slot: u64`: The current blockchain slot.
-- `actual_amount_in: u64`: The amount of the input token to be swapped.
-- `a_to_b: bool`: The direction of the swap. `true` for token A to token B, `false` for token B to token A.
-- `has_referral: bool`: Indicates if a referral fee should be considered.
+Use the on-chain account data for transaction-critical quotes. API data is useful for discovery and charts, but the pool account is the source of truth for execution.
 
-### Returns
+## Tests
 
-A `Result<SwapResult>` which contains the details of the swap if successful, including `amount_out`, fees, and new liquidity states. 
+The public repository includes Rust tests and fixtures for quote paths and initial price calculations:
+
+```bash
+git clone https://github.com/MeteoraAg/damm-v2.git
+cd damm-v2
+cargo test -p rust-sdk
+```
+
+These tests are suitable for quote-engine regression coverage. CPI programs should also add Anchor/local-validator tests for account metas, signer constraints, remaining accounts, and Token 2022 behavior.
+
+## Rust SDK Or CPI
+
+| Need | Use |
+| --- | --- |
+| Off-chain Rust quote engine | Rust SDK |
+| On-chain program composing swaps or liquidity | [Rust CPI](/developer-guides/damm-v2/cpi/integration) |
+| Full transaction construction from an app | [TypeScript SDK](/developer-guides/damm-v2/typescript-sdk/getting-started) |

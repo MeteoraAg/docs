@@ -1,0 +1,98 @@
+---
+title: "DAMM v2 Accounts And State"
+sidebarTitle: "Accounts"
+description: "Reference DAMM v2 cp-amm account types, important fields, PDA derivations, and indexing notes."
+llmsDescription: "Account reference for the public Meteora DAMM v2 cp-amm program. Documents Config, Pool, Position, TokenBadge, Vesting, RewardInfo, UserRewardInfo, PoolFeesConfig, DynamicFeeConfig, pool metrics, position metrics, PDA seeds, account sizes, state interpretation, Token 2022 flags, layout version behavior, and SDK methods for fetching and decoding accounts."
+---
+
+DAMM v2 accounts are Anchor accounts. Prefer SDK fetch methods for application code and use the public IDL when generating clients.
+
+## PDA Map
+
+| Account | SDK helper | Seeds |
+| --- | --- | --- |
+| Pool authority | `derivePoolAuthority()` | `pool_authority` |
+| Static or dynamic config | `deriveConfigAddress(index)` | `config`, little-endian `u64` index |
+| Config-based pool | `derivePoolAddress(config, tokenAMint, tokenBMint)` | `pool`, config, sorted mints |
+| Customizable pool | `deriveCustomizablePoolAddress(tokenAMint, tokenBMint)` | `cpool`, sorted mints |
+| Position | `derivePositionAddress(positionNft)` | `position`, position NFT mint |
+| Token vault | `deriveTokenVaultAddress(tokenMint, pool)` | `token_vault`, mint, pool |
+| Reward vault | `deriveRewardVaultAddress(pool, rewardIndex)` | `reward_vault`, pool, reward index |
+| Token badge | `deriveTokenBadgeAddress(tokenMint)` | `token_badge`, mint |
+| Position NFT token account | `derivePositionNftAccount(positionNftMint)` | `position_nft_account`, position NFT mint |
+| Operator | `deriveOperatorAddress(whitelistedAddress)` | `operator`, whitelisted address |
+
+Pool and customizable pool PDAs sort the two mint public keys lexicographically in the seed list. Always read `pool.token_a_mint` and `pool.token_b_mint` from state before building token-specific instructions.
+
+## Config
+
+`Config` is a `320` byte zero-copy account. Important fields:
+
+| Field | Meaning |
+| --- | --- |
+| `vault_config_key` | Alpha-vault key that may buy before activation when configured |
+| `pool_creator_authority` | If non-default, only this authority can create pools with the config |
+| `pool_fees` | Base fee, dynamic fee config, protocol/referral fee percents, compounding fee bps |
+| `activation_type` | `0` slot, `1` timestamp |
+| `collect_fee_mode` | `0` BothToken, `1` OnlyB, `2` Compounding |
+| `config_type` | `0` static, `1` dynamic |
+| `index` | Config index used in PDA derivation |
+| `sqrt_min_price`, `sqrt_max_price` | Price bounds for concentrated modes |
+
+Use `fetchConfigState`, `getStaticConfigs`, or `getAllConfigs` to read configs from TypeScript.
+
+## Pool
+
+`Pool` is a `1104` byte zero-copy account. Important fields:
+
+| Field | Meaning |
+| --- | --- |
+| `pool_fees` | Runtime fee state, including base and dynamic fee state |
+| `token_a_mint`, `token_b_mint` | Pool mints |
+| `token_a_vault`, `token_b_vault` | Vault token accounts |
+| `whitelisted_vault` | Pre-activation alpha-vault access |
+| `liquidity` | Total active liquidity |
+| `protocol_a_fee`, `protocol_b_fee` | Accrued protocol fees |
+| `sqrt_min_price`, `sqrt_max_price`, `sqrt_price` | Price bounds and current square-root price |
+| `activation_point`, `activation_type` | Launch activation point and unit |
+| `pool_status` | `0` enabled, `1` disabled |
+| `token_a_flag`, `token_b_flag` | Token program/extension flags |
+| `collect_fee_mode` | Liquidity and fee mode |
+| `pool_type` | Permissionless or customizable |
+| `fee_version` | `0` caps max fee at 50%; `1` caps max fee at 99% |
+| `fee_a_per_liquidity`, `fee_b_per_liquidity` | Fee growth checkpoints as little-endian `U256` bytes |
+| `permanent_lock_liquidity` | Total permanently locked pool liquidity |
+| `creator` | Pool creator |
+| `token_a_amount`, `token_b_amount` | Tracked reserves for layout version `V1` |
+| `layout_version` | `V1` pools track token reserve amounts directly |
+| `reward_infos` | Two pool reward slots |
+
+Use `fetchPoolState` for state and `fetchPoolFees` when you need decoded pool fee bytes.
+
+## Position
+
+`Position` is a `400` byte zero-copy account tied to a Token 2022 position NFT.
+
+| Field | Meaning |
+| --- | --- |
+| `pool` | Pool address |
+| `nft_mint` | Position NFT mint |
+| `fee_a_per_token_checkpoint`, `fee_b_per_token_checkpoint` | Fee checkpoints as little-endian `U256` bytes |
+| `fee_a_pending`, `fee_b_pending` | Claimable pending fees |
+| `unlocked_liquidity` | Withdrawable liquidity |
+| `vested_liquidity` | Liquidity locked by vesting |
+| `permanent_locked_liquidity` | Liquidity that cannot be withdrawn |
+| `reward_infos` | User reward checkpoints and pending rewards for two reward slots |
+| `inner_vesting` | Embedded vesting schedule used by newer lock flows |
+
+The position NFT is the ownership handle. A position operation that changes liquidity or claims fees verifies the owner through the NFT token account.
+
+## Rewards And Vesting
+
+Each pool has up to two `RewardInfo` slots. Once initialized, a reward slot remains initialized. Each position has matching `UserRewardInfo` checkpoints.
+
+External `Vesting` accounts are still supported, but `inner_vesting` lets integrations lock liquidity without creating a separate vesting account. Use the SDK lock and refresh helpers unless you are building low-level instructions.
+
+## Token Badges
+
+`TokenBadge` is a `160` byte account that records the mint for Token 2022 mints requiring review. See [Token 2022 support](/core-products/damm-v2/token-2022-support) for product behavior and supported extension categories.

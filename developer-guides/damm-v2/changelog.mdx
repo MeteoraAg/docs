@@ -1,0 +1,75 @@
+---
+title: "DAMM v2 Developer Changelog"
+sidebarTitle: "Changelog"
+description: "Track DAMM v2 program and SDK changes that affect integrations, quotes, events, and migrations."
+llmsDescription: "Developer changelog for Meteora DAMM v2. Tracks public cp-amm program and @meteora-ag/cp-amm-sdk releases, breaking changes, compounding collect fee mode, layout version reserve tracking, event changes, rate-limiter requirements, market-cap scheduler support, SDK quote changes, API and IDL impacts, PR links, upgrade checklists, and CTAs for builders maintaining swaps, pool creation, CPI, indexers, and quote engines."
+rss: true
+---
+
+Track DAMM v2 developer-facing releases here. Use the public [`cp-amm` changelog](https://github.com/MeteoraAg/damm-v2/blob/main/CHANGELOG.md) and [`@meteora-ag/cp-amm-sdk` changelog](https://github.com/MeteoraAg/damm-v2-sdk/blob/main/CHANGELOG.md) for exhaustive history.
+
+<Update
+  label="Current"
+  description="cp_amm 0.2.0 and TypeScript SDK 1.4.3 — compounding pools and reserve-aware quotes"
+  rss="DAMM v2 cp_amm 0.2.0 adds compounding collect fee mode and layout V1 reserve tracking. TypeScript SDK 1.4.3 fixes pool creation liquidity handling for collect fee mode."
+>
+  <Warning>
+    **Breaking integration area.** Re-test custom quote engines, event decoders, and pool creation code if you support compounding pools or parse `EvtSwap2` fee fields.
+  </Warning>
+
+  ## Release Summary
+
+  | Component | Version | Notes |
+  | --- | --- | --- |
+  | On-chain program | `cp_amm 0.2.0` | Adds compounding collect fee mode and tracked reserves |
+  | TypeScript SDK | `1.4.3` | Fixes `createPool`, `createCustomPool`, and `createCustomPoolWithDynamicConfig` liquidity handling by collect fee mode |
+
+  ## What Changed
+
+  | Area | Change | Developer action |
+  | --- | --- | --- |
+  | Collect fee mode | Added `CollectFeeMode.Compounding` (`2`) | Pass `collectFeeMode` into quote and pool creation helpers |
+  | Pool layout | New pools track `token_a_amount` and `token_b_amount` in layout `V1` | Use current SDK quote helpers for reserve-aware calculations |
+  | Swap event | `partner_fee` replaced by `compounding_fee` in `EvtSwap2.swap_result` | Update event decoders and analytics schemas |
+  | Fee result types | SDK split fees into `claimingFee` and `compoundingFee` | Replace old `tradingFee`/`partnerFee` assumptions |
+  | Pool creation | Compounding pools subtract `DEAD_LIQUIDITY` differently from concentrated pools | Upgrade to SDK `1.4.3+` |
+
+  ## Upgrade Checklist
+
+  1. Upgrade TypeScript integrations to `@meteora-ag/cp-amm-sdk@1.4.3` or later.
+  2. Use `getQuote2`/`swap2` for new swap integrations.
+  3. Update event decoders to read `EvtSwap2.swap_result.compounding_fee`.
+  4. Include `collectFeeMode`, current reserves, and liquidity in deposit/withdraw quote paths where the SDK type requires them.
+  5. Re-run quote tests for concentrated and compounding pools.
+  6. For custom generated clients, refresh from the current public IDL.
+</Update>
+
+<Update
+  label="Earlier"
+  description="cp_amm 0.1.8 and SDK 1.3.x — inner vesting, static configs, and compounding SDK support"
+  rss="DAMM v2 0.1.8 adds lock_inner_position and fix fee parameter endpoints. SDK 1.3.x adds compounding mode support and static config helpers."
+>
+  ## Notable Changes
+
+  | Component | Change | Developer action |
+  | --- | --- | --- |
+  | Program `0.1.8` | Added `lock_inner_position`; split instructions support `inner_vesting` | Prefer embedded vesting flows when they simplify account planning |
+  | SDK `1.3.8` / `1.4.0` | Added static config discovery helpers | Use `getStaticConfigs()` for public config discovery |
+  | SDK `1.3.7` | Added compounding liquidity handlers and `CollectFeeMode.Compounding` | Pass collect fee mode to liquidity and quote helpers |
+  | SDK `1.3.4` | Uses idempotent ATA creation in more transactions | Re-test wallet flows where users may close ATAs |
+</Update>
+
+<Update
+  label="Historical"
+  description="cp_amm 0.1.5–0.1.7 — rate limiter, swap2, market-cap scheduler, and operator model"
+  rss="DAMM v2 historical releases added rate limiter, swap2, EvtSwap2, market-cap fee schedulers, pool fee updates, and operator accounts."
+>
+  ## Integration Impact
+
+  | Version | Change | Developer action |
+  | --- | --- | --- |
+  | `0.1.7` | Added `zap_protocol_fee`; whitelisted programs can bypass rate-limiter stack-height checks | No action for normal app integrations |
+  | `0.1.6` | Added market-cap scheduler fee modes and operator accounts; new pools use fee version `V1` with 99% max fee | Update fee decoders and quote tests |
+  | `0.1.5` | Added rate limiter, `swap2`, `EvtSwap2`, and `EvtLiquidityChange` | Include instructions sysvar for rate-limiter swaps; index `EvtSwap2` |
+  | `0.1.4` | Added `split_position2` | Prefer `splitPosition2` for better split resolution |
+</Update>

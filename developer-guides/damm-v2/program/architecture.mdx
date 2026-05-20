@@ -1,0 +1,77 @@
+---
+title: "DAMM v2 Program Architecture"
+sidebarTitle: "Architecture"
+description: "Understand the public cp-amm program architecture, PDAs, pool types, fee modes, events, and integration boundaries."
+llmsDescription: "Architecture reference for the public Meteora DAMM v2 cp-amm program. Covers the Anchor program ID, public source and IDL, pool authority and PDA model, static dynamic and customizable pool creation paths, concentrated versus compounding liquidity handlers, fee layers, activation controls, Token 2022 support, position NFTs, rewards, event guidance, and when to use SDKs versus generated clients or CPI."
+---
+
+The DAMM v2 on-chain program is `cp-amm`, a public Anchor program deployed to the same address on mainnet and devnet:
+
+```text
+cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG
+```
+
+Use the [public program source](https://github.com/MeteoraAg/damm-v2/tree/main/programs/cp-amm) and [published IDL](https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json) when building generated clients, custom indexers, or CPI integrations.
+
+## Core Model
+
+| Component | Role |
+| --- | --- |
+| `Config` | Reusable pool template. Static configs define fees, activation type, collect fee mode, and price bounds. Dynamic configs restrict the creator but allow pool-specific fee parameters. |
+| `Pool` | Market state for two token mints, vaults, price, liquidity, fee accumulators, protocol fees, rewards, status, creator, and layout version. |
+| `Position` | NFT-backed LP state with liquidity, fee checkpoints, pending fees, reward checkpoints, and lock or vesting state. |
+| `TokenBadge` | Whitelist record for Token 2022 mints that need review before DAMM v2 can safely support them. |
+| `Vesting` | Optional external vesting state. Newer flows can also use `Position.inner_vesting`. |
+| `RewardInfo` | Pool-level state for up to two built-in liquidity mining reward slots. |
+
+## Pool Creation Paths
+
+| Instruction | SDK method | Config model | Pool PDA seed |
+| --- | --- | --- | --- |
+| `initialize_pool` | `createPool` | Static config determines pool parameters | `pool` + config + sorted mints |
+| `initialize_pool_with_dynamic_config` | `createCustomPoolWithDynamicConfig` | Dynamic config authorizes creator; creator supplies parameters | `pool` + config + sorted mints |
+| `initialize_customizable_pool` | `createCustomPool` | No config key; creator supplies parameters directly | `cpool` + sorted mints |
+
+Static and dynamic config accounts are operator-managed. Customizable pools are intended for launch flows where the creator controls pool-specific launch parameters.
+
+## Liquidity Modes
+
+DAMM v2 chooses its liquidity handler from `collect_fee_mode`:
+
+| `collect_fee_mode` | Name | Liquidity behavior | Fee behavior |
+| --- | --- | --- | --- |
+| `0` | `BothToken` | Concentrated or full-range constant product | Fees accrue in the output token |
+| `1` | `OnlyB` | Concentrated or full-range constant product | Fees accrue in token B |
+| `2` | `Compounding` | Full-range constant product using tracked reserves | A configurable token B fee share compounds into reserves; the rest is claimable |
+
+For product-level behavior and formulas, link to [concentrated liquidity](/core-products/damm-v2/concentrated-liquidity), [compounding liquidity](/core-products/damm-v2/compounding-liquidity), and [formulas](/core-products/damm-v2/formulas) instead of duplicating the math.
+
+## Fee Layers
+
+Every pool combines:
+
+| Layer | Source |
+| --- | --- |
+| Base fee | Time scheduler, rate limiter, or market-cap scheduler |
+| Dynamic fee | Optional volatility-responsive fee layer |
+| Protocol fee | Protocol share of trading fees |
+| Referral fee | Optional referral share when a referral account is provided |
+| Compounding fee | Only for `CollectFeeMode.Compounding` |
+
+Use the SDK fee helpers to encode and decode fee parameters. If you index raw events or accounts, remember that initialize-event fee bytes are Borsh serialized while pool-account fee bytes are pod-aligned.
+
+## Events
+
+Use `EvtSwap2` for swap indexing. It includes reserve amounts and the newer `SwapResult2` fee fields. Older swap and liquidity events were deprecated and removed in later program releases.
+
+For trading terminals, quote and chart from program events or SDK/API fields that account for fees. Do not infer execution price from SPL token transfer logs because anti-sniper fee modes can make transfer amounts misleading.
+
+## Integration Boundary
+
+| If you are building | Recommended surface |
+| --- | --- |
+| Web app, bot, launch script, or liquidity manager | TypeScript SDK |
+| Rust server-side quote engine | Rust SDK |
+| Anchor program composing DAMM v2 | CPI against the public IDL/program |
+| Indexer or generated client | Public IDL plus account layouts in this guide |
+| Charts and discovery UI | DAMM v2 API plus on-chain verification for transaction-critical state |
