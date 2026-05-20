@@ -1,15 +1,11 @@
 ---
 title: "DLMM Program Architecture"
 sidebarTitle: "Architecture"
-description: "Understand the public lb_clmm program model for DLMM pools, bins, bin arrays, positions, rewards, limit orders, fees, Token-2022, and compute-heavy flows."
-llmsDescription: "Explains the public DLMM lb_clmm program architecture from the IDL and SDK behavior. Covers the core model for LbPair, Bin, BinArray, BinArrayBitmapExtension, PositionV2, rewards, LimitOrder, Oracle, TokenBadge, price bins, pool types, FunctionType and ConcreteFunctionType, collect fee mode, dynamic fees, Token-2022 support, dynamic positions, bin array loading, bitmap extensions, compute requirements, and when to rely on SDK helpers."
+description: "Understand the lb_clmm program model for DLMM pools, bins, bin arrays, positions, rewards, limit orders, fees, Token-2022, and compute-heavy flows."
+llmsDescription: "Explains the DLMM lb_clmm program architecture from the IDL and SDK behavior. Covers the core model for LbPair, Bin, BinArray, BinArrayBitmapExtension, PositionV2, rewards, LimitOrder, Oracle, TokenBadge, price bins, pool types, FunctionType and ConcreteFunctionType, collect fee mode, dynamic fees, Token-2022 support, dynamic positions, bin array loading, bitmap extensions, compute requirements, and when to rely on SDK helpers."
 ---
 
 The DLMM on-chain program is `lb_clmm`. It stores liquidity in discrete price bins rather than a continuous curve. Each bin has its own token balances, liquidity supply, fee state, reward state, and optional limit order state.
-
-<Note>
-  The `lb_clmm` source code is not open sourced. This page documents the public program model from the published IDL, SDK types, and SDK behavior, not private handler internals.
-</Note>
 
 ## Core Model
 
@@ -27,15 +23,13 @@ The DLMM on-chain program is `lb_clmm`. It stores liquidity in discrete price bi
 
 ## Price Bins
 
-`active_id` is the current active bin. `bin_step` controls the price increment between adjacent bins. The SDK exposes:
+`active_id` is the current active bin. `bin_step` controls the price increment between adjacent bins.
 
 ```typescript
 const price = dlmmPool.fromPricePerLamport(...)
 const binId = dlmmPool.getBinIdFromPrice(price, true)
 const activeBin = await dlmmPool.getActiveBin()
 ```
-
-Use the SDK helpers for price and bin conversion instead of recreating fixed-point math in an integration.
 
 ## Pool Types
 
@@ -48,27 +42,11 @@ Use the SDK helpers for price and bin conversion instead of recreating fixed-poi
 
 ## Function Type
 
-`PresetParameter2` and the SDK constants distinguish:
-
 | Function type | Meaning |
 | --- | --- |
-| `Undetermined = 0` | Legacy/default state where concrete behavior is inferred by program state. |
-| `LiquidityMining = 1` | Pool can initialize and fund reward emissions. |
-| `LimitOrder = 2` | Pool is configured for limit order behavior. |
+| `LiquidityMining = 0` | Pool can initialize and fund reward emissions. |
+| `LimitOrder = 1` | Pool is configured for limit order behavior. |
 
-Creation helpers take `ConcreteFunctionType.LimitOrder = 0` or `ConcreteFunctionType.LiquidityMining = 1` and convert it to the stored `FunctionType`. Choose the function type when creating v2 pools. Do not assume a pool can add rewards or limit orders later unless it was created for that behavior.
-
-## Fees
-
-DLMM combines:
-
-- Base fee from static pool parameters.
-- Variable fee from volatility/reference parameters.
-- Protocol fee accumulated in `LbPair.protocol_fee`.
-- Optional host fee on swap flows.
-- Limit order fee share on limit order pools.
-
-The TypeScript SDK exposes `getFeeInfo()`, `getDynamicFee()`, `calculateFeeInfo(...)`, and quote methods that include fees. Integrations should quote through the SDK before constructing swap transactions.
 
 ## Token-2022
 
@@ -80,9 +58,7 @@ Permissionless Token-2022 support includes standard extensions such as transfer 
 
 `PositionV2` has a fixed base layout and can append dynamic `PositionBinData` when a position grows beyond the default bin count. The program supports increasing or decreasing the position range without closing the account.
 
-For user-facing behavior and LP strategy context, link to [Dynamic Positions](/core-products/dlmm/dynamic-positions) instead of restating product guidance in integration docs.
-
-Important limits exposed by the SDK include:
+Some important limits are:
 
 | Constant | Purpose |
 | --- | --- |
@@ -94,6 +70,4 @@ Use `quoteExtendPosition`, `increasePositionLength`, `decreasePositionLength`, `
 
 ## Compute And Account Loading
 
-DLMM operations can touch many bin arrays. Swaps and liquidity operations must provide the bin arrays needed to cover the route or position range. The SDK handles most of this by deriving bin array accounts, adding bitmap extensions, and estimating compute units.
-
-`initialize_bin_array` initializes all bin prices and can require a high compute budget. Add an explicit compute unit instruction when initializing bin arrays outside the SDK.
+DLMM operations can touch many bin arrays. Swaps and liquidity operations must provide the bin arrays needed to cover the route or position range. `initialize_bin_array` initializes all bin prices and can require a high compute budgetso you can optionally add an explicit compute unit instruction when initializing bin arrays.

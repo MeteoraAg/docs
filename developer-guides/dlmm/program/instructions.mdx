@@ -1,15 +1,11 @@
 ---
 title: "DLMM Program Instructions"
 sidebarTitle: "Instructions"
-description: "Reference public lb_clmm instruction families and the SDK methods used for pool creation, bin arrays, positions, liquidity, swaps, rewards, limit orders, and admin flows."
-llmsDescription: "Instruction-family reference for the public DLMM lb_clmm interface. Covers pool creation instructions, bin array initialization, position creation and resizing, liquidity add and remove flows, v2 Token-2022-aware liquidity paths, swap and exact-out swap instructions, fee and reward claims, reward funding, limit order placement and cancellation, admin and operator controls, and the corresponding @meteora-ag/dlmm SDK methods developers should prefer."
+description: "Reference lb_clmm instruction families and the SDK methods used for pool creation, bin arrays, positions, liquidity, swaps, rewards, limit orders, and admin flows."
+llmsDescription: "Instruction-family reference for the DLMM lb_clmm interface. Covers pool creation instructions, bin array initialization, position creation and resizing, liquidity add and remove flows, v2 Token-2022-aware liquidity paths, swap and exact-out swap instructions, fee and reward claims, reward funding, limit order placement and cancellation, admin and operator controls, and the corresponding @meteora-ag/dlmm SDK methods developers should prefer."
 ---
 
-The `lb_clmm` IDL exposes many instructions. Integrations should prefer the TypeScript SDK for transaction construction unless they are building CPI or low-level transaction flows.
-
-<Note>
-  This page documents the public instruction interface from the IDL and SDK. The deployed program's Rust source and handler internals are not open sourced.
-</Note>
+The `lb_clmm` IDL exposes many instructions. Integrators can choose to either use the TypeScript SDK for transaction construction build through CPI.
 
 ## Pool Creation
 
@@ -18,12 +14,10 @@ The `lb_clmm` IDL exposes many instructions. Integrations should prefer the Type
 | `initialize_lb_pair` | Legacy permissionless SPL Token pool creation. |
 | `initialize_lb_pair2` | Current permissionless v2 pool creation with Token-2022 support and `PresetParameter2`. |
 | `initialize_permission_lb_pair` | Operator-controlled pool creation for permissioned launches. |
-| `initialize_customizable_permissionless_lb_pair` | Customizable permissionless pool creation for SPL Token pools. |
-| `initialize_customizable_permissionless_lb_pair2` | Customizable permissionless pool creation with Token-2022 support. |
+| `initialize_customizable_permissionless_lb_pair` | Legacy customizable permissionless pool creation for SPL Token pools. |
+| `initialize_customizable_permissionless_lb_pair2` | Current customizable permissionless pool creation with Token-2022 support. |
 | `initialize_preset_parameter` | Admin/operator preset initialization. |
 | `initialize_token_badge` | Admin allowlist for Token-2022 mints that require a badge. |
-
-Use SDK methods such as `createLbPair`, `createLbPair2`, `createCustomizablePermissionlessLbPair`, and `createCustomizablePermissionlessLbPair2`.
 
 ## Bin Arrays
 
@@ -49,8 +43,6 @@ Use SDK methods such as `createLbPair`, `createLbPair2`, `createCustomizablePerm
 | `set_permissionless_operation_bits` | Enables selected permissionless position actions. |
 | `close_position`, `close_position2`, `close_position_if_empty` | Close position accounts when eligible. |
 
-For wide positions, use SDK methods such as `quoteExtendPosition`, `createExtendedEmptyPosition`, `increasePositionLength`, and `decreasePositionLength`.
-
 ## Liquidity
 
 | Instruction family | Use |
@@ -59,8 +51,6 @@ For wide positions, use SDK methods such as `quoteExtendPosition`, `createExtend
 | `add_liquidity*2` | v2 liquidity flows with Token-2022 and dynamic-position support. |
 | `remove_liquidity*` | Removes liquidity by bin amounts, range, or all liquidity. |
 | `rebalance_liquidity` | Combines add, remove, claim, resize, and shrink behavior in one flow. |
-
-The SDK provides higher-level methods including `initializePositionAndAddLiquidityByStrategy`, `addLiquidityByStrategy`, `addLiquidityByStrategyChunkable`, `addLiquidityByWeight2`, `removeLiquidity`, `simulateRebalancePosition`, and `rebalancePosition`.
 
 ## Swaps
 
@@ -96,8 +86,6 @@ const quote = dlmmPool.swapQuote(
 | `withdraw_protocol_fee` | Withdraws protocol fees. |
 | `zap_protocol_fee` | Operator zap flow for protocol fees. |
 
-SDK helpers include `claimSwapFee`, `claimAllSwapFee`, `claimLMReward`, `claimAllLMRewards`, `claimAllRewards`, and `claimAllRewardsByPosition`.
-
 ## Limit Orders
 
 | Instruction | Use |
@@ -105,20 +93,3 @@ SDK helpers include `claimSwapFee`, `claimAllSwapFee`, `claimLMReward`, `claimAl
 | `place_limit_order` | Places an order at one or more bins. |
 | `cancel_limit_order` | Cancels an existing order. |
 | `close_limit_order_if_empty` | Closes the account after all order bins are empty. |
-
-Use `quoteCreateLimitOrder`, `placeLimitOrder`, `cancelLimitOrder`, `getLimitOrder`, and `getLimitOrderByUserAndLbPair`.
-
-## Admin And Operator Controls
-
-| Instruction | Use |
-| --- | --- |
-| `set_pair_status` | Admin/operator status control. |
-| `set_pair_status_permissionless` | Creator-controlled status flow for eligible pools. |
-| `set_activation_point` | Updates activation point. |
-| `set_pre_activation_duration` | Updates pre-activation duration. |
-| `set_pre_activation_swap_address` | Updates the address allowed to swap before activation. |
-| `update_base_fee_parameters` | Updates base fee parameters. |
-| `update_dynamic_fee_parameters` | Updates variable/dynamic fee parameters. |
-| `update_fees_and_rewards` / `update_fees_and_reward2` | Refreshes fee and reward state. |
-| `go_to_a_bin` | Admin/operator active-bin movement. |
-| `increase_oracle_length` | Expands oracle observation capacity. |

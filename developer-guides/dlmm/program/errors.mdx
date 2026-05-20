@@ -1,0 +1,257 @@
+---
+title: "DLMM Program Errors"
+sidebarTitle: "Errors"
+description: "Reference lb_clmm Anchor custom errors, including error codes, enum names, messages, and troubleshooting notes for DLMM integrations."
+llmsDescription: "Reference for DLMM lb_clmm program errors sourced from the onchain program LBError enum and generated IDL. Covers Anchor custom error code decoding, common categories for slippage, bin arrays, positions, rewards, Token-2022 remaining accounts, limit orders, zap, CPI, and the complete code/name/message table from 6000 through 6110 with explanations of why each error occurs."
+---
+
+This page lists the Anchor custom errors returned by the DLMM `lb_clmm` program.
+
+<Tip>
+    Anchor custom program errors start at `6000`. When a transaction log contains
+    `custom program error: 0x1771`, convert the hex value to decimal to find the
+    matching code. For example, `0x1771` is `6001`, which maps to
+    `InvalidBinId`.
+</Tip>
+
+## Instruction and Error Map
+
+The table below maps each `LBError` variant to where it can be raised in the current `lb_clmm` program. Use it to trace a transaction failure back to an instruction handler or a shared module.
+
+### How to read the Instructions column
+
+| Entry type | Meaning |
+| --- | --- |
+| Instruction name (e.g. `swap2`) | Returned directly from that instruction's handler in `programs/lb_clmm/src/instructions/`. |
+| *Shared:* … | Returned from an internal module (not a top-level instruction). Any instruction that calls that module can surface the same error. |
+| — *(IDL only)* | Listed in `errors.rs`and the published IDL, but no `LBError::…` call site exists in the current program source. |
+
+| Code | Name | Instructions |
+| --- | --- | --- |
+| `6000` | `InvalidStartBinIndex` | *Shared:* bin state |
+| `6001` | `InvalidBinId` | <ul><li><code>initialize_permissionless_lb_pair</code></li><li><code>go_to_a_bin</code></li><li><code>increase_position_length</code></li><li><code>increase_position_length2</code></li><li><code>rebalance_position</code></li><li><code>add_liquidity2</code></li><li><code>remove_liquidity2</code></li><li><em>Shared:</em> bin state</li></ul> |
+| `6002` | `InvalidInput` | <ul><li><code>add_liquidity</code></li><li><code>add_liquidity_by_strategy</code></li><li><code>add_liquidity_by_weight</code></li><li><code>add_liquidity_by_weight_one_side</code></li><li><code>set_permissionless_operation_bits</code></li><li><code>set_pair_status_permissionless</code></li><li><code>claim_fee2</code></li><li><code>claim_reward2</code></li><li><code>remove_liquidity2</code></li><li><code>swap2</code></li><li><code>update_fees_and_reward2</code></li><li><code>remove_liquidity</code></li><li><em>Shared:</em> weight-to-amounts math, permission pair access, bin state, preset parameters</li></ul> |
+| `6003` | `ExceededAmountSlippageTolerance` | <ul><li><code>rebalance_position</code></li><li><code>swap</code></li><li><code>add_liquidity_single_side_precise2</code></li><li><code>swap2</code></li></ul> |
+| `6004` | `ExceededBinSlippageTolerance` | <ul><li><code>add_liquidity_by_strategy</code></li><li><code>add_liquidity_by_weight</code></li><li><code>add_liquidity_by_weight_one_side</code></li><li><code>place_limit_order</code></li><li><code>rebalance_position</code></li></ul> |
+| `6005` | `CompositionFactorFlawed` | <code>add_liquidity</code> |
+| `6006` | `NonPresetBinStep` | <code>initialize_permissionless_lb_pair</code> |
+| `6007` | `ZeroLiquidity` | `add_liquidity`, `add_liquidity_single_side_precise2` |
+| `6008` | `InvalidPosition` | <ul><li><code>remove_liquidity_by_range2</code></li><li><code>remove_liquidity_by_range</code></li><li><em>Shared:</em> dynamic position state</li></ul> |
+| `6009` | `BinArrayNotFound` | <code>go_to_a_bin</code> |
+| `6010` | `InvalidTokenMint` | `swap`, `swap2` |
+| `6011` | `InvalidAccountForSingleDeposit` | `add_liquidity_by_weight_one_side`, `add_liquidity_single_side_precise2` |
+| `6012` | `PairInsufficientLiquidity` | <ul><li><code>swap</code></li><li><code>swap2</code></li><li><em>Shared:</em> lb pair state</li></ul> |
+| `6013` | `InvalidFeeOwner` | — *(IDL only)* |
+| `6014` | `InvalidFeeWithdrawAmount` | — *(IDL only)* |
+| `6015` | `InvalidAdmin` | <ul><li><code>fund_reward</code></li><li><code>withdraw_ineligible_reward</code></li><li><em>Shared:</em> access control</li></ul> |
+| `6016` | `IdenticalFeeOwner` | — *(IDL only)* |
+| `6017` | `InvalidBps` | <ul><li><code>add_liquidity</code></li><li><code>remove_liquidity2</code></li><li><code>remove_liquidity_by_range2</code></li><li><code>remove_liquidity</code></li><li><code>remove_liquidity_by_range</code></li></ul> |
+| `6018` | `MathOverflow` | <ul><li><code>rebalance_position</code></li><li><code>swap2</code></li><li><em>Shared:</em> price math, safe math, utils math, bin state, lb pair state, oracle state, Token-2022 utilities</li></ul> |
+| `6019` | `TypeCastFailed` | <ul><li><code>claim_reward</code></li><li><code>add_liquidity</code></li><li><code>add_liquidity_by_strategy</code></li><li><code>initialize_customizable_permissionless_lb_pair</code></li><li><code>fund_reward</code></li><li><code>initialize_reward</code></li><li><code>update_reward_duration</code></li><li><code>update_reward_funder</code></li><li><code>withdraw_ineligible_reward</code></li><li><code>increase_position_length2</code></li><li><code>rebalance_position</code></li><li><code>set_pair_status_permissionless</code></li><li><code>claim_reward2</code></li><li><code>swap2</code></li><li><code>remove_liquidity</code></li><li><em>Shared:</em> bin math, safe math, utils math, weight-to-amounts math, bin state, dynamic position state, lb pair state, parameters state</li></ul> |
+| `6020` | `InvalidRewardIndex` | <ul><li><code>claim_reward</code></li><li><code>fund_reward</code></li><li><code>initialize_reward</code></li><li><code>update_reward_duration</code></li><li><code>update_reward_funder</code></li><li><code>withdraw_ineligible_reward</code></li><li><code>claim_reward2</code></li><li><em>Shared:</em> remaining accounts</li></ul> |
+| `6021` | `InvalidRewardDuration` | `initialize_reward`, `update_reward_duration` |
+| `6022` | `RewardInitialized` | <code>initialize_reward</code> |
+| `6023` | `RewardUninitialized` | <ul><li><code>claim_reward</code></li><li><code>fund_reward</code></li><li><code>update_reward_duration</code></li><li><code>update_reward_funder</code></li><li><code>withdraw_ineligible_reward</code></li><li><code>claim_reward2</code></li></ul> |
+| `6024` | `IdenticalFunder` | <code>update_reward_funder</code> |
+| `6025` | `RewardCampaignInProgress` | <code>update_reward_duration</code> |
+| `6026` | `IdenticalRewardDuration` | <code>update_reward_duration</code> |
+| `6027` | `InvalidBinArray` | <ul><li><code>swap</code></li><li><em>Shared:</em> bin state, dynamic position state</li></ul> |
+| `6028` | `NonContinuousBinArrays` | *Shared:* bin state |
+| `6029` | `InvalidRewardVault` | <ul><li><code>claim_reward</code></li><li><code>fund_reward</code></li><li><code>withdraw_ineligible_reward</code></li><li><code>rebalance_position</code></li><li><code>claim_reward2</code></li></ul> |
+| `6030` | `NonEmptyPosition` | <ul><li><code>close_position</code></li><li><code>decrease_position_length</code></li><li><code>close_position2</code></li></ul> |
+| `6031` | `UnauthorizedAccess` | <ul><li><code>initialize_bin_array</code></li><li><code>initialize_position_by_operator</code></li><li><em>Shared:</em> position helpers, customizable permissionless pair access, permission pair access, permissionless pair access</li></ul> |
+| `6032` | `InvalidFeeParameter` | <code>update_fee_parameters</code> |
+| `6033` | `MissingOracle` | — *(IDL only)* |
+| `6034` | `InsufficientSample` | *Shared:* oracle state |
+| `6035` | `InvalidLookupTimestamp` | — *(IDL only)* |
+| `6036` | `BitmapExtensionAccountIsNotProvided` | <ul><li><code>initialize_permissionless_lb_pair</code></li><li><em>Shared:</em> lb pair state</li></ul> |
+| `6037` | `CannotFindNonZeroLiquidityBinArrayId` | *Shared:* bin array bitmap |
+| `6038` | `BinIdOutOfBound` | *Shared:* position helpers |
+| `6039` | `InsufficientOutAmount` | <ul><li><code>zap_protocol_fee</code></li><li><code>swap</code></li><li><code>swap2</code></li></ul> |
+| `6040` | `InvalidPositionWidth` | <ul><li><code>increase_position_length</code></li><li><code>increase_position_length2</code></li><li><code>rebalance_position</code></li><li><em>Shared:</em> position helpers</li></ul> |
+| `6041` | `ExcessiveFeeUpdate` | *Shared:* lb pair state, parameters state |
+| `6042` | `PoolDisabled` | <ul><li><code>add_liquidity</code></li><li><code>add_liquidity_by_weight_one_side</code></li><li><code>place_limit_order</code></li><li><code>go_to_a_bin</code></li><li><code>rebalance_position</code></li><li><code>swap</code></li><li><code>add_liquidity2</code></li><li><code>add_liquidity_single_side_precise2</code></li><li><code>swap2</code></li></ul> |
+| `6043` | `InvalidPoolType` | <ul><li><code>set_pair_status_permissionless</code></li><li><em>Shared:</em> pair access (base), lb pair state</li></ul> |
+| `6044` | `ExceedMaxWhitelist` | — *(IDL only)* |
+| `6045` | `InvalidIndex` | *Shared:* lb pair state |
+| `6046` | `RewardNotEnded` | <code>withdraw_ineligible_reward</code> |
+| `6047` | `MustWithdrawnIneligibleReward` | <code>fund_reward</code> |
+| `6048` | `UnauthorizedAddress` | — *(IDL only)* |
+| `6049` | `OperatorsAreTheSame` | <code>update_position_operator</code> |
+| `6050` | `WithdrawToWrongTokenAccount` | <ul><li><code>claim_fee</code></li><li><code>claim_reward</code></li><li><code>claim_fee2</code></li><li><code>claim_reward2</code></li><li><code>remove_liquidity2</code></li><li><code>remove_liquidity</code></li></ul> |
+| `6051` | `WrongRentReceiver` | <ul><li><code>close_position</code></li><li><code>close_position2</code></li><li><code>close_position_if_empty</code></li></ul> |
+| `6052` | `AlreadyPassActivationPoint` | <ul><li><code>initialize_customizable_permissionless_lb_pair</code></li><li><code>update_fee_parameters</code></li><li><em>Shared:</em> permission pair access</li></ul> |
+| `6053` | `ExceedMaxSwappedAmount` | — *(IDL only)* |
+| `6054` | `InvalidStrategyParameters` | `add_liquidity_by_strategy`, `add_liquidity_by_strategy_one_side` |
+| `6055` | `LiquidityLocked` | <ul><li><code>cancel_limit_order</code></li><li><code>rebalance_position</code></li><li><code>remove_liquidity2</code></li><li><code>remove_all_liquidity</code></li><li><code>remove_liquidity</code></li></ul> |
+| `6056` | `BinRangeIsNotEmpty` | <code>go_to_a_bin</code> |
+| `6057` | `NotExactAmountOut` | `swap`, `swap2` |
+| `6058` | `InvalidActivationType` | <ul><li><code>initialize_permission_lb_pair</code></li><li><em>Shared:</em> customizable permissionless pair access, permission pair access, permissionless pair access</li></ul> |
+| `6059` | `InvalidActivationDuration` | <ul><li><code>initialize_customizable_permissionless_lb_pair</code></li><li><em>Shared:</em> pair access (base)</li></ul> |
+| `6060` | `MissingTokenAmountAsTokenLaunchProof` | `initialize_customizable_permissionless_lb_pair`, `initialize_position_by_operator` |
+| `6061` | `InvalidQuoteToken` | — *(IDL only)* |
+| `6062` | `InvalidBinStep` | *Shared:* preset parameters |
+| `6063` | `InvalidBaseFee` | *Shared:* preset parameters |
+| `6064` | `InvalidPreActivationDuration` | *Shared:* permission pair access |
+| `6065` | `AlreadyPassPreActivationSwapPoint` | *Shared:* permission pair access |
+| `6066` | `InvalidStatus` | <code>set_pair_status</code> |
+| `6067` | `ExceededMaxOracleLength` | <code>increase_oracle_length</code> |
+| `6068` | `InvalidMinimumLiquidity` | *Shared:* bin state, dynamic position state |
+| `6069` | `NotSupportMint` | — *(IDL only)* |
+| `6070` | `UnsupportedMintExtension` | *Shared:* Token-2022 utilities |
+| `6071` | `UnsupportNativeMintToken2022` | *Shared:* Token-2022 utilities |
+| `6072` | `UnmatchTokenMint` | *Shared:* Token-2022 utilities |
+| `6073` | `UnsupportedTokenMint` | *Shared:* Token-2022 utilities |
+| `6074` | `InsufficientRemainingAccounts` | <ul><li><code>rebalance_position</code></li><li><code>add_liquidity_by_strategy2</code></li><li><code>add_liquidity_by_weight2</code></li><li><em>Shared:</em> remaining accounts</li></ul> |
+| `6075` | `InvalidRemainingAccountSlice` | *Shared:* remaining accounts |
+| `6076` | `DuplicatedRemainingAccountTypes` | *Shared:* remaining accounts |
+| `6077` | `MissingRemainingAccountForTransferHook` | *Shared:* Token-2022 utilities |
+| `6078` | `NoTransferHookProgram` | *Shared:* Token-2022 utilities |
+| `6079` | `ZeroFundedAmount` | <code>fund_reward</code> |
+| `6080` | `InvalidSide` | `decrease_position_length`, `increase_position_length` |
+| `6081` | `InvalidResizeLength` | <ul><li><code>decrease_position_length</code></li><li><code>increase_position_length</code></li><li><code>increase_position_length2</code></li></ul> |
+| `6082` | `NotSupportAtTheMoment` | — *(IDL only)* |
+| `6083` | `InvalidRebalanceParameters` | <code>rebalance_position</code> |
+| `6084` | `InvalidRewardAccounts` | — *(IDL only)* |
+| `6085` | `UndeterminedError` | <ul><li><code>close_bin_array</code></li><li><code>patch_bin_array_bitmap_extension</code></li><li><code>place_limit_order</code></li><li><code>rebalance_position</code></li><li><em>Shared:</em> bin state</li></ul> |
+| `6086` | `ReallocExceedMaxLengthPerInstruction` | <code>rebalance_position</code> |
+| `6087` | `InvalidBaseFeeMantissa` | *Shared:* preset parameters |
+| `6088` | `InvalidPositionOwner` | <code>initialize_position2</code> |
+| `6089` | `InvalidPoolAddress` | <code>initialize_position2</code> |
+| `6090` | `InvalidTokenBadgeType` | — *(IDL only)* |
+| `6091` | `InvalidTransferHookAuthority` | — *(IDL only)* |
+| `6092` | `AmountXIsNegative` | <code>rebalance_position</code> |
+| `6093` | `AmountYIsNegative` | <code>rebalance_position</code> |
+| `6094` | `InvalidPoolCreator` | *Shared:* access control |
+| `6095` | `InvalidFunctionType` | <ul><li><code>claim_reward</code></li><li><code>place_limit_order</code></li><li><code>fund_reward</code></li><li><code>initialize_reward</code></li><li><code>update_reward_duration</code></li><li><code>update_reward_funder</code></li><li><code>withdraw_ineligible_reward</code></li><li><code>claim_reward2</code></li></ul> |
+| `6096` | `InvalidPermission` | <ul><li><code>create_operator_account</code></li><li><em>Shared:</em> access control</li></ul> |
+| `6097` | `IncorrectATA` | *Shared:* token utilities |
+| `6098` | `InvalidWithdrawProtocolFeeZapAccounts` | <code>zap_protocol_fee</code> |
+| `6099` | `MintRestrictedFromZap` | <code>zap_protocol_fee</code> |
+| `6100` | `CpiDisabled` | <code>zap_protocol_fee</code> |
+| `6101` | `MissingZapOutInstruction` | <code>zap_protocol_fee</code> |
+| `6102` | `InvalidZapAccounts` | <code>zap_protocol_fee</code> |
+| `6103` | `InvalidZapOutParameters` | <code>zap_protocol_fee</code> |
+| `6104` | `InsufficientInAmount` | *Shared:* bin state |
+| `6105` | `InvalidPlaceLimitOrderParameters` | <ul><li><code>place_limit_order</code></li><li><em>Shared:</em> bin state</li></ul> |
+| `6106` | `InvalidLimitOrderOwner` | *Shared:* access control |
+| `6107` | `InvalidCancelLimitOrderParameters` | <code>cancel_limit_order</code> |
+| `6108` | `CannotFindLimitOrderByBinId` | *Shared:* limit order state |
+| `6109` | `CancelNonEmptyLimitOrder` | <code>cancel_limit_order</code> |
+| `6110` | `InvalidCollectFeeMode` | *Shared:* fee calculator |
+
+## Error Codes
+
+| Code | Name | Message | Why it occurs |
+| --- | --- | --- | --- |
+| `6000` | `InvalidStartBinIndex` | Invalid start bin index | A bin array start index cannot be represented or does not align with the expected bin-array boundary in `state/bin.rs`. |
+| `6001` | `InvalidBinId` | Invalid bin id | A bin ID is outside the position range, outside the valid bin array range, or otherwise cannot be used for the requested liquidity or resize operation. |
+| `6002` | `InvalidInput` | Invalid input data | A generic guard failed, such as an empty input vector, reversed min/max bin range, invalid preset field, invalid permission bits, or zero swap amount. |
+| `6003` | `ExceededAmountSlippageTolerance` | Exceeded amount slippage tolerance | The actual token amount in or out after simulation/execution is worse than the caller's amount slippage limit. Refresh the quote or widen tolerance. |
+| `6004` | `ExceededBinSlippageTolerance` | Exceeded bin slippage tolerance | The active bin moved outside the caller's allowed bin range before or during the instruction. Refresh the quote and active bin. |
+| `6005` | `CompositionFactorFlawed` | Composition factor flawed | A liquidity composition calculation produced an invalid factor for the selected strategy or bin distribution. |
+| `6006` | `NonPresetBinStep` | Non preset bin step | Pool creation used a `bin_step` that does not match the selected preset parameter account. |
+| `6007` | `ZeroLiquidity` | Zero liquidity | The liquidity calculation produced zero shares or a funding amount was too small to create any usable liquidity. |
+| `6008` | `InvalidPosition` | Invalid position | The position account or requested bin range does not match the operation, such as withdrawing outside the position's lower/upper bin IDs. |
+| `6009` | `BinArrayNotFound` | Bin array not found | A required bin array account for the target bin range was not provided or could not be found. |
+| `6010` | `InvalidTokenMint` | Invalid token mint | Swap or pool accounts use mismatched token mints, identical input/output mints, or mints that are not the pool's token X/Y mints. |
+| `6011` | `InvalidAccountForSingleDeposit` | Invalid account for single deposit | Single-sided deposit accounts do not match the side being deposited, usually token X versus token Y account ordering. |
+| `6012` | `PairInsufficientLiquidity` | Pair insufficient liquidity | A swap or quote path cannot find enough liquidity across the provided bin arrays to satisfy the requested amount. |
+| `6013` | `InvalidFeeOwner` | Invalid fee owner | The signer or destination does not match the fee owner recorded on the position. |
+| `6014` | `InvalidFeeWithdrawAmount` | Invalid fee withdraw amount | A protocol-fee or position-fee withdrawal amount is invalid for the fee state being withdrawn. |
+| `6015` | `InvalidAdmin` | Invalid admin | An admin-only operation was signed by an address that is not the configured admin or authorized operator. |
+| `6016` | `IdenticalFeeOwner` | Identical fee owner | A fee-owner update tried to set the new fee owner to the current fee owner. |
+| `6017` | `InvalidBps` | Invalid basis point | A basis-point value exceeds the maximum allowed basis points, for example more than 10000 for full withdrawal. |
+| `6018` | `MathOverflow` | Math operation overflow | Checked arithmetic, exponentiation, shifting, multiplication, division, or fee/liquidity math overflowed. |
+| `6019` | `TypeCastFailed` | Type cast error | A numeric conversion failed, commonly when converting between large math types and narrower onchain integer types. |
+| `6020` | `InvalidRewardIndex` | Invalid reward index | The reward index is outside the supported reward slots or cannot be converted to a valid array index. |
+| `6021` | `InvalidRewardDuration` | Invalid reward duration | Reward initialization or duration update used a duration outside the allowed range. |
+| `6022` | `RewardInitialized` | Reward already initialized | The selected reward slot is already initialized and cannot be initialized again. |
+| `6023` | `RewardUninitialized` | Reward not initialized | A claim, fund, or update instruction targeted a reward slot that has not been initialized. |
+| `6024` | `IdenticalFunder` | Identical funder | A reward-funder update tried to set the funder to the current funder. |
+| `6025` | `RewardCampaignInProgress` | Reward campaign in progress | A reward duration change was attempted while the current reward campaign is still active. |
+| `6026` | `IdenticalRewardDuration` | Reward duration is the same | A reward duration update used the same duration already stored on the reward. |
+| `6027` | `InvalidBinArray` | Invalid bin array | A provided bin array has the wrong index, wrong relationship to the requested bin, or does not match the expected contiguous array set. |
+| `6028` | `NonContinuousBinArrays` | Bin arrays must be continuous | Multiple bin arrays were provided in an order or sequence with gaps where the instruction requires continuous arrays. |
+| `6029` | `InvalidRewardVault` | Invalid reward vault | The reward vault account does not match the reward slot's configured vault. |
+| `6030` | `NonEmptyPosition` | Position is not empty | A close or shrink operation was attempted while the position still has liquidity, fees, rewards, or non-empty bin data. |
+| `6031` | `UnauthorizedAccess` | Unauthorized access | The action is not permitted for the pool type, pair status, operator, creator, or permissionless operation configuration. |
+| `6032` | `InvalidFeeParameter` | Invalid fee parameter | Fee parameter updates failed bounds checks such as factor, period, decay, reduction, or activation constraints. |
+| `6033` | `MissingOracle` | Missing oracle account | An operation that needs the oracle account did not include it. |
+| `6034` | `InsufficientSample` | Insufficient observation sample | Oracle lookup could not find enough observation samples for the requested timestamp or TWAP calculation. |
+| `6035` | `InvalidLookupTimestamp` | Invalid lookup timestamp | Oracle lookup was requested for a timestamp that is not valid for the stored observation window. |
+| `6036` | `BitmapExtensionAccountIsNotProvided` | Bitmap extension account is not provided | The target bin array index is outside the default bitmap range, but the bitmap extension account was not supplied. |
+| `6037` | `CannotFindNonZeroLiquidityBinArrayId` | Cannot find non-zero liquidity binArrayId | Bitmap search could not find the next bin array with non-zero liquidity in the requested direction. |
+| `6038` | `BinIdOutOfBound` | Bin id out of bound | A bin ID is outside the min/max bin IDs supported by the program's price and bin math. |
+| `6039` | `InsufficientOutAmount` | Insufficient amount in for minimum out | The resulting output amount is below the caller's minimum output amount, or a zap output amount is zero. |
+| `6040` | `InvalidPositionWidth` | Invalid position width | Position initialization or resize would create a width outside the allowed position length or dynamic-position limits. |
+| `6041` | `ExcessiveFeeUpdate` | Excessive fee update | Fee update logic detected too much elapsed time or too large an update step for the variable fee state. |
+| `6042` | `PoolDisabled` | Pool disabled | The pool status disallows the requested action, such as swap or add liquidity while that action is disabled. |
+| `6043` | `InvalidPoolType` | Invalid pool type | The stored pool type cannot be decoded or the instruction is not valid for that pool type. |
+| `6044` | `ExceedMaxWhitelist` | Whitelist for wallet is full | A whitelist update would exceed the maximum number of whitelisted wallets. |
+| `6045` | `InvalidIndex` | Invalid index | An index into a pool bitmap, reward array, bin array list, or similar indexed structure is invalid. |
+| `6046` | `RewardNotEnded` | Reward not ended | Ineligible reward withdrawal was attempted before the reward campaign ended. |
+| `6047` | `MustWithdrawnIneligibleReward` | Must withdraw ineligible reward | Reward funding or updates require ineligible rewards to be withdrawn first. |
+| `6048` | `UnauthorizedAddress` | Unauthorized address | A supplied address is not the configured authority, funder, owner, or allowed address for the requested action. |
+| `6049` | `OperatorsAreTheSame` | Cannot update because operators are the same | A position operator update tried to set the new operator to the current operator. |
+| `6050` | `WithdrawToWrongTokenAccount` | Withdraw to wrong token account | Fee, reward, or liquidity withdrawal destination token accounts do not match the expected mint or owner. |
+| `6051` | `WrongRentReceiver` | Wrong rent receiver | A close instruction supplied a rent receiver that is not allowed to receive the closed account lamports. |
+| `6052` | `AlreadyPassActivationPoint` | Already activated | Activation point, fee, or pool setup changes were attempted after the configured activation point has already passed. |
+| `6053` | `ExceedMaxSwappedAmount` | Swapped amount is exceeded max swapped amount | A pre-activation or capped swap flow would exceed the configured maximum swapped amount. |
+| `6054` | `InvalidStrategyParameters` | Invalid strategy parameters | Liquidity strategy parameters are inconsistent, outside allowed ranges, or incompatible with the active bin. |
+| `6055` | `LiquidityLocked` | Liquidity locked | A remove-liquidity or rebalance remove step was attempted before the position's lock release point. |
+| `6056` | `BinRangeIsNotEmpty` | Bin range is not empty | A bin range expected to be empty still contains liquidity or position data. |
+| `6057` | `NotExactAmountOut` | Amount out is not matched with exact amount out | Exact-out swap execution did not produce the requested exact output amount. |
+| `6058` | `InvalidActivationType` | Invalid activation type | The activation type byte cannot be decoded into a supported activation type. |
+| `6059` | `InvalidActivationDuration` | Invalid activation duration | The activation duration or activation window is outside the allowed range for that pair type. |
+| `6060` | `MissingTokenAmountAsTokenLaunchProof` | Missing token amount as token launch owner proof | A launch-owner proof flow expected token amount evidence, but the required amount/account proof was missing. |
+| `6061` | `InvalidQuoteToken` | Quote token must be SOL or USDC | A restricted launch or pool creation flow used a quote token other than SOL or USDC. |
+| `6062` | `InvalidBinStep` | Invalid bin step | A preset or pool creation request used a bin step outside the program's allowed range. |
+| `6063` | `InvalidBaseFee` | Invalid base fee | Preset fee fields calculate to a base fee outside the allowed bounds. |
+| `6064` | `InvalidPreActivationDuration` | Invalid pre-activation duration | Pre-activation duration is too long, too short, or invalid for the pair's activation configuration. |
+| `6065` | `AlreadyPassPreActivationSwapPoint` | Already pass pre-activation swap point | The pre-activation swap address or pre-activation setting was changed after the pre-activation swap point passed. |
+| `6066` | `InvalidStatus` | Invalid status | A status byte cannot be decoded or a status update tried to set the pool to its current status. |
+| `6067` | `ExceededMaxOracleLength` | Exceed max oracle length | Oracle length expansion would exceed the maximum oracle observation capacity. |
+| `6068` | `InvalidMinimumLiquidity` | Invalid minimum liquidity | A bin or position operation would violate the minimum liquidity requirement after adding or removing liquidity. |
+| `6069` | `NotSupportMint` | Not support token_2022 mint extension | A Token-2022 mint contains an extension that the pool creation or token validation path does not support. |
+| `6070` | `UnsupportedMintExtension` | Unsupported mint extension | Token-2022 validation found a mint extension outside the supported extension set. |
+| `6071` | `UnsupportNativeMintToken2022` | Unsupported native mint token2022 | The native mint was supplied through the Token-2022 path, which is not supported. |
+| `6072` | `UnmatchTokenMint` | Unmatch token mint | A token account, mint account, or remaining account does not match the expected pool or reward mint. |
+| `6073` | `UnsupportedTokenMint` | Unsupported token mint | The token mint is not supported for the requested pool or token path. |
+| `6074` | `InsufficientRemainingAccounts` | Insufficient remaining accounts | Token-2022 transfer hooks, reward accounts, or other extension paths require more remaining accounts than were provided. |
+| `6075` | `InvalidRemainingAccountSlice` | Invalid remaining account slice | The encoded remaining-account slice metadata does not line up with the remaining accounts passed to the instruction. |
+| `6076` | `DuplicatedRemainingAccountTypes` | Duplicated remaining account types | The same remaining-account category was supplied more than once. |
+| `6077` | `MissingRemainingAccountForTransferHook` | Missing remaining account for transfer hook | A Token-2022 mint has a transfer hook, but the required extra accounts for the hook were not included. |
+| `6078` | `NoTransferHookProgram` | Remaining account was passed for transfer hook but there's no hook program | Transfer-hook remaining accounts were supplied for a mint that has no transfer-hook program. |
+| `6079` | `ZeroFundedAmount` | Zero funded amount | Reward funding was attempted with an amount of zero. |
+| `6080` | `InvalidSide` | Invalid side | A resize or single-sided operation used a side value that cannot be decoded into the supported side enum. |
+| `6081` | `InvalidResizeLength` | Invalid resize length | Position resize length is zero, exceeds limits, or would shrink/grow the account in an invalid way. |
+| `6082` | `NotSupportAtTheMoment` | Not support at the moment | The requested flow is recognized but intentionally disabled or not implemented in the current program path. |
+| `6083` | `InvalidRebalanceParameters` | Invalid rebalance parameters | Rebalance add/remove/resize/shrink parameters are inconsistent, exceed slippage, or produce invalid target amounts. |
+| `6084` | `InvalidRewardAccounts` | Invalid reward accounts | Reward accounts provided to a rebalance or reward claim flow do not match the expected reward mints/vaults. |
+| `6085` | `UndeterminedError` | Undetermined error | A defensive fallback branch was reached in bin, rebalance, or resize logic where no more specific error applied. |
+| `6086` | `ReallocExceedMaxLengthPerInstruction` | Realloc exceed max length per instruction | Dynamic position resizing would reallocate more bytes than the program allows in a single instruction. |
+| `6087` | `InvalidBaseFeeMantissa` | Mantissa cannot more than two significant digits | Preset base-fee mantissa has more precision than the program accepts. |
+| `6088` | `InvalidPositionOwner` | Invalid position owner | The position owner is invalid, missing, or mismatched with the signer/position account for initialization. |
+| `6089` | `InvalidPoolAddress` | Invalid pool address | A position account is being initialized or used with an `lb_pair` address that does not match the expected pool. |
+| `6090` | `InvalidTokenBadgeType` | Invalid token badge type | Token badge validation found an unsupported badge type. |
+| `6091` | `InvalidTransferHookAuthority` | Invalid transfer hook authority | The configured transfer-hook authority is not the authority expected by the Token-2022 validation path. |
+| `6092` | `AmountXIsNegative` | Amount x is negative | Rebalance math produced a negative token X amount where only unsigned token amounts are valid. |
+| `6093` | `AmountYIsNegative` | Amount y is negative | Rebalance math produced a negative token Y amount where only unsigned token amounts are valid. |
+| `6094` | `InvalidPoolCreator` | Invalid pool creator | A creator-only operation was signed by an address that is not the pool creator. |
+| `6095` | `InvalidFunctionType` | Invalid function type | A fee or reward flow used a function type that cannot be decoded or is not supported for the operation. |
+| `6096` | `InvalidPermission` | Invalid permission | Operator or permission-bit configuration includes a permission outside the supported permission mask. |
+| `6097` | `IncorrectATA` | Incorrect ATA | A token account is not the associated token account for the expected owner and mint. |
+| `6098` | `InvalidWithdrawProtocolFeeZapAccounts` | Invalid withdraw protocol fee zap accounts | Protocol-fee zap account ordering, token accounts, vaults, or fee accounts do not match the expected zap layout. |
+| `6099` | `MintRestrictedFromZap` | SOL,USDC protocol fee cannot be withdrawn via zap | Protocol fees for restricted SOL/USDC mints were routed through zap, which the program forbids. |
+| `6100` | `CpiDisabled` | CPI disabled | The zap flow attempted to CPI into a program or path that is disabled by configuration. |
+| `6101` | `MissingZapOutInstruction` | Missing zap out instruction | The instruction sysvar did not contain the expected zap-out instruction at the required position. |
+| `6102` | `InvalidZapAccounts` | Invalid zap accounts | Zap accounts are missing, out of order, duplicated incorrectly, or do not match the expected pool/token accounts. |
+| `6103` | `InvalidZapOutParameters` | Invalid zap out parameters | Zap-out instruction data, route parameters, amount, direction, or decoded fields are invalid. |
+| `6104` | `InsufficientInAmount` | Insufficient in amount | The input amount available to a swap, bin, or zap calculation is not enough to continue the operation. |
+| `6105` | `InvalidPlaceLimitOrderParameters` | Invalid place limit order parameters | Limit order placement parameters are invalid, such as inconsistent bins, side, amount, or active-bin relationship. |
+| `6106` | `InvalidLimitOrderOwner` | Invalid limit order owner | The signer is not the owner allowed to create, update, or cancel the limit order account. |
+| `6107` | `InvalidCancelLimitOrderParameters` | Invalid cancel limit order parameters | Cancel parameters do not match an existing order bin, side, amount, or cancellation constraints. |
+| `6108` | `CannotFindLimitOrderByBinId` | Cannot find limit order by bin id | The limit order account does not contain an order entry for the requested bin ID. |
+| `6109` | `CancelNonEmptyLimitOrder` | Cannot cancel non-empty limit order | A limit order close/cancel path expected the limit order to be empty, but order data remains. |
+| `6110` | `InvalidCollectFeeMode` | Invalid collect fee mode | The stored collect-fee mode byte cannot be decoded into a supported collect fee mode. |
