@@ -578,6 +578,7 @@ This returns `RemainingAccountsInfoSlice[]` and account metas for Token-2022 tra
 
 | Helper | Description |
 | --- | --- |
+| `getPotentialToken2022IxDataAndAccounts(actionType, rewardIndex?)` | Instance helper that returns remaining-account slices and metas for Token-2022 transfer hooks used by liquidity, swap, fee, and reward flows. |
 | `calculateTransferFeeIncludedAmount(amount, mint, epoch)` | Grosses up an amount so the receiver gets the intended net amount after transfer fee. |
 | `calculateTransferFeeExcludedAmount(amount, mint, epoch)` | Calculates net amount after transfer fee. |
 | `getExtraAccountMetasForTransferHook(connection, mint, mintAccount)` | Reads transfer-hook extra account metas for one mint. |
@@ -602,12 +603,17 @@ This returns `RemainingAccountsInfoSlice[]` and account metas for Token-2022 tra
 | Helper | Description |
 | --- | --- |
 | `binIdToBinArrayIndex` | Converts a bin ID to bin array index. |
+| `deriveBinArrayBitmapExtension` | Derives the bitmap extension account for a pool. |
 | `getBinArrayLowerUpperBinId` | Returns lower/upper bin IDs for a bin array index. |
 | `isBinIdWithinBinArray` | Checks whether a bin belongs to a bin array. |
+| `getBinFromBinArray` | Returns one bin from a loaded bin array. |
 | `isOverflowDefaultBinArrayBitmap` | Checks if a bin array index requires bitmap extension. |
 | `findNextBinArrayIndexWithLiquidity` | Finds next initialized bin array with liquidity in a direction. |
 | `findNextBinArrayWithLiquidity` | Same, but returns an account from loaded bin arrays. |
 | `getBinArraysRequiredByPositionRange` | Returns bin array PDAs required for a position range. |
+| `getBinIdIndexInBinArray` | Converts bin ID to its index inside a bin array. |
+| `binDeltaToMinMaxBinId` | Converts a bin delta around an active bin into min/max bin IDs. |
+| `decodeRewardPerTokenStored` | Decodes reward-per-token state from a bin. |
 | `enumerateBins` | Iterates bins across loaded bin arrays. |
 | `getBinArrayInfoForNonContiguousBinIds` | Returns bin array metas and bitmap account for arbitrary bin IDs. |
 
@@ -627,6 +633,7 @@ This returns `RemainingAccountsInfoSlice[]` and account metas for Token-2022 tra
 
 | Helper | Description |
 | --- | --- |
+| `getPriceOfBinByBinId` | Converts a bin ID and bin step to a decimal price. |
 | `calculateSpotDistribution` | Builds spot weight distribution. |
 | `calculateBidAskDistribution` | Builds bid/ask weight distribution. |
 | `calculateNormalDistribution` | Builds curve/normal distribution. |
@@ -635,6 +642,7 @@ This returns `RemainingAccountsInfoSlice[]` and account metas for Token-2022 tra
 | `toStrategyParameters` | Converts SDK strategy enum into program strategy parameters. |
 | `toWeightDistribution` | Converts bps distributions into program weights. |
 | `fromWeightDistributionToAmount`, `fromWeightDistributionToAmountOneSide` | Converts weights back to token amounts. |
+| `toAmountBidSide`, `toAmountAskSide`, `toAmountBothSide` | Lower-level helpers for converting weight distribution to token amounts by side. |
 | `autoFillYByWeight`, `autoFillXByWeight` | Calculates missing side amount for weight deposits. |
 
 ### Fee And Math Helpers
@@ -646,8 +654,9 @@ This returns `RemainingAccountsInfoSlice[]` and account metas for Token-2022 tra
 | `getExcludedFeeAmount`, `getIncludedFeeAmount`, `splitFee` | Fee-inclusive/exclusive calculations. |
 | `computeBaseFactorFromFeeBps` | Converts fee bps into base factor and base fee power factor. |
 | `getQPriceFromId`, `getQPriceBaseFactor` | Q64.64 price helpers. |
-| `mulShr`, `shlDiv`, `mulDiv` | Fixed-point arithmetic helpers. |
-| `generateAmountForBinRange`, `compressBinAmount`, `findOptimumDecompressMultiplier` | Seed liquidity compression helpers. |
+| `mulShr`, `shlDiv`, `mulDiv`, `pow` | Fixed-point arithmetic helpers. |
+| `getC`, `distributeAmountToCompressedBinsByRatio` | Seed-liquidity and compression math helpers. |
+| `generateAmountForBinRange`, `generateBinAmount`, `compressBinAmount`, `findOptimumDecompressMultiplier` | Seed liquidity compression helpers. |
 
 ### RPC And Transaction Helpers
 
@@ -659,10 +668,52 @@ This returns `RemainingAccountsInfoSlice[]` and account metas for Token-2022 tra
 | `getTokenDecimals`, `getTokenBalance` | Token account reads. |
 | `getOrCreateATAInstruction` | Returns ATA address and optional create instruction. |
 | `wrapSOLInstruction`, `unwrapSOLInstruction` | Native SOL wrapping helpers. |
+| `parseLogs` | Parses Anchor events from transaction logs. |
 | `getEstimatedComputeUnitUsageWithBuffer`, `getEstimatedComputeUnitIxWithBuffer` | Simulation-based compute budget helpers. |
+| `getDefaultExtendPositionCU`, `getSimulationComputeUnits` | Lower-level compute unit helpers. |
 | `createProgram`, `decodeAccount`, `getAccountDiscriminator` | Anchor program/account helpers. |
 | `capSlippagePercentage`, `getAndCapMaxActiveBinSlippage`, `getSlippageMaxAmount`, `getSlippageMinAmount` | Slippage helpers. |
+| `getBinCount`, `getPositionCountByBinCount` | Position/bin count helpers. |
+| `resetUninvolvedLiquidityParams` | Clears liquidity params outside the active update range. |
 | `encodePositionPermissions` | Encodes position permission bits. |
+
+### Pool State Helpers
+
+| Helper | Description |
+| --- | --- |
+| `getTokenProgramId` | Returns token X/Y program IDs from an `LbPair`. |
+| `isSupportLimitOrder` | Checks whether a pool supports limit order behavior. |
+| `getFeeMode` | Returns fee-on-input/output behavior for a swap direction. |
+
+### Rebalance Helper Exports
+
+| Helper | Description |
+| --- | --- |
+| `getLiquidityStrategyParameterBuilder` | Returns the strategy parameter builder for spot, curve, or bid/ask strategies. |
+| `suggestBalancedXParametersFromY`, `suggestBalancedYParametersFromX` | Suggest balanced strategy parameters from a single-side input. |
+| `getAutoFillAmountByRebalancedPosition` | Computes autofill amounts for rebalance simulation. |
+| `buildLiquidityStrategyParameters` | Builds rebalance liquidity strategy parameters. |
+| `buildBitFlagAndNegateStrategyParameters` | Encodes rebalance deposit/withdraw flags. |
+| `getAmountInBinsBidSide`, `getAmountInBinsAskSide`, `toAmountIntoBins` | Convert rebalance amounts into per-bin values. |
+| `getRebalanceBinArrayIndexesAndBitmapCoverage` | Computes bin array coverage and bitmap extension requirements for rebalance. |
+
+### Low-Level Export Notes
+
+These exports are available for advanced integrations and tests, but most applications do not need to call them directly:
+
+| Export | Description |
+| --- | --- |
+| `swapExactInQuoteAtBin`, `swapExactOutQuoteAtBin`, `getAmountIn`, `getAmountOut`, `getBinMaxAmountOut`, `getLimitOrderLiquidity` | Single-bin quote and liquidity helpers used internally by quote simulation. |
+| `BalancedStrategyBuilder`, `SpotStrategyParameterBuilder`, `CurveStrategyParameterBuilder`, `BidAskStrategyParameterBuilder` | Strategy builder classes used by rebalance and liquidity strategy helpers. |
+| `PositionV2Wrapper`, `LimitOrderV1Wrapper`, `LimitOrderBinDataWrapper` | Account wrapper classes for parsed position and limit order data. |
+| `capBps`, `MAX_BPS`, `REBALANCE_POSITION_PADDING` | Rebalance helper constants and bounds. |
+| `DEFAULT_ADD_LIQUIDITY_CU`, `DEFAULT_EXTEND_POSITION_HIGH_CU`, `DEFAULT_EXTEND_POSITION_LOW_CU`, `DEFAULT_INIT_POSITION_CU`, `DEFAULT_INIT_BIN_ARRAY_CU`, `MIN_CU_BUFFER`, `MAX_CU_BUFFER`, `MAX_CU` | Compute unit defaults used by transaction builders. |
+| `POSITION_MIN_SIZE`, `POSITION_BIN_DATA_SIZE`, `LIMIT_ORDER_MIN_SIZE`, `LIMIT_ORDER_BIN_DATA_SIZE` | Dynamic account size constants. |
+| `ClockLayout`, `MEMO_PROGRAM_ID` | Clock account decoder and memo program constant used by v2 builders. |
+| `chunkDepositWithRebalanceEndpoint` | Internal-style helper for chunking deposit instructions through the rebalance endpoint. |
+| `derivePlaceHolderAccountMeta` | Derives the placeholder account meta used for optional accounts. |
+| `getTokensMintFromPoolAddress` | Helper for decoding token mints from a pool address. |
+| `DLMMError` | Legacy SDK error export alongside `DlmmSdkError`. |
 
 ### Account Filters
 

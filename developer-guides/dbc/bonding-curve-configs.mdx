@@ -1,12 +1,17 @@
 ---
-title: Bonding Curve Configs
+title: "DBC Bonding Curve Configs"
+sidebarTitle: "Bonding Curve Configs"
+description: "Configure DBC pool fees, curve shape, token behavior, vesting, migration, and graduated DAMM pool settings."
+llmsDescription: "DBC PoolConfig field guide covering partner/creator roles, tokenomics, poolFees, baseFee, dynamicFee, migrationQuoteThreshold, migrationFee, curve points, DAMM v1/v2 migration, liquidity percentages, LP vesting, poolCreationFee, and buildCurve helpers."
 ---
 
-<Note>Every DBC pool must be created using a config key that defines the pool's parameters. Each DBC pool is a PDA of `baseMint` + `quoteMint` + `config`.</Note>
+<Note>
+  Every DBC pool is created from a config key that defines pool behavior. The pool address is derived from `baseMint`, `quoteMint`, and `config`.
+</Note>
 
-Configs are basically where you configure the pre-graduation pool fees, post-graduation pool fees, the collect fee mode, the dynamic fee, the bonding curve shape, token vesting and more.
+Configs define pre-graduation pool fees, post-graduation pool fees, collect fee mode, dynamic fee behavior, bonding curve shape, token vesting, migration rules, and fee recipients.
 
-This guide will cover what each field in the configuration means and how you can configure your ideal bonding curve settings.
+This guide explains each config field and points to SDK helpers that can build valid curve parameters for common launch designs.
 
 # Context
 
@@ -103,7 +108,7 @@ A typical DBC curve config will look like this when you parse it into the `creat
 
 There are 3 ways you can go about to create your DBC curve config key onchain. You can either:
 1. Head to [launch.meteora.ag](https://launch.meteora.ag) and use the UI to create your DBC curve config key.
-2. Use the build curve functions in the [DBC Typescript SDK](/developer-guide/guides/dbc/typescript-sdk/getting-started) to create your DBC curve config key. These build curve functions abstracts the math complexity of the bonding curve while still allowing you to have full control over the curve structure.
+2. Use the build curve functions in the [DBC TypeScript SDK](/developer-guides/dbc/typescript-sdk/getting-started) to create your DBC curve config key. These build curve functions abstracts the math complexity of the bonding curve while still allowing you to have full control over the curve structure.
 3. Doing the math and creating the curve config key manually and parsing it into the `create_config` instruction.
 
 ## Tokenomics Configuration
@@ -266,7 +271,7 @@ enableFirstSwapWithMinFee: true
 
 - The `migrationQuoteThreshold` is a u128 value representing the amount of quote token that will be needed to be collected in the pre-graduation DBC pool to qualify for the pool to be ready for migration.
 - In order for the token to graduate from pre-graduation to post-graduation, the `poolState.quoteReserve` must be greater than or equal to the `poolConfig.migrationQuoteThreshold`.
-- If you want your pool to automatically migrate when the `poolState.quoteReserve` is greater than or equal to the `poolConfig.migrationQuoteThreshold`, you would need to set the `migrationQuoteThreshold` to have a minimum value of 750 USD. You can read more about our migration keepers [here](/developer-guide/guides/dbc/overview#migration-keeper)
+- If you want your pool to automatically migrate when the `poolState.quoteReserve` is greater than or equal to the `poolConfig.migrationQuoteThreshold`, you would need to set the `migrationQuoteThreshold` to have a minimum value of 750 USD. You can read more about our migration keepers [here](/developer-guides/dbc#migration-keepers).
 
 ### `migrationFee`
 
@@ -314,7 +319,7 @@ migrationFee: {
 ### `migrationFeeOption`
 
 - The `migrationFeeOption` are fee configs that have been pre-defined for the DBC Pool Authority to use.
-- You can find the list of the pre-defined fee configs [here](/developer-guide/guides/dbc/overview#damm-fee-config-keys).
+- You can find the list of the pre-defined fee configs [here](/developer-guides/dbc#damm-fee-config-keys).
 <Note>**For DAMM v1**, the `collectFeeMode` of the post-graduation pool is set to `Output Token`.</Note>
 <Note>**For DAMM v2**, the `collectFeeMode` of the post-graduation pool is set to `Quote Token`. Additionally, because dynamic fee is enabled in the DAMM v2 fee config, there will be an additional 20% of the chosen base fee added to the total fee.</Note>
 - The `migrationFeeOption` is a u8 value representing the pool fee of the post-graduation pool.
@@ -515,34 +520,34 @@ When creating the DBC Curve Config, you need to call the `create_config` instruc
 
 # Build Curve Helper functions
 
-Creating a curve config key is a highly complex process that involves understanding how the math of the bonding curve works. To make this process easier, we have created a set of helper functions in the [DBC Typescript SDK](/developer-guide/guides/dbc/typescript-sdk/getting-started) that will help you create the curve config key.
+Creating a curve config key is a highly complex process that involves understanding how the math of the bonding curve works. To make this process easier, we have created a set of helper functions in the [DBC TypeScript SDK](/developer-guides/dbc/typescript-sdk/getting-started) that will help you create the curve config key.
 
-### [buildCurve](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurve)
+### [buildCurve](/developer-guides/dbc/typescript-sdk/sdk-functions#buildcurve)
 
 - This function is useful when you want to create a curve config with a specific `migrationQuoteThreshold` and `percentageSupplyOnMigration`.
 - The `percentageSupplyOnMigration` is the percentage of the total token supply that you want to be migrated into the post-graduation pool's LP.
 
-### [buildCurveWithMarketCap](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithmarketcap)
+### [buildCurveWithMarketCap](/developer-guides/dbc/typescript-sdk/sdk-functions#buildcurvewithmarketcap)
 
 - This function is useful when you want to create a curve config that has a specific starting token price and an ending migration token price.
 - The `initialMarketCap` is the initial market cap of the token when the pre-graduation pool is first created.
 - The `migrationMarketCap` is the market cap of the token when the pre-graduation pool is ready to migrate to the post-graduation pool.
 
-### [buildCurveWithTwoSegments](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithtwosegments)
+### [buildCurveWithTwoSegments](/developer-guides/dbc/typescript-sdk/sdk-functions#buildcurvewithtwosegments)
 
 - This function is useful when you want to create a 2 constant product curve structure with a specific `initialMarketCap`, `migrationMarketCap` and `percentageSupplyOnMigration`.
 - The `percentageSupplyOnMigration` is the percentage of the total token supply that you want to be migrated into the post-graduation pool's LP.
 - The `initialMarketCap` is the initial market cap of the token when the pre-graduation pool is first created.
 - The `migrationMarketCap` is the market cap of the token when the pre-graduation pool is ready to migrate to the post-graduation pool.
 
-### [buildCurveWithLiquidityWeights](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithliquidityweights)
+### [buildCurveWithLiquidityWeights](/developer-guides/dbc/typescript-sdk/sdk-functions#buildcurvewithliquidityweights)
 
 - This function is useful when you want to create a curve config with a unique price action (flat, exponential, etc.) with a specific initial market cap, migration market cap and liquidity weights.
 - The `liquidityWeights` is an array of values that you want to be the exponent of the liquidity of the curve segments. Using these liquidity weights, you can control how thick or thin each curve segment's liquidity is to control the price action of the curve.
 - The `initialMarketCap` is the initial market cap of the token when the pre-graduation pool is first created.
 - The `migrationMarketCap` is the market cap of the token when the pre-graduation pool is ready to migrate to the post-graduation pool.
 
-### [buildCurveWithMidPrice](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithmidprice)
+### [buildCurveWithMidPrice](/developer-guides/dbc/typescript-sdk/sdk-functions#buildcurvewithmidprice)
 
 - This function is useful when you want to create a 2 constant product curve structure with a specific mid-point price. This allows you to control the price at which the two curve segments meet.
 - The `initialMarketCap` is the initial market cap of the token when the pre-graduation pool is first created.
@@ -550,7 +555,7 @@ Creating a curve config key is a highly complex process that involves understand
 - The `midPrice` is the price at which the two curve segments will meet (the breakpoint price between the two constant product curves).
 - The `percentageSupplyOnMigration` is the percentage of the total token supply that you want to be migrated into the post-graduation pool's LP.
 
-### [buildCurveWithCustomSqrtPrices](/developer-guide/guides/dbc/typescript-sdk/sdk-functions#buildcurvewithcustomsqrtprices)
+### [buildCurveWithCustomSqrtPrices](/developer-guides/dbc/typescript-sdk/sdk-functions#buildcurvewithcustomsqrtprices)
 
 - This function is useful when you want full control over the curve by specifying custom sqrt price breakpoints directly.
 - The `sqrtPrices` is an array of custom sqrt prices that must be in ascending order. The first element is the starting price (pMin) and the last element is the migration price (pMax).

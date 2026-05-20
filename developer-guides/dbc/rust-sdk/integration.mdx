@@ -1,23 +1,29 @@
 ---
-title: Integration
-description: DBC
+title: "DBC Rust Integration"
+sidebarTitle: "Integration"
+description: "Use DBC Rust quote helpers and on-chain program types for swap simulation and program-side integration."
+llmsDescription: "DBC Rust integration guide covering quote_exact_in, quote_exact_out, quote_partial_fill, VirtualPool, PoolConfig, SwapResult2, exact in/out, partial fill, current slot/timestamp, referral fees, and CPI/account-order guidance."
 ---
 
-The `dynamic-bonding-curve-sdk` provides a convenient way to interact with the Dynamic Bonding Curve program.
-
-Before you begin, here are some important resources:
+The `dynamic-bonding-curve` repository includes Rust state, curve, fee, and quote logic used by the on-chain program. Use these helpers when you need program-aligned swap simulation or Rust-side integration tests.
 
 <CardGroup cols={1}>
-  <Card title="Rust SDK" icon="rust" iconType="solid" href="https://github.com/MeteoraAg/dynamic-bonding-curve/tree/main/dynamic-bonding-curve-sdk">
-    Meteora DBC Rust SDK
+  <Card title="DBC Program Source" icon="rust" iconType="solid" href="https://github.com/MeteoraAg/dynamic-bonding-curve/tree/main/programs/dynamic-bonding-curve">
+    Anchor program source, state layouts, math, instructions, and tests.
   </Card>
 </CardGroup>
 
-# `quote_exact_in`
+<Note>
+  For off-chain applications, the TypeScript SDK is the primary public SDK. Rust integrations should mirror the published IDL and program source, and should compare raw instruction account order against SDK-built transactions.
+</Note>
 
-This function calculates the result of a swap for a given amount of an exact input token.
+## Quote Helpers
 
-**Function**
+DBC supports exact-in, exact-out, and partial-fill quote paths. These map to the `swap2` modes used by modern integrations.
+
+### `quote_exact_in`
+
+Calculates the result of a swap for an exact input amount.
 
 ```rust
 pub fn quote_exact_in(
@@ -31,25 +37,19 @@ pub fn quote_exact_in(
 ) -> Result<SwapResult2>
 ```
 
-**Parameters**
+| Parameter | Meaning |
+| --- | --- |
+| `pool` | Current `VirtualPool` state. |
+| `config` | `PoolConfig` used by the pool. |
+| `swap_base_for_quote` | `true` to sell base for quote, `false` to buy base with quote. |
+| `current_timestamp` | Current cluster timestamp. |
+| `current_slot` | Current cluster slot. |
+| `in_amount` | Input amount before DBC fee calculation. |
+| `has_referral` | Whether referral fee should be included in the fee split. |
 
--   `pool`: A reference to the `VirtualPool` state.
--   `config`: A reference to the `PoolConfig` for the pool.
--   `swap_base_for_quote`: A boolean indicating the direction of the trade. `true` for swapping base token for quote token, `false` otherwise.
--   `current_timestamp`: The current Solana cluster timestamp.
--   `current_slot`: The current Solana cluster slot.
--   `in_amount`: The amount of input tokens for the swap, excluding any transfer fees.
--   `has_referral`: A boolean indicating if a referral fee should be considered.
+### `quote_exact_out`
 
-**Returns**
-
-It returns a `Result<SwapResult2>`, where `SwapResult2` contains detailed information about the outcome of the swap, such as the amount in, fees, and the next sqrt price of the token.
-
-# `quote_exact_out`
-
-This function calculates the result of a swap for a given amount of an exact output token.
-
-**Function**
+Calculates the required input amount for an exact output amount.
 
 ```rust
 pub fn quote_exact_out(
@@ -62,24 +62,11 @@ pub fn quote_exact_out(
 ) -> Result<SwapResult2>
 ```
 
-**Parameters**
+Use this for `swap2` exact-out mode, then pass the returned input bound into the transaction with explicit slippage protection.
 
--   `pool`: A reference to the `VirtualPool` state.
--   `config`: A reference to the `PoolConfig` for the pool.
--   `swap_base_for_quote`: A boolean indicating the direction of the trade. `true` for swapping base token for quote token, `false` otherwise.
--   `current_timestamp`: The current Solana cluster timestamp.
--   `current_slot`: The current Solana cluster slot.
--   `out_amount`: The amount of output tokens for the swap, excluding any transfer fees.
+### `quote_partial_fill`
 
-**Returns**
-
-It returns a `Result<SwapResult2>`, where `SwapResult2` contains detailed information about the outcome of the swap, such as the amount in, fees, and the next sqrt price of the token.
-
-# `quote_partial_fill`
-
-This function calculates the result of a swap for a given amount of a partial input token. This is useful for trading terminals to not be hurt by the last swap overpaying.
-
-**Function**
+Calculates a partial-fill quote for an exact input amount.
 
 ```rust
 pub fn quote_partial_fill(
@@ -93,16 +80,33 @@ pub fn quote_partial_fill(
 ) -> Result<SwapResult2>
 ```
 
-**Parameters**
+Partial fill is useful near the end of a bonding curve because the final buy may not be able to consume the full input amount without exceeding the migration boundary.
 
--   `pool`: A reference to the `VirtualPool` state.
--   `config`: A reference to the `PoolConfig` for the pool.
--   `swap_base_for_quote`: A boolean indicating the direction of the trade. `true` for swapping base token for quote token, `false` otherwise.
--   `current_timestamp`: The current Solana cluster timestamp.
--   `current_slot`: The current Solana cluster slot.
--   `in_amount`: The amount of input tokens for the swap, excluding any transfer fees.
--   `has_referral`: A boolean indicating if a referral fee should be considered.
+## Return Data
 
-**Returns**
+`SwapResult2` includes the values indexers and transaction builders need:
 
-It returns a `Result<SwapResult2>`, where `SwapResult2` contains detailed information about the outcome of the swap, such as the amount in, fees, and the next sqrt price of the token.
+| Field | Use |
+| --- | --- |
+| `included_fee_input_amount` | Input amount before excluded-fee adjustment. |
+| `excluded_fee_input_amount` | Amount that moves the curve after fee handling. |
+| `amount_left` | Unused amount in partial-fill flows. |
+| `output_amount` | Output token amount. |
+| `next_sqrt_price` | Post-swap sqrt price. |
+| `trading_fee`, `protocol_fee`, `referral_fee` | Fee split for the swap. |
+
+## CPI Guidance
+
+When calling DBC from another program, generate bindings from the IDL or compare against SDK-built instructions. Account order is especially important for swap and migration flows that include optional accounts, token programs, event authority accounts, or instruction sysvar validation.
+
+Keep user-facing limits in your own instruction arguments:
+
+| Flow | Required bound |
+| --- | --- |
+| Exact in | Minimum output amount. |
+| Exact out | Maximum input amount. |
+| Partial fill | Minimum output and expected partial-fill behavior. |
+
+<Warning>
+  Never rely on token transfer logs to reconstruct DBC swap price. Use `EvtSwap2`, account state, or the quote helpers so fee-adjusted amounts and `next_sqrt_price` are handled correctly.
+</Warning>

@@ -1,0 +1,73 @@
+---
+title: "DBC Program Architecture"
+sidebarTitle: "Architecture"
+description: "How dynamic_bonding_curve models configs, virtual pools, swaps, fees, migration, and permissions."
+llmsDescription: "dynamic_bonding_curve architecture overview: PoolConfig, VirtualPool, curve points, fee scheduler, rate limiter, dynamic fees, swap/swap2 modes, migration to DAMM v1/v2, vesting, surplus, leftover, and operator permissions."
+---
+
+The DBC on-chain program is `dynamic_bonding_curve`. It creates a virtual reserve pool from a partner config, lets users trade along a configured curve, then migrates completed pools to DAMM v1 or DAMM v2.
+
+## Core Model
+
+| Concept | Program representation | Notes |
+| --- | --- | --- |
+| Config | `PoolConfig` | Partner-owned launch template. Stores quote mint, fee claimer, curve, fee settings, migration settings, token authority behavior, vesting, pool creation fee, and graduated-pool fee settings. |
+| Virtual pool | `VirtualPool` | Per-token launch pool. Stores creator, base mint, vaults, reserves, current sqrt price, fee balances, progress flags, migration state, and metrics. |
+| Curve | `sqrt_start_price` plus `curve` points | Piecewise liquidity curve. Each curve point has a sqrt price and liquidity. |
+| Fees | `PoolFeesConfig`, `BaseFeeConfig`, `DynamicFeeConfig`, `VolatilityTracker` | Base fee can be flat, scheduled, or rate-limited. Dynamic fee adds volatility-sensitive fees. |
+| Metadata | `PartnerMetadata`, `VirtualPoolMetadata` | Optional metadata accounts for partners and pools. |
+| Migration | DAMM v1/v2 migration handlers | Moves quote and base liquidity into the configured DAMM pool and handles locked/claimable LP allocations. |
+| Operators | `Operator`, `ClaimFeeOperator` | Admin-controlled roles for protocol fee claims, pool creation fee claims, and protocol fee zaps. |
+
+## Lifecycle
+
+1. A partner creates a `PoolConfig`.
+2. A creator initializes a `VirtualPool` with an SPL Token or Token-2022 base mint.
+3. Users swap against the virtual reserves until `quote_reserve >= migration_quote_threshold`.
+4. Optional locked vesting is initialized through the locker flow.
+5. The pool migrates to DAMM v1 or DAMM v2 according to `migration_option`.
+6. Partner, creator, protocol, and leftover receivers claim the amounts permitted by the config and pool state.
+
+## Swap Modes
+
+DBC exposes two swap entry points:
+
+| Instruction | Modes |
+| --- | --- |
+| `swap` | Exact in only. |
+| `swap2` | Exact in (`0`), partial fill (`1`), and exact out (`2`). |
+
+New integrations should prefer `swap2`. Its event includes fields that trading terminals and indexers need, including `quoteReserveAmount`, `migrationThreshold`, `includedFeeInputAmount`, and `nextSqrtPrice`.
+
+## Fee Model
+
+`PoolFeesConfig` combines a base fee and an optional dynamic fee. The total fee numerator is capped by the program before fees are split.
+
+| Fee layer | Purpose |
+| --- | --- |
+| Flat fee | Uses only `cliff_fee_numerator`. |
+| Fee scheduler | Reduces the base fee linearly or exponentially over slots or timestamps. |
+| Rate limiter | Increases fee pressure by trade size over a limited duration. Requires extra instruction sysvar validation. |
+| Dynamic fee | Adds volatility-sensitive fees from the pool's `VolatilityTracker`. |
+| Protocol/referral split | Protocol receives a share of trading fees, and referral fees are carved out when a referral account is present. |
+
+<Note>
+  For pools using rate limiter mode or first-swap-with-min-fee validation, include `SYSVAR_INSTRUCTIONS_PUBKEY` in the swap instruction remaining accounts. The SDK does this for supported builders.
+</Note>
+
+## Migration
+
+`migration_option` determines the graduated pool:
+
+| Option | Destination | Notes |
+| --- | --- | --- |
+| `0` | DAMM v1 | Requires SPL Token base mints. Uses migration metadata, optional locker creation, migration, then LP lock/claim instructions. |
+| `1` | DAMM v2 | Supports newer graduated-pool fee settings and direct position-based liquidity vesting. DAMM v2 migration metadata is deprecated. |
+
+Migration uses the configured `migration_fee_option`, optional partner/creator migration fee split, protocol migration fee, liquidity percentages, and lock/vesting settings.
+
+## Integration Boundaries
+
+Use the TypeScript SDK for transaction construction unless you need custom program-side CPI or backend-only flows. The SDK mirrors the on-chain math in `src/math`, derives PDAs, validates config parameters, handles SOL wrapping, and includes the extra accounts required by modern swap and migration flows.
+
+For indexers and trading terminals, treat on-chain events and account data as the stable read path. Do not infer price from token transfer logs; anti-sniper fees can make transfer amounts differ from the swap amounts used for charting.
