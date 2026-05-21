@@ -1,0 +1,227 @@
+---
+title: "Presale Vault TS SDK Reference"
+sidebarTitle: "Reference"
+description: "Understand @meteora-ag/presale exports, enums, PDA helpers, transaction builders, state wrappers, math helpers, Token 2022 helpers, and account readers."
+llmsDescription: "Explains the Presale Vault TypeScript SDK reference for @meteora-ag/presale. Covers dependencies, program IDs, core exports, enums, constants, Presale client creation, static presale creation methods, instance transaction builders, state reader methods, instruction builders, PDA helpers, account wrappers, math helpers, Token 2022 helpers, RPC helpers, account filters, permissioned metadata URL behavior, common workflow, and integration notes."
+---
+
+This page is based on the public source surface of `@meteora-ag/presale`. Use it as the high-level map for the SDK, then open the package types when you need exact parameter shapes.
+
+```typescript
+import Presale, {
+  PRESALE_PROGRAM_ID,
+  PresaleMode,
+  WhitelistMode,
+  UnsoldTokenAction,
+  derivePresale,
+  uiPriceToQPrice,
+} from "@meteora-ag/presale";
+```
+
+## Dependencies
+
+| Package | Version range in SDK |
+| --- | --- |
+| `@coral-xyz/anchor` | `^0.31.1` |
+| `@solana/web3.js` | `^1.98.2` |
+| `@solana/spl-token` | `^0.4.13` |
+| `bn.js` | `^5.2.2` |
+| `decimal.js` | `^10.6.0` |
+
+## Program IDs
+
+| Export | Value |
+| --- | --- |
+| `PRESALE_PROGRAM_ID` | `presSVxnf9UU8jMxhgSMqaRwNiT36qeBdNeTRKjTdbj` |
+| `MEMO_PROGRAM_ID` | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` |
+| `METAPLEX_PROGRAM_ID` | `metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s` |
+
+## Core Exports
+
+| Export | Use |
+| --- | --- |
+| `Presale` | Main SDK client for transaction builders and state readers. |
+| `PRESALE_PROGRAM_ID` | Default deployed program ID. |
+| IDL exports | Bundled Anchor IDL JSON and generated TypeScript IDL type. |
+| `pda` exports | PDA derivation helpers for presale, vault, escrow, operator, Merkle root, and metadata accounts. |
+| `instructions` exports | Low-level instruction builders for every public program instruction. |
+| `type` exports | Program account aliases, enums, and response types. |
+| `math` exports | Price, cap, lock/vest, claim, and fee helper functions. |
+| `accounts` exports | Presale, registry, and escrow wrapper classes plus account filters. |
+| `rpc` exports | On-chain timestamp, account chunking, and compute-unit simulation helpers. |
+| `token2022` exports | Transfer-hook account discovery and transfer-fee calculation helpers. |
+
+## Enums
+
+| Enum | Values |
+| --- | --- |
+| `UnsoldTokenAction` | `Refund = 0`, `Burn = 1`. |
+| `WhitelistMode` | `Permissionless = 0`, `PermissionWithMerkleProof = 1`, `PermissionWithAuthority = 2`. |
+| `PresaleMode` | `FixedPrice = 0`, `Prorata = 1`, `Fcfs = 2`. |
+| `PresaleProgress` | `NotStarted = 0`, `Ongoing = 1`, `Completed = 2`, `Failed = 3`. |
+| `AccountsType` | `TransferHookBase = 0`, `TransferHookQuote = 1`. |
+| `Rounding` | `Up = 0`, `Down = 1`. |
+
+## Constants
+
+| Constant | Use |
+| --- | --- |
+| `DEFAULT_PERMISSIONLESS_REGISTRY_INDEX` | `BN(0)`, used by permissionless escrow and deposit helpers. |
+| `U64_MAX` | `18446744073709551615` as `BN`. |
+| `U128_MAX` | SDK integer bound helper. |
+
+## Creating A Client
+
+```typescript
+import { Connection, PublicKey } from "@solana/web3.js";
+import Presale, { PRESALE_PROGRAM_ID } from "@meteora-ag/presale";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const presale = await Presale.create(
+  connection,
+  new PublicKey("PRESALE_ADDRESS"),
+  PRESALE_PROGRAM_ID
+);
+```
+
+The client caches presale state, base and quote mint data, and Token 2022 transfer-hook metadata. Call `refetchState()` before building transactions from a long-lived UI session.
+
+## `Presale` Static Methods
+
+| Method | Returns | Use |
+| --- | --- | --- |
+| `Presale.create(connection, presaleAddress, programId?)` | `Promise<Presale>` | Fetch state and create a client for an existing presale. |
+| `Presale.createFixedPricePresale(connection, programId, presaleParams, fixedPriceParams, shouldOptimizeComputeUnit?)` | `Promise<Transaction>` | Build a fixed-price presale initialization transaction. Includes fixed-price extra-args creation and `initialize_presale`. |
+| `Presale.createProrataPresale(connection, programId, params, shouldOptimizeComputeUnit?)` | `Promise<Transaction>` | Build a prorata presale initialization transaction. |
+| `Presale.createFcfsPresale(connection, programId, params, shouldOptimizeComputeUnit?)` | `Promise<Transaction>` | Build an FCFS presale initialization transaction. |
+| `Presale.closeFixedPricePresaleArgs(connection, params, programId, shouldOptimizeComputeUnit?)` | `Promise<Transaction>` | Build a transaction to close the fixed-price extra-args PDA. |
+| `Presale.revokeOperator(params, shouldOptimizeComputeUnit?)` | `Promise<Transaction>` | Build a transaction to revoke an operator account. |
+| `Presale.getPresales(connection, programId?)` | `Promise<{ pubkey; account }[]>` | Fetch and decode all presale accounts for a program ID. |
+
+## `Presale` Instance Methods
+
+| Method | Returns | Use |
+| --- | --- | --- |
+| `setComputeUnitOptimization(enable)` | `void` | Enable or disable automatic compute-unit estimation and compute-budget instruction prepending. |
+| `refetchState()` | `Promise<void>` | Refresh cached presale state and transfer-hook metadata. |
+| `createMerkleRootConfig(params)` | `Promise<Transaction>` | Build a transaction to create a Merkle root config. |
+| `closeMerkleRootConfig(params)` | `Promise<Transaction>` | Build a transaction to close a Merkle root config. |
+| `createMerkleRootConfigFromAddresses(params)` | `Promise<Transaction[]>` | Build Merkle root config transactions from whitelisted wallets, chunked by tree size. |
+| `createMerkleProofResponse(params)` | `Promise<Record<string, MerkleProofResponse>>` | Generate proof responses keyed by `address-registryIndex`. |
+| `createPermissionlessEscrow(params)` | `Promise<Transaction>` | Build a transaction to create a permissionless escrow. |
+| `createPermissionedEscrowWithMerkleProof(params)` | `Promise<Transaction>` | Build a transaction to create a Merkle-proof escrow. |
+| `createPermissionedEscrowWithAutoFetchMerkleProofFromMetadata(params)` | `Promise<TransactionInstruction>` | Fetch proof data from `PermissionedServerMetadata.server_url` and return an escrow creation instruction. |
+| `createPermissionedEscrowWithCreator(params)` | `Promise<Transaction>` | Build a transaction to create an authority-permissioned escrow with an operator signer. |
+| `createOperator(params)` | `Promise<Transaction>` | Build a transaction to create an operator account. |
+| `deposit(params)` | `Promise<Transaction>` | Build a deposit transaction. It may include escrow creation or return a partially signed transaction from a permissioned authority server. |
+| `withdraw(params)` | `Promise<Transaction>` | Build an in-presale withdrawal transaction. |
+| `claim(params)` | `Promise<Transaction>` | Build a base token claim transaction. |
+| `withdrawRemainingQuote(params)` | `Promise<Transaction>` | Build a remaining quote refund transaction. |
+| `performUnsoldBaseTokenAction(payer)` | `Promise<Transaction>` | Build the unsold base token burn or refund transaction. |
+| `creatorWithdraw(params)` | `Promise<Transaction>` | Build a creator withdrawal transaction for completed or failed presales. |
+| `creatorCollectFee()` | `Promise<Transaction>` | Build a creator deposit-fee collection transaction. |
+| `refreshEscrow(params)` | `Promise<Transaction>` | Build an escrow refresh transaction. |
+| `closeEscrow(params)` | `Promise<Transaction>` | Build an escrow close transaction. |
+| `createPermissionedServerMetadata(params)` | `Promise<Transaction>` | Store a permissioned metadata URL. |
+| `closePermissionedServerMetadata(params)` | `Promise<Transaction>` | Close the permissioned metadata account. |
+| `getPresaleEscrowByOwner(owner)` | `Promise<IEscrowWrapper[]>` | Fetch escrow wrappers for an owner across initialized registries. |
+| `getEscrowsByPresale()` | `Promise<{ pubkey; account }[]>` | Fetch and decode all escrow accounts for the presale. |
+| `getEscrowsByPresaleRegistry(registryIndex)` | `Promise<{ pubkey; account }[]>` | Fetch and decode escrow accounts for one registry. |
+| `getParsedPresale()` | `PresaleWrapper` | Return a parsed wrapper for display and derived values. |
+
+## PDA Helpers
+
+| Function | Use |
+| --- | --- |
+| `derivePresale(mint, quote, base, programId)` | Main presale PDA. |
+| `derivePresaleAuthority(programId)` | Presale authority PDA. |
+| `deriveFixedPricePresaleExtraArgs(presale, programId)` | Fixed-price extra-args PDA. |
+| `derivePresaleVault(presale, programId)` | Base token vault PDA. |
+| `deriveQuoteTokenVault(presale, programId)` | Quote token vault PDA. |
+| `deriveMerkleRootConfig(presale, programId, version)` | Merkle root config PDA. |
+| `deriveEscrow(presale, owner, registryIndex, programId)` | Buyer escrow PDA. |
+| `deriveOperator(creator, operator, programId)` | Operator PDA. |
+| `derivePermissionedServerMetadata(presale, programId)` | Permissioned metadata PDA. |
+| `deriveMetaplexMetadata(mint)` | Metaplex metadata PDA for a mint. |
+
+## Low-level Instruction Builders
+
+| Builder | Program instruction |
+| --- | --- |
+| `createInitializeFixedPricePresaleArgsIx` | `initialize_fixed_price_presale_args` |
+| `createInitializeFixedPricePresaleIx` | `initialize_presale` with fixed-price mode |
+| `createInitializeProrataPresaleIx` | `initialize_presale` with prorata mode |
+| `createInitializeFcfsPresaleIx` | `initialize_presale` with FCFS mode |
+| `createCloseFixedPriceArgsIx` | `close_fixed_price_presale_args` |
+| `createMerkleRootConfigIx` | `create_merkle_root_config` |
+| `closeMerkleRootConfigIx` | `close_merkle_root_config` |
+| `createPermissionlessEscrowIx` / `getOrCreatePermissionlessEscrowIx` | `create_permissionless_escrow` |
+| `createPermissionedEscrowWithMerkleProofIx` / `getOrCreatePermissionedEscrowWithMerkleProofIx` | `create_permissioned_escrow_with_merkle_proof` |
+| `createPermissionedEscrowWithCreatorIx` / `getOrCreatePermissionedEscrowWithCreatorIx` | `create_permissioned_escrow_with_creator` |
+| `fetchPartialSignedInitEscrowAndDepositTransactionFromOperator` | Fetches a creator-hosted partially signed transaction for authority mode. |
+| `createOperatorIx` | `create_operator` |
+| `createRevokeOperatorIx` | `revoke_operator` |
+| `createDepositIx` | `deposit` |
+| `createWithdrawIx` | `withdraw` |
+| `createClaimIx` | `claim` |
+| `createWithdrawRemainingQuoteIx` | `withdraw_remaining_quote` |
+| `createPerformUnsoldBaseTokenActionIx` | `perform_unsold_base_token_action` |
+| `createCreatorWithdrawIx` | `creator_withdraw` |
+| `createCreatorCollectFeeIx` | `creator_collect_fee` |
+| `createRefreshEscrowIx` | `refresh_escrow` |
+| `createCloseEscrowIx` | `close_escrow` |
+| `createInitializePermissionedServerMetadataIx` | `create_permissioned_server_metadata` |
+| `createClosePermissionedServerMetadataIx` | `close_permissioned_server_metadata` |
+
+## Account Wrappers
+
+| Wrapper | Useful methods |
+| --- | --- |
+| `PresaleWrapper` | `getPresaleProgressState`, `getPresaleProgressPercentage`, `getPresaleModeName`, `getWhitelistModeName`, `getRemainingDepositRawQuota`, `getTotalDepositRawAmount`, `getAllPresaleRegistries`, `getAverageTokenPrice`, `getTimings`, `canDeposit`, `canWithdraw`, `canWithdrawRemainingQuote`, `canClaim`, `canCreatorWithdraw`, `canCreatorCollectFee`. |
+| `PresaleRegistryWrapper` | `isInitialized`, `getRegistryIndex`, `getPresaleRawSupply`, `getTotalDepositRawAmount`, `getBuyerMaximumRawDepositCap`, `getBuyerMinimumRawDepositCap`, `getDepositFeeBps`, `getDepositFeePercentage`, `getTokenPrice`, `getTotalDepositFeeRawAmount`, `getWithdrawableRemainingQuote`, `getTotalBaseTokenSold`. |
+| `EscrowWrapper` | `getDepositRawAmount`, `getDepositFeeRawAmount`, `getIndividualDepositCap`, `getRemainingDepositAmount`, `getTotalClaimableRawAmount`, `getPendingClaimableRawAmount`, `getClaimedRawAmount`, `canWithdrawRemainingQuoteAmount`, `getWithdrawableRemainingQuoteAmount`, `canClose`. |
+
+## Math Helpers
+
+| Function | Use |
+| --- | --- |
+| `uiPriceToQPrice(price, baseDecimals, quoteDecimals, rounding)` | Convert a UI fixed price into the program's Q64 `q_price`. |
+| `qPriceToPrice(qPrice)` | Convert a Q64 fixed price back to a `Decimal` price. |
+| `calculateDynamicLamportPrice(presaleSupply, totalDeposit)` | Compute dynamic lamport price from supply and total deposit. |
+| `calculateImmediateReleaseToken(totalSoldToken, immediateReleaseBps)` | Split sold token amount into immediate and vested portions. |
+| `calculateLockAndVestDurationFromTimestamps(presaleEnd, lockEnd, vestEnd)` | Convert absolute timestamps into lock and vest durations. |
+| `calculateMinimumQuoteAmountForBaseLamport(qPrice)` | Compute minimum quote needed to buy at least one base lamport. |
+| `calculateMaximumQuoteAmountForPresaleSupply(qPrice, presaleSupply)` | Compute quote cap for a fixed-price supply. |
+| `calculateDepositFeeIncludedAmount(depositAmount, feeBps, rounding)` | Calculate the fee-included quote amount for a net deposit amount. |
+
+## Token 2022 Helpers
+
+| Function | Use |
+| --- | --- |
+| `getSliceAndExtraAccountMetasForTransferHook(connection, mint, mintAccount, accountsType)` | Fetch remaining-account slice metadata and account metas for a transfer-hook mint. |
+| `getExtraAccountMetasForTransferHook(connection, mint, mintAccount, source, destination, authority, amount)` | Resolve extra account metas for a transfer-hook transfer. |
+| `calculateTransferFeeIncludedAmount(mint, transferFeeExcludedAmount, epoch?)` | Include Token 2022 transfer fee for an intended net transfer amount. |
+| `calculateTransferFeeExcludedAmount(mint, transferFeeIncludedAmount, epoch?)` | Exclude Token 2022 transfer fee from a gross transfer amount. |
+| `getTokenProgramIdFromFlag(flag)` | Map program token flag to SPL Token or Token 2022 program ID. |
+
+## Account Filters And RPC Helpers
+
+| Helper | Use |
+| --- | --- |
+| `getPresaleFilter()` | Memcmp discriminator filter for presale accounts. |
+| `getEscrowFilter()` | Memcmp discriminator filter for escrow accounts. |
+| `getEscrowPresaleFilter(presale)` | Filter escrows by parent presale. |
+| `getEscrowRegistryIndexFilter(registryIndex)` | Filter escrows by registry index. |
+| `getEscrowOwnerFilter(owner)` | Filter escrows by owner. |
+| `getOnChainTimestamp(connection)` | Read current on-chain Unix timestamp from the Clock sysvar. |
+| `fetchMultipleAccountsAutoChunk(connection, pubkeys)` | Fetch many accounts in chunks. |
+| `getSimulationComputeUnits(connection, instructions, payer, lookupTables)` | Estimate compute units by simulation. |
+
+## Permissioned Metadata URLs
+
+Presale Vault has no Meteora-hosted public API. Permissioned presales can store a creator-managed `server_url` in `PermissionedServerMetadata`.
+
+| Whitelist mode | SDK behavior |
+| --- | --- |
+| `PermissionWithMerkleProof` | Auto-fetch helper requests `/{presaleAddress}/{registryIndex}/{owner}` from the stored base URL and expects `MerkleProofResponse`. |
+| `PermissionWithAuthority` | Deposit flow may request `/{presaleAddress}/{registryIndex}/{owner}?amount={amount}` from the stored base URL and expects a serialized partially signed transaction. |

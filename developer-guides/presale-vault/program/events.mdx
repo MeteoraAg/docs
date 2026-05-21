@@ -1,0 +1,62 @@
+---
+title: "Presale Vault Program Events"
+sidebarTitle: "Events"
+description: "Explore Presale Vault event payloads for initialization, escrows, deposits, withdrawals, claims, refunds, operators, metadata, and creator actions."
+llmsDescription: "Explains the Presale Vault event surface emitted by the public Meteora presale program. Covers fixed-price extra-args events, presale creation, escrow creation and close events, Merkle root config events, deposit, withdraw, claim, remaining quote refund, unsold base token action, creator withdraw, escrow refresh, operator creation, permissioned server metadata create and close, creator fee collection, event fields, and indexing notes."
+---
+
+The `presale` program emits Anchor events through event CPI. Use this page when building indexers, analytics pipelines, charting systems, or low-level clients that need to map transactions back to Presale Vault activity.
+
+## Initialization Events
+
+| Event | Fields | Emitted by |
+| --- | --- | --- |
+| `EvtFixedPricePresaleArgsCreate` | `presale`, `q_price` | `initialize_fixed_price_presale_args` |
+| `EvtFixedPricePresaleArgsClose` | `presale`, `owner`, `fixed_price_presale_args` | `close_fixed_price_presale_args` |
+| `EvtPresaleVaultCreate` | `base_mint`, `quote_mint`, `presale_registries`, `lock_duration`, `vest_duration`, `whitelist_mode`, `presale_mode`, `presale_start_time`, `presale_end_time`, `presale_maximum_cap`, `presale_minimum_cap` | `initialize_presale` |
+
+## Escrow And Buyer Events
+
+| Event | Fields | Emitted by |
+| --- | --- | --- |
+| `EvtEscrowCreate` | `presale`, `owner`, `whitelist_mode`, `total_escrow_count` | `create_permissionless_escrow`, `create_permissioned_escrow_with_creator`, `create_permissioned_escrow_with_merkle_proof` |
+| `EvtDeposit` | `presale`, `escrow`, `deposit_amount`, `escrow_total_deposit_amount`, `presale_total_deposit_amount`, `owner`, `deposit_fee` | `deposit` |
+| `EvtWithdraw` | `presale`, `escrow`, `withdraw_amount`, `escrow_total_deposit_amount`, `presale_total_deposit_amount`, `owner` | `withdraw` |
+| `EvtClaim` | `presale`, `escrow`, `claim_amount`, `escrow_total_claim_amount`, `presale_total_claim_amount`, `owner` | `claim` |
+| `EvtWithdrawRemainingQuote` | `presale`, `escrow`, `owner`, `amount_refunded`, `presale_total_refunded_quote_token` | `withdraw_remaining_quote` |
+| `EvtEscrowRefresh` | `presale`, `escrow`, `owner`, `current_timestamp`, `pending_claim_token` | `refresh_escrow` |
+| `EvtEscrowClose` | `presale`, `escrow`, `owner`, `rent_receiver` | `close_escrow` |
+
+## Permissioning Events
+
+| Event | Fields | Emitted by |
+| --- | --- | --- |
+| `EvtMerkleRootConfigCreate` | `owner`, `config`, `presale`, `version`, `root` | `create_merkle_root_config` |
+| `EvtCloseMerkleRootConfig` | `presale`, `merkle_root_config`, `owner` | `close_merkle_root_config` |
+| `EvtOperatorCreate` | `creator`, `operator`, `operator_owner` | `create_operator` |
+| `EvtPermissionedServerMetadataCreate` | `presale`, `permissioned_server_metadata`, `server_url` | `create_permissioned_server_metadata` |
+| `EvtPermissionedServerMetadataClose` | `presale`, `permissioned_server_metadata` | `close_permissioned_server_metadata` |
+
+`revoke_operator` closes the operator account but does not emit a custom event in the current source.
+
+## Creator Events
+
+| Event | Fields | Emitted by |
+| --- | --- | --- |
+| `EvtCreatorWithdraw` | `presale`, `amount`, `creator`, `presale_progress` | `creator_withdraw` |
+| `EvtCreatorCollectFee` | `presale`, `owner`, `total_collected_fee` | `creator_collect_fee` |
+| `EvtPerformUnsoldBaseTokenAction` | `presale`, `total_token_unsold`, `unsold_base_token_action` | `perform_unsold_base_token_action` |
+
+## Field Notes
+
+| Field | Meaning |
+| --- | --- |
+| `presale_mode` | Raw `PresaleMode` value: `0` fixed price, `1` prorata, `2` FCFS. |
+| `whitelist_mode` | Raw `WhitelistMode` value: `0` permissionless, `1` Merkle proof, `2` authority. |
+| `presale_progress` | Raw `PresaleProgress` value at creator withdrawal: `2` completed or `3` failed. |
+| `unsold_base_token_action` | Raw `UnsoldTokenAction` value: `0` refund, `1` burn. |
+| `deposit_amount` | Fee-excluded quote amount that was accepted after mode-specific capping or fixed-price rounding. |
+| `deposit_fee` | Deposit fee charged on top of the accepted deposit amount. |
+| `claim_amount` | Base amount after Token 2022 transfer-fee exclusion. |
+| `amount_refunded` | Quote amount after Token 2022 transfer-fee exclusion. |
+| `q_price` | Fixed-price Q64 value used by the program. |

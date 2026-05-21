@@ -1,0 +1,105 @@
+---
+title: "Presale Vault Changelog"
+sidebarTitle: "Changelog"
+description: "Track Presale Vault program and TypeScript SDK release notes, integration changes, and known source-material gaps."
+llmsDescription: "Explains the Presale Vault integration changelog for builders maintaining Meteora Presale Vault integrations. Covers local program and SDK versions, documented SDK release entries, fixed pending-claim timing behavior, fixed-price withdrawal and early-end options, immediate release timestamp support, lock and vest helper additions, on-chain timestamp helper additions, Merkle root closing support, compute-unit optimization controls, qPrice conversion fixes, exported Presale class changes, and source-material gaps where no release notes are available."
+rss: true
+---
+
+<Tip>
+  Track Presale Vault releases here.
+</Tip>
+
+<Update
+ label="presale 0.1.1"
+  description="Improvement in Calculation and Security"
+  rss="DBC dynamic-bonding-curve 0.1.10 migrates DAMM v2 vesting to inner positions and adds DAMM v2 compounding fee pool support, with event parsing and bonding curve configuration updates. SDK 1.5.6."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.1.1` | [presale #31](https://github.com/MeteoraAg/presale/pull/33) |
+  | TypeScript SDK | `0.0.6` | [presale-sdk #9](https://github.com/MeteoraAg/presale-sdk/pull/9) |
+
+  ## What We Shipped 
+  - Improvement in Calculation
+  - Improvement in Security
+
+  ## What To Do
+
+  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrators</th>
+          <th>What Changed</th>
+          <th>What To Do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Partners</strong></td>
+          <td>
+            <ul>
+              <li>Calculation Updates</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Bump your SDK version to <code>@meteora-ag/presale-sdk@0.0.6</code> to start testing.</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  ## Program: `presale` `0.1.1`
+
+  Program ID (mainnet and devnet): `presSVxnf9UU8jMxhgSMqaRwNiT36qeBdNeTRKjTdbj`
+
+  [Program PR #33](https://github.com/MeteoraAg/presale/pull/33)
+
+### Fixed
+
+- Calculation of `vesting_start_time`, `vesting_end_time`, `lock_start_time`, and `lock_end_time` now correctly handled
+- Added missing `params.validate()` call in `handle_initialize_fixed_price_presale_args`
+- Fixed issue where fixed price presale could not complete if `minimum_cap` and `maximum_cap` were configured to unreachable values
+- Fixed bug where presale registry could consume supply from another registry's presale
+
+### Added
+
+- Added option to allow fixed price presale to disable withdraw
+- Added option to allow both fixed price and FCFS presales to prevent ending presale early when cap is reached
+- Added closure of `MerkleRoofConfig` account
+- Added support for the `security_txt!` macro
+
+### Changed
+
+- Presale mode now reserves `presale_mode_raw_data: [u128; 3]`, used for storing mode-specific data (e.g. price in fixed mode)
+- Removed `lock_start_time` and `lock_end_time` fields as they can be represented by `presale_end_time` and `vesting_start_time` and were unused
+- For permissioned mode:
+  - In dynamic price presale, `buyer_minimum_cap` must be 1 and `buyer_maximum_cap` must be `presale_maximum_cap`
+  - In fixed price presale, `buyer_minimum_cap` must be the minimum possible quote token value and `buyer_maximum_cap` must be `presale_maximum_cap`
+  - This change reduces errors when creating whitelist wallet caps that prevent escrow account creation
+
+  ## TypeScript SDK: `@meteora-ag/presale-sdk` `0.0.6`
+
+  [SDK PR #9](https://github.com/MeteoraAg/presale-sdk/pull/9)
+
+    ### Added
+
+  - `disableWithdraw` option on fixed price presale mode. Allow creator to disable withdrawing from the vault after deposit.
+  - `disableEarlierPresaleEndOnceCapReached` option. Allow creator to prevent the presale end immediately once the target cap reached on FCFS and fixed price presale.
+  - `immediateReleaseTimestamp`. Allow creator to configure the timing of immediate release portion of token.
+  - `calculateLockAndVestDurationFromTimestamps` helper function to calculate lock and vest duration from presale end time, lock end time, and vest end time.
+  - `getOnChainTimestamp` helper function to get current unix timestamp from on chain clock.
+  - `getRegistryRemainingDepositQuota` function on `IPresaleWrapper` to return remaining deposit-able amount on specific registry.
+  - `closeMerkleRootConfig` function to be able to close merkle root config account.
+
+  ### Changed
+
+  - `getPendingClaimableUiAmount` and `getPendingClaimableRawAmount` of `IEscrowWrapper` added `currentTimestamp` parameter. Can be retrieved from on chain clock using `getOnChainTimestamp` helper function.
+
+</Update>

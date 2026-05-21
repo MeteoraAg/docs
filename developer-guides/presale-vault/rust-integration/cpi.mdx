@@ -1,0 +1,129 @@
+---
+title: "Presale Vault Rust Integration CPI"
+sidebarTitle: "CPI"
+description: "Learn how to plan Presale Vault Anchor CPI integrations with account ordering, event CPI accounts, Token 2022 remaining accounts, and tests."
+llmsDescription: "Explains Presale Vault Rust CPI integration for programs that call the public Meteora presale program. Covers program ID, cpi feature usage, generated bindings, instruction scope, event CPI accounts, account planning for deposits, withdrawals, claims, creator actions, Merkle and authority permissioned flows, Token 2022 transfer-hook remaining accounts, common CPI failures, best practices, and local LiteSVM testing."
+---
+
+Use CPI only when your Solana program must compose directly with Presale Vault. For off-chain apps, launch scripts, and dashboards, the TypeScript SDK is simpler and safer.
+
+<Warning>
+  Do not hand-type account order from memory. Generate CPI bindings from the Presale Vault IDL or depend on the local Anchor crate with the `cpi` feature, then compare against SDK-built instructions for the same flow.
+</Warning>
+
+## Program ID
+
+```rust
+pub const PRESALE_PROGRAM_ID: Pubkey =
+    pubkey!("presSVxnf9UU8jMxhgSMqaRwNiT36qeBdNeTRKjTdbj");
+```
+
+The public program ID is the same for mainnet and devnet.
+
+## Dependency
+
+```toml
+[dependencies]
+presale = { path = "../presale/programs/presale", features = ["cpi"] }
+```
+
+Keep the local crate, IDL, deployed program, and TypeScript SDK revision aligned in tests.
+
+## CPI Instruction Scope
+
+The full instruction list is documented in [Program Instructions](/developer-guides/presale-vault/program/instructions). CPI integrations most often need:
+
+| Flow | Instruction |
+| --- | --- |
+| Create buyer escrow | `create_permissionless_escrow`, `create_permissioned_escrow_with_merkle_proof`, or `create_permissioned_escrow_with_creator` |
+| Deposit quote token | `deposit` |
+| Withdraw during presale | `withdraw` |
+| Claim base token | `claim` |
+| Refund failed or prorata overflow quote | `withdraw_remaining_quote` |
+| Refresh claimable state | `refresh_escrow` |
+| Close escrow | `close_escrow` |
+
+Creator-managed flows such as presale initialization, Merkle root config, operator setup, creator withdrawal, fee collection, and unsold token action can also be called by CPI, but they require stricter authority and lifecycle planning.
+
+## Event CPI Accounts
+
+Most account structs use `#[event_cpi]`. Generated clients include these accounts after the primary accounts:
+
+| Account | Why it appears |
+| --- | --- |
+| `event_authority` | Anchor event-CPI PDA for the `presale` program. |
+| `program` | The `presale` program account used by event CPI emission. |
+
+Omitting these accounts from a CPI call can cause account validation or account-count failures.
+
+## Account Planning
+
+| Flow | Required planning |
+| --- | --- |
+| Initialize presale | Presale PDA, vault PDAs, presale authority, base and quote token programs, payer base token account, base signer, creator, fixed-price extra-args remaining account when mode is fixed price, and Token 2022 base transfer-hook accounts when required. |
+| Create permissionless escrow | Presale state, escrow PDA from registry `0`, owner, payer, and system program. |
+| Create Merkle proof escrow | Presale state, escrow PDA from registry index, owner, Merkle root config, payer, proof, and deposit cap. |
+| Create authority escrow | Presale state, escrow PDA from registry index, owner, operator PDA, operator owner signer, payer, and deposit cap. |
+| Deposit | Presale state, quote vault, quote mint, escrow, payer quote token account, payer signer, token program, and quote transfer-hook remaining accounts when required. |
+| Withdraw | Presale state, quote vault, quote mint, presale authority, escrow, owner quote token account, owner signer, token program, memo program, and quote transfer-hook accounts when required. |
+| Claim | Presale state, base vault, base mint, presale authority, escrow, owner base token account, owner signer, token program, memo program, and base transfer-hook accounts when required. |
+| Creator withdraw | Base or quote vault and mint are passed as remaining accounts depending on whether the presale failed or completed. |
+
+Read mints, vaults, token program flags, mode, whitelist mode, and registry state from the `Presale` account whenever possible. Avoid deriving business assumptions from user input alone.
+
+## Token 2022 Remaining Accounts
+
+Presale Vault supports Token 2022 transfer hooks through `RemainingAccountsInfo`:
+
+```rust
+pub enum AccountsType {
+    TransferHookBase,
+    TransferHookQuote,
+}
+```
+
+| Transfer | Slice type |
+| --- | --- |
+| Base token transfers | `TransferHookBase` |
+| Quote token transfers | `TransferHookQuote` |
+
+If a mint has a transfer-hook program, include the required hook accounts in the remaining accounts and set the matching slice length. If a mint does not have a hook program, do not pass transfer-hook accounts for that mint.
+
+## Common CPI Failures
+
+| Error or symptom | Likely cause |
+| --- | --- |
+| `NotEnoughAccountKeys` | Missing event CPI accounts, memo program, mode-specific remaining accounts, or transfer-hook remaining accounts. |
+| `ConstraintSeeds` / `ConstraintAddress` | Presale, vault, escrow, operator, Merkle root, presale authority, or event authority PDA is wrong. |
+| `ConstraintHasOne` | Escrow, vault, mint, owner, or metadata account does not match parent account state. |
+| `PresaleNotOpenForDeposit` | Presale progress is not `Ongoing`. |
+| `PresaleNotOpenForWithdraw` | Mode disallows withdrawal, fixed-price withdrawal is disabled, or presale is no longer ongoing. |
+| `MissingPresaleExtraParams` | Fixed-price initialization did not pass the fixed-price extra-args account as the first remaining account. |
+| `InvalidRemainingAccountSlice` | Remaining-account slice type or length does not match the accounts provided. |
+| `MissingRemainingAccountForTransferHook` | Token 2022 mint has a transfer hook but CPI did not forward the hook accounts. |
+| `NoTransferHookProgram` | Hook accounts were forwarded for a mint without a transfer-hook program. |
+| `EscrowNotEmpty` | CPI attempted to close an escrow before all state-dependent claim, refund, or withdrawal requirements were complete. |
+
+## Best Practices
+
+| Check | Detail |
+| --- | --- |
+| Generate accounts | Use generated CPI bindings or the local Anchor crate. Compare account metas against the TypeScript SDK for the same flow. |
+| Simulate first | Simulate CPI transactions with realistic presale state, especially Token 2022 and permissioned flows. |
+| Respect lifecycle state | Load `Presale` and derive `PresaleProgress` from current timestamp before deciding which instruction to call. |
+| Handle once-only flags | Creator withdrawal, fee collection, unsold token action, and remaining quote withdrawal are guarded by account flags. |
+| Plan Token 2022 fees | Transfer-fee mints affect gross and net amounts. Use SDK or Rust helper math before setting amounts and bounds. |
+| Keep registries straight | Derive escrows with the intended registry index and validate registry caps before submitting transactions. |
+| Test every mode | Fixed-price, prorata, and FCFS have different withdrawal, cap, price, and refund behavior. |
+
+## Testing
+
+Use the local test suite as a reference for account metas and edge cases:
+
+```bash
+cd presale
+anchor build
+cargo test -p presale -- --nocapture
+```
+
+Add your own integration tests for CPI callers that cover at least one successful path and one expected failure path per presale mode you support.
