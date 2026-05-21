@@ -1,0 +1,271 @@
+---
+title: "DBC TS SDK Examples"
+sidebarTitle: "Examples"
+description: "Explore TypeScript examples for DBC config creation, pool creation, swap quotes, swaps, fee claims, migration, and state reads."
+llmsDescription: "Explains practical DBC TypeScript SDK examples using @meteora-ag/dynamic-bonding-curve-sdk. Covers setup, building curve configs, createConfig, createPool, deriveDbcPoolAddress, swapQuote2, swap2 exact-in and partial-fill modes, reading pool progress, claiming partner and creator fees, migrating to DAMM v1 or DAMM v2, and when to use the SDK Reference for the complete API surface."
+---
+
+These examples are based on the local `dynamic-bonding-curve-sdk` examples and tests. They focus on transaction construction patterns. For the full method catalog, see the [SDK Reference](/developer-guides/dbc/typescript-sdk/reference).
+
+## Setup
+
+```typescript
+import BN from "bn.js";
+import { NATIVE_MINT } from "@solana/spl-token";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import {
+  ActivationType,
+  BaseFeeMode,
+  buildCurveWithCustomSqrtPrices,
+  CollectFeeMode,
+  createSqrtPrices,
+  DammV2BaseFeeMode,
+  DammV2DynamicFeeMode,
+  deriveDbcPoolAddress,
+  DynamicBondingCurveClient,
+  MigratedCollectFeeMode,
+  MigrationFeeOption,
+  MigrationOption,
+  SwapMode,
+  TokenDecimal,
+  TokenType,
+  TokenUpdateAuthorityOption,
+} from "@meteora-ag/dynamic-bonding-curve-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = DynamicBondingCurveClient.create(connection, "confirmed");
+```
+
+## Build A Curve Config
+
+`buildCurveWithCustomSqrtPrices` gives explicit control over the curve checkpoints. Other supported helpers are listed in the [SDK Reference](/developer-guides/dbc/typescript-sdk/reference#curve-builders).
+
+```typescript
+const sqrtPrices = createSqrtPrices(
+  [0.000000001, 0.00000000105, 0.000000002, 0.000001],
+  TokenDecimal.SIX,
+  TokenDecimal.NINE
+);
+
+const curveConfig = buildCurveWithCustomSqrtPrices({
+  token: {
+    tokenType: TokenType.SPL,
+    tokenBaseDecimal: TokenDecimal.SIX,
+    tokenQuoteDecimal: TokenDecimal.NINE,
+    tokenUpdateAuthority: TokenUpdateAuthorityOption.PartnerUpdateAuthority,
+    totalTokenSupply: 1_000_000_000,
+    leftover: 1_000,
+  },
+  fee: {
+    baseFeeParams: {
+      baseFeeMode: BaseFeeMode.FeeSchedulerExponential,
+      feeSchedulerParam: {
+        startingFeeBps: 9000,
+        endingFeeBps: 120,
+        numberOfPeriod: 60,
+        totalDuration: 60,
+      },
+    },
+    dynamicFeeEnabled: true,
+    collectFeeMode: CollectFeeMode.QuoteToken,
+    creatorTradingFeePercentage: 0,
+    poolCreationFee: 1,
+    enableFirstSwapWithMinFee: false,
+  },
+  migration: {
+    migrationOption: MigrationOption.MET_DAMM_V2,
+    migrationFeeOption: MigrationFeeOption.Customizable,
+    migrationFee: {
+      feePercentage: 10,
+      creatorFeePercentage: 50,
+    },
+    migratedPoolFee: {
+      collectFeeMode: MigratedCollectFeeMode.QuoteToken,
+      dynamicFee: DammV2DynamicFeeMode.Enabled,
+      poolFeeBps: 120,
+      baseFeeMode: DammV2BaseFeeMode.FeeTimeSchedulerLinear,
+    },
+  },
+  liquidityDistribution: {
+    partnerLiquidityPercentage: 0,
+    partnerPermanentLockedLiquidityPercentage: 100,
+    creatorLiquidityPercentage: 0,
+    creatorPermanentLockedLiquidityPercentage: 0,
+  },
+  lockedVesting: {
+    totalLockedVestingAmount: 0,
+    numberOfVestingPeriod: 0,
+    cliffUnlockAmount: 0,
+    totalVestingDuration: 0,
+    cliffDurationFromMigrationTime: 0,
+  },
+  activationType: ActivationType.Timestamp,
+  sqrtPrices,
+  liquidityWeights: [2, 1, 1],
+});
+```
+
+## Create A Config
+
+```typescript
+const partner = Keypair.generate();
+const config = Keypair.generate();
+
+const createConfigTx = await client.partner.createConfig({
+  config: config.publicKey,
+  feeClaimer: partner.publicKey,
+  leftoverReceiver: partner.publicKey,
+  payer: partner.publicKey,
+  quoteMint: NATIVE_MINT,
+  ...curveConfig,
+});
+
+createConfigTx.feePayer = partner.publicKey;
+```
+
+The transaction must be signed by the payer and the new `config` signer.
+
+## Create A Pool
+
+```typescript
+const creator = Keypair.generate();
+const baseMint = Keypair.generate();
+
+const createPoolTx = await client.pool.createPool({
+  baseMint: baseMint.publicKey,
+  config: config.publicKey,
+  name: "TEST",
+  symbol: "TEST",
+  uri: "https://example.com/token.json",
+  payer: creator.publicKey,
+  poolCreator: creator.publicKey,
+});
+
+createPoolTx.feePayer = creator.publicKey;
+
+const pool = deriveDbcPoolAddress(
+  NATIVE_MINT,
+  baseMint.publicKey,
+  config.publicKey
+);
+```
+
+## Quote And Swap
+
+```typescript
+const poolState = await client.state.getPool(pool);
+const configState = await client.state.getPoolConfig(poolState.config);
+
+const currentPoint =
+  configState.activationType === ActivationType.Slot
+    ? new BN(await connection.getSlot())
+    : new BN(Math.floor(Date.now() / 1000));
+
+const quote = client.pool.swapQuote2({
+  virtualPool: poolState,
+  config: configState,
+  swapBaseForQuote: false,
+  swapMode: SwapMode.ExactIn,
+  amountIn: new BN(1_000_000_000),
+  slippageBps: 100,
+  hasReferral: false,
+  eligibleForFirstSwapWithMinFee: false,
+  currentPoint,
+});
+
+const swapTx = await client.pool.swap2({
+  owner: new PublicKey("USER_WALLET"),
+  payer: new PublicKey("FEE_PAYER"),
+  pool,
+  swapBaseForQuote: false,
+  swapMode: SwapMode.ExactIn,
+  amountIn: new BN(1_000_000_000),
+  minimumAmountOut: quote.minimumAmountOut,
+  referralTokenAccount: null,
+});
+```
+
+## Partial Fill Near Completion
+
+Use partial fill when the final buy may cross the migration threshold before consuming the full input amount.
+
+```typescript
+const partialQuote = client.pool.swapQuote2({
+  virtualPool: poolState,
+  config: configState,
+  swapBaseForQuote: false,
+  swapMode: SwapMode.PartialFill,
+  amountIn: new BN(5_000_000_000),
+  slippageBps: 100,
+  hasReferral: false,
+  eligibleForFirstSwapWithMinFee: false,
+  currentPoint,
+});
+
+const partialFillTx = await client.pool.swap2({
+  owner: new PublicKey("USER_WALLET"),
+  pool,
+  swapBaseForQuote: false,
+  swapMode: SwapMode.PartialFill,
+  amountIn: new BN(5_000_000_000),
+  minimumAmountOut: partialQuote.minimumAmountOut,
+  referralTokenAccount: null,
+});
+```
+
+## Read Progress And Fees
+
+```typescript
+const quoteProgress = await client.state.getPoolQuoteTokenCurveProgress(pool);
+const baseProgress = await client.state.getPoolBaseTokenCurveProgress(pool);
+const feeMetrics = await client.state.getPoolFeeMetrics(pool);
+const feeBreakdown = await client.state.getPoolFeeBreakdown(pool);
+
+console.log({
+  quoteProgress,
+  baseProgress,
+  totalProtocolQuoteFee: feeMetrics.totalProtocolQuoteFee.toString(),
+  currentPartnerQuoteFee: feeBreakdown.partnerQuoteFee.toString(),
+});
+```
+
+## Claim Fees
+
+```typescript
+const partnerClaimTx = await client.partner.claimPartnerTradingFee2({
+  feeClaimer: partner.publicKey,
+  payer: partner.publicKey,
+  pool,
+  maxBaseAmount: new BN("18446744073709551615"),
+  maxQuoteAmount: new BN("18446744073709551615"),
+  receiver: partner.publicKey,
+});
+
+const creatorClaimTx = await client.creator.claimCreatorTradingFee2({
+  creator: creator.publicKey,
+  payer: creator.publicKey,
+  pool,
+  maxBaseAmount: new BN("18446744073709551615"),
+  maxQuoteAmount: new BN("18446744073709551615"),
+  receiver: creator.publicKey,
+});
+```
+
+## Migration Flow
+
+| Destination | SDK sequence |
+| --- | --- |
+| DAMM v1 | `createDammV1MigrationMetadata`, optional `createLocker`, `migrateToDammV1`, optional `lockDammV1LpToken`, optional `claimDammV1LpToken`. |
+| DAMM v2 | Optional `createLocker`, then `migrateToDammV2`. |
+
+```typescript
+const { transaction: migrateToDammV2Tx } = await client.migration.migrateToDammV2({
+  payer: new PublicKey("MIGRATOR"),
+  virtualPool: pool,
+  dammConfig: new PublicKey("DAMM_V2_CONFIG"),
+});
+```
+
+<Note>
+  Meteora runs mainnet migration keepers for eligible pools. The SDK migration builders are still useful for manual migration, devnet validation, and custom keeper infrastructure.
+</Note>

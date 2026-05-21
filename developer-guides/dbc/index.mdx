@@ -1,16 +1,14 @@
 ---
 title: "DBC Developer Guide"
 sidebarTitle: "Overview"
-description: "Entry point for Dynamic Bonding Curve integrations: program docs, TypeScript SDK, Rust quote helpers, Go SDK, trading terminal notes, and migration flows."
-llmsDescription: "DBC developer guide overview. Routes to program architecture/accounts/instructions/errors, @meteora-ag/dynamic-bonding-curve-sdk, Rust integration, Go SDK, config guide, and trading terminal integration. Lists the dynamic_bonding_curve program ID and SDK repository paths."
+description: "Learn how to build DBC integrations with the dynamic_bonding_curve program, TypeScript SDK, Rust helpers, Go examples, and release notes."
+llmsDescription: "Explains the DBC Developer Guide as the integration entry point for Meteora Dynamic Bonding Curve. Covers program accounts, instructions, events, errors, @meteora-ag/dynamic-bonding-curve-sdk, Rust quote and CPI guides, Go examples, changelog, program IDs, commands, migration flows, and public repository paths for DBC builders."
 ---
 
-Dynamic Bonding Curve (DBC) is Meteora's token launch primitive for creating a virtual reserve pool, trading through a configured bonding curve, and migrating finished pools to DAMM v1 or DAMM v2.
-
-For product-level concepts, fee behavior, migration design, and formulas, start with the core product docs.
+Dynamic Bonding Curve (DBC) is Meteora's token launch primitive for creating a virtual reserve pool, trading through a configured bonding curve, and migrating finished pools to DAMM v1 or DAMM v2. To learn more about fee behavior, migration design, and formulas, you can read the following documentations.
 
 <CardGroup cols={2}>
-  <Card title="Learn More About DBC" icon="book-open" iconType="solid" href="/core-products/dbc/what-is-dbc">
+  <Card title="Learn more about DBC" icon="book-open" iconType="solid" href="/core-products/dbc/what-is-dbc">
     Overview of DBC, universal curves, launch configurations, fees, surplus, leftover tokens, and migration.
   </Card>
   <Card title="DBC Formulas" icon="calculator" iconType="solid" href="/core-products/dbc/formulas">
@@ -21,32 +19,28 @@ For product-level concepts, fee behavior, migration design, and formulas, start 
 ## Integration
 
 <CardGroup cols={2}>
-  <Card title="Program Architecture" icon="cog" iconType="solid" href="/developer-guides/dbc/program/architecture">
-    Program design, configs, virtual pools, swaps, fees, migration, and integration boundaries.
-  </Card>
   <Card title="Program Accounts" icon="table-cells" iconType="solid" href="/developer-guides/dbc/program/accounts">
     Account model for pool configs, virtual pools, vaults, metadata, operators, and migration accounts.
   </Card>
   <Card title="Program Instructions" icon="list" iconType="solid" href="/developer-guides/dbc/program/instructions">
     Instruction families for partners, creators, swaps, migration, fee claims, and operators.
   </Card>
+  <Card title="Program Events" icon="list" iconType="solid" href="/developer-guides/dbc/program/events">
+    Event-CPI payloads for configs, pools, swaps, fee claims, migration, and operator flows.
+  </Card>
   <Card title="Program Errors" icon="triangle-exclamation" iconType="solid" href="/developer-guides/dbc/program/errors">
     Anchor custom errors, messages, and common integration causes.
   </Card>
-  <Card title="Bonding Curve Configs" icon="sliders" iconType="solid" href="/developer-guides/dbc/bonding-curve-configs">
-    Config field reference for fees, curves, vesting, migration, and graduated-pool behavior.
-  </Card>
-  <Card title="Trading Terminal Integration" icon="chart-line" iconType="solid" href="/developer-guides/dbc/integrate-with-dbc">
-    Index pool progress, chart swaps, compute fees, read `EvtSwap2`, and avoid transfer-log price errors.
-  </Card>
   <Card title="TypeScript SDK" icon="code" iconType="solid" href="/developer-guides/dbc/typescript-sdk/getting-started">
-    Official TypeScript SDK for config creation, pool creation, quotes, swaps, migration, and state reads.
+    Official TypeScript SDK for config builders, pool creation, quotes, swaps, migration, and state reads.
   </Card>
-  <Card title="Rust Integration" icon="terminal" iconType="solid" href="/developer-guides/dbc/rust-sdk/integration">
+  <Card title="Rust Integration" icon="terminal" iconType="solid" href="/developer-guides/dbc/rust-integration/library">
     Rust quote helpers and program-side integration notes for `dynamic_bonding_curve`.
   </Card>
-  <Card title="Go SDK" icon="golang" iconType="solid" href="/developer-guides/dbc/go-sdk/integration">
-    Go SDK examples for pool reads, swaps, fee claims, and creator transfer flows.
+</CardGroup>
+<CardGroup cols={1}>
+  <Card title="Go Integration" icon="golang" iconType="solid" href="/developer-guides/dbc/go-integration/reference">
+    Go examples for pool reads, swaps, fee claims, and creator transfer flows.
   </Card>
 </CardGroup>
 
@@ -66,46 +60,19 @@ The pool authority PDA used by the program is:
 | Pool Authority | `FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM` |
 
 <CardGroup cols={2}>
-  <Card title="DBC Program" icon="github" iconType="solid" href="https://github.com/MeteoraAg/dynamic-bonding-curve">
+  <Card title="DBC Program" icon="code" href="https://github.com/MeteoraAg/dynamic-bonding-curve">
     Anchor program source for `dynamic_bonding_curve`.
   </Card>
-  <Card title="DBC IDL" icon="file-code" iconType="solid" href="https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/src/idl/dynamic-bonding-curve/idl.json">
+  <Card title="DBC IDL" icon="file-code" href="https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/blob/main/packages/dynamic-bonding-curve/src/idl/dynamic-bonding-curve/idl.json">
     Published Anchor IDL used by the TypeScript SDK.
   </Card>
+  <Card title="TypeScript SDK" icon="node-js" href="https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/tree/main/packages/dynamic-bonding-curve">
+    Public SDK for transaction builders, state reads, quotes, curve helpers, PDA helpers, and tests.
+  </Card>
+  <Card title="Go Examples" icon="golang" href="https://github.com/MeteoraAg/dbc-go">
+    Go examples for backend reads, swaps, fee claims, and crfeator transfer flows.
+  </Card>
 </CardGroup>
-
-## Resources
-
-Use these repositories for implementation references:
-
-| Repository | Use |
-| --- | --- |
-| [`MeteoraAg/dynamic-bonding-curve`](https://github.com/MeteoraAg/dynamic-bonding-curve) | On-chain Anchor program, Rust math, account states, instructions, migration handlers, and tests. |
-| [`MeteoraAg/dynamic-bonding-curve-sdk`](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/tree/main/packages/dynamic-bonding-curve) | Official TypeScript SDK, IDLs, math helpers, state services, transaction builders, examples, and tests. |
-| [`MeteoraAg/dbc-go`](https://github.com/MeteoraAg/dbc-go) | Go SDK helpers and runnable examples for backends and indexers. |
-
-| Path | Use |
-| --- | --- |
-| `programs/dynamic-bonding-curve/src/lib.rs` | Public instruction entry points and access-control boundaries. |
-| `programs/dynamic-bonding-curve/src/state` | `PoolConfig`, `VirtualPool`, metadata, operator, and fee state layouts. |
-| `programs/dynamic-bonding-curve/src/curve.rs` | Curve math for sqrt price, reserve deltas, and swap movement. |
-| `packages/dynamic-bonding-curve/src/client.ts` | Main `DynamicBondingCurveClient` entry point. |
-| `packages/dynamic-bonding-curve/src/services` | Transaction builders for pool, partner, creator, migration, program, and state reads. |
-| `packages/dynamic-bonding-curve/src/math` | TypeScript quote, curve, fee scheduler, rate limiter, and dynamic fee math. |
-| `dbc-go/examples` | Go examples for pool creation, swaps, state reads, fee claims, and creator transfer. |
-
-## Common Flows
-
-| Task | Primary SDK path |
-| --- | --- |
-| Create a config | `client.partner.createConfig` or `client.pool.createConfigAndPool*` helpers |
-| Build a curve | `buildCurve`, `buildCurveWithMarketCap`, `buildCurveWithTwoSegments`, `buildCurveWithLiquidityWeights`, `buildCurveWithMidPrice`, `buildCurveWithCustomSqrtPrices` |
-| Create a pool | `client.pool.createPool` |
-| Quote a swap | `client.pool.swapQuote` or `client.pool.swapQuote2` |
-| Execute a swap | `client.pool.swap` or `client.pool.swap2` |
-| Claim trading fees | `client.partner.claimPartnerTradingFee2` or `client.creator.claimCreatorTradingFee2` |
-| Migrate to DAMM v1 | `createDammV1MigrationMetadata`, optional `createLocker`, `migrateToDammV1`, then LP lock/claim helpers |
-| Migrate to DAMM v2 | Optional `createLocker`, then `migrateToDammV2` |
 
 ## Migration Keepers
 
@@ -151,11 +118,21 @@ The SDK exposes these arrays as `DAMM_V1_MIGRATION_FEE_ADDRESS` and `DAMM_V2_MIG
 
 | Task | Command |
 | --- | --- |
-| Build TypeScript SDK | `cd packages/dynamic-bonding-curve && bun install && bun run build` |
-| Run TypeScript SDK tests | `cd packages/dynamic-bonding-curve && bun test` |
+| Build TypeScript SDK | `cd packages/dynamic-bonding-curve && pnpm install && pnpm run build` |
+| Run TypeScript SDK tests | `cd packages/dynamic-bonding-curve && pnpm test` |
+| Run TypeScript type checks | `cd packages/dynamic-bonding-curve && pnpm run check-types` |
+| Run Rust quote tests | `cd dynamic-bonding-curve && cargo test -p dynamic-bonding-curve-sdk` |
 | Run Go examples | `go run examples/<file-name>.go` |
 | Run program tests | `anchor test` from the `dynamic-bonding-curve` repository |
 
 <Note>
   Some SDK tests depend on local validator fixtures and deployed program artifacts. For production integrations, simulate transactions and test on devnet before sending mainnet transactions.
 </Note>
+
+## Stay Updated
+
+<CardGroup cols={1}>
+  <Card title="DBC Changelog" icon="newspaper" href="/developer-guides/dbc/changelog">
+    Program, IDL, SDK, quote, migration, and validation changes for integration planning.
+  </Card>
+</CardGroup>

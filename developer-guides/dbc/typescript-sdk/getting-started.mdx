@@ -1,26 +1,26 @@
 ---
 title: "DBC TS SDK Getting Started"
 sidebarTitle: "Getting Started"
-description: "Install @meteora-ag/dynamic-bonding-curve-sdk, initialize the client, read pool state, and run a swap quote."
-llmsDescription: "First steps with @meteora-ag/dynamic-bonding-curve-sdk: install, DynamicBondingCurveClient, program ID, state reads, swapQuote, config/pool creation links, and SDK test commands."
+description: "Learn how to install @meteora-ag/dynamic-bonding-curve-sdk, initialize the DBC client, read pool state, quote swaps, and test the SDK."
+llmsDescription: "Explains the first steps for building with the DBC TypeScript SDK. Covers installing @meteora-ag/dynamic-bonding-curve-sdk, initializing DynamicBondingCurveClient, using the public dynamic_bonding_curve program ID, fetching PoolConfig and VirtualPool state, quoting swaps with swapQuote and swapQuote2, choosing service areas, running SDK checks, local validator fixtures, and devnet faucet resources."
 ---
 
 This guide shows how to install and initialize the official DBC TypeScript SDK, `@meteora-ag/dynamic-bonding-curve-sdk`.
 
-Before you begin, here are some important resources:
+Before you begin, here are the main resources:
 
 <CardGroup cols={2}>
   <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/tree/main/packages/dynamic-bonding-curve">
-    Meteora DBC TypeScript SDK source, tests, scripts, IDLs, and math helpers.
+    SDK source, tests, IDLs, services, math helpers, and package metadata.
   </Card>
-  <Card title="DBC NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/dynamic-bonding-curve-sdk">
-    Published DBC SDK package.
+  <Card title="NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/dynamic-bonding-curve-sdk">
+    Published package for DBC TypeScript integrations.
   </Card>
 </CardGroup>
 
 ## Installation
 
-To use the SDK in your project, install it using your preferred package manager:
+Install the SDK and its Solana dependencies:
 
 <Tabs>
   <Tab title="npm">
@@ -47,103 +47,69 @@ To use the SDK in your project, install it using your preferred package manager:
 
 ## Initialization
 
-Initialize the client with a Solana connection and commitment:
+Create a client from a Solana connection and commitment:
 
 ```typescript
 import { Connection } from "@solana/web3.js";
 import { DynamicBondingCurveClient } from "@meteora-ag/dynamic-bonding-curve-sdk";
 
 const connection = new Connection(process.env.RPC_URL!, "confirmed");
-const client = new DynamicBondingCurveClient(connection, "confirmed");
+const client = DynamicBondingCurveClient.create(connection, "confirmed");
 ```
 
-You can also use the static helper:
+The constructor is also public:
 
 ```typescript
-const client = DynamicBondingCurveClient.create(connection, "confirmed");
+const client = new DynamicBondingCurveClient(connection, "confirmed");
 ```
 
 ## Program ID
 
-The SDK defaults to the public DBC program ID:
+The SDK defaults to the public DBC program ID on both mainnet and devnet:
 
-```typescript
+```text
 dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN
 ```
 
-This ID is used on both mainnet and devnet.
+## Reference
 
-## Read Pool State
-
-Use `client.state` for indexed-like reads directly from program accounts:
-
-```typescript
-import { PublicKey } from "@solana/web3.js";
-
-const poolAddress = new PublicKey("YOUR_POOL_ADDRESS");
-
-const pool = await client.state.getPool(poolAddress);
-const config = await client.state.getPoolConfig(pool.config);
-
-const quoteProgress = await client.state.getPoolQuoteTokenCurveProgress(poolAddress);
-const baseProgress = await client.state.getPoolBaseTokenCurveProgress(poolAddress);
-```
-
-## Example Swap Quote
-
-Quote before building a swap transaction. The SDK mirrors the on-chain curve and fee math.
-
-```typescript
-import BN from "bn.js";
-
-const quote = await client.pool.swapQuote({
-  virtualPool: pool,
-  config,
-  swapBaseForQuote: false,
-  amountIn: new BN(1_000_000_000), // 1 SOL when quote mint is WSOL
-  slippageBps: 100,
-  hasReferral: false,
-  currentPoint: new BN(0),
-});
-
-console.log({
-  amountOut: quote.amountOut.toString(),
-  minimumAmountOut: quote.minimumAmountOut.toString(),
-  nextSqrtPrice: quote.nextSqrtPrice.toString(),
-});
-```
-
-For new trading integrations, prefer `swap2`/`swapQuote2` when you need partial-fill or exact-out behavior.
-
-## Main Service Areas
-
-| Service | Use |
-| --- | --- |
-| `client.partner` | Create configs, create partner metadata, claim partner fees, claim pool creation fees, withdraw partner surplus. |
-| `client.pool` | Create pools, create config-and-pool flows, create pool with first buy, quote swaps, build swaps. |
-| `client.creator` | Create pool metadata, claim creator fees, transfer pool creator, withdraw creator surplus. |
-| `client.migration` | Create lockers, migrate to DAMM v1/v2, lock or claim DAMM v1 LP, withdraw migration fees and leftover. |
-| `client.state` | Read configs, pools, metadata, fee metrics, progress, tokenomics, and quote math helpers. |
-
-Use the [SDK Functions](/developer-guides/dbc/typescript-sdk/sdk-functions) page for method signatures and the [Example Scripts](/developer-guides/dbc/typescript-sdk/example-scripts) page for full transaction flows.
+<CardGroup cols={2}>
+  <Card
+    title="SDK Examples"
+    icon="bolt"
+    iconType="solid"
+    href="/developer-guides/dbc/typescript-sdk/examples"
+  >
+    Explore full transaction flows, including pool initialization, swaps, liquidity, and more.
+  </Card>
+  <Card
+    title="SDK Reference"
+    icon="code"
+    iconType="solid"
+    href="/developer-guides/dbc/typescript-sdk/reference"
+  >
+    Access the full method map, PDA helpers, and fee helpers for DBC.
+  </Card>
+</CardGroup>
 
 ## Testing The SDK
 
-If you have cloned the SDK repository, start with package-level checks:
+The local package scripts use `pnpm` in the repository root and package scripts in `packages/dynamic-bonding-curve`.
 
 ```bash
 cd packages/dynamic-bonding-curve
-bun install
-bun run build
-bun test
+pnpm install
+pnpm run build
+pnpm run check-types
+pnpm test
 ```
 
-Some tests use local validator fixtures and program artifacts. For application integrations, simulate transactions and test on devnet before mainnet.
+Some tests depend on local validator fixtures and deployed program artifacts. For application integrations, simulate transactions and test on devnet before mainnet.
 
 ## Faucets
 
 <CardGroup cols={1}>
   <Card title="Devnet Faucet" icon="faucet" href="https://faucet.solana.com/">
-    <p>When working on devnet, you might need test SOL.</p>
+    Request test SOL for devnet integration testing.
   </Card>
 </CardGroup>

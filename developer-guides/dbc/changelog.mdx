@@ -1,0 +1,115 @@
+---
+title: "DBC Changelog"
+sidebarTitle: "Changelog"
+description: "Track DBC release notes, breaking changes, and upgrade guidance for the program, IDL, TypeScript SDK, Rust quote helpers, and migration flows."
+llmsDescription: "Explains the DBC integration changelog for builders maintaining Meteora Dynamic Bonding Curve integrations. Covers local source versions, dynamic_bonding_curve program and IDL version 0.1.10, @meteora-ag/dynamic-bonding-curve-sdk package version 1.5.7, breaking SDK changes, buildCurve parameter restructuring, migrated DAMM v2 compounding fees, market-cap fee scheduler changes, first-swap minimum-fee remaining accounts, swap2 and partial-fill support, migration metadata deprecation, and upgrade checklists."
+rss: true
+---
+
+<Tip>
+  Track DBC releases here.
+</Tip>
+
+<Update
+  label="dynamic-bonding-curve 0.1.10"
+  description="Migrate to DAMM v2 Inner Positions + DAMM v2 Compounding Fee"
+  rss="DBC dynamic-bonding-curve 0.1.10 migrates DAMM v2 vesting to inner positions and adds DAMM v2 compounding fee pool support, with event parsing and bonding curve configuration updates. SDK 1.5.6."
+>
+  <Info>
+    Mainnet deployment for Release 0.1.10 is planned for March 16, 2026, at 11:00 AM UTC+8 (Monday).
+  </Info>
+
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.1.10` | [dynamic-bonding-curve #174](https://github.com/MeteoraAg/dynamic-bonding-curve/pull/174) |
+  | TypeScript SDK | `1.5.7` | [dynamic-bonding-curve-sdk #101](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/pull/101) |
+
+  ## What We Shipped 
+  - Migrate to DAMM v2 Inner Positions 
+  - Migrate to DAMM v2 Compounding Fee Pool
+
+  ## What To Do
+
+  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrators</th>
+          <th>What Changed</th>
+          <th>What To Do</th>
+        </tr>
+      </thead>
+      <tbody>
+       <tr>
+          <td><strong>Trading Terminals</strong></td>
+          <td>
+            <ul>
+              <li><code>EvtPartnerClaimPoolCreationFee</code> event parsing</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>The <code>EvtPartnerClaimPoolCreationFee</code> event now includes a fee_receiver field. Partners parsing/indexing this event must update their deserialization.</li>
+            </ul>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Partners</strong></td>
+          <td>
+            <ul>
+              <li>Bonding Curve Configuration Updates</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Bump your SDK version to <code>@meteora-ag/dynamic-bonding-curve-sdk@1.5.5-rc.0</code> to start testing.</li>
+              <li>Optionally update your bonding curve configuration to enable compounding fee mode by passing <code>migrated_pool_fee.collect_fee_mode: 2</code> and <code>compounding_fee_bps: 1-10_000</code> field in <code>ConfigParameters</code></li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  ## Program: `dynamic-bonding-curve` `0.1.10`
+
+  Program ID (mainnet and devnet): `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`
+
+  [Program PR #174](https://github.com/MeteoraAg/dynamic-bonding-curve/pull/174)
+
+  ### Added
+
+  - Add new endpoint `create_operator_account` and `close_operator_account` that allows admin to manage different operator accounts.
+  - Add new account `Operator`, that would stores `whitelisted_address` as well as their operational permissions
+  - Add new endpoint `zap_protocol_fee` that allow operator to claim protocol fees and zap out to SOL/USDC or other token in pool and send to treasury address
+  - Add support for damm-v2 Compounding `collect_fee_mode`. This can be enabled through the `create_config` endpoint by passing `migrated_pool_fee.collect_fee_mode: 2` and `compounding_fee_bps: 1-10_000` field in `ConfigParameters`
+
+  ### Changed
+
+  - When migrate to damm-v2, instead of using external accounts for vesting, now we will use position itself, that would save 2 accounts for damm-v2 migration instruction.
+
+  ### Removed
+
+  - Removed the `create_claim_protocol_fee_operator` endpoint in favor of `create_operator_account`, which can create an operator account configured with permissions, including claiming protocol fees.
+
+  ## TypeScript SDK: `@meteora-ag/dynamic-bonding-curve-sdk` `1.5.6`
+
+  [SDK PR #98](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/pull/98)
+
+  <Tip>
+    Early testing: [`@meteora-ag/dynamic-bonding-curve-sdk@1.5.5-rc.0`](https://www.npmjs.com/package/@meteora-ag/dynamic-bonding-curve-sdk/v/1.5.5-rc.0).<br /> Production: [`@meteora-ag/dynamic-bonding-curve-sdk@1.5.6`](https://www.npmjs.com/package/@meteora-ag/dynamic-bonding-curve-sdk/v/1.5.6). 
+  </Tip>
+
+  ### Added
+
+  - Added `MigratedCollectFeeMode` enum with `Compounding` (2) support for migrated DAMM v2 pool configuration.
+  - Added `compoundingFeeBps` support in `MigratedPoolFeeConfig` and propagated it through all `buildCurve*` helpers.
+
+  ### Changed
+
+  - Updated migrated pool fee validation to require `compoundingFeeBps > 0` only when `collectFeeMode = MigratedCollectFeeMode.Compounding`, and `0` otherwise.
+  - Updated migration flow for DAMM v2 to remove position vesting accounts from `migrateDammV2` remaining accounts.
+  - Removed `deriveDammV2PositionVestingAccount` PDA helper.
+</Update>
