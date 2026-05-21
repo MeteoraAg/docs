@@ -1,0 +1,121 @@
+---
+title: "DBC Rust Integration Library"
+sidebarTitle: "Library"
+description: "Learn how to use the DBC Rust library for exact-in, exact-out, partial-fill, account-state inputs, and tests."
+llmsDescription: "Explains the DBC Rust integration library in the local dynamic-bonding-curve-sdk crate. Covers installation, quote_exact_in, quote_exact_out, quote_partial_fill, VirtualPool and PoolConfig inputs, SwapResult2 outputs, activation slot and timestamp handling, referral fees, first-swap minimum-fee eligibility, test fixtures, and when to use the Rust quote library instead of the TypeScript SDK."
+---
+
+The `dynamic-bonding-curve` repository includes a Rust crate at `dynamic-bonding-curve-sdk`. It depends on the on-chain `dynamic-bonding-curve` crate and reuses program state and math types.
+
+## Install
+
+Use the crate from the local workspace or a pinned Git revision:
+
+```toml
+[dependencies]
+dynamic-bonding-curve-sdk = { git = "https://github.com/MeteoraAg/dynamic-bonding-curve", package = "dynamic-bonding-curve-sdk" }
+```
+
+For local development inside the program repository:
+
+```bash
+cd dynamic-bonding-curve
+cargo test -p dynamic-bonding-curve-sdk
+```
+
+## What It Provides
+
+| Module | Function | Use |
+| --- | --- | --- |
+| `quote_exact_in` | `quote_exact_in` | Quote a swap for a fixed input amount. |
+| `quote_exact_out` | `quote_exact_out` | Quote the required input for a fixed output amount. |
+| `quote_partial_fill` | `quote_partial_fill` | Quote a partial-fill swap near the end of a bonding curve. |
+
+The crate is useful for Rust services, quote engines, tests, and keepers that already decode `VirtualPool` and `PoolConfig` accounts.
+
+## Quote Inputs
+
+All three quote helpers require current pool and config state:
+
+| Parameter | Meaning |
+| --- | --- |
+| `pool: &VirtualPool` | Current virtual pool account data. |
+| `config: &PoolConfig` | Pool config account referenced by `pool.config`. |
+| `swap_base_for_quote: bool` | `true` sells base for quote; `false` buys base with quote. |
+| `current_timestamp: u64` | Current cluster timestamp. Used when `config.activation_type` is timestamp. |
+| `current_slot: u64` | Current cluster slot. Used when `config.activation_type` is slot. |
+| `has_referral: bool` | Whether a referral fee should be included. Used by exact-in and partial-fill quotes. |
+| `eligible_for_first_swap_with_min_fee: bool` | Whether the quote should use the first-swap minimum fee path. Set this only when the transaction satisfies the program validation path. |
+
+## Exact-In Quote
+
+```rust
+pub fn quote_exact_in(
+    pool: &VirtualPool,
+    config: &PoolConfig,
+    swap_base_for_quote: bool,
+    current_timestamp: u64,
+    current_slot: u64,
+    in_amount: u64,
+    has_referral: bool,
+    eligible_for_first_swap_with_min_fee: bool,
+) -> anyhow::Result<SwapResult2>
+```
+
+Use this for `swap2` exact-in mode, then apply your slippage policy before building the transaction.
+
+## Exact-Out Quote
+
+```rust
+pub fn quote_exact_out(
+    pool: &VirtualPool,
+    config: &PoolConfig,
+    swap_base_for_quote: bool,
+    current_timestamp: u64,
+    current_slot: u64,
+    out_amount: u64,
+    eligible_for_first_swap_with_min_fee: bool,
+) -> anyhow::Result<SwapResult2>
+```
+
+Exact-out quotes return the input amount required to receive `out_amount`. Apply a maximum input bound before sending the transaction.
+
+## Partial-Fill Quote
+
+```rust
+pub fn quote_partial_fill(
+    pool: &VirtualPool,
+    config: &PoolConfig,
+    swap_base_for_quote: bool,
+    current_timestamp: u64,
+    current_slot: u64,
+    in_amount: u64,
+    has_referral: bool,
+    eligible_for_first_swap_with_min_fee: bool,
+) -> anyhow::Result<SwapResult2>
+```
+
+Partial fill is useful when the pool is close to `migration_quote_threshold` and a full exact-in swap might cross the migration boundary.
+
+## Return Data
+
+`SwapResult2` contains the values needed by quote engines and transaction builders:
+
+| Field | Use |
+| --- | --- |
+| `included_fee_input_amount` | Input amount before excluded-fee adjustment. |
+| `excluded_fee_input_amount` | Amount that moves the curve after fee handling. |
+| `amount_left` | Unused amount in partial-fill flows. |
+| `output_amount` | Output token amount. |
+| `next_sqrt_price` | Post-swap Q64.64 sqrt price. |
+| `trading_fee`, `protocol_fee`, `referral_fee` | Fee split for the swap. |
+
+## Tests
+
+The Rust crate includes tests for exact-out and partial-fill behavior, plus binary fixtures for configs and pools with quote-token and both-token fee modes.
+
+| Path | Use |
+| --- | --- |
+| `dynamic-bonding-curve-sdk/src/tests/test_quote_exact_out.rs` | Exact-out quote tests. |
+| `dynamic-bonding-curve-sdk/src/tests/test_quote_partial_fill.rs` | Partial-fill quote tests. |
+| `dynamic-bonding-curve-sdk/fixtures/*.bin` | Serialized pool and config fixtures. |

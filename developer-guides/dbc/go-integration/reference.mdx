@@ -1,0 +1,70 @@
+---
+title: "DBC Go SDK Integration Reference"
+sidebarTitle: "Reference"
+description: "Learn how to use dbc-go for backend integrations, account reads, swaps, fee claims, and creator transfer examples."
+llmsDescription: "Explains DBC Go SDK integration using the local dbc-go examples repository. Covers setup, solana-go dependencies, repository layout, account deserialization helpers, PDA helpers, pool and config reads, bonding curve progress, pool creation and swap examples, fee claim examples, creator transfer examples, and when to prefer the TypeScript SDK for newer transaction builders."
+---
+
+The `dbc-go` SDK provides Go helpers for backend services, indexers, and scripts that need to read DBC state or build common DBC transactions.
+
+<CardGroup cols={1}>
+  <Card title="Go SDK" icon="golang" iconType="solid" href="https://github.com/MeteoraAg/dbc-go">
+    Meteora DBC Go SDK source and examples.
+  </Card>
+</CardGroup>
+
+## Installation
+
+Clone the repository and install dependencies. The local `go.mod` uses `github.com/gagliardetto/solana-go`.
+
+```bash
+git clone https://github.com/MeteoraAg/dbc-go.git
+cd dbc-go
+go mod tidy
+```
+
+## Repository Map
+
+| Path | Use |
+| --- | --- |
+| `instructions` | Transaction builders and readers for partner, pool, creator, and state-related flows. |
+| `math` | Curve and safe math helpers. |
+| `common` | Program IDs, shared constants, and account types. |
+| `helpers` | Account deserialization, PDA helpers, and common utilities. |
+| `examples` | Runnable examples for pool creation, swaps, reads, fee claims, and creator transfer. |
+
+## Run Examples
+
+Before running examples, configure the keypairs, RPC endpoint, and public keys required by the file.
+
+```bash
+go run examples/<file-name>.go
+```
+
+## Examples
+
+| Example | Use |
+| --- | --- |
+| `examples/create_pool_and_swap_sol.go` | Create a pool and perform a SOL swap. |
+| `examples/create_pool_and_swap_usdc.go` | Create a pool and perform a USDC swap. |
+| `examples/get_pool.go` | Fetch virtual pool state. |
+| `examples/get_pool_config.go` | Fetch config settings and curve parameters. |
+| `examples/get_bonding_curve_progress.go` | Monitor quote reserve progress toward migration. |
+| `examples/get_pool_fee_metrics.go` | Read pool fee metrics. |
+| `examples/claim_creator_trading_fee.go` | Claim accumulated creator trading fees. |
+| `examples/claim_partner_trading_fee.go` | Claim accumulated partner trading fees. |
+| `examples/transfer_pool_creator.go` | Transfer pool creator rights to a new address. |
+
+## Helper Surface
+
+| Helper | Use |
+| --- | --- |
+| `helpers.DeserializePoolConfig` | Decode a `PoolConfig` account. |
+| `helpers.DeserializePool` | Decode a `VirtualPool` account. |
+| `helpers.DeriveDbcPoolPDA` | Derive a DBC pool PDA. |
+| `helpers.DeriveTokenVaultPDA` | Derive DBC token vault PDAs. |
+| `helpers.DeriveEventAuthorityPDA` | Derive the DBC event authority PDA. |
+| `helpers.DerivePoolAuthorityPDA` | Derive the DBC pool authority PDA. |
+| `instructions.GetPoolConfig` | Fetch and decode a pool config. |
+| `instructions.GetPool` | Fetch and decode a pool. |
+| `instructions.GetPoolFeeMetrics` | Fetch pool fee metrics. |

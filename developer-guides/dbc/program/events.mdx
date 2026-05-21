@@ -1,0 +1,95 @@
+---
+title: "DBC Program Events"
+sidebarTitle: "Events"
+description: "Understand DBC dynamic_bonding_curve events emitted by config, pool, swap, fee claim, migration, metadata, and operator flows."
+llmsDescription: "Explains the DBC program event reference for the public Meteora dynamic_bonding_curve program. Covers Anchor event-CPI delivery, event authority PDA requirements, config and metadata events, EvtInitializePool, EvtSwap and EvtSwap2, EvtCurveComplete, fee claim events, migration events, surplus and leftover events, operator events, deprecated EvtCreateConfig compatibility behavior, and indexing considerations for trading terminals and analytics."
+---
+
+The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use this page when building indexers, analytics pipelines, charting systems, or low-level clients that need to map transactions back to DBC pool activity.
+
+## Event CPI
+
+| Item | Value |
+| --- | --- |
+| Event authority seed | `__event_authority` |
+| SDK helper | `deriveDbcEventAuthority()` |
+| Primary swap event | `EvtSwap2` |
+| Deprecated compatibility event | `EvtCreateConfig` is deprecated; prefer `EvtCreateConfigV2`. |
+
+## Config And Metadata Events
+
+| Event | Emitted by | Important fields | Use |
+| --- | --- | --- | --- |
+| `EvtCreateConfig` | `create_config` | `config`, `quote_mint`, `fee_claimer`, fee and curve fields | Deprecated config payload kept for compatibility. |
+| `EvtCreateConfigV2` | `create_config` | `config`, `quote_mint`, `fee_claimer`, `leftover_receiver`, `config_parameters` | Preferred config creation payload. |
+| `EvtPartnerMetadata` | `create_partner_metadata` | `partner_metadata`, `fee_claimer` | Link partner metadata to a fee claimer. |
+| `EvtVirtualPoolMetadata` | `create_virtual_pool_metadata` | `virtual_pool_metadata`, `virtual_pool` | Link pool metadata to a virtual pool. |
+| `EvtInitializePool` | `initialize_virtual_pool_with_spl_token`, `initialize_virtual_pool_with_token2022` | `pool`, `config`, `creator`, `base_mint`, `pool_type`, `activation_point` | Index new DBC pools. |
+| `EvtUpdatePoolCreator` | `transfer_pool_creator` | `pool`, `creator`, `new_creator` | Track creator authority transfer. |
+
+## Swap Events
+
+| Event | Emitted by | Important fields | Use |
+| --- | --- | --- | --- |
+| `EvtSwap` | `swap`, `swap2` | `pool`, `config`, `trade_direction`, `has_referral`, `params`, `swap_result`, `amount_in`, `current_timestamp` | Legacy/simple swap payload. |
+| `EvtSwap2` | `swap`, `swap2` | `pool`, `config`, `trade_direction`, `has_referral`, `swap_parameters`, `swap_result`, `quote_reserve_amount`, `migration_threshold`, `current_timestamp` | Preferred swap payload for charting, progress, fees, and exact-out or partial-fill support. |
+| `EvtCurveComplete` | `swap`, `swap2` when the threshold is reached | `pool`, `config`, `base_reserve`, `quote_reserve` | Mark bonding curve completion and migration readiness. |
+
+### EvtSwap2 Payload
+
+| Field | Meaning |
+| --- | --- |
+| `trade_direction` | `0` base to quote, `1` quote to base. |
+| `has_referral` | Whether referral fee was included in the fee split. |
+| `swap_parameters.amount_0` | Input for exact-in and partial-fill, or requested output for exact-out. |
+| `swap_parameters.amount_1` | Minimum output for exact-in and partial-fill, or maximum input for exact-out. |
+| `swap_parameters.swap_mode` | `0` exact in, `1` partial fill, `2` exact out. |
+| `swap_result.included_fee_input_amount` | Input amount before excluded-fee adjustment. |
+| `swap_result.excluded_fee_input_amount` | Amount that moved the curve after fee handling. |
+| `swap_result.amount_left` | Unused amount in partial-fill mode. |
+| `swap_result.output_amount` | Output token amount. |
+| `swap_result.next_sqrt_price` | Post-swap sqrt price. |
+| `swap_result.trading_fee`, `protocol_fee`, `referral_fee` | Fee split for the swap. |
+| `quote_reserve_amount` | Quote reserve after the swap. Use this for progress charts. |
+| `migration_threshold` | Configured quote threshold for migration readiness. |
+
+<Warning>
+  Do not reconstruct DBC price from token transfer logs. Use `EvtSwap2`, quote helpers, and account state so fee-adjusted amounts, partial fills, and `next_sqrt_price` are handled correctly.
+</Warning>
+
+## Fee And Claim Events
+
+| Event | Emitted by | Important fields | Use |
+| --- | --- | --- | --- |
+| `EvtClaimTradingFee` | `claim_trading_fee` | `pool`, `token_base_amount`, `token_quote_amount` | Partner trading fee claim. |
+| `EvtClaimCreatorTradingFee` | `claim_creator_trading_fee` | `pool`, `token_base_amount`, `token_quote_amount` | Creator trading fee claim. |
+| `EvtClaimProtocolFee` | `claim_protocol_fee` | `pool`, `token_base_amount`, `token_quote_amount` | Protocol trading fee claim. |
+| `EvtClaimPoolCreationFee` | `claim_protocol_pool_creation_fee` | `pool`, `receiver`, `creation_fee` | Protocol share of pool creation fee. |
+| `EvtPartnerClaimPoolCreationFee` | `claim_partner_pool_creation_fee` | `pool`, `partner`, `creation_fee`, `fee_receiver` | Partner share of pool creation fee. |
+| `EvtClaimProtocolLiquidityMigrationFee` | Migration claim path | `pool`, `token_base_amount`, `token_quote_amount` | Protocol liquidity migration fee claim. |
+
+## Migration And Withdrawal Events
+
+| Event | Emitted by | Important fields | Use |
+| --- | --- | --- | --- |
+| `EvtCreateMeteoraMigrationMetadata` | `migration_meteora_damm_create_metadata` | `virtual_pool` | DAMM v1 migration metadata creation. |
+| `EvtPartnerWithdrawSurplus` | `partner_withdraw_surplus` | `pool`, `surplus_amount` | Partner surplus withdrawal. |
+| `EvtCreatorWithdrawSurplus` | `creator_withdraw_surplus` | `pool`, `surplus_amount` | Creator surplus withdrawal. |
+| `EvtWithdrawLeftover` | `withdraw_leftover` | `pool`, `leftover_receiver`, `leftover_amount` | Leftover base-token withdrawal. |
+| `EvtWithdrawMigrationFee` | `withdraw_migration_fee` | `pool`, `fee`, `flag` | Migration fee withdrawal with role flag. |
+| `EvtPartnerWithdrawMigrationFee` | Partner migration fee withdrawal path | `pool`, `fee` | Partner-specific migration fee withdrawal compatibility event. |
+
+## Operator Events
+
+| Event | Emitted by | Important fields | Use |
+| --- | --- | --- | --- |
+| `EvtCreateClaimFeeOperator` | Operator creation flow | `operator` | Track protocol fee operator creation. |
+| `EvtCloseClaimFeeOperator` | `close_claim_protocol_fee_operator` | `claim_fee_operator`, `operator` | Track protocol fee operator closure. |
+
+## Indexing Notes
+
+1. Treat `EvtSwap2.quote_reserve_amount / EvtSwap2.migration_threshold` as the event-side progress signal.
+2. Reconcile event-derived progress with `VirtualPool.quote_reserve` from account state.
+3. Index both `EvtInitializePool` and pool accounts so pools created before your indexer starts are still discoverable.
+4. Store raw `swap_result` values for analytics; rounded UI values can lose fee and partial-fill detail.
+5. For migrated pools, use DBC events to identify completion and destination AMM state to track post-migration trading.

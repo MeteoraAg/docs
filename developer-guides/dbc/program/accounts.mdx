@@ -1,99 +1,138 @@
 ---
 title: "DBC Program Accounts"
 sidebarTitle: "Accounts"
-description: "Account model for dynamic_bonding_curve configs, virtual pools, vaults, metadata, operators, and migration state."
-llmsDescription: "DBC account reference covering PoolConfig, VirtualPool, vaults, metadata, operator accounts, claim fee operator, DAMM v1 migration metadata, lock escrow, and important state fields."
+description: "Understand DBC dynamic_bonding_curve accounts, including configs, virtual pools, metadata, operators, migration state, constants, and PDA seeds."
+llmsDescription: "Explains the DBC program account model for the public Meteora dynamic_bonding_curve program. Covers PoolConfig, VirtualPool, PartnerMetadata, VirtualPoolMetadata, Operator, ClaimFeeOperator, MeteoraDammMigrationMetadata, LockEscrow, config signer accounts, token vaults, constants, enums, PDA seeds, state interpretation, and SDK methods for fetching and deriving accounts."
 ---
 
-This page summarizes the DBC accounts most integrations read, derive, or pass into instructions. Use the published IDL and SDK builders for exact account ordering.
+<Note>
+  This page summarizes the `dynamic-bonding-curve` account model. For exact layouts, use the published IDL and generated TypeScript types exported by `@meteora-ag/dynamic-bonding-curve-sdk`.
+</Note>
 
-## Core Accounts
+## Address Map
 
-| Account | Type | Purpose |
+| Address | How it is chosen | Use |
 | --- | --- | --- |
-| Config | `PoolConfig` | Partner-created config that controls quote mint, fee claimer, leftover receiver, pool fees, curve, token behavior, migration settings, pool creation fee, and graduated-pool fee settings. |
-| Virtual pool | `VirtualPool` | The active bonding curve pool for a base mint and config. Stores creator, vaults, reserves, current price, fees, migration progress, and metrics. |
-| Base vault | Token account | Holds base tokens controlled by the program authority. |
-| Quote vault | Token account | Holds quote tokens controlled by the program authority. |
-| Base mint | SPL Token or Token-2022 mint | Token launched by the creator. DAMM v1 migration requires SPL Token. |
-| Quote mint | SPL Token mint | Quote token configured on `PoolConfig`. Native SOL is represented with wrapped SOL flows in the SDK. |
-| Pool authority | PDA | Program authority over vaults and migration flows. |
+| `PoolConfig` | New signer account passed to `create_config` | Partner config for quote mint, fee claimer, leftover receiver, fees, curve, token behavior, migration settings, and graduated-pool settings. |
+| `VirtualPool` | PDA from quote mint, base mint, and config | Active DBC pool for one base mint and config. Stores creator, vaults, reserves, current price, fee accruals, metrics, and migration progress. |
+| Base vault | PDA token account from pool and base mint | Program-controlled token account for launched base tokens. |
+| Quote vault | PDA token account from pool and quote mint | Program-controlled token account for quote tokens. |
+| Pool authority | PDA from `pool_authority` | Program authority over vaults and migration flows. The deployed address is `FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM`. |
+| Event authority | PDA from `__event_authority` | Anchor event-CPI authority required by event-emitting instructions. |
+| Partner metadata | PDA from `partner_metadata` and fee claimer | Optional public metadata for a partner. |
+| Virtual pool metadata | PDA from `virtual_pool_metadata` and pool | Optional public metadata for a pool. |
+| DAMM v1 migration metadata | PDA from `meteora` and pool | Metadata used by DAMM v1 migration and LP lock/claim flows. |
+| DAMM v2 migration metadata | PDA from `damm_v2` and pool | Deprecated in the program; DAMM v2 migration no longer requires a separate metadata setup step. |
+| Operator | PDA from `operator` | Admin-created permission account for protocol fee claim and zap flows. |
+| Claim fee operator | PDA from `cf_operator` | Protocol fee claim authorization account. |
 
-## `PoolConfig`
+## Constants
 
-Important fields include:
+| Constant | Value | Meaning |
+| --- | --- | --- |
+| `MAX_CURVE_POINT` | `16` | Maximum curve points accepted by public curve builders. |
+| `MAX_CURVE_POINT_CONFIG` | `20` | Fixed on-chain `PoolConfig.curve` capacity. |
+| `FEE_DENOMINATOR` | `1_000_000_000` | Fee numerator denominator used by DBC fee math. |
+| `MIN_FEE_BPS` | `25` | Minimum pre-graduation base fee, equal to 0.25%. |
+| `MAX_FEE_BPS` | `9900` | Maximum pre-graduation total fee, equal to 99%. |
+| `PROTOCOL_FEE_PERCENT` | `20` | Protocol share of trading fees before optional referral split. |
+| `HOST_FEE_PERCENT` | `20` | Referral share of the protocol fee when a referral account is present. |
+| `PROTOCOL_POOL_CREATION_FEE_PERCENT` | `10` | Protocol share of pool creation fees. The remainder is claimable by the partner. |
+| `MIN_POOL_CREATION_FEE` | `1_000_000` lamports | Minimum non-zero pool creation fee. |
+| `MAX_POOL_CREATION_FEE` | `100_000_000_000` lamports | Maximum pool creation fee. |
+| `MIN_LOCKED_LIQUIDITY_BPS` | `1000` | Minimum locked-liquidity requirement, equal to 10%. |
+| `MAX_LOCK_DURATION_IN_SECONDS` | `63_072_000` | Maximum lock duration for migrated DAMM v2 liquidity, equal to two years. |
+
+## Enums
+
+| Enum | Values |
+| --- | --- |
+| `ActivationType` | `0` slot, `1` timestamp. |
+| `TokenType` / `PoolType` | `0` SPL Token, `1` Token-2022. |
+| `CollectFeeMode` | `0` quote token, `1` output token. |
+| `MigrationOption` | `0` DAMM v1, `1` DAMM v2. |
+| `MigrationFeeOption` | `0` 25 bps, `1` 30 bps, `2` 100 bps, `3` 200 bps, `4` 400 bps, `5` 600 bps, `6` customizable. |
+| `BaseFeeMode` | `0` linear scheduler, `1` exponential scheduler, `2` rate limiter. |
+| `MigrationProgress` | `0` pre-bonding curve, `1` post-bonding curve, `2` locked vesting, `3` created pool. |
+| `TokenAuthorityOption` | `0` creator update authority, `1` immutable, `2` partner update authority, `3` creator update and mint authority, `4` partner update and mint authority. |
+| `OperatorPermission` | `0` claim protocol fee, `1` zap protocol fee. |
+
+## PoolConfig
+
+`PoolConfig` is the partner-created account that defines all pools launched with a config.
 
 | Field | Use |
 | --- | --- |
-| `quote_mint` | Quote mint used by all pools created with the config. |
-| `fee_claimer` | Partner authority that can claim partner fees and pool creation fees. |
-| `leftover_receiver` | Receiver for leftover base tokens after migration. |
-| `pool_fees` | Base fee and dynamic fee config for pre-graduation swaps. |
-| `collect_fee_mode` | Whether pre-graduation fees are collected in quote token or output token. |
-| `migration_option` | DAMM v1 or DAMM v2 destination. |
-| `migration_quote_threshold` | Quote reserve threshold for migration readiness. |
-| `sqrt_start_price` | Starting sqrt price for the curve. |
-| `curve` | Piecewise sqrt price/liquidity points. |
-| `locked_vesting` | Optional post-migration base token vesting. |
-| `migration_fee` | Partner/creator migration fee split. |
-| `migrated_pool_fee` | Custom DAMM v2 graduated-pool fee settings. |
-| `pool_creation_fee` | SOL fee charged when creators create pools from the config. |
+| `quote_mint` | Quote mint for every pool using the config. |
+| `fee_claimer` | Partner authority allowed to claim partner fees and partner pool creation fees. |
+| `leftover_receiver` | Receiver for leftover base tokens after migration for fixed-supply launches. |
+| `pool_fees` | `BaseFeeConfig` and optional `DynamicFeeConfig` used before migration. |
+| `partner_liquidity_vesting_info`, `creator_liquidity_vesting_info` | DAMM v2 migrated-liquidity vesting settings. |
+| `collect_fee_mode` | Whether DBC pre-migration fees are collected in quote token or output token. |
+| `migration_option` | Destination AMM: DAMM v1 or DAMM v2. |
+| `activation_type` | Whether fee schedules and activation checks use slot or timestamp. |
+| `token_decimal`, `token_type`, `quote_token_flag` | Base token decimals, base token program, and quote token classification. |
+| `partner_*_liquidity_percentage`, `creator_*_liquidity_percentage` | Permanent locked and claimable liquidity shares after migration. |
+| `migration_fee_option`, `migration_fee_percentage`, `creator_migration_fee_percentage` | Graduated pool fee key and partner/creator migration fee split. |
+| `fixed_token_supply_flag`, `pre_migration_token_supply`, `post_migration_token_supply` | Fixed-supply behavior and supply limits. |
+| `creator_trading_fee_percentage` | Creator share of trading fees. |
+| `token_update_authority` | Mint and metadata authority mode for pool creation. |
+| `swap_base_amount`, `migration_quote_threshold`, `migration_base_threshold`, `migration_sqrt_price` | Amount and price thresholds computed from the curve configuration. |
+| `locked_vesting_config` | Base token vesting schedule used by locker flows. |
+| `migrated_collect_fee_mode`, `migrated_dynamic_fee`, `migrated_pool_fee_bps`, `migrated_compounding_fee_bps` | DAMM v2 graduated-pool fee behavior. |
+| `migrated_pool_base_fee_mode`, `migrated_pool_base_fee_bytes` | DAMM v2 base-fee mode and serialized market-cap scheduler params. |
+| `enable_first_swap_with_min_fee` | Enables the bundled creator first-swap validation path. |
+| `pool_creation_fee` | Lamport fee charged on pool creation. |
+| `sqrt_start_price`, `curve` | Q64.64 start price and fixed array of liquidity distribution points. |
 
-## `VirtualPool`
+## VirtualPool
 
-Important fields include:
+`VirtualPool` is the account traders, indexers, and migration keepers read most often.
 
 | Field | Use |
 | --- | --- |
-| `config` | Config key used by the pool. |
+| `volatility_tracker` | Dynamic fee state: reference price, accumulator, and last update timestamp. |
+| `config` | `PoolConfig` used by the pool. |
 | `creator` | Pool creator. This authority can claim creator fees, withdraw creator surplus, and transfer creator rights. |
-| `base_mint` | Launched token mint. |
-| `base_vault`, `quote_vault` | Program-controlled token vaults. |
-| `base_reserve`, `quote_reserve` | Current virtual reserves. `quote_reserve` is commonly used for migration progress. |
-| `sqrt_price` | Current curve price in Q64.64 sqrt format. |
+| `base_mint`, `base_vault`, `quote_vault` | Token identity and program-controlled vaults. |
+| `base_reserve`, `quote_reserve` | Current reserves. `quote_reserve` is the main migration progress input. |
+| `protocol_base_fee`, `protocol_quote_fee` | Accrued protocol trading fees. |
+| `partner_base_fee`, `partner_quote_fee` | Accrued partner trading fees. |
+| `creator_base_fee`, `creator_quote_fee` | Accrued creator trading fees. |
+| `sqrt_price` | Current Q64.64 sqrt price. |
 | `activation_point` | Slot or timestamp used for fee schedules and rate limiter windows. |
-| `pool_type` | SPL Token or Token-2022 base token. |
-| `is_migrated` | Boolean-like flag indicating whether migration has completed. |
-| `migration_progress` | State machine for pre-bonding, post-bonding, locked vesting, and created pool. |
-| `partner_*_fee`, `creator_*_fee`, `protocol_*_fee` | Accrued fee balances by recipient and token side. |
+| `pool_type` | SPL Token or Token-2022 base mint. |
+| `is_migrated` | Boolean-like migration completion flag. |
+| `migration_progress` | State machine for bonding, vesting, and migrated pool creation. |
+| `is_partner_withdraw_surplus`, `is_creator_withdraw_surplus`, `is_protocol_withdraw_surplus` | Surplus withdrawal flags. |
+| `is_withdraw_leftover` | Leftover base-token withdrawal flag. |
+| `migration_fee_withdraw_status` | Bit flags for partner and creator migration fee withdrawals. |
 | `metrics` | Lifetime protocol and trading fee counters. |
+| `finish_curve_timestamp` | Timestamp when the curve completed. |
+| `creation_fee_bits` | Pool creation fee claim flags. |
+| `has_swap` | Cached flag indicating whether the pool has had a swap. |
+| `protocol_liquidity_migration_fee_bps` | Protocol liquidity migration fee bps. |
+| `protocol_migration_base_fee_amount`, `protocol_migration_quote_fee_amount` | Protocol migration fee amounts. |
 
-## Metadata Accounts
+## Nested Types
 
-| Account | Purpose |
-| --- | --- |
-| `PartnerMetadata` | Optional partner metadata associated with a fee claimer. |
-| `VirtualPoolMetadata` | Optional metadata associated with a pool. |
-| Mint metadata | Metaplex metadata for SPL Token pool creation. |
-
-## Migration Accounts
-
-| Account | Used by | Notes |
+| Type | Fields | Use |
 | --- | --- | --- |
-| DAMM v1 migration metadata | DAMM v1 migration | Created before `migrate_meteora_damm`. |
-| Lock escrow | Locked vesting / DAMM v1 LP locks | Derived through the locker program when the config uses locked vesting or permanent LP locks. |
-| DAMM config | DAMM v1/v2 migration | Selected from the predefined fee config address arrays or custom DAMM v2 config. |
-| DAMM pool / position accounts | Migration | Derived from base mint, quote mint, and DAMM config by the migration handlers and SDK. |
+| `PoolFeesConfig` | `base_fee`, `dynamic_fee` | Active pre-graduation fee configuration. |
+| `BaseFeeConfig` | `cliff_fee_numerator`, `first_factor`, `second_factor`, `third_factor`, `base_fee_mode` | Linear scheduler, exponential scheduler, or rate limiter parameters. |
+| `DynamicFeeConfig` | `initialized`, `max_volatility_accumulator`, `variable_fee_control`, `bin_step`, `filter_period`, `decay_period`, `reduction_factor`, `bin_step_u128` | Optional volatility-based fee configuration. |
+| `LockedVestingConfig` | `amount_per_period`, `cliff_duration_from_migration_time`, `frequency`, `number_of_period`, `cliff_unlock_amount` | Base token vesting schedule after migration. |
+| `LiquidityVestingInfo` | `vesting_percentage`, `bps_per_period`, `number_of_periods`, `frequency`, `cliff_duration_from_migration_time` | DAMM v2 migrated-liquidity vesting. |
+| `LiquidityDistributionConfig` | `sqrt_price`, `liquidity` | One curve segment endpoint and liquidity value. |
+| `PoolMetrics` | `total_protocol_base_fee`, `total_protocol_quote_fee`, `total_trading_base_fee`, `total_trading_quote_fee` | Lifetime fee counters. |
 
-## Operator Accounts
+## Metadata And Operator Accounts
 
-| Account | Purpose |
-| --- | --- |
-| `Operator` | Stores permission bits for admin-created operator accounts. |
-| `ClaimFeeOperator` | Used for protocol fee claim authorization. |
-
-Operator-controlled flows include protocol trading fee claims, protocol pool creation fee claims, and protocol fee zap operations. These are usually not needed for launchpad, creator, or trading terminal integrations.
-
-## Address Helpers
-
-The TypeScript SDK exposes helpers for common derivations:
-
-| Helper | Use |
-| --- | --- |
-| `deriveDbcPoolAddress` | Derive the virtual pool address from quote mint, base mint, and config. |
-| `deriveDbcTokenVaultAddress` | Derive token vault addresses. |
-| `deriveDbcEventAuthority` | Derive Anchor event authority. |
-| `deriveDammV1MigrationMetadataAddress` | Derive DAMM v1 migration metadata. |
-| `derivePartnerMetadata` | Derive partner metadata. |
-
-Prefer SDK helpers or generated IDL clients for account derivation and instruction account order.
+| Account | Fields | Use |
+| --- | --- | --- |
+| `PartnerMetadata` | `fee_claimer`, `name`, `website`, `logo` | Optional partner profile keyed by fee claimer. |
+| `VirtualPoolMetadata` | `virtual_pool`, `name`, `website`, `logo` | Optional pool profile keyed by pool. |
+| `Operator` | `whitelisted_address`, `permission` | Admin-created operator permission bitmap. |
+| `ClaimFeeOperator` | `operator` | Protocol fee claim authorization account. |
+| `MeteoraDammMigrationMetadata` | `virtual_pool`, `partner`, `lp_mint`, partner/creator locked and claimable liquidity, claim and lock statuses | DAMM v1 migration and LP claim state. |
+| `LockEscrow` | `pool`, `owner`, `escrow_vault`, `total_locked_amount`, `lp_per_token`, fee fields | Locker escrow state used by locked vesting and DAMM v1 LP locks. |

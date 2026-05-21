@@ -1,0 +1,109 @@
+---
+title: "DBC Rust Integration CPI"
+sidebarTitle: "CPI"
+description: "Learn how to plan DBC Anchor CPI integrations with generated bindings, event-CPI accounts, remaining accounts, swap limits, and migration constraints."
+llmsDescription: "Explains DBC Rust CPI integration for programs that call the public Meteora dynamic_bonding_curve program. Covers program ID, enabling Anchor CPI bindings, generated IDL clients, instruction scope, account planning for config, pool, swap, fee claim, and migration flows, event authority accounts, instructions sysvar remaining accounts, first-swap and rate-limiter behavior, Token-2022 token program handling, CPI invariant checks and common failures."
+---
+
+Use CPI when your Solana program must call DBC directly, for example to swap, add or remove liquidity, claim fees or rewards, or manage a DBC position as part of a larger protocol instruction.
+
+## Program ID
+
+| Network | Program ID |
+| --- | --- |
+| Mainnet Beta | `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN` |
+| Devnet | `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN` |
+
+## Generated Bindings
+
+For a Rust program in the same workspace, enable the DBC program crate with the `cpi` feature:
+
+```toml
+[dependencies]
+dynamic-bonding-curve = { git = "https://github.com/MeteoraAg/dynamic-bonding-curve", package = "dynamic-bonding-curve", features = ["cpi"] }
+```
+
+If you are outside the repository, generate bindings from the published IDL and pin the IDL version you tested against.
+
+## CPI Instruction Scope
+
+| Flow | CPI suitability | Notes |
+| --- | --- | --- |
+| Fee claims | Good | Account lists are smaller and signer roles are clear. |
+| Swaps | Possible | Plan slippage, token accounts, token program variants, optional referral account, event authority, and optional instructions sysvar. |
+| Pool creation | Possible, but heavier | Requires mint signer, metadata accounts, vault PDAs, token program variant, event authority, and payer accounts. |
+| DAMM v1/v2 migration | Advanced | DBC migration instructions perform downstream CPIs into DAMM, locker, and token programs. Prefer SDK-built top-level transactions unless your program owns the keeper flow. |
+| Protocol operator flows | Usually internal | Require admin-created operator accounts and protocol permissions. |
+
+## Event CPI Accounts
+
+Most public DBC instructions use `#[event_cpi]`. Include these accounts when constructing CPI contexts:
+
+| Account | Purpose |
+| --- | --- |
+| `event_authority` | DBC event authority PDA derived from `__event_authority`. |
+| `program` | DBC program account. |
+| Destination event authorities | Migration flows may also require DAMM, DAMM v2, or locker event authority accounts. |
+
+## Remaining Accounts
+
+Swaps may require the instructions sysvar as the first remaining account.
+
+| Case | Remaining account |
+| --- | --- |
+| Rate limiter base fee is active | `SYSVAR_INSTRUCTIONS_PUBKEY` |
+| `enable_first_swap_with_min_fee` is enabled | `SYSVAR_INSTRUCTIONS_PUBKEY` |
+| No rate limiter and no first-swap minimum fee | No swap-specific remaining account is required by this rule. |
+
+The program validates single-swap behavior for active rate limiter pools. The first-swap minimum-fee path also validates that pool initialization appears earlier in the top-level transaction; do not assume a CPI-only path is eligible for that minimum fee.
+
+## Swap CPI Shape
+
+Use `swap2` for new integrations because it supports exact-in, partial-fill, and exact-out modes.
+
+| Mode | Required user limit |
+| --- | --- |
+| Exact in | Minimum output amount. |
+| Partial fill | Minimum output amount and clear handling of `amount_left`. |
+| Exact out | Maximum input amount. |
+
+Before calling DBC from your program:
+
+1. Decode and validate `VirtualPool` and `PoolConfig`.
+2. Verify account ownership and data length before deserializing.
+3. Use the Rust quote library or TypeScript SDK math to calculate expected amounts.
+4. Pass user-controlled slippage limits into your own instruction args.
+5. Recheck token mints, vaults, token program IDs, and signer authorities in your account constraints.
+
+## Token Programs
+
+DBC supports SPL Token and Token-2022 base mints. Migration and pool creation account lists differ by token type.
+
+| Token side | Guidance |
+| --- | --- |
+| Base mint | Read `PoolConfig.token_type` and `VirtualPool.pool_type`; use the matching token program. |
+| Quote mint | Native SOL uses wrapped SOL account handling in SDK-built transactions. CPI integrations must prepare token accounts explicitly. |
+| Token-2022 | Include Token-2022 program accounts where required and validate associated token accounts carefully. |
+
+## CPI Invariant Checks
+
+Some DBC handlers wrap downstream CPIs with account invariant checks. If the downstream CPI unexpectedly changes account owner, data length, or reduces lamports, DBC can return `AccountInvariantViolation`.
+
+| Error | Common CPI cause |
+| --- | --- |
+| `InvalidAccount` | PDA, vault, mint, owner, or token program mismatch. |
+| `IncorrectATA` | Associated token account owner or mint mismatch. |
+| `FailToValidateSingleSwapInstruction` | Missing instructions sysvar or invalid single-swap transaction context. |
+| `FirstSwapValidationFailed` | First-swap minimum-fee transaction context does not match program requirements. |
+| `AccountInvariantViolation` | Downstream CPI changed protected account invariants. |
+| `CpiDisabled` | Downstream protocol zap CPI disabled. |
+
+## Best Practices
+
+| Practice | Why it matters |
+| --- | --- |
+| Prefer SDK-built transactions for frontends and bots | The SDK keeps account order, wrapped SOL, event authorities, and remaining accounts aligned with the IDL. |
+| Keep CPI account lists explicit | DBC migration and swap flows have many optional and downstream accounts. |
+| Pin IDL and program versions | The local IDL is `0.1.10`; regenerate bindings when the IDL changes. |
+| Simulate on devnet or localnet | Migration and swap CPI failures are easier to diagnose before mainnet. |
+| Store raw event and account data in indexers | `EvtSwap2` and `VirtualPool` state are both needed for reliable charting and progress tracking. |
