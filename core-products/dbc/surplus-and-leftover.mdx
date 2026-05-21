@@ -1,0 +1,125 @@
+---
+title: "DBC Surplus and Leftover"
+sidebarTitle: "Surplus and Leftover"
+description: "Learn how DBC handles surplus quote tokens and leftover base tokens after a bonding curve completes or migrates."
+llmsDescription: "Explains DBC surplus and leftover handling, including quote reserve above migration threshold, surplus split between protocol, partner, and creator, creator trading fee percentage split, one-time surplus claims after curve completion, fixed-supply leftover base tokens, leftover receiver, leftover formula, and one-time leftover withdrawal after migrated pool creation."
+---
+
+DBC surplus and leftover are the two cleanup amounts that can remain in a virtual pool after a launch reaches the end of its bonding-curve flow.
+
+| Amount | Token Side | When It Can Exist | Receiver Path |
+| --- | --- | --- | --- |
+| Surplus | Quote token | The final swap leaves quote reserve above the migration threshold. | Protocol, partner, and creator surplus claims. |
+| Leftover | Base token | A fixed-supply launch has unused base tokens after migration accounting. | Configured `leftover_receiver`. |
+
+## Surplus
+
+Surplus is the extra quote token amount collected above the migration threshold.
+
+The migration threshold defines how much quote reserve is needed to complete the curve. In active markets, the swap that completes the curve may push the quote reserve above that threshold. The extra amount is surplus.
+
+```math
+\text{Total Surplus} =
+\text{Quote Reserve} - \text{Migration Quote Threshold}
+```
+
+Surplus exists only when the quote reserve is greater than the migration threshold.
+
+## Surplus Split
+
+DBC splits surplus into protocol surplus and partner or creator surplus.
+
+```math
+\text{Partner and Creator Surplus} = \left\lfloor\text{Total Surplus} \times 80\%\right\rfloor
+```
+
+```math
+\text{Protocol Surplus} = \text{Total Surplus} - \text{Partner and Creator Surplus}
+```
+
+The partner and creator share is then split using the same creator trading fee percentage configured for the launch.
+
+```math
+\text{Creator Surplus} =
+\text{Partner and Creator Surplus} \times \text{Creator Trading Fee Percentage}
+```
+
+```math
+\text{Partner Surplus} =
+\text{Partner and Creator Surplus} - \text{Creator Surplus}
+```
+
+For example, if the migration quote threshold is 100 SOL and the final quote reserve is 105 SOL, the total surplus is 5 SOL. With a 25% creator trading fee percentage, the split is:
+
+| Recipient | Amount |
+| --- | --- |
+| Partner and creator surplus share | 4 SOL |
+| Protocol surplus share | 1 SOL |
+| Creator surplus | 1 SOL |
+| Partner surplus | 3 SOL |
+
+## Claiming Surplus
+
+Surplus can be claimed after the curve is complete. It is not a post-migration-only claim. The virtual pool tracks whether each surplus recipient has already withdrawn, so each claim can happen only once.
+
+| Claimant | Program Behavior |
+| --- | --- |
+| Partner | Claims the partner share of the partner and creator surplus allocation. |
+| Creator | Claims the creator share of the partner and creator surplus allocation. |
+| Protocol | Claims the protocol surplus share through protocol fee claiming. |
+
+<Note>
+  Surplus is different from trading fees and migration fees. It comes from extra quote reserve above the migration threshold.
+</Note>
+
+## Leftover
+
+Leftover is the unused base token amount from a fixed-supply launch after the token has migrated.
+
+It exists because fixed-supply launches predefine the total token amount before trading begins. Not every token in that initial supply is necessarily sold through the bonding curve or needed for the migrated DAMM pool. The unused amount is called leftover.
+
+| Supply Model | Leftover Behavior |
+| --- | --- |
+| Dynamic supply | Usually no leftover. The launch mints the supply needed for the curve and migration flow. |
+| Fixed supply | Leftover may exist because the launch starts from a predefined supply. |
+
+For fixed-supply launches, the config includes:
+
+- `pre_migration_token_supply`: the fixed supply available before migration.
+- `post_migration_token_supply`: the supply expected after migration.
+- `leftover_receiver`: the address that receives unused base tokens.
+
+## Leftover Formula
+
+```math
+\text{Leftover} =
+\text{Remaining Base Vault Amount}
+- \text{Protocol and Trading Base Fees}
+- \text{Protocol Migration Base Fee}
+```
+
+In product terms, leftover is the part of the fixed launch supply that remains in the virtual pool after migration accounting and after base-token fee balances are reserved.
+
+This is more precise than simply subtracting tokens sold from the initial supply. The program withdraws leftover from the base vault only after excluding claimable base fees and protocol migration base fees.
+
+## Withdrawing Leftover
+
+Leftover can be withdrawn only after the DBC pool has migrated and the graduated pool has been created. In program terms, the virtual pool migration progress must be `CreatedPool`.
+
+This matters because the program must first know how many base tokens were sold, how many were needed for migration, and how many remain in the virtual pool after fee and migration accounting.
+
+Leftover can only be withdrawn once, and it is sent to the configured `leftover_receiver`.
+
+## Example
+
+Imagine a fixed-supply launch sets aside 1 billion tokens for the DBC flow.
+
+- 650 million tokens are sold through the bonding curve.
+- 300 million tokens are needed for the migrated pool and post-migration allocations.
+- 50 million tokens remain unused.
+
+The 50 million unused tokens are leftover and can be withdrawn to the configured leftover receiver after migration.
+
+<Note>
+  For dynamic-supply launches, teams usually focus on the curve supply and migrated pool supply rather than leftover recovery.
+</Note>

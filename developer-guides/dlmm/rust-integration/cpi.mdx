@@ -24,18 +24,6 @@ pub const DLMM_PROGRAM_ID: Pubkey =
 
 The public program ID is the same for mainnet and devnet.
 
-## Recommended Workflow
-
-1. Build the equivalent transaction with the Rust `commons` crate.
-2. Inspect the generated DLMM instruction account order and instruction args.
-3. Generate Rust bindings from the DLMM IDL, or use the generated module from
-   `dlmm-sdk/commons` for off-chain tests.
-4. Forward the same main accounts, optional accounts, event CPI accounts,
-   transfer-hook accounts, and bin arrays through your program.
-5. Keep `min_amount_out`, `max_in_amount`, `min_bin_id`, `max_bin_id`, and
-   slippage bounds in your own instruction args so users sign explicit limits.
-6. Simulate and test on devnet pools before mainnet deployment.
-
 ## Generated Bindings
 
 Prefer generated CPI bindings from the DLMM IDL. The `lb_clmm` handlers use
@@ -147,8 +135,7 @@ The order of `ctx.remaining_accounts` must match the order of
 
 ## Swap2 CPI Shape
 
-This shape mirrors `src/instructions/v2/swap2.rs`. Generated bindings may name
-fields slightly differently, but the account concepts should match.
+This shape mirrors `swap2` on the program.
 
 ```rust
 use anchor_lang::prelude::*;
@@ -294,7 +281,7 @@ SDK or `commons` generated client output for the exact placeholder behavior.
 
 ## Off-Chain Account Planning
 
-Use the SDK or `commons` crate to plan accounts before calling your CPI program.
+Use the Typescript SDK or `commons` crate to plan accounts before calling your CPI program.
 
 ```typescript
 const swapYtoX = true
