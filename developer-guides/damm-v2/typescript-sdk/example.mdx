@@ -1,0 +1,513 @@
+---
+title: "DAMM v2 TS SDK Examples"
+sidebarTitle: "Examples"
+description: "Explore TypeScript examples for DAMM v2 swaps, liquidity, positions, fee claims, rewards, locks, Token 2022, and pool creation."
+llmsDescription: "Explains practical DAMM v2 TypeScript SDK examples using @meteora-ag/cp-amm-sdk. Covers setup, pool state reads, user position discovery, getQuote2 and swap2, createPositionAndAddLiquidity, addLiquidity, removeAllLiquidityAndClosePosition, claimPositionFee2, permanentLockPosition, scheduled lockPosition vesting, initializeAndFundReward, claimReward, createCustomPool, dynamic fee parameters ands Token 2022 transfer-fee quote inputs."
+---
+
+These examples are based on the local `damm-v2-sdk` examples and tests. They focus on transaction construction patterns. For the full method catalog, see the [SDK Reference](/developer-guides/damm-v2/typescript-sdk/reference).
+
+## Setup
+
+```typescript
+import {
+  ActivationType,
+  BaseFeeMode,
+  CollectFeeMode,
+  CpAmm,
+  MAX_SQRT_PRICE,
+  MIN_SQRT_PRICE,
+  SwapMode,
+  derivePositionAddress,
+  derivePositionNftAccount,
+  getBaseFeeParams,
+  getCurrentPoint,
+  getDynamicFeeParams,
+  getSqrtPriceFromPrice,
+  getTokenProgram,
+  type PoolFeesParams,
+} from "@meteora-ag/cp-amm-sdk";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  getMint,
+} from "@solana/spl-token";
+import BN from "bn.js";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const cpAmm = new CpAmm(connection);
+
+// Replace this with your server-side signer or wallet signing flow.
+const user = Keypair.generate();
+const pool = new PublicKey("...");
+```
+
+Use devnet while testing. The DAMM v2 program ID is the same for devnet and mainnet:
+
+```typescript
+// cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG
+```
+
+## Fetch Pool And User Positions
+
+```typescript
+const poolState = await cpAmm.fetchPoolState(pool);
+
+const userPositions = await cpAmm.getUserPositionByPool(
+  pool,
+  user.publicKey,
+);
+
+const largestPosition = userPositions[0];
+
+console.log({
+  tokenA: poolState.tokenAMint.toBase58(),
+  tokenB: poolState.tokenBMint.toBase58(),
+  position: largestPosition?.position.toBase58(),
+});
+```
+
+Use `getPositionsByUser(user)` when you need a wallet-level position view across all pools.
+
+## Quote And Swap
+
+The recommended swap flow is:
+
+1. Fetch the pool state.
+2. Resolve the current activation point.
+3. Quote with `getQuote2`.
+4. Build the swap with `swap2`.
+5. Simulate, sign, and send.
+
+```typescript
+const poolState = await cpAmm.fetchPoolState(pool);
+const currentPoint = await getCurrentPoint(
+  connection,
+  poolState.activationType as ActivationType,
+);
+
+const amountIn = new BN(1_000_000);
+
+const quote = cpAmm.getQuote2({
+  inputTokenMint: poolState.tokenAMint,
+  poolState,
+  currentPoint,
+  amountIn,
+  slippage: 0.5,
+  swapMode: SwapMode.ExactIn,
+  tokenADecimal: 6,
+  tokenBDecimal: 6,
+  hasReferral: false,
+});
+
+const tx = await cpAmm.swap2({
+  payer: user.publicKey,
+  pool,
+  inputTokenMint: poolState.tokenAMint,
+  outputTokenMint: poolState.tokenBMint,
+  tokenAMint: poolState.tokenAMint,
+  tokenBMint: poolState.tokenBMint,
+  tokenAVault: poolState.tokenAVault,
+  tokenBVault: poolState.tokenBVault,
+  tokenAProgram: getTokenProgram(poolState.tokenAFlag),
+  tokenBProgram: getTokenProgram(poolState.tokenBFlag),
+  referralTokenAccount: null,
+  poolState,
+  swapMode: SwapMode.ExactIn,
+  amountIn,
+  minimumAmountOut: quote.minimumAmountOut!,
+});
+
+tx.feePayer = user.publicKey;
+tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+console.log(await connection.simulateTransaction(tx));
+
+const signature = await sendAndConfirmTransaction(connection, tx, [user]);
+console.log("Swap signature", signature);
+```
+
+<Tip>
+  Use `SwapMode.PartialFill` when the swap may consume less than the requested input. Use `SwapMode.ExactOut` with `maximumAmountIn` when the output amount is fixed.
+</Tip>
+
+## Create A Position And Add Liquidity
+
+`createPositionAndAddLiquidity` creates the position NFT and adds liquidity in one transaction.
+
+```typescript
+const poolState = await cpAmm.fetchPoolState(pool);
+const positionNft = Keypair.generate();
+const position = derivePositionAddress(positionNft.publicKey);
+
+const maxAmountTokenA = new BN(1_000_000);
+const maxAmountTokenB = new BN(1_000_000);
+
+const liquidityDelta = cpAmm.getLiquidityDelta({
+  maxAmountTokenA,
+  maxAmountTokenB,
+  sqrtPrice: poolState.sqrtPrice,
+  sqrtMinPrice: poolState.sqrtMinPrice,
+  sqrtMaxPrice: poolState.sqrtMaxPrice,
+  collectFeeMode: poolState.collectFeeMode,
+  tokenAAmount: poolState.tokenAAmount,
+  tokenBAmount: poolState.tokenBAmount,
+  liquidity: poolState.liquidity,
+});
+
+const tx = await cpAmm.createPositionAndAddLiquidity({
+  owner: user.publicKey,
+  pool,
+  positionNft: positionNft.publicKey,
+  liquidityDelta,
+  maxAmountTokenA,
+  maxAmountTokenB,
+  tokenAAmountThreshold: maxAmountTokenA,
+  tokenBAmountThreshold: maxAmountTokenB,
+  tokenAMint: poolState.tokenAMint,
+  tokenBMint: poolState.tokenBMint,
+  tokenAProgram: getTokenProgram(poolState.tokenAFlag),
+  tokenBProgram: getTokenProgram(poolState.tokenBFlag),
+});
+
+await sendAndConfirmTransaction(connection, tx, [user, positionNft]);
+
+console.log("Created position", position.toBase58());
+```
+
+For compounding pools, include `tokenAAmount`, `tokenBAmount`, and `liquidity` when calculating liquidity so the quote uses the current pool reserves.
+
+## Add Liquidity To An Existing Position
+
+Use `getDepositQuote` before building the transaction. The quote returns the liquidity delta and the counterpart token amount.
+
+```typescript
+const poolState = await cpAmm.fetchPoolState(pool);
+const positionNftMint = new PublicKey("...");
+const position = derivePositionAddress(positionNftMint);
+const positionNftAccount = derivePositionNftAccount(positionNftMint);
+
+const inAmount = new BN(1_000_000);
+const depositQuote = cpAmm.getDepositQuote({
+  inAmount,
+  isTokenA: true,
+  sqrtPrice: poolState.sqrtPrice,
+  minSqrtPrice: poolState.sqrtMinPrice,
+  maxSqrtPrice: poolState.sqrtMaxPrice,
+  collectFeeMode: poolState.collectFeeMode,
+  tokenAAmount: poolState.tokenAAmount,
+  tokenBAmount: poolState.tokenBAmount,
+  liquidity: poolState.liquidity,
+});
+
+const tx = await cpAmm.addLiquidity({
+  owner: user.publicKey,
+  pool,
+  position,
+  positionNftAccount,
+  liquidityDelta: depositQuote.liquidityDelta,
+  maxAmountTokenA: depositQuote.actualInputAmount,
+  maxAmountTokenB: depositQuote.outputAmount,
+  tokenAAmountThreshold: depositQuote.actualInputAmount,
+  tokenBAmountThreshold: depositQuote.outputAmount,
+  tokenAMint: poolState.tokenAMint,
+  tokenBMint: poolState.tokenBMint,
+  tokenAVault: poolState.tokenAVault,
+  tokenBVault: poolState.tokenBVault,
+  tokenAProgram: getTokenProgram(poolState.tokenAFlag),
+  tokenBProgram: getTokenProgram(poolState.tokenBFlag),
+});
+
+await sendAndConfirmTransaction(connection, tx, [user]);
+```
+
+## Remove Liquidity And Close A Position
+
+`removeAllLiquidityAndClosePosition` combines fee claim, full liquidity removal, and position close. It will reject locked positions, so load vesting accounts and the current point first.
+
+```typescript
+const poolState = await cpAmm.fetchPoolState(pool);
+const position = new PublicKey("...");
+const positionNftAccount = new PublicKey("...");
+const positionState = await cpAmm.fetchPositionState(position);
+const currentPoint = await getCurrentPoint(
+  connection,
+  poolState.activationType as ActivationType,
+);
+
+const vestings = (await cpAmm.getAllVestingsByPosition(position)).map(
+  ({ publicKey, account }) => ({
+    account: publicKey,
+    vestingState: account,
+  }),
+);
+
+const tx = await cpAmm.removeAllLiquidityAndClosePosition({
+  owner: user.publicKey,
+  position,
+  positionNftAccount,
+  poolState,
+  positionState,
+  tokenAAmountThreshold: new BN(0),
+  tokenBAmountThreshold: new BN(0),
+  vestings,
+  currentPoint,
+});
+
+await sendAndConfirmTransaction(connection, tx, [user]);
+```
+
+Use `removeLiquidity` when you only want to remove a specific liquidity delta and keep the position open.
+
+## Claim Position Fees
+
+`claimPositionFee2` is the preferred fee claim helper for new integrations.
+
+```typescript
+const poolState = await cpAmm.fetchPoolState(pool);
+const userPositions = await cpAmm.getUserPositionByPool(pool, user.publicKey);
+const { position, positionNftAccount } = userPositions[0];
+
+const tx = await cpAmm.claimPositionFee2({
+  receiver: user.publicKey,
+  feePayer: user.publicKey,
+  owner: user.publicKey,
+  pool,
+  position,
+  positionNftAccount,
+  tokenAMint: poolState.tokenAMint,
+  tokenBMint: poolState.tokenBMint,
+  tokenAVault: poolState.tokenAVault,
+  tokenBVault: poolState.tokenBVault,
+  tokenAProgram: getTokenProgram(poolState.tokenAFlag),
+  tokenBProgram: getTokenProgram(poolState.tokenBFlag),
+});
+
+await sendAndConfirmTransaction(connection, tx, [user]);
+```
+
+## Lock Liquidity
+
+Use `permanentLockPosition` for irreversible locks and `lockPosition` for vesting schedules.
+
+```typescript
+const positionNftMint = new PublicKey("...");
+const position = derivePositionAddress(positionNftMint);
+const positionNftAccount = derivePositionNftAccount(positionNftMint);
+const unlockedLiquidity = new BN("1000000000000");
+
+const permanentLockTx = await cpAmm.permanentLockPosition({
+  owner: user.publicKey,
+  pool,
+  position,
+  positionNftAccount,
+  unlockedLiquidity,
+});
+
+await sendAndConfirmTransaction(connection, permanentLockTx, [user]);
+```
+
+For scheduled vesting, create a vesting account signer and pass the cliff and period settings:
+
+```typescript
+const vestingAccount = Keypair.generate();
+
+const vestingTx = await cpAmm.lockPosition({
+  owner: user.publicKey,
+  payer: user.publicKey,
+  pool,
+  position,
+  positionNftAccount,
+  cliffPoint: null,
+  periodFrequency: new BN(24 * 60 * 60),
+  cliffUnlockLiquidity: new BN(0),
+  liquidityPerPeriod: new BN("250000000000"),
+  numberOfPeriod: 4,
+  vestingAccount: vestingAccount.publicKey,
+});
+
+await sendAndConfirmTransaction(connection, vestingTx, [user, vestingAccount]);
+```
+
+## Initialize And Claim Rewards
+
+`initializeAndFundReward` creates a reward slot and funds it in one transaction.
+
+```typescript
+const rewardMint = new PublicKey("...");
+const rewardIndex = 0;
+
+const initRewardTx = await cpAmm.initializeAndFundReward({
+  rewardIndex,
+  rewardDuration: new BN(24 * 60 * 60),
+  pool,
+  creator: user.publicKey,
+  payer: user.publicKey,
+  rewardMint,
+  carryForward: false,
+  amount: new BN(1_000_000_000),
+  rewardMintProgram: TOKEN_PROGRAM_ID,
+});
+
+await sendAndConfirmTransaction(connection, initRewardTx, [user]);
+```
+
+Claim rewards by loading the current pool and position state:
+
+```typescript
+const position = new PublicKey("...");
+const positionNftAccount = new PublicKey("...");
+const poolState = await cpAmm.fetchPoolState(pool);
+const positionState = await cpAmm.fetchPositionState(position);
+
+const claimRewardTx = await cpAmm.claimReward({
+  user: user.publicKey,
+  position,
+  poolState,
+  positionState,
+  positionNftAccount,
+  rewardIndex: 0,
+  isSkipReward: false,
+  feePayer: user.publicKey,
+});
+
+await sendAndConfirmTransaction(connection, claimRewardTx, [user]);
+```
+
+Use `initializeReward` plus `fundReward` when initialization and funding should be separate admin actions.
+
+## Create A Customizable Pool
+
+Customizable pools let the creator set fee behavior, activation behavior, and whether initial liquidity should be locked.
+
+```typescript
+const tokenAMint = new PublicKey("...");
+const tokenBMint = new PublicKey("...");
+const tokenADecimals = 6;
+const tokenBDecimals = 6;
+
+const tokenAAmount = new BN(1_000_000).mul(
+  new BN(10).pow(new BN(tokenADecimals)),
+);
+const tokenBAmount = new BN(1_000_000).mul(
+  new BN(10).pow(new BN(tokenBDecimals)),
+);
+const initSqrtPrice = getSqrtPriceFromPrice("1", tokenADecimals, tokenBDecimals);
+
+const liquidityDelta = cpAmm.getLiquidityDelta({
+  maxAmountTokenA: tokenAAmount,
+  maxAmountTokenB: tokenBAmount,
+  sqrtPrice: initSqrtPrice,
+  sqrtMinPrice: MIN_SQRT_PRICE,
+  sqrtMaxPrice: MAX_SQRT_PRICE,
+  collectFeeMode: CollectFeeMode.BothToken,
+});
+
+const baseFee = getBaseFeeParams(
+  {
+    baseFeeMode: BaseFeeMode.FeeTimeSchedulerExponential,
+    feeTimeSchedulerParam: {
+      startingFeeBps: 5000,
+      endingFeeBps: 25,
+      numberOfPeriod: 60,
+      totalDuration: 3600,
+    },
+  },
+  tokenBDecimals,
+  ActivationType.Timestamp,
+);
+
+const poolFees: PoolFeesParams = {
+  baseFee,
+  compoundingFeeBps: 0,
+  padding: 0,
+  dynamicFee: getDynamicFeeParams(25),
+};
+
+const positionNft = Keypair.generate();
+
+const {
+  tx,
+  pool: newPool,
+  position: initialPosition,
+} = await cpAmm.createCustomPool({
+  payer: user.publicKey,
+  creator: user.publicKey,
+  positionNft: positionNft.publicKey,
+  tokenAMint,
+  tokenBMint,
+  tokenAAmount,
+  tokenBAmount,
+  sqrtMinPrice: MIN_SQRT_PRICE,
+  sqrtMaxPrice: MAX_SQRT_PRICE,
+  liquidityDelta,
+  initSqrtPrice,
+  poolFees,
+  hasAlphaVault: false,
+  activationType: ActivationType.Timestamp,
+  collectFeeMode: CollectFeeMode.BothToken,
+  activationPoint: null,
+  tokenAProgram: TOKEN_PROGRAM_ID,
+  tokenBProgram: TOKEN_PROGRAM_ID,
+  isLockLiquidity: false,
+});
+
+await sendAndConfirmTransaction(connection, tx, [user, positionNft]);
+
+console.log({
+  pool: newPool.toBase58(),
+  position: initialPosition.toBase58(),
+});
+```
+
+Use `createPool` instead when you are creating against an existing DAMM v2 config account. Use `createCustomPoolWithDynamicConfig` when your flow needs to create through a dynamic config account.
+
+## Token-2022 Transfer Fee Inputs
+
+For Token-2022 transfer-fee mints, pass mint and epoch data into quote helpers so the SDK can account for transfer fees.
+
+```typescript
+async function getTransferFeeInfo(mint: PublicKey, tokenProgram: PublicKey) {
+  if (!tokenProgram.equals(TOKEN_2022_PROGRAM_ID)) {
+    return undefined;
+  }
+
+  const [mintAccount, epochInfo] = await Promise.all([
+    getMint(connection, mint, connection.commitment, tokenProgram),
+    connection.getEpochInfo(),
+  ]);
+
+  return {
+    mint: mintAccount,
+    currentEpoch: epochInfo.epoch,
+  };
+}
+
+const poolState = await cpAmm.fetchPoolState(pool);
+const tokenAProgram = getTokenProgram(poolState.tokenAFlag);
+const tokenBProgram = getTokenProgram(poolState.tokenBFlag);
+
+const quote = cpAmm.getQuote2({
+  inputTokenMint: poolState.tokenAMint,
+  poolState,
+  currentPoint: await getCurrentPoint(
+    connection,
+    poolState.activationType as ActivationType,
+  ),
+  amountIn: new BN(1_000_000),
+  slippage: 0.5,
+  swapMode: SwapMode.ExactIn,
+  tokenADecimal: 6,
+  tokenBDecimal: 6,
+  hasReferral: false,
+  inputTokenInfo: await getTransferFeeInfo(poolState.tokenAMint, tokenAProgram),
+  outputTokenInfo: await getTransferFeeInfo(poolState.tokenBMint, tokenBProgram),
+});
+
+console.log(quote.minimumAmountOut?.toString());
+```

@@ -1,15 +1,15 @@
 ---
 title: "DAMM v2 Developer Guide"
 sidebarTitle: "Overview"
-description: "Start building with Meteora DAMM v2 using the cp-amm program, TypeScript SDK, Rust quote SDK, Go examples, CPI integrations, and data API."
-llmsDescription: "Developer overview for Meteora DAMM v2 and the public cp-amm program. Explains the guide scope, public-source boundary, program IDs, package and API URLs, integration surfaces, recommended build path, and links to program, SDK, CPI, Go, Rust, API, product, audit, IDL, and changelog resources without duplicating product economics or LP strategy documentation."
+description: "Learn how to build DAMM v2 integrations with the cp-amm program, TypeScript SDK, Rust guides, Go readers, Data API, and release notes."
+llmsDescription: "Explains the DAMM v2 Developer Guide as the integration entry point for Meteora's cp-amm program. Covers program accounts, instructions, events, errors, @meteora-ag/cp-amm-sdk, Rust library and CPI guides, Go account readers, Data API reference, changelog, program IDs, commands, and public repository paths for DAMM v2 builders."
 ---
 
-DAMM v2 is Meteora's configurable constant-product AMM on Solana. To learn more about DAMM v2 such as fee behavior, formulas, Token 2022 support, NFT positions, liquidity mining, and LP strategy, you can read the following documentations:
+DAMM v2 is Meteora's configurable constant-product AMM on Solana. To learn more about DAMM v2, including fee behavior, formulas, Token 2022 support, NFT positions, liquidity mining, and LP strategy, read the following product documentations.
 
 <CardGroup cols={2}>
   <Card title="Learn more about DAMM v2" icon="book-open" iconType="solid" href="/core-products/damm-v2/what-is-damm-v2">
-    Overview of DAMM v2, fee behavior, formulas, Token 2022 support, NFT positions, liquidity mining, and LP strategy.
+    Overview of DAMM v2, fee behavior, Token 2022 support, NFT positions, liquidity mining, and LP strategy.
   </Card>
   <Card title="DAMM v2 Formulas" icon="calculator" iconType="solid" href="/core-products/damm-v2/formulas">
     Formulas and definitions for price, liquidity, fee, and impermanent loss concepts.
@@ -19,14 +19,6 @@ DAMM v2 is Meteora's configurable constant-product AMM on Solana. To learn more 
 ## Integration
 
 <CardGroup cols={2}>
-  <Card
-    title="Program Architecture"
-    icon="cog"
-    iconType="solid"
-    href="/developer-guides/damm-v2/program/architecture"
-  >
-    Program design, pool creation paths, liquidity modes, fees, Token-2022, and integration boundaries.
-  </Card>
   <Card
     title="Program Accounts"
     icon="table-cells"
@@ -42,6 +34,14 @@ DAMM v2 is Meteora's configurable constant-product AMM on Solana. To learn more 
     href="/developer-guides/damm-v2/program/instructions"
   >
     Instruction families for pool creation, liquidity, swaps, rewards, locks, operator flows, and admin flows.
+  </Card>
+  <Card
+    title="Program Events"
+    icon="list"
+    iconType="solid"
+    href="/developer-guides/damm-v2/program/events"
+  >
+    Event families for pool creation, liquidity, swaps, rewards, locks, operator flows, and admin flows.
   </Card>
   <Card
     title="Program Errors"
@@ -63,20 +63,18 @@ DAMM v2 is Meteora's configurable constant-product AMM on Solana. To learn more 
     title="Rust Integration"
     icon="terminal"
     iconType="solid"
-    href="/developer-guides/damm-v2/rust-sdk/integration"
+    href="/developer-guides/damm-v2/rust-integration/library"
   >
-    Rust quote math and Anchor CPI integration against the public `cp-amm` program.
+    Rust integration with DAMM v2 through CPI and the quote library.
   </Card>
   <Card
     title="Go Integration"
     icon="golang"
     iconType="solid"
-    href="/developer-guides/damm-v2/go-sdk/integration"
+    href="/developer-guides/damm-v2/go-integration/reference"
   >
     Go examples for reading pools, positions, position NFTs, and unclaimed rewards.
   </Card>
-</CardGroup>
-<CardGroup cols={1}>
   <Card
     title="DAMM v2 APIs"
     icon="database"
@@ -87,48 +85,49 @@ DAMM v2 is Meteora's configurable constant-product AMM on Solana. To learn more 
   </Card>
 </CardGroup>
 
-## IDs And Endpoints
+## Program IDs
 
-| Item | Value |
+The `cp_amm` program ID is the same on mainnet and devnet:
+
+| Network | Program ID |
 | --- | --- |
-| Mainnet program ID | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
-| Devnet program ID | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
-| Pool authority PDA seed | `pool_authority` |
-| TypeScript package | `@meteora-ag/cp-amm-sdk` |
-| Current local SDK version | `1.4.3` |
-| Production API | `https://damm-v2.datapi.meteora.ag` |
-| Dev API | `https://damm-v2-api.dev.metdev.io` |
-| Production Swagger UI | `https://damm-v2.datapi.meteora.ag/swagger-ui/` |
-| Dev Swagger UI | `https://damm-v2-api.dev.metdev.io/swagger-ui/` |
-
-## Recommended Build Path
-
-1. Read the [product overview](/core-products/damm-v2/what-is-damm-v2) only far enough to understand pool modes, fees, positions, and Token 2022 support.
-2. Use the [TypeScript SDK](/developer-guides/damm-v2/typescript-sdk/getting-started) for transactions and quotes unless you specifically need CPI or a generated client.
-3. Review [accounts](/developer-guides/damm-v2/program/accounts), [instructions](/developer-guides/damm-v2/program/instructions), and [errors](/developer-guides/damm-v2/program/errors) before building custom indexers, generated clients, or low-level integrations.
-4. Use [Rust CPI](/developer-guides/damm-v2/cpi/integration) for on-chain composition and [Rust SDK](/developer-guides/damm-v2/rust-sdk/integration) for off-chain Rust quote math.
-5. Use the [API reference](/developer-guides/damm-v2/api-reference/overview) for indexed data, charts, and discovery. Use on-chain state or SDK helpers for transaction-critical reads.
-6. Check the [developer changelog](/developer-guides/damm-v2/changelog) before upgrading program, SDK, or event decoders.
-
-## Resource Map
+| Mainnet Beta | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
+| Devnet | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
 
 <CardGroup cols={2}>
-  <Card title="cp-amm Program" icon="code" href="https://github.com/MeteoraAg/damm-v2/tree/main/programs/cp-amm">
+  <Card title="DAMM v2 Program" icon="code" href="https://github.com/MeteoraAg/damm-v2/tree/main/programs/cp-amm">
     Public Anchor program source for DAMM v2.
+  </Card>
+  <Card title="DAMM v2 IDL" icon="file-code" href="https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json">
+    Published Anchor IDL used by generated clients and the TypeScript SDK.
   </Card>
   <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-sdk">
     Public SDK for transactions, quotes, PDA derivation, and account fetching.
   </Card>
-  <Card title="IDL" icon="file-code" href="https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json">
-    Published Anchor IDL used by generated clients and the TypeScript SDK.
-  </Card>
   <Card title="Go Examples" icon="golang" iconType="solid" href="https://github.com/MeteoraAg/damm-v2-go">
     Public Go examples for reading DAMM v2 state.
   </Card>
-  <Card title="Audit" icon="shield-check" href="/resources/audits/damm-v2">
-    DAMM v2 audit resources.
-  </Card>
-  <Card title="Product Docs" icon="book" href="/core-products/damm-v2/what-is-damm-v2">
-    Concepts, formulas, fees, LP positions, liquidity mining, and Token 2022 behavior.
+</CardGroup>
+
+<Note>
+  The `cp-amm` source, IDL, TypeScript SDK, Rust quote SDK, and Go examples are public.
+</Note>
+
+## Commands
+
+| Task | Command |
+| --- | --- |
+| Build TypeScript SDK | `cd damm-v2-sdk && pnpm install && pnpm run build` |
+| Run TypeScript SDK tests | `cd damm-v2-sdk && pnpm test` |
+| Run TypeScript type checks | `cd damm-v2-sdk && pnpm run check-types` |
+| Run Rust quote SDK tests | `cd damm-v2 && cargo test -p rust-sdk` |
+| Build `cp-amm` program | `cd damm-v2 && anchor build` |
+| Run Go examples | `cd damm-v2-go && go mod tidy && go run examples/get_pool.go` |
+
+## Stay Updated
+
+<CardGroup cols={1}>
+  <Card title="DAMM v2 Changelog" icon="newspaper" iconType="solid" href="/developer-guides/damm-v2/changelog">
+    Program, SDK, event, and quote changes for integration planning.
   </Card>
 </CardGroup>

@@ -1,13 +1,17 @@
 ---
-title: "DAMM v2 Accounts And State"
+title: "DAMM v2 Program Accounts"
 sidebarTitle: "Accounts"
-description: "Reference DAMM v2 cp-amm account types, important fields, PDA derivations, and indexing notes."
-llmsDescription: "Account reference for the public Meteora DAMM v2 cp-amm program. Documents Config, Pool, Position, TokenBadge, Vesting, RewardInfo, UserRewardInfo, PoolFeesConfig, DynamicFeeConfig, pool metrics, position metrics, PDA seeds, account sizes, state interpretation, Token 2022 flags, layout version behavior, and SDK methods for fetching and decoding accounts."
+description: "Understand DAMM v2 cp-amm accounts, including configs, pools, positions, rewards, vesting, token badges, enums, and PDA seeds."
+llmsDescription: "Explains the DAMM v2 program account model for the public Meteora cp-amm program. Covers PDA seeds, constants, enums, Config accounts, Pool state, Position state, rewards and vesting structs, TokenBadge accounts, PoolFeesConfig, DynamicFeeConfig, token flags, layout version behavior, account sizes, state interpretation, indexing notes, and SDK methods for fetching and decoding accounts."
 ---
 
-DAMM v2 accounts are Anchor accounts. Prefer SDK fetch methods for application code and use the public IDL when generating clients.
+<Note>
+  This page summarizes the `cp-amm` account model. For exact layouts, use the published IDL and generated TypeScript types exported by `@meteora-ag/cp-amm-sdk`.
+</Note>
 
 ## PDA Map
+
+Pool and customizable pool PDAs sort the two mint public keys lexicographically in the seed list.
 
 | Account | SDK helper | Seeds |
 | --- | --- | --- |
@@ -20,13 +24,39 @@ DAMM v2 accounts are Anchor accounts. Prefer SDK fetch methods for application c
 | Reward vault | `deriveRewardVaultAddress(pool, rewardIndex)` | `reward_vault`, pool, reward index |
 | Token badge | `deriveTokenBadgeAddress(tokenMint)` | `token_badge`, mint |
 | Position NFT token account | `derivePositionNftAccount(positionNftMint)` | `position_nft_account`, position NFT mint |
+| Claim fee operator | `deriveClaimFeeOperatorAddress(operator)` | `cf_operator`, operator |
 | Operator | `deriveOperatorAddress(whitelistedAddress)` | `operator`, whitelisted address |
+| Event authority | generated clients | `__event_authority` |
 
-Pool and customizable pool PDAs sort the two mint public keys lexicographically in the seed list. Always read `pool.token_a_mint` and `pool.token_b_mint` from state before building token-specific instructions.
+## Constants
+
+| Constant | Value | Use |
+| --- | --- | --- |
+| `MIN_SQRT_PRICE` | `4295048016` | Lower square-root price bound. |
+| `MAX_SQRT_PRICE` | `79226673521066979257578248091` | Upper square-root price bound. |
+| `NUM_REWARDS` | `2` | Reward slots per pool and position. |
+| `FEE_DENOMINATOR` | `1_000_000_000` | Fee numerator denominator. |
+| `MAX_FEE_BPS_V0` | `5000` | Legacy pool-version max fee, 50%. |
+| `MAX_FEE_BPS_V1` | `9900` | Current pool-version max fee, 99%. |
+| `CURRENT_POOL_VERSION` | `1` | Current fee version for new pools. |
+| `SPLIT_POSITION_DENOMINATOR` | `1_000_000_000` | Numerator denominator for `split_position2`. |
+| `MIN_REWARD_DURATION` | `86400` | Minimum reward campaign duration, 1 day. |
+| `MAX_REWARD_DURATION` | `31536000` | Maximum reward campaign duration, 1 year. |
+
+## Enums
+
+| Enum | Values |
+| --- | --- |
+| `CollectFeeMode` | `0` BothToken, `1` OnlyB, `2` Compounding |
+| `PoolStatus` | `0` Enable, `1` Disable |
+| `PoolType` | `0` Permissionless, `1` Customizable |
+| `LayoutVersion` | `0` V0, `1` V1 |
+| `ActivationType` | `0` Slot, `1` Timestamp |
+| `BaseFeeMode` | Time scheduler linear, time scheduler exponential, rate limiter, market-cap scheduler linear, market-cap scheduler exponential |
+| `SwapMode` | `0` ExactIn, `1` PartialFill, `2` ExactOut |
+| `OperatorPermission` | Config, token badge, pool status, reward, pool fee, protocol fee, zap, and layout-fix permissions |
 
 ## Config
-
-`Config` is a `320` byte zero-copy account. Important fields:
 
 | Field | Meaning |
 | --- | --- |
@@ -41,9 +71,17 @@ Pool and customizable pool PDAs sort the two mint public keys lexicographically 
 
 Use `fetchConfigState`, `getStaticConfigs`, or `getAllConfigs` to read configs from TypeScript.
 
-## Pool
+### PoolFeesConfig
 
-`Pool` is a `1104` byte zero-copy account. Important fields:
+| Field | Meaning |
+| --- | --- |
+| `base_fee` | Encoded base fee mode and mode-specific parameters |
+| `dynamic_fee` | Optional volatility-responsive fee config |
+| `protocol_fee_percent` | Protocol share of trading fees |
+| `referral_fee_percent` | Referral share of protocol fee when referral is present |
+| `compounding_fee_bps` | Fee share that compounds into reserves for compounding pools |
+
+## Pool
 
 | Field | Meaning |
 | --- | --- |
@@ -69,9 +107,28 @@ Use `fetchConfigState`, `getStaticConfigs`, or `getAllConfigs` to read configs f
 
 Use `fetchPoolState` for state and `fetchPoolFees` when you need decoded pool fee bytes.
 
-## Position
+### PoolMetrics
 
-`Position` is a `400` byte zero-copy account tied to a Token 2022 position NFT.
+| Field | Meaning |
+| --- | --- |
+| `total_lp_a_fee`, `total_lp_b_fee` | Lifetime LP fees accumulated by token side |
+| `total_protocol_a_fee`, `total_protocol_b_fee` | Lifetime protocol fees accumulated by token side |
+| `total_position` | Count of created positions, updated when position accounts are initialized or reduced |
+
+### RewardInfo
+
+| Field | Meaning |
+| --- | --- |
+| `initialized` | Non-zero when a reward slot is initialized |
+| `reward_token_flag` | Token program flag for the reward mint |
+| `mint`, `vault`, `funder` | Reward mint, reward vault, and funder authority |
+| `reward_duration`, `reward_duration_end` | Campaign duration and end timestamp |
+| `reward_rate` | Emission rate in Q64-scaled reward units |
+| `reward_per_token_stored` | Cumulative reward growth checkpoint as little-endian `U256` bytes |
+| `last_update_time` | Last pool reward update timestamp |
+| `cumulative_seconds_with_empty_liquidity_reward` | Carry-forward accounting when rewards accrue while liquidity is empty |
+
+## Position
 
 | Field | Meaning |
 | --- | --- |
@@ -87,11 +144,36 @@ Use `fetchPoolState` for state and `fetchPoolFees` when you need decoded pool fe
 
 The position NFT is the ownership handle. A position operation that changes liquidity or claims fees verifies the owner through the NFT token account.
 
+### PositionMetrics
+
+| Field | Meaning |
+| --- | --- |
+| `total_claimed_a_fee`, `total_claimed_b_fee` | Lifetime claimed fee counters for the position |
+
+### UserRewardInfo
+
+| Field | Meaning |
+| --- | --- |
+| `reward_per_token_checkpoint` | Last synced pool reward growth checkpoint |
+| `reward_pendings` | Claimable pending reward amount |
+| `total_claimed_rewards` | Lifetime claimed rewards for the reward slot |
+
+### InnerVesting
+
+| Field | Meaning |
+| --- | --- |
+| `cliff_point` | Slot or timestamp when cliff unlock begins |
+| `period_frequency` | Slot or timestamp interval between unlock periods |
+| `cliff_unlock_liquidity` | Liquidity released at the cliff |
+| `liquidity_per_period` | Liquidity released per period after the cliff |
+| `total_released_liquidity` | Liquidity already released into unlocked liquidity |
+| `number_of_period` | Number of post-cliff unlock periods |
+
 ## Rewards And Vesting
 
 Each pool has up to two `RewardInfo` slots. Once initialized, a reward slot remains initialized. Each position has matching `UserRewardInfo` checkpoints.
 
-External `Vesting` accounts are still supported, but `inner_vesting` lets integrations lock liquidity without creating a separate vesting account. Use the SDK lock and refresh helpers unless you are building low-level instructions.
+External `Vesting` accounts are still supported and are `176` byte zero-copy accounts keyed by `position`. `inner_vesting` stores one vesting schedule inside the `Position` account and lets integrations lock liquidity without creating a separate vesting account. Use the SDK lock and refresh helpers unless you are building low-level instructions.
 
 ## Token Badges
 

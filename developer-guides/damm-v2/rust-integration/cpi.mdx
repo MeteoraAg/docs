@@ -1,0 +1,157 @@
+---
+title: "DAMM v2 Rust Integration CPI"
+sidebarTitle: "CPI"
+description: "Learn how to plan DAMM v2 Anchor CPI integrations with cp-amm accounts, remaining accounts, generated clients, failures, and tests."
+llmsDescription: "Explains DAMM v2 Rust CPI integration for programs that call the public Meteora cp-amm program. Covers program ID, generated bindings, CPI instruction scope, account planning for swaps, liquidity, claims, locks, rewards, and pool creation, event CPI accounts, rate-limiter instructions-sysvar remaining account behavior, Token 2022 token program handling, position NFT ownership checks, common CPI failures, best practices, generated-client guidance, public source references, and testing with localnet, devnet, and simulation workflows."
+---
+
+Use CPI when your Solana program must call DAMM v2 directly, for example to swap, add or remove liquidity, claim fees or rewards, or manage a DAMM v2 position as part of a larger protocol instruction.
+
+<Note>
+  The stable integration contract is the public `cp-amm` program, the published IDL, and the official SDK behavior. This page is cross-checked against the `cp-amm` source so account ordering and remaining-account notes match the on-chain handlers.
+</Note>
+
+## Program ID
+
+```rust
+pub const CP_AMM_PROGRAM_ID: Pubkey =
+    pubkey!("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG");
+```
+
+The public program ID is the same for mainnet and devnet.
+
+## Generated Bindings
+
+Prefer generated CPI bindings from the `cp-amm` IDL. The handlers use Anchor accounts, optional accounts, generated instruction args, `#[event_cpi]`, and a custom optimized swap entrypoint with Anchor fallback.
+
+<Warning>
+  Do not hand-type account order from memory. Generate bindings or compare against SDK-built instructions. Most CPI failures come from one misplaced optional account, event authority account, position NFT account, token program, or rate-limiter remaining account.
+</Warning>
+
+The public integration contract is:
+
+| Resource | Link |
+| --- | --- |
+| Program source | [MeteoraAg/damm-v2/programs/cp-amm](https://github.com/MeteoraAg/damm-v2/tree/main/programs/cp-amm) |
+| IDL | [cp_amm.json](https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json) |
+| Program ID | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
+
+You can generate a client from the IDL or depend on the public `cp-amm` crate from the DAMM v2 workspace when your build setup allows it.
+
+If you depend on the Rust crate for CPI, enable the CPI-compatible features from the workspace:
+
+```toml
+[dependencies]
+cp-amm = { path = "../programs/cp-amm", features = ["cpi"] }
+```
+
+When importing from the public workspace, keep the crate revision aligned with the IDL and SDK version you test against.
+
+## CPI Instruction Scope
+
+For the full `cp-amm` instruction-family map, see [DAMM v2 Program Instructions](/developer-guides/damm-v2/program/instructions). This page focuses on CPI implementation details for the user instructions most integrations call: `swap2`, `add_liquidity`, `remove_liquidity`, `claim_position_fee`, `claim_reward`, and position lock flows.
+
+For off-chain apps, bots, and launch scripts, the TypeScript SDK is usually simpler and safer.
+
+## Account Planning
+
+| Flow | Required planning |
+| --- | --- |
+| Swap | Pool authority, pool, user input/output token accounts, vaults, mints, payer, token programs, optional referral token account |
+| Rate-limiter swap | Add the instructions sysvar as the first remaining account when the rate limiter is active |
+| Add/remove liquidity | Pool, position, user token accounts, vaults, mints, position NFT token account, owner signer, token programs |
+| Claim fees | Position NFT ownership, destination token accounts, pool vaults, token programs |
+| Claim rewards | Reward vault and reward mint/program for the reward index |
+| Pool creation | Correct pool PDA, vault PDAs, position NFT mint/account, token programs, rent/system accounts, and config where applicable |
+
+Read token mint and vault addresses from pool state whenever possible. Avoid reconstructing token A/B assumptions from user input alone.
+
+## Event CPI Accounts
+
+Most `cp-amm` account structs use `#[event_cpi]`. Generated clients include event CPI accounts after the instruction's primary accounts:
+
+| Account | Why it appears |
+| --- | --- |
+| `event_authority` | PDA derived from `__event_authority` for `cp_amm` |
+| `program` | The `cp_amm` program account used by Anchor event CPI emission |
+
+Keep these accounts in the generated order. They are part of Anchor's account validation even though they are not business-state accounts.
+
+## Remaining Accounts
+
+Rate-limiter pools reject swaps that do not include the instructions sysvar because the program validates single-swap behavior for that pool in the transaction.
+
+```rust
+solana_program::sysvar::instructions::ID
+```
+
+For `swap` and `swap2`, the optimized swap path expects the fixed swap account list plus remaining accounts. If the rate limiter is active, put the instructions sysvar as the first remaining account. Normal non-rate-limiter swaps do not need remaining accounts.
+
+Token 2022 transfer-hook accounts are not a general DAMM v2 CPI surface for active transfer hooks. DAMM v2 supports Transfer Hook only when the hook program ID and authority are unset. See [Token 2022 support](/core-products/damm-v2/token-2022-support).
+
+## Swap CPI Shape
+
+For generated Anchor CPI, the account set mirrors `SwapCtx`:
+
+| Account | Notes |
+| --- | --- |
+| `pool_authority` | PDA derived from `pool_authority` |
+| `pool` | Mutable pool account; must match token vaults |
+| `input_token_account`, `output_token_account` | Mutable user token accounts |
+| `token_a_vault`, `token_b_vault` | Mutable pool vaults |
+| `token_a_mint`, `token_b_mint` | Pool mints |
+| `payer` | Signer whose token account is debited |
+| `token_a_program`, `token_b_program` | SPL Token or Token-2022 programs matching the mints |
+| `referral_token_account` | Optional referral account; use the generated optional-account representation |
+| `event_authority`, `program` | Event CPI accounts |
+
+`swap2` parameters use the same semantics as the SDK:
+
+| Mode | `amount_0` | `amount_1` |
+| --- | --- | --- |
+| `ExactIn` | Input amount | Minimum output |
+| `PartialFill` | Input amount | Minimum output |
+| `ExactOut` | Desired output | Maximum input |
+
+## Common CPI Failures
+
+| Error | Likely cause |
+| --- | --- |
+| `NotEnoughAccountKeys` | The CPI account list is shorter than the handler expects. This often means `event_authority`, `program`, an optional referral account placeholder, or a remaining account was omitted. |
+| `ConstraintAddress` / `ConstraintSeeds` | The pool authority or event authority PDA does not match the `cp-amm` program seeds. |
+| `ConstraintHasOne` | The pool, position, vault, or mint account does not match the `has_one` relationships in the account struct. Read vaults and mints from pool state instead of reconstructing them from user input. |
+| `ConstraintTokenMint` / `ConstraintTokenTokenProgram` | A vault or token program does not match the mint and token program expected by the pool. Token A and token B can use different token programs. |
+| `AccountNotSigner` | The expected `payer` or `owner` was not a signer. If your program signs with a PDA, forward the correct signer seeds. |
+| `FailToValidateSingleSwapInstruction` | A rate-limiter swap is missing the instructions sysvar, the sysvar is not the first remaining account, the transaction includes another swap for the same pool, or the CPI stack is deeper than the rate-limiter path allows. |
+| `UnsupportedSysvar` | The first remaining account for an active rate-limiter swap is not `solana_program::sysvar::instructions::ID`. |
+| `ExceededSlippage` | The quote is stale, bounds are too tight, or Token 2022 transfer fees were not included in the add, remove, or swap thresholds. |
+| `AmountIsZero` / `InvalidParameters` | Input amount, liquidity delta, or the rounded token amount is zero. This can happen with very small liquidity changes. |
+| `PoolDisabled` | The pool status or access validator does not allow the requested action, such as swap, add liquidity, remove liquidity, or lock. |
+| `InsufficientLiquidity` | The position does not have enough unlocked liquidity, or vesting/lock state was not refreshed before removal. |
+| `PositionIsNotEmpty` | `close_position` was called before all liquidity, fees, rewards, and locks were cleared. |
+| `InvalidRewardIndex` / `RewardUninitialized` / `InvalidRewardVault` | The reward index is outside `NUM_REWARDS`, the reward slot has not been initialized, or the vault does not match pool reward state. |
+| `RewardVaultFrozenSkipRequired` | The reward vault is frozen and `claim_reward` was called without the skip flag. |
+| `InvalidTokenBadge` | Pool creation, reward initialization, or Token 2022 mint handling requires a token badge account that was missing or did not match the mint. |
+| `UnsupportNativeMintToken2022` | The native mint was supplied through Token 2022. Use the normal wrapped SOL mint and token program path. |
+| `IncorrectATA` | Operator or protocol-fee flows expected a canonical ATA but received a different token account or owner. |
+| `PriceRangeViolation` / `InvalidPriceRange` | Swap or pool creation parameters would move outside the pool price range, or the range is invalid for the collect-fee mode. |
+
+## Best Practices
+
+| Check | Detail |
+| --- | --- |
+| Quote before CPI | Quote off-chain with the TypeScript SDK or Rust quote library, then pass explicit input and slippage bounds into your own program. |
+| Forward generated order | Use generated bindings or compare your account metas against an SDK-built instruction. The main accounts, optional accounts, and event CPI accounts must stay in the generated order. |
+| Read pool state first | Use pool state for token mints, vaults, token flags, collect-fee mode, layout version, activation type, and reward vaults. Do not infer token A/B ordering from user input. |
+| Include event CPI accounts | Most user-facing handlers use `#[event_cpi]`; keep `event_authority` and `program` after the primary accounts as generated by Anchor. |
+| Plan rate-limiter swaps | Detect rate-limiter pools off-chain. Include the instructions sysvar as the first remaining account and avoid batching multiple swaps for the same pool in one transaction. |
+| Avoid deep CPI nesting for rate-limiter swaps | The rate-limiter validation rejects some deeper CPI stacks. Prefer a direct CPI from your program to `cp-amm` for those pools. |
+| Handle token programs per mint | Token A and token B can be SPL Token or Token 2022 independently. Pass the token program that owns each mint and vault. |
+| Reject active transfer hooks | DAMM v2 only supports Token 2022 Transfer Hook mints when the hook program ID and authority are unset. Do not forward active transfer-hook account sets as a DLMM-style remaining-account slice. |
+| Verify position NFT ownership | Liquidity, fee, reward, lock, split, and close flows validate that the position NFT token account has amount `1`, matches `position.nft_mint`, and is owned by the signer. |
+| Refresh lock and vesting state | For remove, close, split, and merge-style flows, load current slot or timestamp and include vesting state expected by your wrapper before deciding what liquidity is unlocked. |
+| Account for Token 2022 transfer fees | Add-liquidity thresholds are maximum included-fee amounts; remove-liquidity thresholds are minimum post-fee amounts. Quote with mint and epoch data before building CPI inputs. |
+| Check reward state | Validate reward index, reward vault, reward mint program, campaign timing, and frozen-vault behavior before claiming or funding rewards. |
+| Budget compute | Swaps with dynamic fees, Token 2022 transfers, pool creation, reward operations, and multi-step wrapper instructions can need extra compute. Add compute budget instructions in the outer transaction when needed. |
+| Simulate against real pools | Test on localnet and devnet, then compare logs and account metas against the same flow built by `@meteora-ag/cp-amm-sdk`. |
+| Keep revisions aligned | Test the `cp-amm` crate, generated IDL client, TypeScript SDK, and deployed program version together. Mismatched revisions are a common source of account-order and enum-value failures. |
