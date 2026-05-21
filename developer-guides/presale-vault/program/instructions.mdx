@@ -1,0 +1,131 @@
+---
+title: "Presale Vault Program Instructions"
+sidebarTitle: "Instructions"
+description: "Explore Presale Vault instructions for presale initialization, escrow creation, deposits, withdrawals, claims, creator actions, metadata, and operators."
+llmsDescription: "Explains the Presale Vault program instruction surface for the public Meteora presale program. Covers fixed-price setup, initialize_presale, Merkle root configs, permissionless and permissioned escrow creation, operator management, deposits, withdrawals, claims, remaining quote refunds, unsold base token actions, creator withdrawals, escrow refresh and close flows, permissioned server metadata, creator fee collection, instruction accounts, mode restrictions, and Token 2022 remaining accounts."
+---
+
+The `presale` IDL exposes the instructions below. Integrators should use the TypeScript SDK for transaction construction or build through CPI.
+
+## Presale Initialization
+
+| Instruction | Use | Notes |
+| --- | --- | --- |
+| `initialize_fixed_price_presale_args` | Creates the fixed-price extra-args account. | Required before initializing a fixed-price presale. Stores `q_price`, owner, presale address, and `disable_withdraw`. |
+| `initialize_presale` | Creates the main `Presale` account and base and quote vaults, then transfers presale base tokens into the base vault. | Used for fixed-price, prorata, and FCFS modes. Accepts `InitializePresaleArgs` and `RemainingAccountsInfo`. |
+| `close_fixed_price_presale_args` | Closes the fixed-price extra-args account. | The account has `has_one = owner` and closes rent to `owner`. |
+
+### `initialize_presale` Inputs
+
+| Input | Meaning |
+| --- | --- |
+| `presale_params` | Caps, timestamps, whitelist mode, presale mode, unsold-token action, and early-end flag. |
+| `locked_vesting_params` | Immediate release bps, lock duration, vest duration, and immediate release timestamp. Zeroed values mean no locked vesting. |
+| `presale_registries` | One to five registry configs. Multiple registries require a permissioned whitelist mode. |
+| `remaining_account_info` | Token 2022 transfer-hook slices for the base mint, when required. |
+
+### Mode-specific Initialization
+
+| Mode | Additional behavior |
+| --- | --- |
+| Fixed price | Requires the fixed-price extra-args account as the first remaining account. Validates `q_price`, buyer-cap ranges, supply coverage, and min/max cap gap. |
+| Prorata | Allows oversubscription. If permissioned, each initialized registry must use buyer min cap `1` and buyer max cap equal to `presale_maximum_cap`. |
+| FCFS | Does not allow withdrawals after deposit. If permissioned, each initialized registry must use buyer min cap `1` and buyer max cap equal to `presale_maximum_cap`. |
+
+## Whitelist And Escrow Setup
+
+| Instruction | Use | Availability |
+| --- | --- | --- |
+| `create_permissionless_escrow` | Creates an `Escrow` for a buyer in registry index `0`. | Only when `whitelist_mode` is `Permissionless`. |
+| `create_permissioned_escrow_with_merkle_proof` | Creates an `Escrow` after verifying a Merkle proof against `MerkleRootConfig`. | Only when `whitelist_mode` is `PermissionWithMerkleProof`. |
+| `create_permissioned_escrow_with_creator` | Creates an `Escrow` authorized by a creator operator. | Only when `whitelist_mode` is `PermissionWithAuthority`. |
+| `create_merkle_root_config` | Creates a Merkle root config for a presale and version. | Only for Merkle proof presales before the presale ends. |
+| `close_merkle_root_config` | Closes a Merkle root config. | Allowed when the presale is not ongoing. |
+| `create_operator` | Creates an operator permission account for a creator and operator owner. | Used by authority-permissioned launches. |
+| `revoke_operator` | Closes an operator account back to the creator. | Requires the operator account to have the creator. |
+| `create_permissioned_server_metadata` | Stores a URL for Merkle proofs or authority partial-signing. | Only for Merkle proof or authority permissioned presales before the presale ends. |
+| `close_permissioned_server_metadata` | Closes the permissioned metadata account. | Allowed in any presale progress state. |
+
+### Permissioned Merkle Leaf
+
+The program verifies a leaf derived from:
+
+| Leaf component | Source |
+| --- | --- |
+| Owner | `owner` account passed to `create_permissioned_escrow_with_merkle_proof`. |
+| Registry index | `params.registry_index`. |
+| Deposit cap | `params.deposit_cap`. |
+
+The Merkle proof uses a leaf prefix and sorted pair hashing in the on-chain verifier.
+
+## Buyer Flows
+
+| Instruction | Use | Notes |
+| --- | --- | --- |
+| `deposit` | Deposits quote tokens into the presale quote vault and updates the buyer escrow. | Only while progress is `Ongoing`. The `max_amount` argument excludes transfer fees and deposit fees. |
+| `withdraw` | Withdraws quote tokens from an escrow during the presale. | Only while progress is `Ongoing`, and only when the mode allows withdrawals. FCFS does not allow withdrawals. Fixed price can disable withdrawals. |
+| `claim` | Claims bought base tokens after a successful presale. | Only when progress is `Completed`. It refreshes pending claim amount before transferring. |
+| `withdraw_remaining_quote` | Withdraws refundable quote tokens. | Allowed for failed presales and completed prorata presales with oversubscription. Each escrow can do this once. |
+| `refresh_escrow` | Updates `pending_claim_token` for an escrow. | If the presale is completed, it calculates claimable amount for the current timestamp. |
+| `close_escrow` | Closes an escrow and sends rent to `rent_receiver`. | Escrow must be empty for the current lifecycle state. |
+
+## Creator Flows
+
+| Instruction | Use | Notes |
+| --- | --- | --- |
+| `creator_withdraw` | Withdraws creator funds after the presale ends. | If completed, withdraws raised quote up to `presale_maximum_cap`. If failed, withdraws base supply. Can run once. |
+| `creator_collect_fee` | Collects deposit fees after a successful presale. | Can run once when progress is `Completed`. Prorata excludes the fee share tied to refunded overflow quote. |
+| `perform_unsold_base_token_action` | Burns or refunds unsold base tokens after completion. | Only after `Completed`, only once, and only when unsold base tokens exist. |
+
+## Lifecycle Conditions
+
+| Flow | Required state |
+| --- | --- |
+| Escrow creation | `Ongoing`. |
+| Deposit | `Ongoing`. |
+| Withdraw | `Ongoing` and mode permits withdrawal. |
+| Claim | `Completed`. |
+| Remaining quote refund | `Failed`, or `Completed` with prorata mode. |
+| Creator withdraw | `Completed` or `Failed`. |
+| Creator collect fee | `Completed` and fee not already collected. |
+| Unsold base token action | `Completed` and action not already performed. |
+| Close Merkle root config | Any state except `Ongoing`. |
+
+## Account Lists
+
+Use generated clients for exact account ordering. The main business accounts for each instruction are:
+
+| Instruction | Main accounts |
+| --- | --- |
+| `initialize_fixed_price_presale_args` | `fixed_price_presale_params`, `owner`, `payer`, `system_program` |
+| `initialize_presale` | `presale_mint`, `presale`, `presale_authority`, `quote_token_mint`, `presale_vault`, `quote_token_vault`, `payer_presale_token`, `creator`, `base`, `payer`, `base_token_program`, `quote_token_program`, `system_program` |
+| `create_merkle_root_config` | `presale`, `merkle_root_config`, `creator`, `system_program` |
+| `close_merkle_root_config` | `presale`, `merkle_root_config`, `rent_receiver`, `creator` |
+| `create_permissionless_escrow` | `presale`, `escrow`, `owner`, `payer`, `system_program` |
+| `create_permissioned_escrow_with_merkle_proof` | `presale`, `escrow`, `owner`, `merkle_root_config`, `payer`, `system_program` |
+| `create_permissioned_escrow_with_creator` | `presale`, `escrow`, `owner`, `operator`, `operator_owner`, `payer`, `system_program` |
+| `create_operator` | `operator`, `operator_owner`, `creator`, `system_program` |
+| `revoke_operator` | `operator`, `creator` |
+| `deposit` | `presale`, `quote_token_vault`, `quote_mint`, `escrow`, `payer_quote_token`, `payer`, `token_program` |
+| `withdraw` | `presale`, `quote_token_vault`, `quote_mint`, `presale_authority`, `escrow`, `owner_quote_token`, `owner`, `token_program`, `memo_program` |
+| `claim` | `presale`, `base_token_vault`, `base_mint`, `presale_authority`, `escrow`, `owner_base_token`, `owner`, `token_program`, `memo_program` |
+| `withdraw_remaining_quote` | `presale`, `quote_token_vault`, `quote_mint`, `presale_authority`, `escrow`, `owner_quote_token`, `owner`, `token_program`, `memo_program` |
+| `perform_unsold_base_token_action` | `presale`, `base_token_vault`, `base_mint`, `presale_authority`, `creator_base_token`, `token_program`, `memo_program` |
+| `creator_withdraw` | `presale`, `presale_authority`, `owner_token`, `owner`, `token_program`, `memo_program`, plus mode-dependent vault and mint remaining accounts |
+| `creator_collect_fee` | `presale`, `presale_authority`, `quote_token_vault`, `quote_mint`, `fee_receiving_account`, `owner`, `token_program`, `memo_program` |
+| `refresh_escrow` | `presale`, `escrow` |
+| `close_escrow` | `presale`, `escrow`, `owner`, `rent_receiver` |
+| `create_permissioned_server_metadata` | `presale`, `permissioned_server_metadata`, `owner`, `system_program` |
+| `close_permissioned_server_metadata` | `presale`, `permissioned_server_metadata`, `rent_receiver`, `owner` |
+| `close_fixed_price_presale_args` | `fixed_price_presale_args`, `owner` |
+
+## Token 2022 Remaining Accounts
+
+Transfer-hook mints require extra account metas. The program consumes them through `RemainingAccountsInfo.slices`.
+
+| Accounts type | Use |
+| --- | --- |
+| `TransferHookBase` | Base token transfers, including initialization base-token transfer, claims, creator failed-presale withdrawal, and unsold base token refund. |
+| `TransferHookQuote` | Quote token transfers, including deposits, withdrawals, remaining quote refunds, creator completed-presale withdrawal, and creator fee collection. |
+
+The SDK fetches transfer-hook extra account metas and passes the correct `slices` value for supported flows. Manual clients must ensure the slice length matches the remaining accounts that follow the instruction account list.

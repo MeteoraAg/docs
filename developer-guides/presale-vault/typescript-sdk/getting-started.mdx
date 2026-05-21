@@ -1,25 +1,24 @@
 ---
-title: Getting Started
-description: Presale Vault
+title: "Presale Vault TS SDK Getting Started"
+sidebarTitle: "Getting Started"
+description: "Learn how to install @meteora-ag/presale, create a client, derive Presale Vault PDAs, and build your first transactions."
+llmsDescription: "Explains how to start building with the Presale Vault TypeScript SDK. Covers package installation, dependencies, program ID, client creation, PDA derivation, transaction-building behavior, compute-unit optimization, state fetching, local examples, and contributor test commands."
 ---
 
-This guide provides instructions on how to get started with building on Meteora's Presale Vault program using the Presale Vault TypeScript SDK.
+This guide shows how to install and initialize the official Presale Vault TypeScript SDK, `@meteora-ag/presale-sdk`.
 
-Before you begin, here are some important resources:
+Before you begin, here are the main resources:
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/presale-sdk">
-    Meteora Presale Vault Typescript SDK
+  <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/presale-sdk">
+    Public source for the Presale Vault TypeScript SDK.
   </Card>
   <Card title="Presale Vault NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/presale">
-    Meteora Presale Vault NPM Package
-  </Card>
-    <Card title="Presale Vault Examples" icon="code" iconType="solid" href="https://github.com/MeteoraAg/presale-sdk/tree/main/examples">
-    Meteora Presale Vault Examples
+    Published package for transaction builders, PDAs, wrappers, and helpers.
   </Card>
 </CardGroup>
 
-# Installation
+## Install
 
 To use the SDK in your project, install it using your preferred package manager:
 
@@ -41,52 +40,87 @@ To use the SDK in your project, install it using your preferred package manager:
   </Tab>
 </Tabs>
 
-# Initialization
+## Dependencies
 
-Once installed, you can initialize the SDK in your TypeScript/JavaScript project like this:
+| Package | Version range in SDK |
+| --- | --- |
+| `@coral-xyz/anchor` | `^0.31.1` |
+| `@solana/web3.js` | `^1.98.2` |
+| `@solana/spl-token` | `^0.4.13` |
+| `bn.js` | `^5.2.2` |
+| `decimal.js` | `^10.6.0` |
+
+## Create A Client
+
+Create a client from an existing presale address:
 
 ```typescript
-import { Connection } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import Presale, { PRESALE_PROGRAM_ID, derivePresale } from "@meteora-ag/presale";
 
-// Initialize a connection to the Solana network (e.g., Mainnet)
-const connection = new Connection("https://api.mainnet-beta.solana.com");
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
 
-const baseKeypair = Keypair.generate();
+const baseMint = new PublicKey("BASE_MINT_ADDRESS");
+const quoteMint = new PublicKey("QUOTE_MINT_ADDRESS");
+const base = new PublicKey("BASE_KEY_ADDRESS");
 
-  const presaleAddress = derivePresale(
-    new PublicKey("YOUR_BASE_MINT"),
-    new PublicKey("YOUR_QUOTE_MINT"),
-    baseKeypair.publicKey,
-    PRESALE_PROGRAM_ID
-  );
+const presaleAddress = derivePresale(
+  baseMint,
+  quoteMint,
+  base,
+  PRESALE_PROGRAM_ID
+);
 
-// Create a new instance of the CpAmm SDK
-  const presaleInstance = await Presale.create(
-    connection,
-    presaleAddress,
-    PRESALE_PROGRAM_ID
-  );
+const presale = await Presale.create(
+  connection,
+  presaleAddress,
+  PRESALE_PROGRAM_ID
+);
 ```
 
-# Testing the SDK (for contributors)
+The client caches the presale account, mint accounts, and Token 2022 transfer-hook remaining-account metadata. Call `refetchState()` before building transactions when your UI may be using stale state.
 
-If you have cloned the SDK repository and want to run the built-in tests:
+## Program IDs
 
-```bash
-# Install dependencies
-pnpm install
+| Constant | Value |
+| --- | --- |
+| `PRESALE_PROGRAM_ID` | `presSVxnf9UU8jMxhgSMqaRwNiT36qeBdNeTRKjTdbj` |
+| `MEMO_PROGRAM_ID` | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` |
+| `METAPLEX_PROGRAM_ID` | `metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s` |
 
-# Run tests
-pnpm test
+## Build A Transaction
+
+```typescript
+import BN from "bn.js";
+
+const tx = await presale.deposit({
+  owner: wallet.publicKey,
+  amount: new BN("500000000"),
+});
+
+// Sign, simulate, send, and confirm with your wallet or backend signer.
 ```
 
-# Development Resources
+By default, the SDK estimates compute units and prepends a compute-budget instruction. Disable this behavior if your integration manages compute budget instructions itself:
 
-## Faucets
+```typescript
+presale.setComputeUnitOptimization(false);
+```
+
+## SDK Examples
 
 <CardGroup cols={1}>
-  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.raccoons.dev/">
-    <p>When working on devnet, you might need test tokens. Here is a helpful faucet.</p>
+  <Card title="Presale Vault Examples" icon="code" iconType="solid" href="https://github.com/MeteoraAg/presale-sdk/tree/main/examples">
+    Example scripts for initialization, deposits, claims, refunds, and creator actions.
   </Card>
 </CardGroup>
+
+## Testing The SDK
+
+If you have cloned the SDK repository, start with package-level checks and tests:
+
+```bash
+pnpm install
+pnpm run build
+pnpm test
+```

@@ -1,59 +1,121 @@
 ---
-title: Overview
+title: "Presale Vault Developer Guide"
+sidebarTitle: "Overview"
+description: "Learn how to build Presale Vault integrations with the Anchor program, TypeScript SDK, Rust CPI notes, account reference, events, errors, and release notes."
+llmsDescription: "Explains the Presale Vault Developer Guide as the integration entry point for Meteora's presale program. Covers program accounts, instructions, events, errors, @meteora-ag/presale, Rust crate and CPI guidance, self-hosted permissioned metadata URLs, changelog, program IDs, commands, and public repository paths for Presale Vault builders."
 ---
 
-<Warning>This program is still in beta and is subject to breaking changes.</Warning>
-
-Before getting started building on Presale Vault, you should read the following resource to get a better understanding of how Meteora's Presale Vault works:
+Presale Vault is Meteora's presale program on Solana. It lets creators run a token presale where buyers deposit a quote token and later claim allocated base tokens after the presale completes. For concepts such as vault modes, configuration, Token 2022 support, access states, and formulas, you can read the following documentations.
 
 <CardGroup cols={2}>
-  <Card title="What's Presale Vault?" icon="question" iconType="solid" href="/overview/other-products/presale-vault/what-is-presale-vault">
-    Presale Vault allows users to contribute using any SPL token and later claim their allocated presale tokens once the presale concludes.
+  <Card title="Learn more about Presale Vault" icon="book-open" iconType="solid" href="/helper-products/presale-vault/what-is-presale-vault">
+    Overview of Presale Vault modes, access controls, lifecycle states, and token support.
+  </Card>
+  <Card title="Presale Vault Formulas" icon="calculator" iconType="solid" href="/helper-products/presale-vault/formulas">
+    Formulas and definitions for allocation, caps, refunds, fees, and vesting behavior.
   </Card>
 </CardGroup>
 
----
-
-# Presale Vault Program
-
-At Meteora, we’ve developed a `Node.js <> Typescript SDK` to make deploying and managing your Presale Vault easier. The following sections includes information on installing and using the SDK. It also covers where to find the latest code, and how to contribute to these repositories.
-
-## Program Details
+## Integration
 
 <CardGroup cols={2}>
-  <Card title="Presale Vault Program" icon="rust" iconType="solid" href="https://github.com/MeteoraAg/presale">
-    Meteora Presale Vault Program
+  <Card
+    title="Program Accounts"
+    icon="table-cells"
+    iconType="solid"
+    href="/developer-guides/presale-vault/program/accounts"
+  >
+    Account model for presales, registries, escrows, Merkle roots, operators, fixed-price params, and permissioned metadata.
   </Card>
-  <Card title="Presale Vault IDL" icon="code" iconType="solid" href="https://github.com/MeteoraAg/presale-sdk/blob/main/src/idl/presale.json">
-    Meteora Presale Vault Program IDL
+  <Card
+    title="Program Instructions"
+    icon="list"
+    iconType="solid"
+    href="/developer-guides/presale-vault/program/instructions"
+  >
+    Instruction families for initialization, escrow creation, deposits, withdrawals, claims, creator actions, and metadata.
+  </Card>
+  <Card
+    title="Program Events"
+    icon="list"
+    iconType="solid"
+    href="/developer-guides/presale-vault/program/events"
+  >
+    Event payloads emitted by presale creation, escrow actions, deposits, claims, refunds, and creator actions.
+  </Card>
+  <Card
+    title="Program Errors"
+    icon="triangle-exclamation"
+    iconType="solid"
+    href="/developer-guides/presale-vault/program/errors"
+  >
+    Anchor custom error codes, enum names, messages, and common integration causes.
+  </Card>
+  <Card
+    title="TypeScript SDK"
+    icon="code"
+    iconType="solid"
+    href="/developer-guides/presale-vault/typescript-sdk/getting-started"
+  >
+    TypeScript SDK for creating presales, escrows, deposits, claims, refunds, metadata, and state readers.
+  </Card>
+  <Card
+    title="Rust Integration"
+    icon="terminal"
+    iconType="solid"
+    href="/developer-guides/presale-vault/rust-integration/cpi"
+  >
+    Rust integration notes for the CPI feature, generated clients, and tests.
   </Card>
 </CardGroup>
 
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Network</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Program ID</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Mainnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">presSVxnf9UU8jMxhgSMqaRwNiT36qeBdNeTRKjTdbj</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Devnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">presSVxnf9UU8jMxhgSMqaRwNiT36qeBdNeTRKjTdbj</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+## Program IDs
 
-## Official SDKs
+The `presale` program ID is the same on mainnet and devnet:
+
+| Network | Program ID |
+| --- | --- |
+| Mainnet Beta | `presSVxnf9UU8jMxhgSMqaRwNiT36qeBdNeTRKjTdbj` |
+| Devnet | `presSVxnf9UU8jMxhgSMqaRwNiT36qeBdNeTRKjTdbj` |
+
+The program authority PDA used by vault transfers is:
+
+| Authority | Address |
+| --- | --- |
+| Presale Authority | `4Xgt6XKZiowAGNdPWngVAwpYbSwAmbBnRBPtCFXhrypc` |
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="/developer-guide/guides/presale-vault/typescript-sdk/getting-started">
-    Official Meteora Presale Vault Typescript SDK
+  <Card title="Presale Vault Program" icon="code" href="https://github.com/MeteoraAg/presale/tree/main/programs/presale">
+    Public Anchor program source for Presale Vault.
+  </Card>
+  <Card title="Presale Vault IDL" icon="file-code" href="https://github.com/MeteoraAg/presale-sdk/blob/main/src/idl/presale.json">
+    Published Anchor IDL used by generated clients and the TypeScript SDK.
+  </Card>
+</CardGroup>
+<CardGroup cols={1}>
+  <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/presale-sdk">
+    Public SDK for transactions, PDA derivation, account wrappers, math helpers, and examples.
+  </Card>
+</CardGroup>
+
+<Note>
+  The program does not deploy liquidity with raised capital. Creators withdraw completed presale funds and handle downstream liquidity deployment themselves.
+</Note>
+
+## Commands
+
+| Task | Command |
+| --- | --- |
+| Install TypeScript SDK dependencies | `cd presale-sdk && pnpm install` |
+| Build TypeScript SDK | `cd presale-sdk && pnpm run build` |
+| Run TypeScript SDK tests | `cd presale-sdk && pnpm test` |
+| Build `presale` program | `cd presale && anchor build` |
+| Run Rust program tests | `cd presale && cargo test -p presale -- --nocapture` |
+
+## Stay Updated
+
+<CardGroup cols={1}>
+  <Card title="Presale Vault Changelog" icon="newspaper" iconType="solid" href="/developer-guides/presale-vault/changelog">
+    Program and SDK changes for integration planning.
   </Card>
 </CardGroup>

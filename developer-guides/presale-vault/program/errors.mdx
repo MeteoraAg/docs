@@ -1,0 +1,65 @@
+---
+title: "Presale Vault Program Errors"
+sidebarTitle: "Errors"
+description: "Understand Presale Vault Anchor custom errors, codes, messages, and common causes when building integrations."
+llmsDescription: "Explains the Presale Vault program errors for the public Meteora presale program. Covers Anchor custom error codes 6000 through 6044, enum names, messages, common initialization causes, lifecycle-state failures, cap and registry validation failures, Merkle proof and operator failures, Token 2022 remaining-account failures, creator action failures, escrow close failures, and troubleshooting guidance."
+---
+
+This page lists the Anchor custom errors returned by the Presale Vault `presale` program.
+
+<Tip>
+    Anchor custom program errors start at `6000`. When a transaction log contains
+    `custom program error: 0x1771`, convert the hex value to decimal to find the
+    matching code. For example, `0x1771` is `6001`, which maps to
+    `InvalidTokenInfo`.
+</Tip>
+
+## Error Codes
+
+| Code | Name | Message | Common cause |
+| --- | --- | --- | --- |
+| `6000` | `InvalidMintMetadata` | Invalid mint metadata | Mint metadata account does not match the expected base mint metadata. |
+| `6001` | `InvalidTokenInfo` | Invalid token info | Token account, mint, or token program input is inconsistent. |
+| `6002` | `InvalidTokenSupply` | Invalid token supply | Registry supply is zero or summed registry supply exceeds supported bounds. |
+| `6003` | `InvalidPresaleInfo` | Invalid presale info | Invalid caps, timestamps, duration, whitelist mode, presale mode, registry count, or registry caps. |
+| `6004` | `InvalidQuoteMint` | Invalid quote mint | A quote mint account does not match presale state. |
+| `6005` | `InvalidBaseMint` | Invalid base mint | A base mint account does not match presale state. |
+| `6006` | `InvalidLockVestingInfo` | Invalid lock vesting info | Lock plus vest duration is too long, immediate release bps is invalid, or timestamp constraints are invalid. |
+| `6007` | `InvalidTokenPrice` | Invalid token price | Fixed-price `q_price` is zero, overflows, cannot buy at least one base lamport, or cannot cover supply/caps. |
+| `6008` | `MissingPresaleExtraParams` | Missing presale extra params account | Fixed-price initialization did not pass the fixed-price extra-args account as the first remaining account, or it references a different presale. |
+| `6009` | `ZeroTokenAmount` | Zero token amount | Deposit, withdrawal, claim, or rounded fixed-price amount is zero. |
+| `6010` | `UnsupportedToken2022MintOrExtension` | Token2022 extensions or native mint is not supported | Token 2022 mint uses an unsupported extension or the native Token 2022 mint was supplied. |
+| `6011` | `InvalidCreatorAccount` | Invalid creator account | Creator signer does not match `Presale.owner`. |
+| `6012` | `PresaleNotOpenForDeposit` | Presale is not open for deposit | Presale progress is not `Ongoing`. |
+| `6013` | `PresaleNotOpenForWithdraw` | Presale is not open for withdraw | Presale is not ongoing, mode does not allow withdraw, or fixed-price withdrawal is disabled. |
+| `6014` | `PresaleNotOpenForWithdrawRemainingQuote` | Presale is not open for withdraw remaining quote | Presale is neither failed nor a completed prorata presale with refundable quote. |
+| `6015` | `InvalidPresaleWhitelistMode` | Invalid presale whitelist mode | Called a permissionless instruction on a permissioned presale, or a permissioned instruction on the wrong permission mode. |
+| `6016` | `PresaleEnded` | Presale is ended | Tried to create Merkle root config or permissioned metadata after the presale ended. |
+| `6017` | `PresaleNotOpenForClaim` | Presale is not open for claim | Presale has not completed successfully. |
+| `6018` | `InvalidMerkleProof` | Invalid merkle proof | Proof does not match the stored root for owner, registry index, and deposit cap. |
+| `6019` | `DepositAmountOutOfCap` | Deposit amount out of cap | Escrow deposit falls outside registry min/max after deposit or withdrawal. |
+| `6020` | `MathOverflow` | Math overflow | Arithmetic overflow or division issue in price, fee, cap, refund, or vesting math. |
+| `6021` | `InsufficientEscrowBalance` | Insufficient escrow balance | Withdrawal amount exceeds escrow deposit. |
+| `6022` | `RemainingQuoteAlreadyWithdrawn` | Remaining quote has already been withdrawn | Escrow already performed remaining quote refund. |
+| `6023` | `PresaleNotCompleted` | Presale not completed | Unsold base token action was attempted before successful completion. |
+| `6024` | `NoUnsoldTokens` | No unsold tokens | Legacy no-unsold-token path. Current unsold base action uses `NoUnsoldBaseTokens`. |
+| `6025` | `EscrowNotEmpty` | Escrow is not empty | Escrow cannot be closed because deposits, refunds, or claimable tokens remain. |
+| `6026` | `InvalidUnsoldTokenAction` | Invalid unsold token action | Unsold token action enum value is not refund or burn. |
+| `6027` | `CreatorAlreadyWithdrawn` | Creator has already withdrawn | `creator_withdraw` was already executed. |
+| `6028` | `UndeterminedError` | Undetermined error | Internal state or cast failed in a path the program treats as unreachable. |
+| `6029` | `InvalidTokenVault` | Invalid token vault | Vault account does not match presale state. |
+| `6030` | `InvalidRemainingAccountSlice` | Invalid remaining account slice | Token 2022 transfer-hook slice type or length is invalid for the instruction. |
+| `6031` | `DuplicatedRemainingAccountTypes` | Duplicated remaining account types | `RemainingAccountsInfo` includes duplicate base or quote transfer-hook slice types. |
+| `6032` | `MissingRemainingAccountForTransferHook` | Missing remaining account for transfer hook | Mint has a transfer hook but required remaining accounts were not supplied. |
+| `6033` | `NoTransferHookProgram` | No transfer hook program | Remaining transfer-hook accounts were supplied for a mint without a transfer-hook program. |
+| `6034` | `InvalidOperator` | Invalid operator | Operator owner or creator relationship does not match the presale. |
+| `6035` | `NoUnsoldBaseTokens` | No unsold base tokens | Unsold base token action found no unsold base tokens. |
+| `6036` | `UnsoldBaseTokenActionAlreadyPerformed` | Unsold base token action already performed | Unsold base token action was already executed. |
+| `6037` | `InvalidPresaleRegistryIndex` | Invalid presale registry index | Registry index is outside initialized registry count. |
+| `6038` | `MultiplePresaleRegistriesNotAllowed` | Multiple presale registries are not allowed | Multiple registries were supplied for a permissionless presale. |
+| `6039` | `InvalidDepositCap` | Invalid deposit cap | Permissioned escrow deposit cap is zero or outside registry min/max. |
+| `6040` | `PresaleNotOpenForCollectFee` | Presale is not open for collect fee | Presale is not completed, or creator deposit fee was already collected. |
+| `6041` | `InvalidType` | Invalid type | Boolean-like or enum-like numeric field has an invalid value. |
+| `6042` | `InvalidBuyerCapRange` | Invalid buyer cap range | Permissioned fixed-price or dynamic-price registry cap range does not match required values. |
+| `6043` | `PresaleOngoing` | Presale is ongoing | Tried to close a Merkle root config while deposits are ongoing. |
+| `6044` | `PresaleMinMaxCapGapTooSmall` | Presale min/max cap gap too small | Fixed-price min/max cap gap cannot buy a distinct amount of base token. |

@@ -1,0 +1,223 @@
+---
+title: "Presale Vault TS SDK Examples"
+sidebarTitle: "Examples"
+description: "Learn how to build common Presale Vault TypeScript SDK flows for initialization, deposits, claims, refunds, creator actions, and state reads."
+llmsDescription: "Explains common Presale Vault TypeScript SDK examples using @meteora-ag/presale. Covers fixed-price presale creation, prorata and FCFS initialization pointers, permissionless deposits, permissioned Merkle and authority deposits, claims, remaining quote withdrawals, creator withdraw, creator fee collection, unsold base token actions, escrow refresh and close flows, state readers, and local example script paths."
+---
+
+These examples show the SDK flow shape. They return unsigned transactions that your app should sign, simulate, submit, and confirm through its own wallet or backend signer flow.
+
+## Create A Fixed-price Presale
+
+```typescript
+import { Connection, PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import Decimal from "decimal.js";
+import Presale, { PRESALE_PROGRAM_ID } from "@meteora-ag/presale";
+import {
+  Rounding,
+  UnsoldTokenAction,
+  WhitelistMode,
+} from "@meteora-ag/presale";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+
+const tx = await Presale.createFixedPricePresale(
+  connection,
+  PRESALE_PROGRAM_ID,
+  {
+    baseMintPubkey: new PublicKey("BASE_MINT"),
+    quoteMintPubkey: new PublicKey("QUOTE_MINT"),
+    basePubkey: baseKeypair.publicKey,
+    creatorPubkey: creator.publicKey,
+    feePayerPubkey: creator.publicKey,
+    presaleArgs: {
+      presaleMaximumCap: new BN("100000000"),
+      presaleMinimumCap: new BN("1000000"),
+      presaleStartTime: new BN(0),
+      presaleEndTime: new BN(Math.floor(Date.now() / 1000) + 3600),
+      whitelistMode: WhitelistMode.Permissionless,
+      unsoldTokenAction: UnsoldTokenAction.Refund,
+      disableEarlierPresaleEndOnceCapReached: false,
+    },
+    presaleRegistries: [
+      {
+        buyerMinimumDepositCap: new BN("100000"),
+        buyerMaximumDepositCap: new BN("100000000"),
+        presaleSupply: new BN("2000000000"),
+        depositFeeBps: new BN(0),
+      },
+    ],
+    lockedVestingArgs: {
+      immediateReleaseBps: new BN(10_000),
+      immediateReleaseTimestamp: new BN(Math.floor(Date.now() / 1000) + 3600),
+      lockDuration: new BN(0),
+      vestDuration: new BN(0),
+    },
+  },
+  {
+    price: new Decimal(0.1),
+    rounding: Rounding.Down,
+    disableWithdraw: false,
+  }
+);
+
+// Sign with creator and baseKeypair, then simulate and send.
+```
+
+Use `Presale.createProrataPresale` or `Presale.createFcfsPresale` with the same common presale params when you do not need fixed-price `price` and `disableWithdraw` inputs.
+
+## Create A Client
+
+```typescript
+import { Connection, PublicKey } from "@solana/web3.js";
+import Presale, { PRESALE_PROGRAM_ID } from "@meteora-ag/presale";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const presaleAddress = new PublicKey("PRESALE_ADDRESS");
+
+const presale = await Presale.create(
+  connection,
+  presaleAddress,
+  PRESALE_PROGRAM_ID
+);
+```
+
+## Permissionless Deposit
+
+`deposit` automatically creates the permissionless escrow if it does not exist.
+
+```typescript
+import BN from "bn.js";
+
+const tx = await presale.deposit({
+  owner: wallet.publicKey,
+  amount: new BN("500000000"),
+});
+```
+
+## Permissioned Merkle Deposit
+
+For Merkle proof presales, create the Merkle root config and proof responses off-chain, then build deposits with the proof data. The SDK also has an auto-fetch path that reads `PermissionedServerMetadata.server_url`.
+
+```typescript
+const tx = await presale.createPermissionedEscrowWithMerkleProof({
+  owner: buyer.publicKey,
+  payer: buyer.publicKey,
+  registryIndex: new BN(0),
+  depositCap: new BN("100000000"),
+  merkleRootConfig,
+  proof,
+});
+```
+
+After the escrow exists, call `deposit` with the same owner and registry index:
+
+```typescript
+const depositTx = await presale.deposit({
+  owner: buyer.publicKey,
+  registryIndex: new BN(0),
+  amount: new BN("50000000"),
+});
+```
+
+## Permissioned Authority Deposit
+
+Authority-permissioned presales use an operator account. If the escrow is missing, the SDK `deposit` flow requests a partially signed escrow creation and deposit transaction from the creator-managed server URL stored in `PermissionedServerMetadata`.
+
+```typescript
+const operatorTx = await presale.createOperator({
+  creator: creator.publicKey,
+  operator: operator.publicKey,
+});
+```
+
+```typescript
+const depositTx = await presale.deposit({
+  owner: buyer.publicKey,
+  registryIndex: new BN(0),
+  amount: new BN("50000000"),
+});
+```
+
+## Claim
+
+```typescript
+const escrows = await presale.getPresaleEscrowByOwner(wallet.publicKey);
+
+const claimTxs = await Promise.all(
+  escrows.map((escrow) =>
+    presale.claim({
+      owner: wallet.publicKey,
+      registryIndex: new BN(escrow.getEscrowAccount().registryIndex),
+    })
+  )
+);
+```
+
+## Withdraw During Presale
+
+```typescript
+const tx = await presale.withdraw({
+  owner: wallet.publicKey,
+  registryIndex: new BN(0),
+  amount: new BN("10000000"),
+});
+```
+
+Withdrawals are available in prorata mode and in fixed-price mode unless the creator disabled them. FCFS does not allow withdrawals.
+
+## Withdraw Remaining Quote
+
+```typescript
+const tx = await presale.withdrawRemainingQuote({
+  owner: wallet.publicKey,
+  registryIndex: new BN(0),
+});
+```
+
+Use this for failed presales or completed prorata presales with refundable oversubscription.
+
+## Creator Actions
+
+| Flow | Method |
+| --- | --- |
+| Withdraw raised quote or failed-presale base tokens | `presale.creatorWithdraw({ creator })` |
+| Collect deposit fees | `presale.creatorCollectFee()` |
+| Burn or refund unsold base tokens | `presale.performUnsoldBaseTokenAction(payer)` |
+| Create permissioned metadata URL | `presale.createPermissionedServerMetadata({ owner, serverUrl })` |
+| Close permissioned metadata | `presale.closePermissionedServerMetadata({ owner, rentReceiver })` |
+
+## Read State
+
+```typescript
+const parsed = presale.getParsedPresale();
+
+console.log(parsed.getPresaleModeName());
+console.log(parsed.getWhitelistModeName());
+console.log(parsed.getPresaleProgressState());
+console.log(parsed.getRemainingDepositUiQuota());
+console.log(parsed.canDeposit());
+console.log(parsed.canClaim());
+```
+
+## Local Example Scripts
+
+| Flow | Local SDK example |
+| --- | --- |
+| Fixed-price presale | `examples/initialize_presale/initialize_fixed_price_presale.ts` |
+| Prorata presale | `examples/initialize_presale/initialize_prorata_presale.ts` |
+| FCFS presale | `examples/initialize_presale/initialize_fcfs_presale.ts` |
+| Authority permissioned fixed-price presale | `examples/initialize_presale/initialize_authority_permissioned_fixed_price_presale.ts` |
+| Merkle permissioned fixed-price presale | `examples/initialize_presale/initialize_merkle_tree_permissioned_fixed_price_presale.ts` |
+| Permissionless deposit | `examples/deposit/permissionless_deposit.ts` |
+| Permissioned Merkle deposit | `examples/deposit/permissioned_with_merkle_proof_deposit.ts` |
+| Permissioned authority deposit | `examples/deposit/permissioned_with_authority_deposit.ts` |
+| Claim | `examples/claim.ts` |
+| Withdraw | `examples/withdraw.ts` |
+| Withdraw remaining quote | `examples/withdraw_remaining_quote.ts` |
+| Creator withdraw | `examples/creator_withdraw.ts` |
+| Creator collect fee | `examples/creator_collect_fee.ts` |
+| Unsold base token action | `examples/perform_unsold_base_token_action.ts` |
+| Show presale details | `examples/show_presale_details.ts` |
+| Show escrow details | `examples/show_escrow_details.ts` |
