@@ -1,0 +1,89 @@
+---
+title: "DAMM v2 Rust Integration Library"
+sidebarTitle: "Library"
+description: "Learn how to use the DAMM v2 Rust SDK for quote math, initial price calculations, program IDs, and integration tests."
+llmsDescription: "Explains the DAMM v2 Rust integration library in the public damm-v2 rust-sdk crate. Covers installation, provided quote modules, quote inputs, cp-amm program ID, relationship to pool account state, initial price helper functions, quote_exact_in, quote_exact_out, quote_partial_fill_in, calculate_initial_sqrt_price, public fixtures and tests, and when to use the Rust SDK instead of Anchor CPI or the TypeScript SDK."
+---
+
+Use the `rust-sdk` crate when you need Rust tooling around DAMM v2 quotes and initial pool math.
+
+## Install
+
+If your project is in the same workspace as `damm-v2`, depend on the local crate by path:
+
+```toml
+[dependencies]
+rust-sdk = { path = "../damm-v2/rust-sdk" }
+cp-amm = { path = "../damm-v2/programs/cp-amm", features = ["no-entrypoint", "no-custom-entrypoint"] }
+```
+
+If you vendor or pin it from Git, keep the `rust-sdk` and `cp-amm` revisions aligned so account structs, fee logic, and quote math match. The Rust library reads `cp-amm` account structs and math directly.
+
+## What It Provides
+
+| Module | Purpose |
+| --- | --- |
+| `quote_exact_in::get_quote` | Quote exact-    input swaps from a `Pool` state |
+| `quote_exact_out::get_quote` | Quote exact-output swaps |
+| `quote_partial_fill_in::get_quote` | Quote partial-fill exact-input swaps |
+| `calculate_initial_sqrt_price::calculate_concentrated_initial_sqrt_price` | Calculate concentrated pool initial square-root price |
+| `calculate_initial_sqrt_price::calculate_compounding_initial_sqrt_price_and_liquidity` | Calculate compounding pool initial square-root price and liquidity |
+| `utils` | Activation and swap-enabled helpers |
+
+## Program ID
+
+The public DAMM v2 program ID is the same on mainnet and devnet:
+
+```rust
+pub const CP_AMM_PROGRAM_ID: &str =
+    "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
+```
+
+The backing program crate is `cp-amm 0.2.0`.
+
+## Quote Inputs
+
+Rust quote helpers expect a deserialized `cp_amm::state::Pool` and current chain context:
+
+| Input | Why it matters |
+| --- | --- |
+| `Pool` | Contains price, liquidity, reserves, fee state, activation settings, and collect fee mode |
+| Current timestamp | Used by timestamp-activated fees and dynamic fee updates |
+| Current slot | Used by slot-activated fees |
+| Swap amount and direction | Determines exact-in, partial-fill, or exact-out result |
+| Referral flag | Changes protocol/referral fee split |
+
+Use the on-chain account data for transaction-critical quotes. API data is useful for discovery and charts, but the pool account is the source of truth for execution.
+
+The quote modules return the same `SwapResult2` shape used by the program and TypeScript SDK, including `claiming_fee`, `compounding_fee`, `protocol_fee`, `referral_fee`, `included_fee_input_amount`, `excluded_fee_input_amount`, `output_amount`, `next_sqrt_price`, and `amount_left`.
+
+## Initial Price Helpers
+
+Use the initial-price helpers when preparing pool creation inputs in Rust:
+
+| Function | Use |
+| --- | --- |
+| `calculate_concentrated_initial_sqrt_price(token_a_amount, token_b_amount, min_sqrt_price, max_sqrt_price)` | Computes a concentrated pool initial square-root price from initial token amounts and price bounds. |
+| `calculate_compounding_initial_sqrt_price_and_liquidity(token_a_amount, token_b_amount)` | Computes compounding pool initial square-root price and liquidity from full-range reserves. |
+
+For transaction construction, use the TypeScript SDK unless your Rust stack owns signing, simulation, and account planning.
+
+## Tests
+
+The public repository includes Rust tests and fixtures for quote paths and initial price calculations:
+
+```bash
+git clone https://github.com/MeteoraAg/damm-v2.git
+cd damm-v2
+cargo test -p rust-sdk
+```
+
+These tests are suitable for quote-engine regression coverage. CPI programs should also add Anchor/local-validator tests for account metas, signer constraints, remaining accounts, and Token 2022 behavior.
+
+## Rust SDK Or CPI
+
+| Need | Use |
+| --- | --- |
+| Off-chain Rust quote engine | Rust library |
+| On-chain program composing swaps or liquidity | [Rust CPI](/developer-guides/damm-v2/rust-integration/cpi) |
+| Full transaction construction from an app | [TypeScript SDK](/developer-guides/damm-v2/typescript-sdk/getting-started) |

@@ -1,0 +1,65 @@
+---
+title: "DAMM v2 Go Integration Reference"
+sidebarTitle: "Reference"
+description: "Learn how to use the DAMM v2 Go examples to read pools, positions, user position NFTs, and unclaimed rewards."
+llmsDescription: "Explains DAMM v2 Go integration using the public damm-v2-go examples repository. Covers setup, solana-go based account readers, program constants, pool and position deserialization helpers, available examples for pool reads, position reads, user-position discovery, unclaimed reward reads, helper validation, integration limitations, and when to prefer the TypeScript SDK or generated IDL clients for transaction construction."
+---
+
+The public [`damm-v2-go`](https://github.com/MeteoraAg/damm-v2-go) repository provides Go examples for reading DAMM v2 state with `solana-go`. Treat it as example code for account reads, deserialization, and selected low-level instructions rather than a full transaction SDK.
+
+## Setup
+
+```bash
+git clone https://github.com/MeteoraAg/damm-v2-go.git
+cd damm-v2-go
+go mod tidy
+```
+
+Before running examples, set the RPC endpoint and addresses in the example file you are using. Some examples also require uncommenting the local `main()` function.
+
+```bash
+go run examples/get_pool.go
+```
+
+## Available Examples
+
+| Example | Use |
+| --- | --- |
+| `get_pool.go` | Fetch and deserialize a pool account |
+| `get_position.go` | Fetch and deserialize a position account |
+| `get_positions_by_user.go` | Resolve position NFTs and fetch positions for a wallet |
+| `get_user_position_by_pool.go` | Filter a user's positions by pool |
+| `get_all_position_nft_account_by_owner.go` | Read position NFT token accounts by owner |
+| `get_unclaim_reward.go` | Calculate unclaimed reward information |
+| `claim_position_fee.go` | Example transaction flow for claiming position fees |
+
+The Go constants include the public DAMM v2 program ID:
+
+```go
+const DammV2ProgramID = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
+```
+
+## Helpers And Validation
+
+| Helper | Use |
+| --- | --- |
+| `DerivePoolAuthorityPDA()` | Derives the `pool_authority` PDA |
+| `DeriveEventAuthorityPDA()` | Derives the `__event_authority` PDA used by event CPI instructions |
+| `DerivePositionPDA(positionNft)` | Derives the `position` PDA from the position NFT mint |
+| `GetPool(ctx, pool, rpcClient)` | Fetches and deserializes a pool after checking the Anchor discriminator |
+| `GetPosition(ctx, position, rpcClient)` | Fetches and deserializes a position after checking the Anchor discriminator |
+| `GetPositionsByUser(ctx, rpcClient, user)` | Resolves position NFTs, derives position PDAs, fetches positions, and sorts by total liquidity |
+| `ClaimPositionFee(...)` | Builds a low-level claim-fee instruction including event CPI accounts |
+
+## Integration Notes
+
+| Topic | Guidance |
+| --- | --- |
+| Account validation | Example readers check Anchor discriminators before deserializing pool and position data. |
+| Position ownership | User-position lookup starts from Token 2022 position NFT accounts owned by the wallet. |
+| Transaction builders | Prefer the TypeScript SDK unless you are comfortable maintaining low-level Go instruction builders from the IDL. |
+| Module path | The local `go.mod` currently uses a different module path than the public repository name. Check upstream before importing it as a library. |
+| State freshness | Fetch pool accounts directly for transaction-critical reads; use the API for discovery and chart data. |
+| Event CPI accounts | Low-level instructions that emit events need `event_authority` and the program account in the expected account order. |
+
+For custom Go clients, generate from the public [cp_amm IDL](https://github.com/MeteoraAg/damm-v2-sdk/blob/main/src/idl/cp_amm.json) and cross-check account layouts against [Accounts](/developer-guides/damm-v2/program/accounts).

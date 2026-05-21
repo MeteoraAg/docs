@@ -1,8 +1,8 @@
 ---
 title: "DAMM v2 Program Errors"
 sidebarTitle: "Errors"
-description: "PoolError codes, messages, and common integration causes for the DAMM v2 cp-amm program."
-llmsDescription: "cp-amm Anchor error reference from PoolError in MeteoraAg/damm-v2. Includes Anchor custom error decoding, PoolError code table, SDK-side validation errors, and troubleshooting notes for swaps, liquidity, rewards, vesting, Token 2022, rate limiter, operator, and compounding fee integrations."
+description: "Understand DAMM v2 cp-amm PoolError codes, SDK validation errors, messages, and common integration causes."
+llmsDescription: "Explains the DAMM v2 program error reference based on PoolError in MeteoraAg/damm-v2. Covers Anchor custom error decoding, the PoolError code table, TypeScript SDK validation errors, messages, likely causes, and troubleshooting notes for swaps, liquidity, rewards, vesting, Token 2022, rate limiter, operator, and compounding fee integrations."
 ---
 
 This page lists the Anchor custom errors returned by the DAMM v2 `cp-amm` program.
@@ -84,7 +84,7 @@ This page lists the Anchor custom errors returned by the DAMM v2 `cp-amm` progra
 | `6066` | `InvalidZapAccounts` | Invalid zap accounts | Zap accounts do not match the whitelisted route or expected account set. |
 | `6067` | `InvalidCompoundingFeeBps` | Invalid compounding fee bps | Compounding fee bps is outside allowed bounds or incompatible with collect fee mode. |
 
-## SDK Validation Errors
+## Typescript SDK Validation Errors
 
 The TypeScript SDK also raises local validation errors before a transaction is built. These are JavaScript errors rather than on-chain Anchor errors.
 
@@ -92,20 +92,20 @@ The TypeScript SDK also raises local validation errors before a transaction is b
 | --- | --- |
 | `DepositTokenNotAcceptedError` | Deposit was attempted on the side that the current price range cannot accept. |
 | `SameTokenMintsError` | Pool creation or swap input uses the same mint for both sides. |
+| `AmountIsZeroError` | Swap, liquidity, or reward funding amount is zero before building the transaction. |
+| `ExceedMaxFeeBpsError` | Fee bps exceeds the pool version's maximum. |
 | `InvalidPriceRangeError` | Initial, minimum, or maximum price is outside DAMM v2 bounds. |
 | `InvalidCollectFeeModeError` | Unsupported collect fee mode or incompatible pool parameters. |
+| `InvalidCompoundingFeeBpsError` | Compounding fee bps is invalid or used with an incompatible collect fee mode. |
 | `InvalidBaseFeeModeError` | Unsupported base fee mode. |
 | `InvalidFeeTimeSchedulerError` | Time scheduler parameters are invalid. |
 | `InvalidFeeRateLimiterError` | Rate limiter parameters are invalid. |
 | `InvalidFeeMarketCapSchedulerError` | Market-cap scheduler parameters are invalid. |
 | `InvalidDynamicFeeParametersError` | Dynamic fee parameters are invalid. |
+| `InvalidMinimumLiquidityError` | Pool creation or liquidity change does not satisfy minimum liquidity checks. |
+| `SwapDisabledError` | Quote helper determined swap access is disabled for the current point. |
+| `PriceRangeViolationError` | Quote would move outside the pool price range. |
 | `InvalidSplitPositionParametersError` | Split ratio or target position setup is invalid. |
-
-## Debugging Checklist
-
-1. Convert the custom error from hex to decimal, then find the code in the table.
-2. Re-fetch pool, config, position, and token mint state immediately before quoting or building a transaction.
-3. For swaps, use `getQuote2` with the same `SwapMode` and slippage inputs used by `swap2`.
-4. For rate-limiter pools, make sure low-level builders include `SYSVAR_INSTRUCTIONS_PUBKEY`.
-5. For Token 2022 mints, pass the correct token program and token badge accounts where required.
-6. For reward and lock flows, verify position NFT ownership and pending vesting/reward state before submitting.
+| `InvalidVestingInfoError` | Vesting parameters are inconsistent or outside duration limits. |
+| `InvalidRewardIndexError` | Reward index is not one of the two supported reward slots. |
+| `InvalidRewardDurationError` | Reward duration is outside program bounds. |

@@ -1,75 +1,154 @@
 ---
-title: "DAMM v2 Developer Changelog"
+title: "DAMM v2 Changelog"
 sidebarTitle: "Changelog"
-description: "Track DAMM v2 program and SDK changes that affect integrations, quotes, events, and migrations."
-llmsDescription: "Developer changelog for Meteora DAMM v2. Tracks public cp-amm program and @meteora-ag/cp-amm-sdk releases, breaking changes, compounding collect fee mode, layout version reserve tracking, event changes, rate-limiter requirements, market-cap scheduler support, SDK quote changes, API and IDL impacts, PR links, upgrade checklists, and CTAs for builders maintaining swaps, pool creation, CPI, indexers, and quote engines."
+description: "Track DAMM v2 release notes, breaking changes, and upgrade guidance for cp-amm, SDKs, events, quotes, and API integrations."
+llmsDescription: "Explains the DAMM v2 integration changelog for builders maintaining Meteora DAMM v2 integrations. Covers cp-amm program releases, @meteora-ag/cp-amm-sdk updates, breaking changes, compounding collect fee mode, layout version reserve tracking, swap and event changes, rate-limiter account requirements, market-cap scheduler support, SDK quote changes, API and IDL impacts, PR links, and upgrade checklists for swaps, pool creation, CPI, indexers, and quote engines."
 rss: true
 ---
 
-Track DAMM v2 developer-facing releases here. Use the public [`cp-amm` changelog](https://github.com/MeteoraAg/damm-v2/blob/main/CHANGELOG.md) and [`@meteora-ag/cp-amm-sdk` changelog](https://github.com/MeteoraAg/damm-v2-sdk/blob/main/CHANGELOG.md) for exhaustive history.
+<Tip>
+  Track DAMM v2 releases here.
+</Tip>
 
 <Update
-  label="Current"
-  description="cp_amm 0.2.0 and TypeScript SDK 1.4.3 — compounding pools and reserve-aware quotes"
-  rss="DAMM v2 cp_amm 0.2.0 adds compounding collect fee mode and layout V1 reserve tracking. TypeScript SDK 1.4.3 fixes pool creation liquidity handling for collect fee mode."
+  label="cp-amm 0.2.0"
+  description="Compounding Liquidity"
+  rss="DLMM 0.12.0 adds limit orders and quote token fee, with breaking changes for swap quotes, swap account layouts, pool function types, and indexers. SDK 1.9.8, CLI 0.6.3, commons 0.3.3."
 >
+  <Info>
+    Mainnet deployment for Release 0.2.0 is planned for March 13, 2026, at 11:00 AM UTC+8 (Friday).
+  </Info>
+
   <Warning>
-    **Breaking integration area.** Re-test custom quote engines, event decoders, and pool creation code if you support compounding pools or parse `EvtSwap2` fee fields.
+    **Breaking release.** If you build swap instructions manually, run DLMM swap quotes, or index certain DLMM events, please plan an upgrade before mainnet deployment.
   </Warning>
 
-  ## Release Summary
+  ## Release summary
 
-  | Component | Version | Notes |
+  | Component | Version | PR |
   | --- | --- | --- |
-  | On-chain program | `cp_amm 0.2.0` | Adds compounding collect fee mode and tracked reserves |
-  | TypeScript SDK | `1.4.3` | Fixes `createPool`, `createCustomPool`, and `createCustomPoolWithDynamicConfig` liquidity handling by collect fee mode |
+  | Program | `0.2.0` | [damm-v2 #187](https://github.com/MeteoraAg/damm-v2/pull/187) |
+  | TypeScript SDK | `1.3.7` | [damm-v2-sdk #101](https://github.com/MeteoraAg/damm-v2-sdk/pull/101) |
 
-  ## What Changed
+  ## What We Shipped 
+  - Compounding Liquidity
 
-  | Area | Change | Developer action |
-  | --- | --- | --- |
-  | Collect fee mode | Added `CollectFeeMode.Compounding` (`2`) | Pass `collectFeeMode` into quote and pool creation helpers |
-  | Pool layout | New pools track `token_a_amount` and `token_b_amount` in layout `V1` | Use current SDK quote helpers for reserve-aware calculations |
-  | Swap event | `partner_fee` replaced by `compounding_fee` in `EvtSwap2.swap_result` | Update event decoders and analytics schemas |
-  | Fee result types | SDK split fees into `claimingFee` and `compoundingFee` | Replace old `tradingFee`/`partnerFee` assumptions |
-  | Pool creation | Compounding pools subtract `DEAD_LIQUIDITY` differently from concentrated pools | Upgrade to SDK `1.4.3+` |
+  ## What To Do
 
-  ## Upgrade Checklist
+  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrators</th>
+          <th>What Changed</th>
+          <th>What To Do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Swap Routers</strong></td>
+          <td>
+            <ul>
+              <li>Swap quote computation</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>For concentrated pools, update your quote logic to exclude <code>partnerFee</code> from fee calculations</li>
+              <li>For compounding pools, update your quote logic to use the constant-product formula <code>x * y = k</code>. Compute quotes using token_a_amount, token_b_amount, and liquidity from pool state.</li>
+            </ul>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Trading Terminals</strong></td>
+          <td>
+            <ul>
+              <li><code>EvtSwap2</code> event parsing</li>
+              <li>Tracking of pool reserves amounts for compounding pools</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>swap_result.partner_fee is removed. Total trading fee is now split into claiming_fee and compounding_fee. Update event deserialization accordingly.</li>
+              <li>Read token_a_amount and token_b_amount directly from pool state (not derived from liquidity math).</li>
+            </ul>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Partners</strong></td>
+          <td>
+            <ul>
+              <li>Swap quote computation</li>
+              <li>Pool liquidity derivation</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Bump your SDK version to <code>@meteora-ag/cp-amm-sdk@1.3.6.rc.1</code> to start testing.</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 
-  1. Upgrade TypeScript integrations to `@meteora-ag/cp-amm-sdk@1.4.3` or later.
-  2. Use `getQuote2`/`swap2` for new swap integrations.
-  3. Update event decoders to read `EvtSwap2.swap_result.compounding_fee`.
-  4. Include `collectFeeMode`, current reserves, and liquidity in deposit/withdraw quote paths where the SDK type requires them.
-  5. Re-run quote tests for concentrated and compounding pools.
-  6. For custom generated clients, refresh from the current public IDL.
-</Update>
+  ## Program: `cp-amm` `0.2.0`
 
-<Update
-  label="Earlier"
-  description="cp_amm 0.1.8 and SDK 1.3.x — inner vesting, static configs, and compounding SDK support"
-  rss="DAMM v2 0.1.8 adds lock_inner_position and fix fee parameter endpoints. SDK 1.3.x adds compounding mode support and static config helpers."
->
-  ## Notable Changes
+  Program ID (mainnet and devnet): `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
 
-  | Component | Change | Developer action |
-  | --- | --- | --- |
-  | Program `0.1.8` | Added `lock_inner_position`; split instructions support `inner_vesting` | Prefer embedded vesting flows when they simplify account planning |
-  | SDK `1.3.8` / `1.4.0` | Added static config discovery helpers | Use `getStaticConfigs()` for public config discovery |
-  | SDK `1.3.7` | Added compounding liquidity handlers and `CollectFeeMode.Compounding` | Pass collect fee mode to liquidity and quote helpers |
-  | SDK `1.3.4` | Uses idempotent ATA creation in more transactions | Re-test wallet flows where users may close ATAs |
-</Update>
+  [Program PR #187](https://github.com/MeteoraAg/damm-v2/pull/187)
 
-<Update
-  label="Historical"
-  description="cp_amm 0.1.5–0.1.7 — rate limiter, swap2, market-cap scheduler, and operator model"
-  rss="DAMM v2 historical releases added rate limiter, swap2, EvtSwap2, market-cap fee schedulers, pool fee updates, and operator accounts."
->
-  ## Integration Impact
+  ### Added
 
-  | Version | Change | Developer action |
-  | --- | --- | --- |
-  | `0.1.7` | Added `zap_protocol_fee`; whitelisted programs can bypass rate-limiter stack-height checks | No action for normal app integrations |
-  | `0.1.6` | Added market-cap scheduler fee modes and operator accounts; new pools use fee version `V1` with 99% max fee | Update fee decoders and quote tests |
-  | `0.1.5` | Added rate limiter, `swap2`, `EvtSwap2`, and `EvtLiquidityChange` | Include instructions sysvar for rate-limiter swaps; index `EvtSwap2` |
-  | `0.1.4` | Added `split_position2` | Prefer `splitPosition2` for better split resolution |
+  - Pool now will track reserves balances `(token_a_amount, token_b_amount)` if `pool.layout_version == 1`. For pool layout_version 0, operator can call the new endpoint `fix_pool_layout_version` to pump pool version.
+  - Add a new `collect_fee_mode (Compounding)`, in the new collect fee mode, fee will be collected in quote token, and a percentage of fee (configurable) will be added in reserves for compounding. In the new collect fee mode, the pool doesn't have concentrated price range, instead following constant-product formula `token_a_amount * token_b_amount = constant`.
+  - Endpoints `create_config`, `initialize_customizable_pool` and `initialize_pool_with_dynamic_config` will allow user to create pool with `collect_fee_mode == Compounding`, and config for `compounding_fee_bps`.
+
+  ### Changed
+
+  - Related to event `EvtSwap2`, in `swap_result` field, `partner_fee` will be replaced by `compounding_fee`, now total_trading_fee will be calculated as `swap_result.claiming_fee + swap_result.compounding_fee`
+
+  ### Removed
+
+  - Removed `partner` field from Pool struct
+  - Removed unused `partner_fee` feature and the `claim_partner_fee` endpoint
+
+  ### Breaking Changes
+
+  - Quote function will be changed by the new fee mode
+
+  ## TypeScript SDK: `@meteora-ag/cp-amm-sdk` `1.3.7`
+
+  [SDK PR #101](https://github.com/MeteoraAg/damm-v2-sdk/pull/101)
+
+  <Tip>
+    Early testing: [`@meteora-ag/cp-amm-sdk@1.3.6-rc.1`](https://www.npmjs.com/package/@meteora-ag/cp-amm-sdk/v/1.3.6-rc.1).<br /> Production: [`@meteora-ag/cp-amm-sdk@1.3.7`](https://www.npmjs.com/package/@meteora-ag/cp-amm-sdk/v/1.3.7). 
+  </Tip>
+
+  ### Added
+
+  - Added new `CollectFeeMode.Compounding` mode — a constant-product (x \* y = k) liquidity mode where a configurable percentage of trading fees are compounded back into pool liquidity (as token B), with the remaining fees available for claiming. Pools with compounding mode do not use price ranges.
+  - Added `LiquidityHandler` interface and two implementations: `CompoundingLiquidityHandler` and `ConcentratedLiquidityHandler`, with a `getLiquidityHandler` factory function that dispatches based on `collectFeeMode`.
+  - Added `compoundingFeeBps` field to `PoolFeesParams` for configuring the compounding fee split.
+  - Added `collectFeeMode` parameter to `getLiquidityDelta`, `getDepositQuote`, `getWithdrawQuote`, and `preparePoolCreationParams`.
+  - Added `tokenAAmount`, `tokenBAmount`, and `liquidity` parameters to `getDepositQuote` and `getWithdrawQuote` for compounding liquidity calculations.
+
+  ### Changed
+
+  - Rewrote `swapQuote.ts` to use `LiquidityHandler` abstraction, supporting both concentrated and compounding liquidity modes.
+  - Fee structure: `tradingFee` split into `claimingFee` + `compoundingFee` in `SwapResult2`, `FeeOnAmountResult`, and `SplitFees` types.
+  - Renamed `PoolVersion` enum to `LayoutVersion`.
+  - `PoolFeesParams.padding` changed from `number[]` to `number`.
+  - `splitFees` and `getFeeOnAmount` no longer accept `hasPartner` parameter.
+  - `getQuote` `totalFee` now computed as `claimingFee + compoundingFee + protocolFee + referralFee`.
+  - `getQuote2` return type: `tradingFee` and `partnerFee` replaced with `claimingFee` and `compoundingFee`.
+  - `collectFeeMode` comment updated: `0: BothToken, 1: OnlyB, 2: Compounding`.
+  - Liquidity delta and amount functions (`getLiquidityDeltaFromAmountA`, `getLiquidityDeltaFromAmountB`, `getAmountAFromLiquidityDelta`, `getAmountBFromLiquidityDelta`) now accept `collectFeeMode` and dispatch to the appropriate handler.
+
+  ### Removed
+
+  - Removed `claimPartnerFee` endpoint and `ClaimPartnerFeeParams` type.
+  - Removed `partnerFee` from fee result types (`FeeOnAmountResult`, `SplitFees`, `SwapResult2`).
+  - Removed `hasPartner` helper function.
+  - Removed `FEE_PADDING` constant.
 </Update>

@@ -1,0 +1,131 @@
+---
+title: "DAMM v2 Program Events"
+sidebarTitle: "Events"
+description: "Understand DAMM v2 cp-amm events emitted by pool, config, position, liquidity, lock, swap, fee, reward, and operator flows."
+llmsDescription: "Explains the DAMM v2 program event reference for the Meteora cp-amm program. Covers Anchor event-CPI delivery, event authority PDA requirements, pool and config events, position lifecycle events, liquidity and lock events, EvtSwap2 swap payloads, fee and reward events, operator events, deprecated EvtSplitPosition2 compatibility behavior, EvtSplitPosition3 split payloads, fee-parameter decoding formats, and indexing considerations for charting and analytics."
+---
+
+The `cp-amm` program emits Anchor events through event CPI. Use this page when building indexers, analytics pipelines, charting systems, or low-level clients that need to map transactions back to DAMM v2 pool activity.
+
+## Event CPI
+
+| Item | Value |
+| --- | --- |
+| Program ID | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
+| Event authority PDA seed | `__event_authority` |
+| Event source | Anchor event CPI inner instructions |
+| Client account planning | Event-emitting instructions include `event_authority` and the program account. SDK builders and generated clients derive these accounts. |
+| Swap hot path | The optimized swap entrypoint emits the same Anchor event-CPI payload for `EvtSwap2`. |
+
+Low-level builders should pass the event authority account and the `cp-amm` program account when the IDL requires them. The program signs the self-CPI with the event authority PDA internally.
+
+## Pool And Config Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `EvtCreateConfig` | `create_config` | Static config fees, vault config, pool creator authority, activation type, sqrt price range, collect-fee mode, index, and config address. |
+| `EvtCreateDynamicConfig` | `create_dynamic_config` | Dynamic config address, pool creator authority, and index. |
+| `EvtCloseConfig` | `close_config` | Config address and admin. |
+| `EvtCreateTokenBadge` | `create_token_badge` | Token mint that received a badge. |
+| `EvtInitializePool` | `initialize_pool`, `initialize_pool_with_dynamic_config`, `initialize_customizable_pool` | Pool address, token mints, creator, payer, alpha vault, fee parameters, sqrt price range, activation fields, token flags, initial token amounts, initial reserves, liquidity, and pool type. |
+
+`EvtInitializePool` is the primary pool-creation event. Indexers should treat it as the source of pool metadata at creation time, then reconcile current mutable state from the pool account.
+
+## Position Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `EvtCreatePosition` | Pool initialization instructions and `create_position` | Pool, owner, position account, and position NFT mint. |
+| `EvtClosePosition` | `close_position` | Pool, owner, position account, and position NFT mint. |
+| `EvtSplitPosition2` | `split_position`, `split_position2` | Deprecated compatibility event with split amounts and position snapshots without vested-liquidity fields. |
+| `EvtSplitPosition3` | `split_position`, `split_position2` | Current split event with owners, source and destination positions, current sqrt price, split amounts, position snapshots, and split parameters. |
+
+New indexers should use `EvtSplitPosition3`. The current split handler emits `EvtSplitPosition2` for backward compatibility, but `EvtSplitPosition3` carries the current payload shape.
+
+## Liquidity And Lock Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `EvtLiquidityChange` | `add_liquidity`, `remove_liquidity`, `remove_all_liquidity` | Pool, position, owner, token A/B amounts, transfer-fee-included token amounts, reserve snapshots, liquidity delta, token amount thresholds, and `change_type`. |
+| `EvtLockPosition` | `lock_position`, `lock_inner_position` | Pool, position, owner, vesting account, cliff point, period frequency, cliff unlock liquidity, liquidity per period, and number of periods. |
+| `EvtPermanentLockPosition` | `permanent_lock_position` | Pool, position, newly locked liquidity, and total permanent locked liquidity. |
+
+`EvtLiquidityChange.change_type` is `0` for add liquidity and `1` for remove liquidity.
+
+## Swap Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `EvtSwap2` | `swap`, `swap2` | Pool, trade direction, collect-fee mode, referral flag, swap parameters, swap result, transfer-fee fields, timestamp, and reserve snapshots. |
+
+`EvtSwap2` is the canonical swap event for charting and analytics. Prefer it over SPL token transfer logs because DAMM v2 swaps can include Token-2022 transfer fees, protocol fees, compounding fees, and referral fees.
+
+| Field | Meaning |
+| --- | --- |
+| `trade_direction` | `0` means token A to token B. `1` means token B to token A. |
+| `has_referral` | Whether a referral account participated in the swap. |
+| `params.amount_0` | Input amount for exact-in and partial-fill swaps. Desired output amount for exact-out swaps. |
+| `params.amount_1` | Minimum output for exact-in and partial-fill swaps. Maximum input for exact-out swaps. |
+| `params.swap_mode` | `0` exact in, `1` partial fill, `2` exact out. |
+| `swap_result.included_fee_input_amount` | Input amount including transfer fee accounting. |
+| `swap_result.excluded_fee_input_amount` | Input amount after excluded transfer fee accounting. |
+| `swap_result.amount_left` | Unused input for partial-fill or exact-out execution. |
+| `swap_result.output_amount` | Swap output amount before external transfer-fee effects. |
+| `swap_result.next_sqrt_price` | Pool sqrt price after the swap. |
+| `swap_result.claiming_fee` | LP fee component. |
+| `swap_result.protocol_fee` | Protocol fee component. |
+| `swap_result.compounding_fee` | Compounding fee component. |
+| `swap_result.referral_fee` | Referral fee component. |
+| `included_transfer_fee_amount_in` | Transfer fee included on input side. |
+| `included_transfer_fee_amount_out` | Transfer fee included on output side. |
+| `excluded_transfer_fee_amount_out` | Output amount excluded by transfer fee accounting. |
+| `reserve_a_amount`, `reserve_b_amount` | Pool reserve snapshots after execution. |
+
+## Fee And Reward Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `EvtClaimPositionFee` | `claim_position_fee` | Pool, position, owner, claimed token A fee, and claimed token B fee. |
+| `EvtClaimProtocolFee` | `claim_protocol_fee` | Pool and protocol fee amounts claimed from token A and token B. |
+| `EvtInitializeReward` | `initialize_reward` | Pool, reward mint, funder, creator, reward index, and reward duration. |
+| `EvtFundReward` | `fund_reward` | Pool, funder, reward mint, reward index, funded amount, transfer-fee-excluded input amount, reward duration end, previous reward rate, and new reward rate. |
+| `EvtClaimReward` | `claim_reward` | Pool, position, owner, reward mint, reward index, and claimed reward amount. |
+| `EvtUpdateRewardDuration` | `update_reward_duration` | Pool, reward index, old duration, and new duration. |
+| `EvtUpdateRewardFunder` | `update_reward_funder` | Pool, reward index, old funder, and new funder. |
+| `EvtWithdrawIneligibleReward` | `withdraw_ineligible_reward` | Pool, reward mint, and withdrawn amount. |
+
+Reward indexes are limited to the two DAMM v2 reward slots, `0` and `1`.
+
+## Operator Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `EvtSetPoolStatus` | `set_pool_status` | Pool and status byte. |
+| `EvtUpdatePoolFees` | `update_pool_fees` | Pool, operator, and update parameters. |
+
+`EvtUpdatePoolFees.params.cliff_fee_numerator` is optional. `EvtUpdatePoolFees.params.dynamic_fee` is also optional; `None` skips dynamic-fee updates, while a default dynamic-fee value disables dynamic fees.
+
+## Fee Parameter Decoding
+
+`EvtInitializePool.pool_fees.base_fee.data` uses the Borsh event format. Pool account state uses the Pod-aligned account format.
+
+| Source | Format | TypeScript decoder family |
+| --- | --- | --- |
+| `EvtInitializePool` event | Borsh | `decodeFeeTimeSchedulerParams`, `decodeFeeRateLimiterParams`, `decodeFeeMarketCapSchedulerParams` |
+| Pool state account | Pod-aligned | `decodePodAlignedFeeTimeScheduler`, `decodePodAlignedFeeRateLimiter`, `decodePodAlignedFeeMarketCapScheduler` |
+
+Choose the decoder from the pool fee mode. Do not decode an event payload with a pool-state decoder, or pool account data with an event decoder.
+
+## Indexing Notes
+
+| Use case | Event to index |
+| --- | --- |
+| Pool discovery | `EvtInitializePool` |
+| Position lifecycle | `EvtCreatePosition`, `EvtClosePosition` |
+| LP accounting | `EvtLiquidityChange`, `EvtClaimPositionFee` |
+| Swap history and candles | `EvtSwap2` |
+| Rewards | `EvtInitializeReward`, `EvtFundReward`, `EvtClaimReward`, `EvtUpdateRewardDuration`, `EvtUpdateRewardFunder`, `EvtWithdrawIneligibleReward` |
+| Locks and vesting | `EvtLockPosition`, `EvtPermanentLockPosition`, `EvtSplitPosition3` |
+| Operator changes | `EvtSetPoolStatus`, `EvtUpdatePoolFees`, config events |
+
+Most events include `pool` and can be joined directly to pool state. Config and token-badge events do not necessarily include a pool, so index them by config address or token mint.

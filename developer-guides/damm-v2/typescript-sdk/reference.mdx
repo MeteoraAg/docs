@@ -1,0 +1,604 @@
+---
+title: "DAMM v2 TS SDK Reference"
+sidebarTitle: "Reference"
+description: "Understand the @meteora-ag/cp-amm-sdk exports, CpAmm methods, transaction builders, helpers, constants, types, and errors."
+llmsDescription: "Explains the DAMM v2 TypeScript SDK reference for @meteora-ag/cp-amm-sdk. Covers dependencies, program ID, core exports, enums, constants, client creation, every public CpAmm state method, quote method, preparation method, transaction builder, PDA helper, token and compute helper, UI and reward helper, Token 2022 helper, vesting helper, validation helper, fee codec, liquidity math function, fee math function, swap quote function, core type, common workflow, error class, and integration note."
+---
+
+This page is based on the public declaration surface of `@meteora-ag/cp-amm-sdk`. Use it as the high-level map for the SDK, then open the package types when you need exact parameter shapes.
+
+```typescript
+import {
+  CpAmm,
+  ActivationType,
+  BaseFeeMode,
+  CollectFeeMode,
+  SwapMode,
+  derivePoolAddress,
+  derivePositionAddress,
+  getBaseFeeParams,
+  getDynamicFeeParams,
+  getSqrtPriceFromPrice,
+  getTokenProgram,
+} from "@meteora-ag/cp-amm-sdk"
+```
+
+## Dependencies
+
+Important runtime dependencies:
+
+| Package | Use |
+| --- | --- |
+| `@coral-xyz/anchor` | Program client, IDL types, and `BN`. |
+| `@solana/web3.js` | Connections, transactions, instructions, lookup tables, and public keys. |
+| `@solana/spl-token` | SPL Token, Token-2022, ATA, mint, transfer-fee, transfer-hook, and wrapped SOL helpers. |
+| `bn.js` | Integer math inputs and SDK return values. |
+| `decimal.js` | Price, price impact, and UI conversion arithmetic. |
+| `chain` | Transaction composition helpers used by SDK builders. |
+
+## Program ID
+
+```typescript
+CP_AMM_PROGRAM_ID = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
+```
+
+`CpAmm` constructs an Anchor `Program` from the packaged `cp_amm` IDL and the connection you provide.
+
+## Core Exports
+
+| Export | Use |
+| --- | --- |
+| `CpAmm` | Main class for fetching state, quoting, and building transactions. |
+| `CpAmmIdl` / `CpAmmTypes` | Published IDL JSON and generated Anchor type. |
+| `AmmProgram` | Anchor `Program&lt;CpAmmTypes&gt;` type alias. |
+| `TxBuilder` | SDK transaction-builder return type, currently `Promise&lt;Transaction&gt;`. |
+| `cpAmmCoder` | Anchor `BorshCoder` configured with the packaged IDL. |
+| `CP_AMM_PROGRAM_ID` | Program ID constant. |
+| `PoolState`, `PositionState`, `VestingState`, `ConfigState`, `TokenBadgeState` | IDL-derived account state types. |
+| `PoolFeesStruct`, `DynamicFeeStruct`, `BaseFee`, `DynamicFee`, `DecodedPoolFees` | Fee configuration and decoded fee-data types. |
+| `DepositQuote`, `WithdrawQuote`, `Quote2Result`, `SwapResult2` | Quote result types. |
+| `BaseFeeHandler`, `LiquidityHandler` | Interfaces implemented by exported fee and liquidity handler classes. |
+
+## Enums
+
+| Enum | Values |
+| --- | --- |
+| `Rounding` | `Up`, `Down`. |
+| `ActivationPoint` | `Timestamp`, `Slot`. |
+| `ActivationType` | `Slot`, `Timestamp`. |
+| `BaseFeeMode` | `FeeTimeSchedulerLinear`, `FeeTimeSchedulerExponential`, `RateLimiter`, `FeeMarketCapSchedulerLinear`, `FeeMarketCapSchedulerExponential`. |
+| `CollectFeeMode` | `BothToken`, `OnlyB`, `Compounding`. |
+| `TradeDirection` | `AtoB`, `BtoA`. |
+| `LayoutVersion` | `V0`, `V1`. |
+| `PoolStatus` | `Enable`, `Disable`. |
+| `SwapMode` | `ExactIn`, `PartialFill`, `ExactOut`. |
+
+## Important Constants
+
+| Constant | Meaning |
+| --- | --- |
+| `LIQUIDITY_SCALE`, `SCALE_OFFSET`, `ONE_Q64` | Q64 liquidity and price scale constants. |
+| `BASIS_POINT_MAX`, `FEE_DENOMINATOR` | Basis-point and fee-numerator denominators. |
+| `MIN_FEE_BPS`, `MIN_FEE_NUMERATOR` | Minimum base fee. |
+| `MAX_FEE_BPS_V0`, `MAX_FEE_NUMERATOR_V0` | V0 pool maximum fee. |
+| `MAX_FEE_BPS_V1`, `MAX_FEE_NUMERATOR_V1` | V1 pool maximum fee. |
+| `MIN_SQRT_PRICE`, `MAX_SQRT_PRICE` | Global square-root price bounds. |
+| `MIN_CU_BUFFER`, `MAX_CU_BUFFER` | Compute-unit buffer bounds for compute helper functions. |
+| `DYNAMIC_FEE_SCALING_FACTOR`, `DYNAMIC_FEE_ROUNDING_OFFSET` | Dynamic-fee math constants. |
+| `DYNAMIC_FEE_FILTER_PERIOD_DEFAULT`, `DYNAMIC_FEE_DECAY_PERIOD_DEFAULT`, `DYNAMIC_FEE_REDUCTION_FACTOR_DEFAULT` | Default dynamic-fee parameters. |
+| `BIN_STEP_BPS_DEFAULT`, `BIN_STEP_BPS_U128_DEFAULT`, `MAX_PRICE_CHANGE_BPS_DEFAULT` | Default dynamic-fee bin and price-change parameters. |
+| `U128_MAX`, `U64_MAX`, `U24_MAX`, `U16_MAX` | Integer bounds used by validation and math helpers. |
+| `MAX_RATE_LIMITER_DURATION_IN_SECONDS`, `MAX_RATE_LIMITER_DURATION_IN_SLOTS` | Rate-limiter duration bounds. |
+| `SPLIT_POSITION_DENOMINATOR` | Denominator for position split ratios. |
+| `CURRENT_POOL_VERSION` | Current pool layout version. |
+| `DEAD_LIQUIDITY` | Compounding-pool dead liquidity constant. |
+| `NUM_REWARDS`, `MIN_REWARD_DURATION`, `MAX_REWARD_DURATION` | Reward count and duration bounds. |
+| `MAX_EXPONENTIAL`, `MAX` | Internal upper bounds used by math helpers. |
+
+## Creating A Client
+
+```typescript
+import { Connection, PublicKey } from "@solana/web3.js"
+import { CpAmm } from "@meteora-ag/cp-amm-sdk"
+
+const connection = new Connection("https://api.mainnet-beta.solana.com")
+const cpAmm = new CpAmm(connection)
+
+const poolState = await cpAmm.fetchPoolState(new PublicKey("..."))
+```
+
+The client stores the connection-backed Anchor program and exposes read methods, quote methods, and unsigned transaction builders. The caller still sets the fee payer, recent blockhash, signs, simulates, and submits.
+
+## Complete Public Function Index
+
+This section lists the public functions and methods exported by the SDK. Private helper methods emitted in declaration files are intentionally excluded.
+
+### `CpAmm` State And Discovery
+
+| Method | Use |
+| --- | --- |
+| `constructor(connection)` | Create a client for one Solana connection. |
+| `fetchConfigState(config)` | Fetch one config account. |
+| `fetchPoolState(pool)` | Fetch one pool account. |
+| `fetchPoolStatesByTokenAMint(tokenAMint)` | Scan pools by `tokenAMint`. |
+| `fetchPoolFees(pool)` | Decode the pod-aligned base-fee data stored in one pool account. |
+| `fetchPositionState(position)` | Fetch one position account. |
+| `getMultipleConfigs(configs)` | Batch fetch config accounts. |
+| `getMultiplePools(pools)` | Batch fetch pool accounts. |
+| `getMultiplePositions(positions)` | Batch fetch position accounts. |
+| `getAllConfigs()` | Scan all config accounts. |
+| `getStaticConfigs()` | Scan static configs with default vault and creator authorities. |
+| `getAllPools()` | Scan all pool accounts. Prefer an indexed API for broad app discovery. |
+| `getAllPositions()` | Scan all position accounts. |
+| `getAllPositionsByPool(pool)` | Scan all position accounts for one pool. |
+| `getUserPositionByPool(pool, user)` | Resolve a user's position NFTs and filter them to one pool. |
+| `getPositionsByUser(user)` | Resolve all Token-2022 position NFTs owned by a wallet and fetch their positions. |
+| `getAllVestingsByPosition(position)` | Fetch vesting accounts attached to one position. |
+| `isPoolExist(pool)` | Return whether a pool account exists. |
+
+### `CpAmm` Position State Helpers
+
+| Method | Use |
+| --- | --- |
+| `isLockedPosition(position)` | Check whether a position has any locked liquidity. |
+| `isPermanentLockedPosition(positionState)` | Check whether a position has permanently locked liquidity. |
+| `canUnlockPosition(positionState, vestings, currentPoint)` | Check unlock eligibility against permanent locks and vesting schedules. |
+
+### `CpAmm` Quote And Preparation Methods
+
+| Method | Use |
+| --- | --- |
+| `getLiquidityDelta(params)` | Compute Q64 liquidity from token amount caps, price range, and collect-fee mode. |
+| `getQuote(params)` | Legacy exact-in swap quote. |
+| `getQuote2(params)` | Preferred swap quote for exact-in, partial-fill, and exact-out modes. |
+| `getDepositQuote(params)` | Convert a token input amount into liquidity and counterpart amount. |
+| `getWithdrawQuote(params)` | Convert liquidity into expected token A and token B outputs. |
+| `preparePoolCreationSingleSide(params)` | Prepare one-sided concentrated pool creation where the initial price is the min price. |
+| `preparePoolCreationParams(params)` | Compute initial square-root price, liquidity, and token amounts for pool creation. |
+
+### `CpAmm` Transaction Builders
+
+| Method | Use |
+| --- | --- |
+| `createPool(params)` | Build a permissionless pool creation transaction. |
+| `createCustomPool(params)` | Build a customizable pool creation transaction and return `{ tx, pool, position }`. |
+| `createCustomPoolWithDynamicConfig(params)` | Build a customizable pool creation transaction with dynamic config and return `{ tx, pool, position }`. |
+| `createPosition(params)` | Build a transaction that creates a position NFT and position account. |
+| `addLiquidity(params)` | Build a transaction that adds liquidity to an existing position. |
+| `createPositionAndAddLiquidity(params)` | Build a combined position creation and add-liquidity transaction. |
+| `removeLiquidity(params)` | Build a transaction that removes a liquidity delta from a position. |
+| `removeAllLiquidity(params)` | Build a transaction that removes all unlocked liquidity from a position. |
+| `swap(params)` | Build the legacy swap transaction. |
+| `swap2(params)` | Build the preferred swap transaction for `SwapMode.ExactIn`, `PartialFill`, or `ExactOut`. |
+| `lockPosition(params)` | Build a transaction that locks liquidity with vesting. |
+| `permanentLockPosition(params)` | Build a transaction that permanently locks liquidity. |
+| `refreshVesting(params)` | Build a transaction that refreshes vesting state for a position. |
+| `closePosition(params)` | Build a transaction that closes an empty position. |
+| `removeAllLiquidityAndClosePosition(params)` | Build a combined claim-fee, remove-all-liquidity, and close-position transaction. |
+| `mergePosition(params)` | Build a transaction that claims fees, removes source liquidity, adds it to a target position, and closes the source position. |
+| `initializeReward(params)` | Build a transaction that initializes a reward slot. |
+| `initializeAndFundReward(params)` | Build a transaction that initializes and funds a reward slot. |
+| `updateRewardDuration(params)` | Build a transaction that updates reward duration. |
+| `updateRewardFunder(params)` | Build a transaction that updates reward funder authority. |
+| `fundReward(params)` | Build a transaction that funds an initialized reward. |
+| `withdrawIneligibleReward(params)` | Build a transaction that withdraws ineligible reward emissions. |
+| `claimPositionFee(params)` | Build a transaction that claims position trading fees. |
+| `claimPositionFee2(params)` | Build the newer position-fee claim transaction. |
+| `claimReward(params)` | Build a transaction that claims one reward index for a position. |
+| `splitPosition(params)` | Build a transaction that splits a position into a new position with explicit token amounts. |
+| `splitPosition2(params)` | Build the newer split transaction using a numerator over `SPLIT_POSITION_DENOMINATOR`. |
+
+### PDA Helpers
+
+| Function | Use |
+| --- | --- |
+| `getFirstKey(key1, key2)` | Return the lexicographically first key buffer for sorted mint seeds. |
+| `getSecondKey(key1, key2)` | Return the lexicographically second key buffer for sorted mint seeds. |
+| `derivePoolAuthority()` | Derive the global pool authority PDA. |
+| `deriveConfigAddress(index)` | Derive a config PDA from a `u64` index. |
+| `derivePoolAddress(config, tokenAMint, tokenBMint)` | Derive a permissionless pool PDA from config and sorted token mints. |
+| `derivePositionAddress(positionNft)` | Derive a position PDA from the position NFT mint. |
+| `deriveTokenVaultAddress(tokenMint, pool)` | Derive a token vault PDA. |
+| `deriveRewardVaultAddress(pool, rewardIndex)` | Derive a reward vault PDA. |
+| `deriveCustomizablePoolAddress(tokenAMint, tokenBMint)` | Derive a customizable pool PDA from sorted token mints. |
+| `deriveTokenBadgeAddress(tokenMint)` | Derive a token badge PDA. |
+| `deriveClaimFeeOperatorAddress(operator)` | Derive a claim-fee operator PDA. |
+| `derivePositionNftAccount(positionNftMint)` | Derive the canonical position NFT token account. |
+| `deriveOperatorAddress(whitelistedAddress)` | Derive an operator PDA for a whitelisted address. |
+
+### Token, Account, And Compute Helpers
+
+| Function | Use |
+| --- | --- |
+| `getTokenProgram(flag)` | Convert a pool token flag into the SPL Token or Token-2022 program ID. |
+| `getTokenDecimals(connection, mint, tokenProgram)` | Fetch mint decimals. |
+| `getOrCreateATAInstruction(tokenMint, owner, payer, allowOwnerOffCurve, tokenProgram)` | Resolve an ATA and return creation instructions when needed. |
+| `wrapSOLInstruction(from, to, amount)` | Build native SOL wrapping instructions. |
+| `unwrapSOLInstruction(owner, receiver?, allowOwnerOffCurve?)` | Build a wrapped SOL close-account instruction. |
+| `getAllUserPositionNftAccount(connection, user)` | Fetch the user's position NFT accounts. |
+| `getAllPositionNftAccountByOwner(connection, user)` | Fetch Token-2022 position NFT accounts by owner. |
+| `getSimulationComputeUnits(connection, instructions, payer, lookupTables, commitment?)` | Simulate instructions and return consumed compute units. |
+| `getEstimatedComputeUnitUsageWithBuffer(connection, instructions, feePayer, buffer?)` | Estimate compute units with a bounded buffer. |
+| `getEstimatedComputeUnitIxWithBuffer(connection, instructions, feePayer, buffer?)` | Build a compute-budget instruction from estimated units. |
+
+### UI, Price, Reward, And Account Filter Helpers
+
+| Function | Use |
+| --- | --- |
+| `getMaxAmountWithSlippage(amount, rate)` | Apply a max slippage rate to an amount. |
+| `getAmountWithSlippage(amount, slippageBps, swapMode)` | Adjust an amount by slippage according to swap mode. |
+| `getPriceImpact(amountIn, amountOut, currentSqrtPrice, aToB, tokenADecimal, tokenBDecimal)` | Compute price impact for a quote. |
+| `getPriceChange(nextSqrtPrice, currentSqrtPrice)` | Compute price-change percentage from two square-root prices. |
+| `getPriceFromSqrtPrice(sqrtPrice, tokenADecimal, tokenBDecimal)` | Convert Q64 square-root price to UI price. |
+| `getSqrtPriceFromPrice(price, tokenADecimal, tokenBDecimal)` | Convert UI price to Q64 square-root price. |
+| `getUnClaimLpFee(poolState, positionState)` | Compute unclaimed LP fee amounts. |
+| `getRewardInfo(poolState, rewardIndex, periodTime, currentTime)` | Compute current reward info for one reward index. |
+| `getUserRewardPending(poolState, positionState, rewardIndex, currentTime, periodTime)` | Compute pending user reward for one position and reward index. |
+| `positionByPoolFilter(pool)` | Build a `getProgramAccounts` filter for positions by pool. |
+| `vestingByPositionFilter(position)` | Build a `getProgramAccounts` filter for vesting accounts by position. |
+| `offsetBasedFilter(value, offset)` | Build a memcmp filter at an arbitrary account offset. |
+
+### Token-2022 Helpers
+
+| Function | Use |
+| --- | --- |
+| `calculateTransferFeeIncludedAmount(transferFeeExcludedAmount, mint, currentEpoch)` | Compute an amount that includes Token-2022 transfer fees. |
+| `calculateTransferFeeExcludedAmount(transferFeeIncludedAmount, mint, currentEpoch)` | Compute the post-fee amount for a Token-2022 transfer. |
+| `hasTransferHookExtension(connection, mint)` | Detect whether a mint uses a transfer-hook extension. |
+| `validateNoTransferHook(connection, tokenAMint, tokenBMint)` | Throw when either token mint has a transfer hook unsupported by the flow. |
+
+### Vesting Helpers
+
+| Function | Use |
+| --- | --- |
+| `isVestingComplete(vestingData, currentPoint)` | Check whether a vesting schedule is complete. |
+| `getTotalLockedLiquidity(vestingData)` | Sum locked liquidity in a vesting account. |
+| `getAvailableVestingLiquidity(vestingData, currentPoint)` | Compute currently unlocked liquidity from vesting data. |
+
+### Validation Helpers
+
+| Function | Use |
+| --- | --- |
+| `validateFeeTimeScheduler(numberOfPeriod, periodFrequency, reductionFactor, cliffFeeNumerator, baseFeeMode, feeVersion)` | Validate time-scheduler fee parameters. |
+| `validateFeeTimeSchedulerBaseFeeIsStatic(currentPoint, activationPoint, numberOfPeriod, periodFrequency)` | Check whether a time-scheduler base fee is already static. |
+| `validateFeeMarketCapScheduler(cliffFeeNumerator, numberOfPeriod, sqrtPriceStepBps, reductionFactor, schedulerExpirationDuration, feeMarketCapSchedulerMode, feeVersion)` | Validate market-cap scheduler parameters. |
+| `validateFeeMarketCapBaseFeeIsStatic(currentPoint, activationPoint, schedulerExpirationDuration)` | Check whether a market-cap scheduler base fee is already static. |
+| `validateFeeRateLimiter(cliffFeeNumerator, feeIncrementBps, maxFeeBps, maxLimiterDuration, referenceAmount, collectFeeMode, activationType, feeVersion)` | Validate rate-limiter fee parameters. |
+| `validateFeeRateLimiterBaseFeeIsStatic(currentPoint, activationPoint, maxLimiterDuration, referenceAmount, maxFeeBps, feeIncrementBps)` | Check whether a rate-limiter base fee is already static. |
+| `validateFeeFraction(numerator, denominator)` | Validate a fee fraction. |
+| `validateCollectFeeMode(collectFeeMode)` | Validate a collect-fee mode value. |
+| `validateActivationType(activationType)` | Validate an activation type value. |
+| `validatePriceRange(collectFeeMode, sqrtMinPrice, sqrtMaxPrice)` | Validate a pool price range for the chosen collect-fee mode. |
+| `validateInitialSqrtPrice(collectFeeMode, initSqrtPrice, sqrtMinPrice, sqrtMaxPrice)` | Validate an initial square-root price. |
+| `validateCompoundingFee(collectFeeMode, compoundingFeeBps)` | Validate compounding-fee settings. |
+| `validateDynamicFee(dynamicFee)` | Validate dynamic-fee parameters. |
+| `validatePoolFees(poolFees, collectFeeMode, activationType, feeVersion?)` | Validate pool fee settings. |
+| `validateCustomizablePoolParams(params)` | Validate customizable pool creation parameters. |
+| `validateTokenMints(tokenAMint, tokenBMint)` | Validate that token mints are distinct. |
+| `validateCreatePoolParams(params)` | Validate permissionless pool creation parameters. |
+| `validateAddLiquidityParams(liquidityDelta)` | Validate add-liquidity amount. |
+| `validateRemoveLiquidityParams(liquidityDelta)` | Validate remove-liquidity amount. |
+| `validateSplitPositionParams(params)` | Validate legacy split-position parameters. |
+| `validateSplitPosition2Params(numerator)` | Validate split-position v2 ratio numerator. |
+| `validateLockPositionParams(params)` | Validate lock-position parameters. |
+| `validateRewardIndex(rewardIndex)` | Validate a reward index against `NUM_REWARDS`. |
+| `validateRewardDuration(rewardDuration)` | Validate reward duration bounds. |
+
+### Common Fee Encoding Helpers
+
+| Function | Use |
+| --- | --- |
+| `getCurrentPoint(connection, activationType)` | Fetch current slot or timestamp for an activation type. |
+| `isSwapEnabled(pool)` | Check pool status and activation point before swapping. |
+| `convertToFeeSchedulerSecondFactor(value)` | Convert a scheduler second factor into byte data. |
+| `parseFeeSchedulerSecondFactor(secondFactor)` | Parse scheduler second-factor bytes. |
+| `convertToRateLimiterSecondFactor(maxLimiterDuration, maxFeeBps)` | Convert rate-limiter secondary params into byte data. |
+| `parseRateLimiterSecondFactor(secondFactor)` | Parse rate-limiter secondary params from bytes. |
+| `bpsToFeeNumerator(bps)` | Convert basis points to DAMM v2 fee numerator. |
+| `feeNumeratorToBps(feeNumerator)` | Convert DAMM v2 fee numerator to basis points. |
+| `convertToLamports(amount, tokenDecimal)` | Convert UI token amount to integer token units. |
+| `fromDecimalToBN(value)` | Convert a `Decimal` to `BN`. |
+| `getFeeTimeSchedulerParams(startingBaseFeeBps, endingBaseFeeBps, baseFeeMode, numberOfPeriod, totalDuration)` | Build time-scheduler base-fee params. |
+| `computeSqrtPriceStepBps(priceMultiple, numberOfPeriod)` | Compute market-cap scheduler square-root price step bps. |
+| `getFeeMarketCapSchedulerParams(startingBaseFeeBps, endingBaseFeeBps, baseFeeMode, numberOfPeriod, priceMultiple, schedulerExpirationDuration)` | Build market-cap scheduler base-fee params. |
+| `getRateLimiterParams(baseFeeBps, feeIncrementBps, referenceAmount, maxLimiterDuration, maxFeeBps, tokenBDecimal, activationType)` | Build rate-limiter base-fee params. |
+| `getBaseFeeParams(baseFeeParams)` | Build base-fee params from a high-level config object. |
+| `getDynamicFeeParams(baseFeeBps, maxPriceChangeBps?)` | Build default dynamic-fee params from base fee and max price change. |
+| `encodeFeeTimeSchedulerParams(cliffFeeNumerator, numberOfPeriod, periodFrequency, reductionFactor, baseFeeMode)` | Borsh-encode time-scheduler fee params. |
+| `decodeFeeTimeSchedulerParams(data)` | Decode Borsh time-scheduler fee params, such as event data. |
+| `decodePodAlignedFeeTimeScheduler(data)` | Decode pod-aligned time-scheduler params from pool state. |
+| `encodeFeeMarketCapSchedulerParams(cliffFeeNumerator, numberOfPeriod, sqrtPriceStepBps, schedulerExpirationDuration, reductionFactor, baseFeeMode)` | Borsh-encode market-cap scheduler params. |
+| `decodeFeeMarketCapSchedulerParams(data)` | Decode Borsh market-cap scheduler params, such as event data. |
+| `decodePodAlignedFeeMarketCapScheduler(data)` | Decode pod-aligned market-cap scheduler params from pool state. |
+| `encodeFeeRateLimiterParams(cliffFeeNumerator, feeIncrementBps, maxLimiterDuration, maxFeeBps, referenceAmount)` | Borsh-encode rate-limiter params. |
+| `decodeFeeRateLimiterParams(data)` | Decode Borsh rate-limiter params, such as event data. |
+| `decodePodAlignedFeeRateLimiter(data)` | Decode pod-aligned rate-limiter params from pool state. |
+
+<Warning>
+  The same base-fee mode uses different byte layouts in initialize events and pool accounts. Decode `EvtInitializePool` base-fee data with Borsh decoders and pool-state base-fee data with pod-aligned decoders.
+</Warning>
+
+### Compounding Liquidity Math
+
+| Function | Use |
+| --- | --- |
+| `getInitialCompoundingPoolInformation(sqrtPrice, liquidity)` | Compute initial compounding pool bounds and reserves. |
+| `getAmountsForModifyForCompoundingLiquidity(tokenAAmount, tokenBAmount, liquidity, liquidityDelta, round)` | Compute proportional token amounts for modifying compounding liquidity. |
+| `calculateAtoBFromAmountInForCompoundingLiquidity(tokenAAmount, tokenBAmount, amountIn)` | Simulate exact-input A to B swap math for compounding liquidity. |
+| `calculateBtoAFromAmountInForCompoundingLiquidity(tokenAAmount, tokenBAmount, amountIn)` | Simulate exact-input B to A swap math for compounding liquidity. |
+| `calculateAtoBFromPartialAmountInForCompoundingLiquidity(tokenAAmount, tokenBAmount, amountIn)` | Simulate partial-input A to B swap math for compounding liquidity. |
+| `calculateBtoAFromPartialAmountInForCompoundingLiquidity(tokenAAmount, tokenBAmount, amountIn)` | Simulate partial-input B to A swap math for compounding liquidity. |
+| `calculateAtoBFromAmountOutForCompoundingLiquidity(tokenAAmount, tokenBAmount, amountOut)` | Simulate exact-output A to B swap math for compounding liquidity. |
+| `calculateBtoAFromAmountOutForCompoundingLiquidity(tokenAAmount, tokenBAmount, amountOut)` | Simulate exact-output B to A swap math for compounding liquidity. |
+| `getReservesAmountForCompoundingLiquidity(tokenAAmount, tokenBAmount)` | Return compounding reserves. |
+| `getNextSqrtPriceForCompoundingLiquidity(tokenAAmount, tokenBAmount)` | Compute next square-root price from reserves. |
+| `getSqrtPriceFromAmountsForCompoundingLiquidity(tokenAAmount, tokenBAmount)` | Compute square-root price from token amounts. |
+| `getAmountAFromLiquidityDeltaForCompoundingLiquidity(liquidityDelta, tokenAAmount, liquidity, rounding)` | Compute token A amount from compounding liquidity delta. |
+| `getAmountBFromLiquidityDeltaForCompoundingLiquidity(liquidityDelta, tokenBAmount, liquidity, rounding)` | Compute token B amount from compounding liquidity delta. |
+| `getPoolCreationAmountAFromLiquidityDeltaForCompoundingLiquidity(sqrtPrice, liquidity)` | Compute token A needed for compounding pool creation. |
+| `getPoolCreationAmountBFromLiquidityDeltaForCompoundingLiquidity(sqrtPrice, liquidity)` | Compute token B needed for compounding pool creation. |
+| `getLiquidityDeltaFromAmountAForCompoundingLiquidity(amountA, tokenAAmount, liquidity)` | Compute compounding liquidity delta from token A amount. |
+| `getLiquidityDeltaFromAmountBForCompoundingLiquidity(amountB, tokenBAmount, liquidity)` | Compute compounding liquidity delta from token B amount. |
+| `getPoolCreationLiquidityDeltaFromAmountAForCompoundingLiquidity(amountA, sqrtPrice)` | Compute compounding pool-creation liquidity from token A. |
+| `getPoolCreationLiquidityDeltaFromAmountBForCompoundingLiquidity(amountB, sqrtPrice)` | Compute compounding pool-creation liquidity from token B. |
+
+### Concentrated Liquidity Math
+
+| Function | Use |
+| --- | --- |
+| `getInitialConcentratedLiquidityPoolInformation(sqrtMinPrice, sqrtMaxPrice, sqrtPrice, liquidity)` | Compute initial concentrated pool information. |
+| `getAmountsForModifyForConcentratedLiquidity(sqrtPrice, sqrtMinPrice, sqrtMaxPrice, liquidityDelta, round)` | Compute token amounts for modifying concentrated liquidity. |
+| `calculateAtoBFromAmountInForConcentratedLiquidity(sqrtMinPrice, sqrtPrice, liquidity, amountIn)` | Simulate exact-input A to B swap math for concentrated liquidity. |
+| `calculateBtoAFromAmountInForConcentratedLiquidity(sqrtMaxPrice, sqrtPrice, liquidity, amountIn)` | Simulate exact-input B to A swap math for concentrated liquidity. |
+| `calculateAtoBFromPartialAmountInForConcentratedLiquidity(sqrtMinPrice, sqrtPrice, liquidity, amountIn)` | Simulate partial-input A to B swap math for concentrated liquidity. |
+| `calculateBtoAFromPartialAmountInForConcentratedLiquidity(sqrtMaxPrice, sqrtPrice, liquidity, amountIn)` | Simulate partial-input B to A swap math for concentrated liquidity. |
+| `calculateAtoBFromAmountOutForConcentratedLiquidity(sqrtMinPrice, sqrtPrice, liquidity, amountOut)` | Simulate exact-output A to B swap math for concentrated liquidity. |
+| `calculateBtoAFromAmountOutForConcentratedLiquidity(sqrtMaxPrice, sqrtPrice, liquidity, amountOut)` | Simulate exact-output B to A swap math for concentrated liquidity. |
+| `getReservesAmountForConcentratedLiquidity(sqrtPrice, sqrtMinPrice, sqrtMaxPrice, liquidity)` | Compute token A and token B reserves for a concentrated position. |
+| `getAmountBFromLiquidityDeltaForConcentratedLiquidity(lowerSqrtPrice, upperSqrtPrice, liquidity, rounding)` | Compute token B amount from concentrated liquidity delta. |
+| `getAmountAFromLiquidityDeltaForConcentratedLiquidity(lowerSqrtPrice, upperSqrtPrice, liquidity, rounding)` | Compute token A amount from concentrated liquidity delta. |
+| `getNextSqrtPriceFromInput(sqrtPrice, liquidity, amountIn, aForB)` | Compute next square-root price from exact input. |
+| `getNextSqrtPriceFromOutput(sqrtPrice, liquidity, amountOut, aForB)` | Compute next square-root price from exact output. |
+| `getNextSqrtPriceFromAmountInARoundingUp(sqrtPrice, liquidity, amount)` | Compute next square-root price from token A input, rounding up. |
+| `getNextSqrtPriceFromAmountOutARoundingUp(sqrtPrice, liquidity, amount)` | Compute next square-root price from token A output, rounding up. |
+| `getNextSqrtPriceFromAmountInBRoundingDown(sqrtPrice, liquidity, amount)` | Compute next square-root price from token B input, rounding down. |
+| `getNextSqrtPriceFromAmountOutBRoundingDown(sqrtPrice, liquidity, amount)` | Compute next square-root price from token B output, rounding down. |
+| `getLiquidityDeltaFromAmountAForConcentratedLiquidity(amountA, lowerSqrtPrice, upperSqrtPrice)` | Compute concentrated liquidity delta from token A amount. |
+| `getLiquidityDeltaFromAmountBForConcentratedLiquidity(amountB, lowerSqrtPrice, upperSqrtPrice)` | Compute concentrated liquidity delta from token B amount. |
+
+### Generic Liquidity Math
+
+| Function | Use |
+| --- | --- |
+| `getLiquidityHandler(poolState)` | Return a compounding or concentrated liquidity handler for a pool. |
+| `getInitialPoolInformation(collectFeeMode, sqrtMinPrice, sqrtMaxPrice, sqrtPrice, liquidity)` | Dispatch initial-pool math by collect-fee mode. |
+| `getLiquidityDeltaFromAmountA(amountA, sqrtPrice, sqrtMaxPrice, collectFeeMode, tokenAAmount?, liquidity?)` | Dispatch token A liquidity math by collect-fee mode. |
+| `getLiquidityDeltaFromAmountB(amountB, sqrtMinPrice, sqrtPrice, collectFeeMode, tokenBAmount?, liquidity?)` | Dispatch token B liquidity math by collect-fee mode. |
+| `getAmountAFromLiquidityDelta(sqrtPrice, sqrtMaxPrice, liquidityDelta, rounding, collectFeeMode, tokenAAmount?, liquidity?)` | Dispatch token A amount math by collect-fee mode. |
+| `getAmountBFromLiquidityDelta(sqrtMinPrice, sqrtPrice, liquidityDelta, rounding, collectFeeMode, tokenBAmount?, liquidity?)` | Dispatch token B amount math by collect-fee mode. |
+
+### Liquidity Handler Classes
+
+`CompoundingLiquidityHandler` and `ConcentratedLiquidityHandler` implement the same public method surface:
+
+| Method | Use |
+| --- | --- |
+| `constructor(...)` | Create a handler with the pool reserves or price range. |
+| `getAmountsForModifyLiquidity(liquidityDelta, round)` | Compute token amounts for a liquidity delta. |
+| `calculateAtoBFromAmountIn(amountIn)` | Simulate exact-input A to B. |
+| `calculateBtoAFromAmountIn(amountIn)` | Simulate exact-input B to A. |
+| `calculateAtoBFromPartialAmountIn(amountIn)` | Simulate partial-input A to B. |
+| `calculateBtoAFromPartialAmountIn(amountIn)` | Simulate partial-input B to A. |
+| `calculateAtoBFromAmountOut(amountOut)` | Simulate exact-output A to B. |
+| `calculateBtoAFromAmountOut(amountOut)` | Simulate exact-output B to A. |
+| `getReservesAmount()` | Return current reserves. |
+| `getNextSqrtPrice(nextSqrtPrice)` | Return or clamp the next square-root price for the handler. |
+| `getMaxAmountIn(tradeDirection)` | Compute the maximum input for one trade direction. |
+
+### Base Fee Handler Classes
+
+`FeeRateLimiter`, `FeeTimeScheduler`, and `FeeMarketCapScheduler` implement the same public method surface:
+
+| Method | Use |
+| --- | --- |
+| `constructor(...)` | Create the fee handler from decoded fee parameters. |
+| `validate(collectFeeMode, activationType, feeVersion)` | Validate the handler against pool settings. |
+| `getBaseFeeNumeratorFromIncludedFeeAmount(currentPoint, activationPoint, tradeDirection, includedFeeAmount, initSqrtPrice, currentSqrtPrice)` | Compute base fee from an amount that already includes fees. |
+| `getBaseFeeNumeratorFromExcludedFeeAmount(currentPoint, activationPoint, tradeDirection, excludedFeeAmount, initSqrtPrice, currentSqrtPrice)` | Compute base fee from an amount before fees. |
+| `validateBaseFeeIsStatic(currentPoint, activationPoint)` | Check whether the base fee is static at the current point. |
+| `getMinFeeNumerator()` | Return the minimum base-fee numerator. |
+| `getMaxFeeNumerator()` | Return the maximum base-fee numerator. |
+
+### Base Fee And Pool Fee Math
+
+| Function | Use |
+| --- | --- |
+| `getBaseFeeHandlerFromPodAlignedData(rawData)` | Decode pool-state fee bytes into a base-fee handler. |
+| `getBaseFeeHandlerFromBorshData(rawData)` | Decode event or Borsh fee bytes into a base-fee handler. |
+| `getFeeNumeratorOnLinearFeeScheduler(cliffFeeNumerator, reductionFactor, period)` | Compute one linear scheduler fee numerator. |
+| `getFeeNumeratorOnExponentialFeeScheduler(cliffFeeNumerator, reductionFactor, period)` | Compute one exponential scheduler fee numerator. |
+| `getMaxBaseFeeNumerator(cliffFeeNumerator)` | Compute maximum base fee from cliff fee. |
+| `getFeeTimeBaseFeeNumeratorByPeriod(cliffFeeNumerator, numberOfPeriod, period, reductionFactor, feeTimeSchedulerMode)` | Compute time-scheduler base fee by period. |
+| `getFeeTimeBaseFeeNumerator(cliffFeeNumerator, numberOfPeriod, periodFrequency, reductionFactor, feeTimeSchedulerMode, currentPoint, activationPoint)` | Compute current time-scheduler base fee. |
+| `getFeeTimeMinBaseFeeNumerator(cliffFeeNumerator, numberOfPeriod, reductionFactor, feeTimeSchedulerMode)` | Compute time-scheduler minimum base fee. |
+| `getFeeMarketCapBaseFeeNumeratorByPeriod(cliffFeeNumerator, numberOfPeriod, period, reductionFactor, feeMarketCapSchedulerMode)` | Compute market-cap scheduler base fee by period. |
+| `getFeeMarketCapBaseFeeNumerator(cliffFeeNumerator, numberOfPeriod, sqrtPriceStepBps, schedulerExpirationDuration, reductionFactor, feeMarketCapSchedulerMode, currentPoint, activationPoint, initSqrtPrice, currentSqrtPrice)` | Compute current market-cap scheduler base fee. |
+| `getFeeMarketCapMinBaseFeeNumerator(cliffFeeNumerator, numberOfPeriod, reductionFactor, feeMarketCapSchedulerMode)` | Compute market-cap scheduler minimum base fee. |
+| `isZeroRateLimiter(referenceAmount, maxLimiterDuration, maxFeeBps, feeIncrementBps)` | Check whether a rate limiter is effectively disabled. |
+| `isNonZeroRateLimiter(referenceAmount, maxLimiterDuration, maxFeeBps, feeIncrementBps)` | Check whether a rate limiter has non-zero params. |
+| `isRateLimiterApplied(referenceAmount, maxLimiterDuration, maxFeeBps, feeIncrementBps, currentPoint, activationPoint, tradeDirection)` | Check whether a rate limiter applies to the current trade. |
+| `getMaxIndex(maxFeeBps, cliffFeeNumerator, feeIncrementBps)` | Compute the maximum rate-limiter index. |
+| `getFeeNumeratorFromIncludedFeeAmount(inputAmount, referenceAmount, cliffFeeNumerator, maxFeeBps, feeIncrementBps)` | Compute rate-limiter fee numerator from included amount. |
+| `getExcludedFeeAmountFromIncludedFeeAmount(includedFeeAmount, referenceAmount, cliffFeeNumerator, maxFeeBps, feeIncrementBps)` | Convert included amount to excluded amount for rate-limiter math. |
+| `getCheckedAmounts(referenceAmount, cliffFeeNumerator, maxFeeBps, feeIncrementBps)` | Compute checked included/excluded amounts and overflow status. |
+| `getFeeNumeratorFromExcludedFeeAmount(excludedFeeAmount, referenceAmount, cliffFeeNumerator, maxFeeBps, feeIncrementBps)` | Compute rate-limiter fee numerator from excluded amount. |
+| `getRateLimiterMinBaseFeeNumerator(cliffFeeNumerator)` | Compute rate-limiter minimum base fee. |
+| `getRateLimiterMaxBaseFeeNumerator(includedFeeAmount, referenceAmount, cliffFeeNumerator, maxFeeBps, feeIncrementBps)` | Compute rate-limiter maximum base fee for an amount. |
+| `isDynamicFeeEnabled(dynamicFee)` | Check whether dynamic fees are enabled. |
+| `getDynamicFeeNumerator(volatilityAccumulator, binStep, variableFeeControl)` | Compute dynamic-fee numerator from volatility data. |
+| `toNumerator(bps, feeDenominator)` | Convert basis points to a numerator for a given denominator. |
+| `getFeeInPeriod(cliffFeeNumerator, reductionFactor, passedPeriod)` | Compute scheduled fee for a passed period. |
+| `getFeeMode(collectFeeMode, tradeDirection, hasReferral)` | Resolve protocol, LP-claiming, compounding, and referral fee mode. |
+| `getTotalFeeNumerator(poolFees, baseFeeNumerator, maxFeeNumerator)` | Compute total trading fee numerator capped by pool version. |
+| `getTotalTradingFeeFromIncludedFeeAmount(poolFees, currentPoint, activationPoint, includedFeeAmount, tradeDirection, maxFeeNumerator, initSqrtPrice, currentSqrtPrice)` | Compute trading fee from included amount. |
+| `getTotalTradingFeeFromExcludedFeeAmount(poolFees, currentPoint, activationPoint, excludedFeeAmount, tradeDirection, maxFeeNumerator, initSqrtPrice, currentSqrtPrice)` | Compute trading fee from excluded amount. |
+| `splitFees(poolFees, feeAmount, hasReferral)` | Split a fee amount into protocol, claiming, compounding, and referral shares. |
+| `getFeeOnAmount(poolFees, amount, tradeFeeNumerator, hasReferral)` | Compute total fee and split shares for an amount. |
+| `getExcludedFeeAmount(tradeFeeNumerator, includedFeeAmount)` | Convert included amount to excluded amount and trading fee. |
+| `getIncludedFeeAmount(tradeFeeNumerator, excludedFeeAmount)` | Convert excluded amount to included amount and fee amount. |
+| `getMaxFeeNumerator(feeVersion)` | Return max fee numerator for a pool fee version. |
+| `getMaxFeeBps(feeVersion)` | Return max fee bps for a pool fee version. |
+| `calculateInitSqrtPrice(tokenAAmount, tokenBAmount, minSqrtPrice, maxSqrtPrice)` | Calculate initial square-root price from token amounts and bounds. |
+
+### Swap Quote Math
+
+| Function | Use |
+| --- | --- |
+| `applySwapResult(poolState, result, feeMode, tradeDirection)` | Apply an in-memory swap result to pool state and return the post-swap square-root price. |
+| `getSwapResultFromExactInput(poolState, amountIn, feeMode, tradeDirection, currentPoint)` | Compute swap result for exact input. |
+| `getSwapResultFromPartialInput(poolState, amountIn, feeMode, tradeDirection, currentPoint)` | Compute swap result for partial input. |
+| `getSwapResultFromExactOutput(poolState, amountOut, feeMode, tradeDirection, currentPoint)` | Compute swap result for exact output. |
+| `swapQuoteExactInput(pool, currentPoint, amountIn, slippage, aToB, hasReferral, tokenADecimal, tokenBDecimal, inputTokenInfo?, outputTokenInfo?)` | Build an exact-input quote result. |
+| `swapQuoteExactOutput(pool, currentPoint, amountOut, slippage, aToB, hasReferral, tokenADecimal, tokenBDecimal, inputTokenInfo?, outputTokenInfo?)` | Build an exact-output quote result. |
+| `swapQuotePartialInput(pool, currentPoint, amountIn, slippage, aToB, hasReferral, tokenADecimal, tokenBDecimal, inputTokenInfo?, outputTokenInfo?)` | Build a partial-input quote result. |
+
+### Math Utilities
+
+| Function | Use |
+| --- | --- |
+| `mulDiv(x, y, denominator, rounding)` | Multiply, divide, and apply explicit rounding. |
+| `q64ToDecimal(num, decimalPlaces?)` | Convert Q64 number to `Decimal`. |
+| `decimalToQ64(num)` | Convert `Decimal` to Q64 `BN`. |
+| `sqrt(value)` | Integer square-root helper. |
+| `pow(base, exp)` | Integer exponentiation helper. |
+
+## Core Types
+
+The SDK exports many parameter and result aliases so app code can keep transaction-building code typed:
+
+| Type | Description |
+| --- | --- |
+| `CreatePoolParams`, `InitializeCustomizeablePoolParams`, `InitializeCustomizeablePoolWithDynamicConfigParams` | Pool creation inputs. |
+| `PreparePoolCreationParams`, `PreparedPoolCreation`, `PreparePoolCreationSingleSide` | Pool creation pre-calculation inputs and result. |
+| `CreatePositionParams`, `AddLiquidityParams`, `CreatePositionAndAddLiquidity` | Position creation and add-liquidity inputs. |
+| `LiquidityDeltaParams`, `GetDepositQuoteParams`, `GetWithdrawQuoteParams` | Liquidity and deposit/withdraw quote inputs. |
+| `RemoveLiquidityParams`, `RemoveAllLiquidityParams`, `RemoveAllLiquidityAndClosePositionParams`, `MergePositionParams` | Remove, close, and merge inputs. |
+| `GetQuoteParams`, `GetQuote2Params`, `SwapParams`, `Swap2Params`, `SwapAmount` | Swap quote and swap transaction inputs. |
+| `LockPositionParams`, `PermanentLockParams`, `RefreshVestingParams` | Lock and vesting inputs. |
+| `InitializeRewardParams`, `InitializeAndFundReward`, `FundRewardParams`, `ClaimRewardParams` | Reward setup, funding, and claim inputs. |
+| `UpdateRewardDurationParams`, `UpdateRewardFunderParams`, `WithdrawIneligibleRewardParams` | Reward admin inputs. |
+| `ClaimPositionFeeParams`, `ClaimPositionFeeParams2` | Position-fee claim inputs. |
+| `SplitPositionParams`, `SplitPosition2Params` | Position split inputs. |
+| `PoolFeesParams`, `DynamicFeeParams`, `FeeMode`, `FeeOnAmountResult`, `SplitFees` | Fee construction and fee-calculation types. |
+| `InitialPoolInformation`, `SwapAmountFromInput`, `SwapAmountFromOutput` | Liquidity and swap math result types. |
+| `TransferHookState`, `TransferFeeIncludedAmount`, `TransferFeeExcludedAmount` | Token-2022 helper result types. |
+
+## Common Workflows
+
+### Fetch Pool And Build A Quote
+
+```typescript
+import BN from "bn.js"
+import { CpAmm, SwapMode, getTokenProgram } from "@meteora-ag/cp-amm-sdk"
+
+const cpAmm = new CpAmm(connection)
+const poolState = await cpAmm.fetchPoolState(pool)
+
+const quote = cpAmm.getQuote2({
+  poolState,
+  inputTokenMint: poolState.tokenAMint,
+  amountIn: new BN(1_000_000),
+  slippage: 0.5,
+  swapMode: SwapMode.ExactIn,
+  currentPoint,
+  tokenADecimal: 6,
+  tokenBDecimal: 6,
+  hasReferral: false,
+})
+```
+
+`getQuote2` is the preferred quote path for new integrations because it supports exact-in, partial-fill, and exact-out behavior.
+
+### Build A Swap Transaction
+
+```typescript
+const tx = await cpAmm.swap2({
+  payer: user,
+  pool,
+  inputTokenMint: poolState.tokenAMint,
+  outputTokenMint: poolState.tokenBMint,
+  tokenAMint: poolState.tokenAMint,
+  tokenBMint: poolState.tokenBMint,
+  tokenAVault: poolState.tokenAVault,
+  tokenBVault: poolState.tokenBVault,
+  tokenAProgram: getTokenProgram(poolState.tokenAFlag),
+  tokenBProgram: getTokenProgram(poolState.tokenBFlag),
+  referralTokenAccount: null,
+  poolState,
+  swapMode: SwapMode.ExactIn,
+  amountIn: new BN(1_000_000),
+  minimumAmountOut: quote.minimumAmountOut!,
+})
+```
+
+<Note>
+  Rate-limiter pools require the instructions sysvar account on low-level swap builders. The TypeScript SDK detects rate-limiter pools in `swap` and `swap2` when it has `poolState`; pass `poolState` to avoid an extra RPC read and to keep account planning explicit.
+</Note>
+
+### Decode Pool Fees
+
+```typescript
+const poolFees = await cpAmm.fetchPoolFees(pool)
+
+if (poolFees) {
+  // `poolFees` is one of the pod-aligned scheduler layouts.
+}
+```
+
+Use the pod-aligned decoders for pool-state bytes and Borsh decoders for event bytes.
+
+## Error Classes
+
+The SDK exports typed errors that validation, quote, and math helpers may throw:
+
+| Error | Typical trigger |
+| --- | --- |
+| `DepositTokenNotAcceptedError` | Deposit token does not match the position or pool side expected by the quote. |
+| `InvalidFeeError` | Fee params are malformed or out of range. |
+| `ExceedMaxFeeBpsError` | Fee bps exceeds the pool-version maximum. |
+| `InvalidActivationTypeError` | Activation type is not a supported enum value. |
+| `InvalidPriceRangeError` | Square-root price bounds are invalid for the collect-fee mode. |
+| `InvalidCollectFeeModeError` | Collect-fee mode is not supported by the requested flow. |
+| `InvalidCompoundingFeeBpsError` | Compounding fee bps is invalid. |
+| `InvalidFeeTimeSchedulerError` | Time-scheduler fee params are invalid. |
+| `InvalidFeeMarketCapSchedulerError` | Market-cap scheduler fee params are invalid. |
+| `InvalidFeeRateLimiterError` | Rate-limiter params are invalid. |
+| `InvalidDynamicFeeParametersError` | Dynamic-fee params are invalid. |
+| `InvalidMinimumLiquidityError` | Initial liquidity is below the minimum, especially in compounding pool creation. |
+| `AmountIsZeroError` | Required amount or liquidity delta is zero. |
+| `InvalidBaseFeeModeError` | Base-fee mode is unsupported for the selected helper. |
+| `InvalidPoolVersionError` | Pool version is unsupported by a helper. |
+| `MathOverflowError` | Integer math overflows or cannot be represented. |
+| `InsufficientLiquidityError` | Swap or withdraw math requests more liquidity than available. |
+| `SwapDisabledError` | Pool is disabled or not activated for swapping. |
+| `InvalidInputError` | General invalid input error. |
+| `PriceRangeViolationError` | Quote or liquidity math would move outside allowed price bounds. |
+| `SameTokenMintsError` | Pool creation or validation received identical mints. |
+| `InvalidParametersError` | General invalid parameter error. |
+| `InvalidSplitPositionParametersError` | Split position params are invalid. |
+| `InvalidVestingInfoError` | Vesting data is invalid for lock or unlock flow. |
+| `InvalidRewardIndexError` | Reward index is outside the supported range. |
+| `InvalidRewardDurationError` | Reward duration is below or above allowed bounds. |
+
+## Notes
+
+| Topic | What to remember |
+| --- | --- |
+| Token order | Pool PDAs sort mints, but transaction params still need the pool's `tokenAMint` and `tokenBMint` fields. |
+| Compounding mode | `CollectFeeMode.Compounding` uses full-range constant-product liquidity and splits swap fees into `claimingFee` and `compoundingFee`. |
+| Rate limiter | Low-level swap builders must include the instructions sysvar remaining account when the rate limiter is active. The SDK handles this when it can identify the pool mode. |
+| Layout version | V1 pools track `tokenAAmount` and `tokenBAmount`. Use current SDK quote paths for compounding pools. |
+| Swap events | Prefer `EvtSwap2` for swap indexing. Older swap events were deprecated and removed from newer program versions. |
+| Position NFTs | Position ownership is verified through the Token-2022 position NFT account. Pass the derived `positionNftAccount` for liquidity, fee, lock, reward, split, and close flows. |
+| Wrapped SOL | Transaction builders add wrap and unwrap instructions for native SOL paths, but your signing flow still needs enough SOL for rent, transaction fees, and wrapped input amounts. |
+| Token-2022 fees | Pass mint and epoch data into quote helpers when a Token-2022 transfer-fee mint is involved so quoted amounts include transfer fees. |

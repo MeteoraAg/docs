@@ -1,0 +1,132 @@
+---
+title: "DLMM Program Events"
+sidebarTitle: "Events"
+description: "Understand DLMM lb_clmm events emitted by pool, position, liquidity, swap, fee, reward, rebalance, and limit order flows."
+llmsDescription: "Explains the DLMM program event reference for the Meteora lb_clmm program. Covers Anchor event-CPI delivery, event authority PDA requirements, pool creation events, position lifecycle events, liquidity and composition fee events, Swap and Swap2Evt payloads, fee and reward events, operator events, oracle and bin movement events, rebalance events, limit order events, compatibility event pairs, and indexing considerations for analytics and charting."
+---
+
+The `lb_clmm` program emits Anchor events through event CPI. Use this page when building indexers, analytics pipelines, charting systems, or low-level clients that need to map transactions back to DLMM pool activity.
+
+## Event CPI
+
+| Item | Value |
+| --- | --- |
+| Program ID | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo` |
+| Event authority PDA seed | `__event_authority` |
+| Event source | Anchor event CPI inner instructions |
+| Client account planning | Event-emitting instructions include `event_authority` and the program account. SDK builders and generated clients derive these accounts. |
+
+Low-level builders should keep the generated `event_authority` and program accounts in the exact account order expected by the IDL. If either account is missing or moved, Anchor account deserialization can fail before the handler reaches the intended operation.
+
+## Pool Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `LbPairCreate` | `initialize_lb_pair`, `initialize_lb_pair2`, `initialize_permission_lb_pair`, `initialize_customizable_permissionless_lb_pair`, `initialize_customizable_permissionless_lb_pair2` | LB pair address, bin step, token X mint, and token Y mint. |
+
+`LbPairCreate` is the primary pool-discovery event. It identifies the pool and token pair, while mutable pool state such as active bin, fees, reserves, rewards, oracle, and status should be read from the `LbPair` account.
+
+## Position Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `PositionCreate` | `initialize_position`, `initialize_position2`, `initialize_position_pda`, `initialize_position_by_operator` | LB pair, position account, and owner. |
+| `PositionClose` | `close_position`, `close_position2`, `close_position_if_empty` | Position account and owner. |
+| `IncreasePositionLength` | `increase_position_length`, `increase_position_length2` | LB pair, position, owner, length added, and resize side. |
+| `DecreasePositionLength` | `decrease_position_length` | LB pair, position, owner, length removed, and resize side. |
+| `UpdatePositionOperator` | `update_position_operator` | Position, old operator, and new operator. |
+| `SetPositionPermissionlessOperationBitsEvt` | `set_permissionless_operation_bits` | Position, owner, previous permission bits, and new permission bits. |
+
+`IncreasePositionLength.side` and `DecreasePositionLength.side` are encoded resize-side values from the program IDL.
+
+## Liquidity Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `AddLiquidity` | `add_liquidity*`, `add_liquidity*2` | LB pair, sender, position, deposited token X/Y amounts, and active bin during deposit. |
+| `RemoveLiquidity` | `remove_liquidity*`, `remove_liquidity*2`, `remove_all_liquidity` | LB pair, sender, position, withdrawn token X/Y amounts, and active bin during withdrawal. |
+| `CompositionFee` | Add-liquidity and rebalance flows when a composition fee is charged | Sender, bin id, token X/Y composition fee amounts, and protocol fee portions. |
+| `Rebalancing` | `rebalance_liquidity` | LB pair, position, owner, active bin, withdrawn amounts, added amounts, claimed fees, old and new position ranges, and claimed rewards. |
+
+`CompositionFee` can be emitted along with an add-liquidity or rebalance event. Indexers that calculate LP cost basis should process both event types for the same transaction.
+
+## Swap Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `Swap` | `swap`, `swap2` | LB pair, user, start and end bin ids, input amount, output amount, direction, total fee, protocol fee, fee bps, and host fee. |
+| `Swap2Evt` | `swap`, `swap2` | LB pair, user, start and end bin ids, direction, fee bps, input amount, amount left, output amount, market-maker fee, protocol fee, limit-order fee, host fee, and fee-side flags. |
+
+`Swap2Evt` is the richer swap event for charting and analytics. New indexers should prefer it because it separates market-maker, protocol, limit-order, and host fee components.
+
+| Field | Meaning |
+| --- | --- |
+| `swap_for_y` | `true` means token X is swapped for token Y. `false` means token Y is swapped for token X. |
+| `start_bin_id` | Active bin before swap execution. |
+| `end_bin_id` | Active bin after swap execution. |
+| `fee_bps` | Fee rate used for the swap path. |
+| `amount_in` | Total amount paid by the user. |
+| `amount_left` | Unused input amount after execution. |
+| `amount_out` | Total amount transferred to the user. |
+| `mm_fee` | Market-maker fee component. |
+| `protocol_fee` | Protocol fee component. |
+| `limit_order_fee` | Limit-order fee component. |
+| `host_fee` | Host or referral fee component. |
+| `fees_on_input` | Whether fees were collected on the input side. |
+| `fees_on_token_x` | Whether the charged fee token is token X. |
+
+## Fee And Reward Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `ClaimFee` | `claim_fee`, `claim_fee2` | LB pair, position, owner, claimed token X fee, and claimed token Y fee. |
+| `ClaimFee2` | `claim_fee`, `claim_fee2` | `ClaimFee` payload plus active bin id. |
+| `InitializeReward` | `initialize_reward` | LB pair, reward mint, funder, reward index, and reward duration. |
+| `FundReward` | `fund_reward` | LB pair, funder, reward index, and funded amount. |
+| `ClaimReward` | `claim_reward`, `claim_reward2` | LB pair, position, owner, reward index, and claimed reward amount. |
+| `ClaimReward2` | `claim_reward`, `claim_reward2` | `ClaimReward` payload plus active bin id. |
+| `UpdateRewardDuration` | `update_reward_duration` | LB pair, reward index, old duration, and new duration. |
+| `UpdateRewardFunder` | `update_reward_funder` | LB pair, reward index, old funder, and new funder. |
+| `WithdrawIneligibleReward` | `withdraw_ineligible_reward` | LB pair, reward mint, and withdrawn amount. |
+
+Reward indexes are limited to the two DLMM reward slots, `0` and `1`.
+
+New indexers should prefer `ClaimFee2` and `ClaimReward2` when active-bin context is useful. The program still emits the original `ClaimFee` and `ClaimReward` compatibility events.
+
+## Operator And Oracle Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `FeeParameterUpdate` | `update_base_fee` | LB pair, protocol share, base factor, and base fee power factor. |
+| `DynamicFeeParameterUpdate` | `update_dynamic_fee` | LB pair, filter period, decay period, reduction factor, variable fee control, and max volatility accumulator. |
+| `IncreaseObservation` | `increase_oracle_length` | Oracle account and new observation length. |
+| `GoToABin` | `go_to_a_bin` | LB pair, previous bin id, and target bin id. |
+
+Some operator and admin instructions update accounts without emitting a dedicated event. For those flows, use account-state indexing in addition to event indexing.
+
+## Limit Order Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `PlaceLimitOrderEvt` | `place_limit_order` | LB pair, sender, owner, limit order account, active bin id, and place-order parameters. |
+| `CancelLimitOrderEvt` | `cancel_limit_order` | LB pair, sender, limit order account, withdrawn token X/Y amounts, active bin id, and removed bin ids. |
+| `CloseLimitOrderEvt` | `close_limit_order_if_empty` | LB pair, owner, and limit order account. |
+
+`PlaceLimitOrderEvt.params` includes the side, optional relative-bin settings, and bin amount list supplied to the instruction.
+
+## Declared Event Note
+
+`UpdatePositionLockReleasePoint` is defined in `src/events.rs`, but no current `lb_clmm` handler emits it. Treat it as a declared compatibility type, not an emitted event source, unless a future program version adds an `emit_cpi!` call for it.
+
+## Indexing Notes
+
+| Use case | Event to index |
+| --- | --- |
+| Pool discovery | `LbPairCreate` |
+| Position lifecycle | `PositionCreate`, `PositionClose`, `IncreasePositionLength`, `DecreasePositionLength`, `UpdatePositionOperator`, `SetPositionPermissionlessOperationBitsEvt` |
+| LP accounting | `AddLiquidity`, `RemoveLiquidity`, `CompositionFee`, `Rebalancing` |
+| Swap history and candles | `Swap2Evt` |
+| Fees | `ClaimFee2`, `FeeParameterUpdate`, `DynamicFeeParameterUpdate` |
+| Rewards | `InitializeReward`, `FundReward`, `ClaimReward2`, `UpdateRewardDuration`, `UpdateRewardFunder`, `WithdrawIneligibleReward` |
+| Oracle and bin movement | `IncreaseObservation`, `GoToABin` |
+| Limit orders | `PlaceLimitOrderEvt`, `CancelLimitOrderEvt`, `CloseLimitOrderEvt` |

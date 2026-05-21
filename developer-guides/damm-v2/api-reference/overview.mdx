@@ -1,55 +1,68 @@
 ---
-title: "DAMM v2 API Reference"
+title: "DAMM v2 Data API Overview"
 sidebarTitle: "Overview"
-description: "Use the DAMM v2 indexed data API for pool discovery, pool groups, OHLCV candles, historical volume, and protocol stats."
-llmsDescription: "Overview for the Meteora DAMM v2 indexed data API. Covers production and development base URLs, Swagger UI links, OpenAPI generation in Mintlify, rate limit note, available pool and stats endpoint groups, when to use API data versus on-chain pool state, and how the single OpenAPI file is configured with multiple servers for production and development endpoints."
+description: "Learn how the DAMM v2 Data API exposes indexed pools, pool groups, OHLCV candles, historical volume, protocol stats, and query filters."
+llmsDescription: "Explains the DAMM v2 Data API as the indexed data layer for Meteora DAMM v2 integrations. Covers production and development hosts, the 10 RPS rate limit, Swagger and OpenAPI references, pools, pool groups, pool metadata, OHLCV candles, historical volume, protocol stats, query syntax, generated endpoint routes, and when to use indexed API data instead of direct cp-amm account reads."
 ---
 
-The DAMM v2 API is an indexed data API for discovery and analytics. Use it for pool lists, pool groups, pool metadata, OHLCV candles, historical volume, and protocol-level stats.
-
 <Tip>
-  The DAMM v2 API is documented with OpenAPI below. Public guidance notes a rate limit of `10` requests per second.
+  **All DAMM v2 APIs have a rate limit of 10 requests per second (10 RPS).** Explore the production spec at the [Prod Swagger UI](https://damm-v2.datapi.meteora.ag/swagger-ui/) or the development spec at the [Dev Swagger UI](https://damm-v2-api.dev.metdev.io/swagger-ui/).
 </Tip>
 
 ## Base URLs
 
 | Environment | Base URL | Swagger UI |
 | --- | --- | --- |
-| Production | `https://damm-v2.datapi.meteora.ag` | [Open production Swagger](https://damm-v2.datapi.meteora.ag/swagger-ui/) |
-| Development | `https://damm-v2-api.dev.metdev.io` | [Open dev Swagger](https://damm-v2-api.dev.metdev.io/swagger-ui/) |
+| Production | `https://damm-v2.datapi.meteora.ag` | [Open](https://damm-v2.datapi.meteora.ag/swagger-ui/) |
+| Development | `https://damm-v2-api.dev.metdev.io` | [Open](https://damm-v2-api.dev.metdev.io/swagger-ui/) |
 
-This docs site uses one OpenAPI file with multiple servers because production and development expose the same API surface.
+The checked-in OpenAPI file uses the same endpoint schema for both environments. Use the server dropdown in the API playground to switch between production and development.
 
-## Endpoint Groups
+## Pools
 
-<CardGroup cols={2}>
-  <Card title="Pools" icon="water" href="/api-reference/damm-v2/pools/pools">
-    List pools with pagination and filters.
+<CardGroup>
+  <Card title="Pools" icon="file-code" iconType="solid" href="/api-reference/damm-v2/pools/pools">
+    Returns a paginated list of pools using `GET` `/pools`
   </Card>
-  <Card title="Pool" icon="circle-info" href="/api-reference/damm-v2/pools/pool">
-    Fetch metadata and indexed state for one pool.
+  <Card title="Groups" icon="file-code" iconType="solid" href="/api-reference/damm-v2/pools/groups">
+    Returns a paginated list of pool groups using `GET` `/pools/groups`
   </Card>
-  <Card title="Groups" icon="layer-group" href="/api-reference/damm-v2/pools/groups">
-    List grouped pools.
+  <Card title="Group" icon="file-code" iconType="solid" href="/api-reference/damm-v2/pools/group">
+    Returns pools that belong to a specific pool group using `GET` `/pools/groups/{lexical_order_mints}`
   </Card>
-  <Card title="OHLCV" icon="chart-candlestick" href="/api-reference/damm-v2/pools/ohlcv">
-    Fetch candle data for charts.
+  <Card title="Pool" icon="file-code" iconType="solid" href="/api-reference/damm-v2/pools/pool">
+    Returns metadata and current indexed state for a single pool using `GET` `/pools/{address}`
   </Card>
-  <Card title="Historical Volume" icon="chart-column" href="/api-reference/damm-v2/pools/historical-volume">
-    Fetch pool volume history.
+  <Card title="OHLCV" icon="file-code" iconType="solid" href="/api-reference/damm-v2/pools/ohlcv">
+    Returns OHLCV candles for a single pool over a time range using `GET` `/pools/{address}/ohlcv`
   </Card>
-  <Card title="Protocol Overview" icon="chart-pie" href="/api-reference/damm-v2/stats/protocol-overview">
-    Fetch protocol-level indexed stats.
+  <Card title="Historical Volume" icon="file-code" iconType="solid" href="/api-reference/damm-v2/pools/historical-volume">
+    Returns historical volume for a pool aggregated into time buckets using `GET` `/pools/{address}/volume/history`
   </Card>
 </CardGroup>
 
-## API Or On-Chain State
+## Stats
 
-| Need | Use |
+<CardGroup>
+  <Card title="Protocol Overview" icon="file-code" iconType="solid" href="/api-reference/damm-v2/stats/protocol-overview">
+    Returns aggregated protocol-level metrics across all pools using `GET` `/stats/protocol_metrics`
+  </Card>
+</CardGroup>
+
+## Query Syntax
+
+List endpoints use common query parameters:
+
+| Parameter | Use |
 | --- | --- |
-| Pool discovery, charts, search, dashboards | DAMM v2 API |
-| Swap quotes, slippage limits, transaction construction | SDK helpers with current on-chain pool state |
-| Indexer correctness checks | API plus direct account reads from `cp-amm` |
-| Generated endpoint types | The OpenAPI section below |
+| `page` | 1-based page number. |
+| `page_size` | Page size. Pool lists support up to `1000`. |
+| `query` | Search by pool name, tokens, or address. |
+| `sort_by` | Format: `<field>:<direction>` or `<metric>_<window>:<direction>`. |
+| `filter_by` | Format: `<field><op><value> [&& <field><op><value> ...]`. |
 
-For transaction-critical flows, read the pool account and quote through the SDK immediately before building the transaction.
+Supported time windows include `5m`, `30m`, `1h`, `2h`, `4h`, `12h`, and `24h`.
+
+Common sortable fields include `tvl`, `fee_pct`, `bin_step`, `pool_created_at`, `farm_apy`, `volume_*`, `fee_*`, `fee_tvl_ratio_*`, and `apr_*`.
+
+Common filter fields include `tvl`, `is_blacklisted`, `pool_address`, `name`, `token_x`, `token_y`, `volume_*`, `fee_*`, `fee_tvl_ratio_*`, and `apr_*`.
