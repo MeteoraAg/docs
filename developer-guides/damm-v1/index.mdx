@@ -1,99 +1,102 @@
 ---
-title: Overview
+title: "DAMM v1 Developer Guide"
+sidebarTitle: "Overview"
+description: "Learn how to build DAMM v1 integrations with the dynamic AMM program, TypeScript SDK, Rust quote helpers, CPI patterns, Data API, and release notes."
+llmsDescription: "Explains the DAMM v1 Developer Guide as the integration entry point for Meteora's dynamic AMM program. Covers program accounts, instructions, events, errors, @meteora-ag/dynamic-amm-sdk, Rust quote and account helper crates, CPI notes, DAMM v1 Data API reference, pool fee configs, changelog, program IDs, commands, and public repository paths for builders."
 ---
 
-Before getting started building on DAMM v1, you should read the following resource to get a better understanding of how Meteora's DAMM v1 works:
+DAMM v1 is Meteora's legacy dynamic AMM on Solana. It supports constant-product pools, stable pools, LST/depeg pools, Dynamic Vault yield routing, launch-pool activation, LP locks, and farm integrations. To learn the product model before integrating, read the DAMM v1 product docs.
 
 <CardGroup cols={2}>
-  <Card title="What's DAMM v1?" icon="question" iconType="solid" href="/legacy-products/damm-v1/what-is-damm-v1">
-    DAMM v1 is Meteora's first AMM product that allows you to provide liquidity to a pool and earn yield from other landing protocols.
+  <Card title="Learn more about DAMM v1" icon="book-open" iconType="solid" href="/legacy-products/damm-v1/what-is-damm-v1">
+    Overview of DAMM v1 pool types, vault yield, locks, farms, fees, and legacy integration limits.
   </Card>
-  <Card title="Pools with Farms" icon="farm" iconType="solid" href="/legacy-products/damm-v1/pools-with-farms">
-    DAMM v1 pools with farms allows you to seed rewards to the pool such that liquidity providers can stake their LP tokens to earn the seeded rewards.
-  </Card>
-</CardGroup>
-<CardGroup cols={1}>
-  <Card title="DAMM v1 Configs" icon="gear" iconType="solid" href="/developer-guides/damm-v1/pool-fee-configs">
-    Each DAMM v1 pool is a PDA of token mints + config. DAMM v1 configs are available on both mainnet and devnet.
+  <Card title="DAMM v1 Formulas" icon="calculator" iconType="solid" href="/legacy-products/damm-v1/damm-v1-formulas">
+    Formulas for pool reserves, virtual price, LP share, swaps, deposits, withdrawals, fees, and vault accounting.
   </Card>
 </CardGroup>
 
----
-
-# DAMM v1 Program
-
-At Meteora, we’ve developed a `Node.js <> Typescript SDK` and `Rust CPI Examples` to make deploying and managing your DAMM v1 liquidity pool easier. The following sections includes information on installing and using the SDKs and Rust CPI Examples. It also covers where to find the latest code, and how to contribute to these repositories.
-
-## Program Details
-
-### DAMM v1
-
-<CardGroup cols={1}>
-  <Card title="DAMM v1 IDL" icon="code" iconType="solid" href="https://github.com/MeteoraAg/cpi-examples/blob/3326f57fb616c5a310920aa4d2c22073eb3dc6fb/idls/dynamic_amm.json">
-    Meteora DAMM v1 Program IDL
-  </Card>
-</CardGroup>
-
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Network</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Program ID</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Mainnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Devnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-### Farming
-
-<CardGroup cols={1}>
-  <Card title="Farming IDL" icon="code" iconType="solid" href="https://github.com/MeteoraAg/reward-pool/blob/main/target/types/farming.ts">
-    Meteora Farming Program IDL
-  </Card>
-</CardGroup>
-
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Network</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Program ID</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Mainnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">FarmuwXPWXvefWUeqFAa5w6rifLkq5X6E8bimYvrhCB1</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Devnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">FarmuwXPWXvefWUeqFAa5w6rifLkq5X6E8bimYvrhCB1</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-## Official SDKs
+## Integration
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="/developer-guides/damm-v1/typescript-sdk/getting-started">
-    Official Meteora DAMM v1 Typescript SDK
+  <Card title="Program Accounts" icon="table-cells" iconType="solid" href="/developer-guides/damm-v1/program/accounts">
+    Account model for pools, configs, locks, operators, vault relationships, PDA seeds, constants, and enums.
   </Card>
-  <Card title="Farming SDK" icon="node-js" iconType="solid" href="/developer-guides/damm-v1/farming-sdk/getting-started">
-    Official Meteora DAMM v1 Farming Typescript SDK
+  <Card title="Program Instructions" icon="list" iconType="solid" href="/developer-guides/damm-v1/program/instructions">
+    Instruction families for pool creation, swaps, liquidity, locks, configs, fees, activation, and operator flows.
   </Card>
-  <Card title="Rust CPI Examples" icon="rust" iconType="solid" href="/developer-guides/damm-v1/cpi/examples">
-    Official Meteora DAMM v1 Rust CPI Examples
+  <Card title="Program Events" icon="list" iconType="solid" href="/developer-guides/damm-v1/program/events">
+    Anchor events for pool creation, liquidity, swaps, configs, locks, fees, activation, and admin flows.
+  </Card>
+  <Card title="Program Errors" icon="triangle-exclamation" iconType="solid" href="/developer-guides/damm-v1/program/errors">
+    Anchor custom error codes, messages, and common integration causes for DAMM v1 transactions.
+  </Card>
+  <Card title="TypeScript SDK" icon="code" iconType="solid" href="/developer-guides/damm-v1/typescript-sdk/getting-started">
+    Official SDK for pool reads, quotes, swaps, deposits, withdrawals, pool creation, configs, and LP locks.
+  </Card>
+  <Card title="Rust Integration" icon="terminal" iconType="solid" href="/developer-guides/damm-v1/rust-integration/library">
+    Rust quote helpers, PDA helpers, account builders, CLI examples, and CPI planning notes.
+  </Card>
+</CardGroup>
+<CardGroup cols={1}>
+  <Card title="DAMM v1 APIs" icon="database" iconType="solid" href="/developer-guides/damm-v1/api-reference/overview">
+    Indexed read-only pool discovery, pool metrics, pool configs, fee configs, alpha vaults, and farm-backed pool data.
+  </Card>
+</CardGroup>
+
+## Program IDs
+
+The `amm` program ID is the same on mainnet and devnet:
+
+| Network | Program ID |
+| --- | --- |
+| Mainnet Beta | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` |
+| Devnet | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` |
+
+DAMM v1 pools route token inventory through Dynamic Vault:
+
+| Program | ID |
+| --- | --- |
+| Dynamic Vault | `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` |
+| Farming | `FarmuwXPWXvefWUeqFAa5w6rifLkq5X6E8bimYvrhCB1` |
+| Metaplex metadata | `metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s` |
+
+<CardGroup cols={2}>
+  <Card title="DAMM v1 Program" icon="code" href="https://github.com/MeteoraAg/meteora-dynamic-amm/tree/main/programs/amm">
+    Anchor program source for the deployed dynamic AMM.
+  </Card>
+  <Card title="DAMM v1 SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/damm-v1-sdk">
+    Public TypeScript SDK, Rust quote crate, Rust common helpers, CLI, and examples.
+  </Card>
+  <Card title="DAMM v1 IDL" icon="file-code" href="https://github.com/MeteoraAg/damm-v1-sdk/blob/main/ts-client/src/amm/idl.ts">
+    Bundled Anchor IDL used by the TypeScript SDK.
+  </Card>
+  <Card title="Pool Fee Configs" icon="gear" iconType="solid" href="/developer-guides/damm-v1/pool-fee-configs">
+    Published config keys used by config-based DAMM v1 launch pools.
+  </Card>
+</CardGroup>
+
+<Note>
+  DAMM v1 is a legacy product. For new AMM launches, compare your requirements with DAMM v2 and DBC before choosing DAMM v1.
+</Note>
+
+## Commands
+
+| Task | Command |
+| --- | --- |
+| Build TypeScript SDK | `cd damm-v1-sdk/ts-client && pnpm install && pnpm run build` |
+| Run TypeScript SDK tests | `cd damm-v1-sdk/ts-client && pnpm test` |
+| Run Rust quote tests | `cd damm-v1-sdk && cargo t -p dynamic-amm-quote test_quote` |
+| Build Rust CLI | `cd damm-v1-sdk && cargo build -p cli` |
+| Build AMM program | `cd meteora-dynamic-amm && anchor build -p amm` |
+| Run AMM program tests | `cd meteora-dynamic-amm && cargo test -p amm` |
+
+Some SDK and program tests depend on local validator fixtures, deployed vault programs, or account snapshots. For production integrations, simulate transactions and test on devnet before submitting mainnet transactions.
+
+## Stay Updated
+
+<CardGroup cols={1}>
+  <Card title="DAMM v1 Changelog" icon="newspaper" iconType="solid" href="/developer-guides/damm-v1/changelog">
+    Program, SDK, quote, API, lock, and compatibility changes for integration planning.
   </Card>
 </CardGroup>

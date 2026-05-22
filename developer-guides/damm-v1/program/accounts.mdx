@@ -1,0 +1,156 @@
+---
+title: "DAMM v1 Program Accounts"
+sidebarTitle: "Accounts"
+description: "Understand DAMM v1 dynamic AMM accounts, including pools, configs, lock escrows, operators, vault relationships, constants, enums, and PDA seeds."
+llmsDescription: "Explains the DAMM v1 program account model for Meteora's dynamic AMM program. Covers Pool, Config, LockEscrow, Operator, PartnerInfo, Bootstrapping, PoolFees, CurveType, Dynamic Vault relationships, PDA seeds, constants, activation types, pool types, operator permissions, account sizes, state interpretation, and SDK methods for fetching and deriving accounts."
+---
+
+<Note>
+  This page summarizes the local `amm` program source and the public `damm-v1-sdk` account helpers. For exact generated layouts, use the bundled IDL and TypeScript types exported by `@meteora-ag/dynamic-amm-sdk`.
+</Note>
+
+## PDA Map
+
+DAMM v1 sorts token mint public keys lexicographically for permissionless pool PDAs. The helpers call the larger key `first` and the smaller key `second`.
+
+| Account | SDK or Rust helper | Seeds |
+| --- | --- | --- |
+| Permissionless pool | `derivePoolAddress(...)`, `derive_permissionless_pool_key` | curve type byte, sorted mints |
+| Permissionless pool with fee tier | `derivePoolAddress(...)`, `derive_permissionless_pool_key_with_fee_tier` | curve type byte, sorted mints, optional little-endian trade-fee bps |
+| Config-based constant-product pool | `derivePoolAddressWithConfig(...)`, `derive_permissionless_constant_product_pool_with_config_key` | sorted mints, config |
+| Customizable constant-product pool | `deriveCustomizablePermissionlessConstantProductPoolAddress(...)`, `derive_customizable_permissionless_constant_product_pool_key` | `pool`, sorted mints |
+| Config | `deriveConfigPda(index, programId)` | `config`, little-endian `u64` index |
+| LP mint | `derive_lp_mint_key(pool)` | `lp_mint`, pool |
+| Vault A/B LP token account | `derive_vault_lp_key(vault, pool)` | vault, pool |
+| Protocol fee token account | `deriveProtocolTokenFee(pool, mint, programId)` | `fee`, token mint, pool |
+| Lock escrow | `deriveLockEscrowPda(pool, owner, programId)` | `lock_escrow`, pool, owner |
+| Operator | source helper | `operator`, whitelisted address |
+| LP mint metadata | `deriveMintMetadata(lpMint)` | Metaplex `metadata`, metadata program, LP mint |
+
+Permissioned pools use an arbitrary signer account for the pool address rather than a pool PDA.
+
+## Constants
+
+| Constant | Value | Use |
+| --- | --- | --- |
+| `PROGRAM_ID` | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` | Deployed DAMM v1 program. |
+| `STAGING_PROGRAM_ID` | `ammbh4CQztZ6txJ8AaQgPsWjd6o7GhmvopS2JAo5bCB` | Staging program compiled behind the staging feature. |
+| `FEE_DENOMINATOR` | `100_000` | Trade, protocol, host, and partner fee denominator. |
+| `MAX_FEE_BPS` | `1500` | Max trade fee for program validation, equal to 15%. |
+| `MEME_MIN_FEE_BPS` / `MEME_MAX_FEE_BPS` | `25` / `1500` | Customizable pool fee bounds, equal to 0.25% through 15%. |
+| `FEE_NUMERATOR_DIVISIBLE_FACTOR` | `50` | Customizable fee numerator must be divisible by 50. |
+| `MAX_PARTNER_FEE_NUMERATOR` | `50_000` | Max partner share of protocol fee, equal to 50%. |
+| `HOST_TRADE_FEE_NUMERATOR` | `20_000` | Referral host share of protocol fee, equal to 20%. |
+| `PERMISSIONLESS_AMP` | `100` | Stable-pool amplification for permissionless stable pools. |
+| `MAX_AMP` | `10_000` | Max stable-swap amplification coefficient. |
+| `MIN_CHANGE_AMP_DURATION` | `600` seconds | Minimum time between stable amp updates. |
+| `SLOT_BUFFER` | `9000` slots | Mainnet slot-based pre-activation buffer. |
+| `TIME_BUFFER` | `3600` seconds | Mainnet timestamp-based pre-activation buffer. |
+| `MAX_ACTIVATION_SLOT_DURATION` | `SLOT_BUFFER * 24 * 31` | Max future slot activation duration. |
+| `MAX_ACTIVATION_TIME_DURATION` | `TIME_BUFFER * 24 * 31` | Max future timestamp activation duration. |
+| `QUOTE_MINTS` | SOL, USDC | Quote mints allowed for alpha-vault launch-pool paths on mainnet builds. |
+
+## Enums
+
+| Enum | Values |
+| --- | --- |
+| `PoolType` | `Permissioned`, `Permissionless`. |
+| `ActivationType` | `0` slot, `1` timestamp. |
+| `CurveType` | `ConstantProduct`, `Stable { amp, token_multiplier, depeg, last_amp_updated_timestamp }`. |
+| `DepegType` | `None`, `Marinade`, `Lido`, `SplStake`. |
+| `OperatorPermission` | `0` claim protocol fee, `1` zap protocol fee. |
+
+## Pool
+
+`Pool` is the primary DAMM v1 state account. The local source asserts a `Pool` struct size of `944` bytes before the Anchor discriminator.
+
+| Field | Use |
+| --- | --- |
+| `lp_mint` | Pool LP token mint. The LP mint authority is the vault-LP signer PDA. |
+| `token_a_mint`, `token_b_mint` | Pool token mints. |
+| `a_vault`, `b_vault` | Dynamic Vault accounts that hold token A and token B inventory. |
+| `a_vault_lp`, `b_vault_lp` | Program-owned token accounts holding each Dynamic Vault LP token. |
+| `a_vault_lp_bump` | Bump used for the vault-LP signer PDA. |
+| `enabled` | Swap and liquidity access flag. Disabled pools still allow balanced withdrawal. |
+| `protocol_token_a_fee`, `protocol_token_b_fee` | Protocol fee token accounts. |
+| `fee_last_updated_at` | Timestamp of last fee update. |
+| `fees` | `PoolFees` trade and protocol fee fractions. |
+| `pool_type` | Permissioned or permissionless pool classification. |
+| `stake` | Stake/depeg account used by LST stable pools when configured. |
+| `total_locked_lp` | Total LP amount locked through DAMM v1 lock escrow logic. |
+| `bootstrapping` | Launch-pool activation point, whitelisted vault, and activation type. |
+| `partner_info` | Partner fee authority and pending partner fee balances. |
+| `padding` | Reserved bytes for future layout compatibility. |
+| `curve_type` | Constant product or stable-swap curve parameters. |
+
+Use `AmmImpl.create(connection, pool)` or `AmmImpl.createMultiple(connection, pools)` to fetch pool state, Dynamic Vault state, reserves, LP supply, and derived pool information together.
+
+## Config
+
+`Config` defines config-based constant-product launch pools. The source asserts a `Config` struct size of `336` bytes before the Anchor discriminator.
+
+| Field | Use |
+| --- | --- |
+| `pool_fees` | Trade and protocol fee fractions applied to pools created from the config. |
+| `activation_duration` | Duration added to the current slot or timestamp to derive the default activation point. |
+| `vault_config_key` | Alpha Vault config or base key. Default pubkey means no alpha vault. |
+| `pool_creator_authority` | If default, the config is public. If non-default, only this signer can create pools from the config. |
+| `activation_type` | `0` slot or `1` timestamp. |
+| `partner_fee_numerator` | Partner share of protocol fee using `FEE_DENOMINATOR`. |
+| `_padding` | Reserved bytes. |
+
+The TypeScript SDK exposes `createConfig`, `getPoolConfig`, `getFeeConfigurations`, and `getPoolConfigsWithPoolCreatorAuthority`.
+
+## LockEscrow
+
+`LockEscrow` tracks LP tokens locked for an owner and the fee value accrued by locked LP.
+
+| Field | Use |
+| --- | --- |
+| `pool` | DAMM v1 pool. |
+| `owner` | Owner entitled to the locked LP fee stream. |
+| `escrow_vault` | SPL token account that stores locked pool LP tokens. |
+| `bump` | Lock escrow PDA bump. |
+| `total_locked_amount` | Locked LP amount after fee accrual adjustments. |
+| `lp_per_token` | Virtual-price checkpoint used to derive unclaimed LP fee. |
+| `unclaimed_fee_pending` | Pending LP-denominated fee amount. |
+| `a_fee`, `b_fee` | Lifetime token A and token B fees claimed from this escrow. |
+
+Use `AmmImpl.getLockedLpAmountByUser(connection, owner)`, `pool.getUserLockEscrow(owner)`, `pool.lockLiquidity(...)`, `pool.claimLockFee(...)`, or `pool.claimLockFee2(...)` for SDK-based lock reads and transactions.
+
+## Operator
+
+`Operator` is a zero-copy admin-created permission account. The source asserts an `Operator` init space of `64` bytes.
+
+| Field | Use |
+| --- | --- |
+| `whitelisted_address` | Address authorized for the permission bitmap. |
+| `permission` | `u128` bitmap. Bit `0` allows protocol fee claiming. Bit `1` allows zap protocol fee. |
+| `padding` | Reserved bytes. |
+
+Operator flows are admin or protocol operations and are not exposed through the public TypeScript SDK class.
+
+## Nested Types
+
+| Type | Fields | Use |
+| --- | --- | --- |
+| `PoolFees` | `trade_fee_numerator`, `trade_fee_denominator`, `protocol_trade_fee_numerator`, `protocol_trade_fee_denominator` | Trade fee and protocol share of trade fee. |
+| `PartnerInfo` | `fee_numerator`, `partner_authority`, `pending_fee_a`, `pending_fee_b` | Optional partner fee state for config-created pools. |
+| `Bootstrapping` | `activation_point`, `whitelisted_vault`, deprecated `pool_creator`, `activation_type` | Launch-pool activation and alpha-vault access state. |
+| `TokenMultiplier` | `token_a_multiplier`, `token_b_multiplier`, `precision_factor` | Stable-swap decimal normalization. |
+| `Depeg` | `depeg_type`, `base_virtual_price`, `base_cache_updated` | LST/depeg virtual price data. |
+| `CustomizableParams` | `trade_fee_numerator`, `activation_point`, `has_alpha_vault`, `activation_type`, `padding` | Parameters for customizable constant-product pools. |
+| `ConfigParameters` | fee numerators, activation fields, vault config, creator authority, index, partner fee | Parameters used by `create_config`. |
+
+## Dynamic Vault Relationship
+
+DAMM v1 does not hold all pool token inventory directly in the `Pool` account. Each token side uses a Dynamic Vault account:
+
+| Account | Role |
+| --- | --- |
+| `a_vault`, `b_vault` | Dynamic Vault state accounts for token A and token B. |
+| `a_token_vault`, `b_token_vault` | Token accounts owned by each Dynamic Vault. |
+| `a_vault_lp_mint`, `b_vault_lp_mint` | Dynamic Vault LP mints. |
+| `a_vault_lp`, `b_vault_lp` | DAMM v1 pool-owned Dynamic Vault LP token accounts. |
+
+Quote engines must read the pool, both Dynamic Vault accounts, both vault token accounts, both vault LP mints, both pool vault-LP token accounts, the clock sysvar, and any depeg/stake accounts required by the curve.

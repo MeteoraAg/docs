@@ -1,0 +1,183 @@
+---
+title: "DAMM v1 TS SDK Reference"
+sidebarTitle: "Reference"
+description: "Understand @meteora-ag/dynamic-amm-sdk exports, constants, AmmImpl methods, quote helpers, PDA helpers, pool creation helpers, lock helpers, and types."
+llmsDescription: "Explains the DAMM v1 TypeScript SDK reference for @meteora-ag/dynamic-amm-sdk. Covers dependencies, program IDs, package exports, constants, built-in pools, curve classes, AmmImpl static methods, AmmImpl instance methods, getters, quote and pool information types, lock escrow types, deep PDA helper imports, transaction construction patterns, Dynamic Vault account requirements, and common integration notes."
+---
+
+This page is based on the public TypeScript source in `damm-v1-sdk/ts-client`. Use it as the high-level map for the SDK, then open the package types when you need exact parameter shapes.
+
+```typescript
+import AmmImpl, {
+  PROGRAM_ID,
+  MAINNET_POOL,
+  DEVNET_POOL,
+  calculateSwapQuote,
+  derivePoolAddress,
+  type SwapQuote,
+  type DepositQuote,
+  type WithdrawQuote,
+} from "@meteora-ag/dynamic-amm-sdk";
+```
+
+## Dependencies
+
+| Package | Version in local SDK |
+| --- | --- |
+| `@coral-xyz/anchor` | `0.29.0` |
+| `@solana/web3.js` | `1.98.0` |
+| `@solana/spl-token` | `^0.4.6` |
+| `@meteora-ag/vault-sdk` | `2.3.1` |
+| `@meteora-ag/m3m3` | `1.0.10` |
+| `bn.js` | `5.2.1` |
+| `decimal.js` | `^10.4.1` |
+
+## Program IDs
+
+| Program | ID |
+| --- | --- |
+| DAMM v1 | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` |
+| DAMM v1 staging | `ammbh4CQztZ6txJ8AaQgPsWjd6o7GhmvopS2JAo5bCB` |
+| Dynamic Vault | `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` |
+| Metaplex metadata | `metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s` |
+
+## Top-Level Exports
+
+| Export | Use |
+| --- | --- |
+| `AmmImpl` | Main SDK class for pool loading, quotes, transactions, configs, and locks. |
+| `ConstantProductSwap`, `StableSwap` | Local curve implementations used by quote helpers. |
+| `DynamicAmmError` | SDK error decoder. |
+| `AmmIdl`, `VaultIdl` | Bundled Anchor IDLs. |
+| `PROGRAM_ID`, `MAINNET_POOL`, `DEVNET_POOL`, `CURVE_TYPE_ACCOUNTS` | Program constants, sample pool addresses, and depeg accounts. |
+| `CONSTANT_PRODUCT_ALLOWED_TRADE_FEE_BPS`, `STABLE_SWAP_ALLOWED_TRADE_FEE_BPS` | Allowed fee tiers for permissionless pool creation. |
+| `getDepegAccounts`, `getOnchainTime` | Account and clock helpers used by quotes. |
+| `calculateMaxSwapOutAmount`, `calculateSwapQuote`, `calculatePoolInfo` | Quote and pool information helpers. |
+| `checkPoolExists`, `getTokensMintFromPoolAddress`, `derivePoolAddress` | Pool lookup and derivation helpers. |
+| Type exports | `AmmImplementation`, `DepositQuote`, `WithdrawQuote`, `SwapQuote`, `PoolState`, `LockEscrow`, `PoolInformation`, curve types, and `Bootstrapping`. |
+
+Some PDA helpers are implemented in `src/amm/utils.ts` but are not top-level exports. Existing examples import them through package build paths.
+
+## Important Constants
+
+| Constant | Value |
+| --- | --- |
+| `PROGRAM_ID` | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` |
+| `DEVNET_POOL.USDT_USDC` | `BAHscmu1NncGS7t4rc5gSBPv1UFEMkvLaon1Ahdd5rHi` |
+| `DEVNET_POOL.USDT_SOL` | `Bgf1Sy5kfeDgib4go4NgzHuZwek8wE8NZus56z6uizzi` |
+| `DEVNET_POOL.SOL_MSOL` | `2rkn2yM4wJcHPV57T8fPWeBksrfSpiNZoEjRgjtxNDEQ` |
+| `MAINNET_POOL.USDT_USDC` | `32D4zRxNc1EssbJieVHfPhZM3rH6CzfUPrWUuWxD9prG` |
+| `MAINNET_POOL.USDC_SOL` | `5yuefgbJJpmFNK2iiYbLSpv1aZXq7F9AUKkZKErTYCvs` |
+| `MAINNET_POOL.SOL_STSOL` | `7EJSgV2pthhDfb4UiER9vzTqe2eojei9GEQAQnkqJ96e` |
+| `MAINNET_POOL.SOL_MSOL` | `HcjZvfeSNJbNkfLD4eEcRBr96AD3w1GpmMppaeRZf7ur` |
+| `CURVE_TYPE_ACCOUNTS.marinade` | `8szGkuLTAux9XMgZ2vtY39jVSowEcpBfFfD8hXSEqdGC` |
+| `CURVE_TYPE_ACCOUNTS.lido` | `49Yi1TKkNyYjPAFdR9LBvoHcUjuPX4Df5T5yv39w2XTn` |
+| `CONSTANT_PRODUCT_ALLOWED_TRADE_FEE_BPS` | `[25, 100, 400, 600]` |
+| `STABLE_SWAP_ALLOWED_TRADE_FEE_BPS` | `[1, 4, 10, 100]` |
+| `PERMISSIONLESS_AMP` | `100` |
+| `U64_MAX` | `18446744073709551615` |
+
+## `AmmImpl` Static Methods
+
+| Method | Returns | Use |
+| --- | --- | --- |
+| `create(connection, pool, opt?)` | `Promise<AmmImpl>` | Load one pool, vault state, reserves, LP supply, clock, depeg accounts, and computed pool info. |
+| `createMultiple(connection, poolList, opt?)` | `Promise<AmmImpl[]>` | Batch-load multiple pools and shared account data. |
+| `createConfig(...)` | `Promise<Transaction>` | Build an admin `create_config` transaction for a new config PDA index. |
+| `searchPoolsByToken(connection, tokenMint)` | Pool account list | Find pools where the mint is token A or token B. |
+| `createPermissionlessPool(...)` | `Promise<Transaction>` | Create a permissionless pool with stable or constant-product curve and fee tier. |
+| `createPermissionlessConstantProductPoolWithConfig(...)` | `Promise<Transaction[]>` | Create a config-based constant-product pool. Supports optional initial LP lock and initial B-to-A swap. |
+| `createPermissionlessConstantProductPoolWithConfig2(...)` | `Promise<Transaction[]>` | Create a config-based pool with optional activation point and optional stake-for-fee lock split. |
+| `createCustomizablePermissionlessConstantProductPool(...)` | `Promise<Transaction>` | Create a customizable constant-product launch pool. |
+| `createPermissionlessConstantProductMemecoinPoolWithConfig(...)` | `Promise<Transaction[]>` | Create or mint a token, create a config-based pool, and optionally lock/stake/swap liquidity. |
+| `getPoolConfigsWithPoolCreatorAuthority(connection, wallet, opt?)` | Config accounts | Fetch configs whose `pool_creator_authority` matches the wallet. |
+| `getPoolConfig(connection, config, opt?)` | Config account | Fetch one config account. |
+| `getFeeConfigurations(connection, opt?)` | Config summary list | Fetch all config accounts and derived fee bps. |
+| `getLockedLpAmountByUser(connection, userPubKey, opt?)` | `Map<string, LockEscrowAccount>` | Fetch lock escrows for one owner, keyed by pool address. |
+| `fetchMultipleUserBalance(connection, lpMintList, owner)` | `Promise<BN[]>` | Fetch a wallet's LP balances for multiple LP mints. |
+
+## `AmmImpl` Instance Methods
+
+| Method | Returns | Use |
+| --- | --- | --- |
+| `updateState()` | `Promise<void>` | Refresh pool, vault, clock, depeg accounts, and computed pool info. |
+| `getPoolTokenMint()` | `PublicKey` | Return the pool LP mint. |
+| `getLpSupply()` | `Promise<BN>` | Fetch current LP token supply. |
+| `getUserBalance(owner)` | `Promise<BN>` | Fetch the owner's LP token balance. |
+| `getSwapQuote(inTokenMint, inAmountLamport, slippage, swapInitiator?)` | `SwapQuote` | Compute exact-in swap output, minimum output, fee, and price impact. |
+| `getMaxSwapInAmount(tokenMint)` | `BN` | Estimate max source amount for a swap. |
+| `getMaxSwapOutAmount(tokenMint)` | `BN` | Estimate max output amount for a token mint. |
+| `swap(owner, inTokenMint, inAmountLamport, outAmountLamport, referralOwner?)` | `Promise<Transaction>` | Build an exact-in swap transaction. |
+| `swapAndStakeForFee(owner, inTokenMint, inAmount, minOut, outAmount, stakeForFee)` | `Promise<Transaction[]>` | Build a swap followed by a Stake2Earn stake transaction. |
+| `getDepositQuote(tokenAInAmount, tokenBInAmount, balance, slippage)` | `DepositQuote` | Quote a balanced or stable imbalanced deposit. |
+| `deposit(owner, tokenAInAmount, tokenBInAmount, poolTokenAmount)` | `Promise<Transaction>` | Build a deposit transaction. |
+| `getWithdrawQuote(lpTokenAmount, slippage, tokenMint?)` | `WithdrawQuote` | Quote balanced withdrawal or stable single-sided withdrawal. |
+| `withdraw(owner, lpTokenAmount, tokenAOutAmount, tokenBOutAmount)` | `Promise<Transaction>` | Build a withdrawal transaction. |
+| `getUserLockEscrow(owner)` | `Promise<LockEscrow \| null>` | Fetch a lock escrow and derive claimed/unclaimed fee data. |
+| `getLockedLpAmount()` | `Promise<BN>` | Return pool-level locked LP amount from the pool and legacy LP ATA path. |
+| `lockLiquidity(owner, amount, feePayer?, opt?)` | `Promise<Transaction>` | Lock LP tokens into a lock escrow, optionally splitting stake-for-fee liquidity. |
+| `claimLockFee(owner, maxAmount, payer, receiver?, tempWSolAcc?)` | `Promise<Transaction>` | Build the older lock-fee claim transaction. |
+| `claimLockFee2(owner, maxAmount, payer, receiver)` | `Promise<Transaction>` | Build the newer lock-fee claim transaction. |
+| `moveLockedLP(owner, newOwner, maxAmount, payer?)` | `Promise<Transaction>` | Move locked LP between two owners' lock escrows. |
+| `partnerClaimFees(partnerAddress, maxAmountA, maxAmountB)` | `Promise<Transaction>` | Claim partner fees for config-created pools. |
+
+## Getters
+
+| Getter | Type | Use |
+| --- | --- | --- |
+| `decimals` | `number` | Max decimals between token A and token B. |
+| `isStablePool` | `boolean` | Whether `poolState.curveType` is stable. |
+| `isLST` | `boolean` | Whether the stable curve has a non-`none` depeg type. |
+| `feeBps` | `BN` | Current trade fee converted to bps. |
+| `depegToken` | `Mint \| null` | Heuristic depeg-side token mint for LST pools. |
+
+## Quote Types
+
+| Type | Fields |
+| --- | --- |
+| `SwapQuote` | `swapInAmount`, `swapOutAmount`, `minSwapOutAmount`, `fee`, `priceImpact`. |
+| `DepositQuote` | `poolTokenAmountOut`, `minPoolTokenAmountOut`, `tokenAInAmount`, `tokenBInAmount`. |
+| `WithdrawQuote` | `poolTokenAmountIn`, `minTokenAOutAmount`, `minTokenBOutAmount`, `tokenAOutAmount`, `tokenBOutAmount`. |
+| `PoolInformation` | `tokenAAmount`, `tokenBAmount`, `virtualPrice`, `virtualPriceRaw`. |
+| `LockEscrow` | `address`, `amount`, claimed token A/B fees, unclaimed LP/token A/token B fees. |
+
+## Deep PDA And Utility Helpers
+
+These helpers exist in `src/amm/utils.ts`. Import paths can vary between CJS and ESM builds, so prefer top-level exports where available.
+
+| Helper | Use |
+| --- | --- |
+| `derivePoolAddress(...)` | Derive permissionless pool PDA for stable or constant-product pools. Top-level export. |
+| `derivePoolAddressWithConfig(tokenA, tokenB, config, programId)` | Derive config-based constant-product pool PDA. |
+| `deriveCustomizablePermissionlessConstantProductPoolAddress(tokenA, tokenB, programId)` | Derive customizable constant-product pool PDA. |
+| `deriveConfigPda(index, programId)` | Derive config PDA from an index. |
+| `deriveProtocolTokenFee(poolAddress, tokenMint, programId)` | Derive protocol fee token account PDA. |
+| `deriveLockEscrowPda(pool, owner, programId)` | Derive a lock escrow PDA. |
+| `deriveMintMetadata(lpMint)` | Derive the Metaplex metadata PDA for an LP mint. |
+| `getAssociatedTokenAccount(tokenMint, owner)` | Return the canonical SPL associated token account. |
+| `calculateSwapQuote(...)` | Lower-level swap quote helper used by `pool.getSwapQuote`. |
+| `calculatePoolInfo(...)` | Compute token A/B amounts and virtual price from pool and vault data. |
+| `getDepegAccounts(connection, poolStates)` | Fetch remaining depeg accounts for LST/stable pools. |
+| `calculateUnclaimedLockEscrowFee(...)` | Convert lock escrow virtual-price movement into unclaimed LP fee. |
+
+## Common Workflow
+
+| Step | SDK call |
+| --- | --- |
+| Read pool state | `const pool = await AmmImpl.create(connection, poolAddress)` |
+| Quote a swap | `const quote = pool.getSwapQuote(inMint, inAmount, slippage)` |
+| Build a transaction | `const tx = await pool.swap(user, inMint, quote.swapInAmount, quote.minSwapOutAmount)` |
+| Sign and submit | Sign with your wallet or backend signer, then send through your RPC pipeline. |
+| Refresh before the next quote | `await pool.updateState()` |
+
+## Integration Notes
+
+| Area | Note |
+| --- | --- |
+| Amount units | All token amounts are raw integer token units. Use `BN`; do not pass UI decimals. |
+| Slippage | SDK slippage parameters are percentages, not bps. |
+| Returned transactions | Transactions are unsigned. Some pool creation helpers return multiple transactions. |
+| Native SOL | Swap/deposit/withdraw helpers add wrap or unwrap instructions for native SOL paths. |
+| Dynamic Vaults | Quotes depend on Dynamic Vault state and current clock, not only the DAMM v1 pool account. |
+| Depeg pools | Stable LST pools require depeg account reads for accurate quotes and swap account lists. |
+| Config pools | Private configs require the configured `pool_creator_authority` signer. |

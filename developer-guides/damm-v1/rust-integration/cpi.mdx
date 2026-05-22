@@ -1,0 +1,136 @@
+---
+title: "DAMM v1 CPI Integration"
+sidebarTitle: "CPI"
+description: "Learn how to plan DAMM v1 CPI integrations with Anchor crates, account requirements, PDA helpers, swaps, liquidity, locks, and common constraints."
+llmsDescription: "Explains DAMM v1 cross-program invocation integration for Anchor programs. Covers dynamic-amm crate dependency setup, cpi feature usage, required account groups, swap CPI accounts, liquidity CPI accounts, lock CPI accounts, pool creation constraints, Dynamic Vault accounts, depeg remaining accounts, PDA helper usage, known CPI examples, unsupported operator zap paths, and common CPI errors."
+---
+
+DAMM v1 can be invoked from Anchor programs through the `dynamic-amm` program crate included in `damm-v1-sdk/programs/dynamic-amm`. CPI builders must pass the same pool, Dynamic Vault, token, mint, and remaining accounts required by the on-chain instruction.
+
+<Warning>
+  Prefer the TypeScript SDK or Rust off-chain helpers for ordinary app transactions. Use CPI only when another on-chain program must compose directly with DAMM v1.
+</Warning>
+
+## Dependency Setup
+
+The local program crate exposes CPI types through its default `cpi` feature.
+
+```toml
+[dependencies]
+dynamic-amm = { path = "../damm-v1-sdk/programs/dynamic-amm", features = ["cpi"] }
+dynamic-vault = { path = "../damm-v1-sdk/programs/dynamic-vault", features = ["cpi"] }
+anchor-lang = "0.28.0"
+anchor-spl = "0.28.0"
+```
+
+For a published or vendored integration, pin the exact source revision that matches the deployed DAMM v1 IDL you build against.
+
+## Source Examples
+
+<CardGroup cols={1}>
+  <Card title="Public CPI Examples" icon="github" iconType="solid" href="https://github.com/MeteoraAg/cpi-examples">
+    Meteora's public CPI examples include DAMM v1 swap, pool initialization, config-based initialization, lock liquidity, claim fee, and tests.
+  </Card>
+</CardGroup>
+
+The local `damm-v1-sdk/common` crate also contains account builders that are useful when preparing CPI or off-chain instruction account sets.
+
+## Account Planning
+
+Every DAMM v1 CPI has two account layers:
+
+| Layer | Accounts |
+| --- | --- |
+| DAMM v1 pool layer | `pool`, pool LP mint, pool-held Dynamic Vault LP token accounts, protocol fee accounts, lock escrow accounts when needed. |
+| Dynamic Vault layer | `a_vault`, `b_vault`, each vault token account, each vault LP mint, Dynamic Vault program. |
+
+Use `common::dynamic_amm::pda` and `common::dynamic_vault::pda` helpers to derive canonical addresses.
+
+## Swap CPI
+
+`swap` takes `in_amount` and `minimum_out_amount`.
+
+| Account | Requirement |
+| --- | --- |
+| `pool` | DAMM v1 pool. Must be enabled and active. |
+| `user_source_token` | User source token account. Mint must match token A or token B. |
+| `user_destination_token` | User destination token account. Mint must be the opposite pool token. |
+| `a_vault`, `b_vault` | Dynamic Vault accounts stored in pool state. |
+| `a_token_vault`, `b_token_vault` | Token vault accounts stored in each Dynamic Vault. |
+| `a_vault_lp_mint`, `b_vault_lp_mint` | Dynamic Vault LP mints. |
+| `a_vault_lp`, `b_vault_lp` | Pool-held Dynamic Vault LP token accounts. |
+| `protocol_token_fee` | Protocol fee token account for the input mint. |
+| `user` | Signer and owner of `user_source_token`. |
+| `vault_program`, `token_program` | Dynamic Vault and SPL Token programs. |
+| Remaining accounts | Depeg accounts for LST pools, then optional host fee account for referral routing. |
+
+<Tip>
+  Quote off-chain immediately before invoking CPI. Use the quoted minimum output as `minimum_out_amount`.
+</Tip>
+
+## Liquidity CPI
+
+| Instruction | Use | Important constraints |
+| --- | --- | --- |
+| `add_balance_liquidity` | Balanced deposit. | Constant-product pools use balanced liquidity after bootstrap. |
+| `add_imbalance_liquidity` | Stable imbalanced deposit. | Stable pools only. |
+| `remove_balance_liquidity` | Balanced withdrawal. | Allowed even when the pool is disabled. |
+| `remove_liquidity_single_side` | Stable single-sided withdrawal. | Stable pools only. |
+| `bootstrap_liquidity` | Re-seed depleted pool. | Pool must satisfy depleted-pool checks. |
+
+Liquidity instructions need pool LP mint, user token accounts, user pool LP account, both Dynamic Vault accounts, vault token accounts, vault LP mints, and pool-held vault LP token accounts.
+
+## Lock CPI
+
+| Instruction | Use | Notes |
+| --- | --- | --- |
+| `create_lock_escrow` | Initialize a lock escrow PDA. | PDA seeds are `lock_escrow`, pool, owner. |
+| `lock` | Transfer LP into the escrow vault. | `owner` can be any signer funding the lock amount. |
+| `claim_fee` | Claim token A/B fees accrued by locked LP. | Requires the lock escrow, escrow vault, user LP/token accounts, pool/vault accounts, and vault program. |
+
+Lock fee accounting depends on current pool virtual price. Pass fresh vault and LP account data so the instruction can compute the correct fee.
+
+## Pool Creation CPI
+
+Pool creation CPI is possible but account-heavy because it initializes the pool, LP mint, pool-held vault LP accounts, protocol fee accounts, payer LP ATA, and LP metadata.
+
+| Instruction | Notes |
+| --- | --- |
+| `initialize_permissionless_pool` | Uses curve default fee and PDA from curve type plus sorted mints. |
+| `initialize_permissionless_pool_with_fee_tier` | Adds the fee-tier seed when the fee differs from the default. |
+| `initialize_permissionless_constant_product_pool_with_config` | Uses config PDA, sorted mints, and config-controlled activation. |
+| `initialize_customizable_permissionless_constant_product_pool` | Uses `CustomizableParams` and the `pool` seed with sorted mints. |
+
+For most CPI use cases, initialize pools off-chain first and CPI only into swap, liquidity, or lock flows.
+
+## Unsupported Or Restricted CPI Paths
+
+| Area | Constraint |
+| --- | --- |
+| Operator zap | Source includes explicit `CpiDisabled` and strict transaction sysvar validation for zap-related protocol fee flows. Treat zap protocol fee as an operator off-chain transaction path. |
+| Admin config and operator creation | Admin signer restrictions apply. These are not ordinary CPI integration flows. |
+| Activation updates | Launch-pool activation changes are restricted by activation timing windows. |
+| Depeg pools | CPI callers must include the same depeg remaining accounts required by direct transactions. |
+
+## Common CPI Errors
+
+| Error | Likely cause |
+| --- | --- |
+| `InvalidVaultAccount` | Dynamic Vault account or vault token account does not match pool state. |
+| `InvalidVaultLpAccount` | Pool-held vault LP token account is wrong. |
+| `MismatchedTokenMint` | User source/destination, protocol fee, or vault token mint is wrong. |
+| `InvalidProtocolFeeAccount` | Protocol fee token account does not match the input mint's fee PDA. |
+| `PoolDisabled` | Swap or restricted liquidity operation attempted while pool is disabled. |
+| `InvalidActivationPoint` / `PreActivationSwapStarted` | Launch-pool timing constraints are not satisfied. |
+| `InvalidRemainingAccountsLen` / `InvalidRemainingAccounts` | Depeg, referral, or zap remaining accounts are missing or ordered incorrectly. |
+| `ExceededSlippage` | CPI supplied minimum output or liquidity threshold is too strict for current state. |
+
+## Checklist
+
+| Step | Action |
+| --- | --- |
+| 1 | Derive the pool, LP mint, protocol fee account, vault LP accounts, and lock escrow with helper functions. |
+| 2 | Fetch current pool and Dynamic Vault state off-chain for quoting and account validation. |
+| 3 | Include required depeg remaining accounts for LST stable pools. |
+| 4 | Simulate the outer transaction with realistic compute budget and fresh blockhash. |
+| 5 | Reconcile Anchor logs and token transfers after execution. |

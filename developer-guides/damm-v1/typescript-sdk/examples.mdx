@@ -1,0 +1,247 @@
+---
+title: "DAMM v1 TS SDK Examples"
+sidebarTitle: "Examples"
+description: "Explore TypeScript examples for DAMM v1 pool reads, swap quotes, swaps, liquidity, pool creation, configs, locks, and lock fee claims."
+llmsDescription: "Explains practical DAMM v1 TypeScript SDK examples using @meteora-ag/dynamic-amm-sdk. Covers setup, pool state reads, getSwapQuote and swap, getDepositQuote and deposit, getWithdrawQuote and withdraw, config-based constant-product pool creation, authorized config discovery, LP locking, claimable lock fees, claimLockFee2, transaction signing, and links to the SDK reference for the complete API surface."
+---
+
+These examples are based on the local `damm-v1-sdk/ts-client/src/examples` files and public SDK methods. They focus on transaction construction patterns. For the full method catalog, see the [SDK Reference](/developer-guides/damm-v1/typescript-sdk/reference).
+
+## Setup
+
+```typescript
+import AmmImpl from "@meteora-ag/dynamic-amm-sdk";
+import { Connection, Keypair, PublicKey, sendAndConfirmTransaction } from "@solana/web3.js";
+import BN from "bn.js";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+
+// Replace with your wallet adapter, backend signer, or key management flow.
+const user = Keypair.generate();
+const poolAddress = new PublicKey("...");
+```
+
+Use devnet while testing. The DAMM v1 program ID is the same for devnet and mainnet:
+
+```typescript
+// Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB
+```
+
+## Fetch Pool State
+
+```typescript
+const pool = await AmmImpl.create(connection, poolAddress, {
+  cluster: "mainnet-beta",
+});
+
+await pool.updateState();
+
+const lockedLpAmount = await pool.getLockedLpAmount();
+const lpSupply = await pool.getLpSupply();
+
+console.log({
+  pool: pool.address.toBase58(),
+  lpMint: pool.getPoolTokenMint().toBase58(),
+  tokenA: pool.tokenAMint.address.toBase58(),
+  tokenB: pool.tokenBMint.address.toBase58(),
+  tokenAAmount: pool.poolInfo.tokenAAmount.toString(),
+  tokenBAmount: pool.poolInfo.tokenBAmount.toString(),
+  virtualPriceRaw: pool.poolInfo.virtualPriceRaw.toString(),
+  lockedLpAmount: lockedLpAmount.toString(),
+  lpSupply: lpSupply.toString(),
+});
+```
+
+`AmmImpl.create` reads the pool, both Dynamic Vault accounts, vault token accounts, vault LP mints, pool-held vault LP token accounts, clock, and depeg accounts when required.
+
+## Quote And Swap
+
+The recommended swap flow is:
+
+1. Load the pool.
+2. Quote with `getSwapQuote`.
+3. Build the swap transaction with `minSwapOutAmount`.
+4. Sign, simulate when appropriate, and send.
+
+```typescript
+const pool = await AmmImpl.create(connection, poolAddress, {
+  cluster: "devnet",
+});
+
+const inTokenMint = pool.tokenAMint.address;
+const inAmount = new BN(10_000_000);
+const slippagePercent = 1;
+
+const quote = pool.getSwapQuote(inTokenMint, inAmount, slippagePercent);
+
+const tx = await pool.swap(
+  user.publicKey,
+  inTokenMint,
+  quote.swapInAmount,
+  quote.minSwapOutAmount,
+);
+
+const signature = await sendAndConfirmTransaction(connection, tx, [user]);
+
+console.log({
+  signature,
+  outAmount: quote.swapOutAmount.toString(),
+  minOutAmount: quote.minSwapOutAmount.toString(),
+  fee: quote.fee.toString(),
+  priceImpact: quote.priceImpact.toString(),
+});
+```
+
+Pass a `referralOwner` as the optional fifth `pool.swap` argument when routing a host fee account for referral flows.
+
+## Deposit Liquidity
+
+For a balanced deposit, provide one token-side amount to `getDepositQuote` with `balance = true`; the SDK computes the other side from pool state.
+
+```typescript
+const pool = await AmmImpl.create(connection, poolAddress);
+
+const tokenBInAmount = new BN(1_000_000);
+const slippagePercent = 1;
+
+const quote = pool.getDepositQuote(
+  new BN(0),
+  tokenBInAmount,
+  true,
+  slippagePercent,
+);
+
+const tx = await pool.deposit(
+  user.publicKey,
+  quote.tokenAInAmount,
+  quote.tokenBInAmount,
+  quote.minPoolTokenAmountOut,
+);
+
+const signature = await sendAndConfirmTransaction(connection, tx, [user]);
+console.log(signature);
+```
+
+For stable pools, the SDK can also quote imbalanced deposits by calling `getDepositQuote(tokenAAmount, tokenBAmount, false, slippagePercent)`.
+
+## Withdraw Liquidity
+
+```typescript
+const pool = await AmmImpl.create(connection, poolAddress);
+
+const lpTokenAmount = new BN(100_000);
+const slippagePercent = 1;
+
+const quote = pool.getWithdrawQuote(lpTokenAmount, slippagePercent);
+
+const tx = await pool.withdraw(
+  user.publicKey,
+  quote.poolTokenAmountIn,
+  quote.minTokenAOutAmount,
+  quote.minTokenBOutAmount,
+);
+
+const signature = await sendAndConfirmTransaction(connection, tx, [user]);
+console.log(signature);
+```
+
+For stable pools, pass a token mint as the third `getWithdrawQuote` argument to quote a single-sided withdrawal.
+
+## Create A Config-Based Pool
+
+`createPermissionlessConstantProductPoolWithConfig` returns an array of transactions because vault creation, pool creation, optional locking, and optional initial swap can require multiple transactions.
+
+```typescript
+import AmmImpl, { PROGRAM_ID } from "@meteora-ag/dynamic-amm-sdk";
+import { derivePoolAddressWithConfig } from "@meteora-ag/dynamic-amm-sdk/dist/cjs/src/amm/utils";
+import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+
+const tokenAMint = new PublicKey("...");
+const tokenBMint = new PublicKey("...");
+const config = new PublicKey("...");
+
+const tokenAAmount = new BN(100_000);
+const tokenBAmount = new BN(500_000);
+
+const poolAddress = derivePoolAddressWithConfig(
+  tokenAMint,
+  tokenBMint,
+  config,
+  new PublicKey(PROGRAM_ID),
+);
+
+const transactions = await AmmImpl.createPermissionlessConstantProductPoolWithConfig(
+  connection,
+  user.publicKey,
+  tokenAMint,
+  tokenBMint,
+  tokenAAmount,
+  tokenBAmount,
+  config,
+  {
+    cluster: "devnet",
+    lockLiquidity: true,
+  },
+);
+
+for (const tx of transactions) {
+  const signature = await sendAndConfirmTransaction(connection, tx, [user]);
+  console.log(signature);
+}
+
+console.log("pool", poolAddress.toBase58());
+```
+
+Use `createPermissionlessConstantProductPoolWithConfig2` when you need to pass an `activationPoint` accepted by the selected config.
+
+## Find Authorized Configs
+
+```typescript
+const configs = await AmmImpl.getPoolConfigsWithPoolCreatorAuthority(
+  connection,
+  user.publicKey,
+);
+
+for (const config of configs) {
+  console.log({
+    config: config.publicKey.toBase58(),
+    tradeFeeNumerator: config.account.poolFees.tradeFeeNumerator.toString(),
+    activationDuration: config.account.activationDuration.toString(),
+  });
+}
+```
+
+Public configs have `pool_creator_authority` set to the default pubkey. Private configs require the configured creator signer.
+
+## Lock LP And Claim Fees
+
+```typescript
+const pool = await AmmImpl.create(connection, poolAddress);
+
+const lpAmount = new BN(100_000);
+
+const lockTx = await pool.lockLiquidity(
+  user.publicKey,
+  lpAmount,
+  user.publicKey,
+);
+
+await sendAndConfirmTransaction(connection, lockTx, [user]);
+
+const escrow = await pool.getUserLockEscrow(user.publicKey);
+console.log(escrow?.fee.unClaimed);
+
+if (escrow?.fee.unClaimed.lp?.gt(new BN(0))) {
+  const claimTx = await pool.claimLockFee2(
+    user.publicKey,
+    escrow.fee.unClaimed.lp,
+    user.publicKey,
+    user.publicKey,
+  );
+
+  await sendAndConfirmTransaction(connection, claimTx, [user]);
+}
+```
+
+`claimLockFee2` is the newer claim helper. Use `claimLockFee` only when you need the older wrapped-SOL receiver behavior.
