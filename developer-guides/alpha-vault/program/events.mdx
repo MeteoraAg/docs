@@ -1,0 +1,57 @@
+---
+title: "Alpha Vault Program Events"
+sidebarTitle: "Events"
+description: "Track Alpha Vault event payloads for vault creation, escrow changes, deposits, fills, withdrawals, claims, Merkle metadata, and crank fee whitelists."
+llmsDescription: "Explains Alpha Vault events emitted through Anchor event CPI. Covers ProrataVaultCreated, FcfsVaultCreated, EscrowCreated, MerkleRootConfigCreated, MerkleProofMetadataCreated, vault parameter updates, EscrowDeposit, EscrowWithdraw, EscrowRemainingWithdraw, SwapFill, EscrowClaimToken, EscrowClosed, and crank fee whitelist events with field-level payloads and indexing notes."
+---
+
+The `alpha-vault` program emits Anchor events through event CPI. Indexers should decode the event payloads from the `alpha_vault` program logs and join them with `Vault` and `Escrow` account reads when current aggregate state is needed.
+
+## Vault Events
+
+| Event | Fields | Emitted by | Use |
+| --- | --- | --- | --- |
+| `ProrataVaultCreated` | `base_mint`, `quote_mint`, `start_vesting_point`, `end_vesting_point`, `max_buying_cap`, `pool`, `pool_type`, `escrow_fee`, `activation_type` | `initialize_prorata_vault`, `initialize_vault_with_prorata_config` | Index new Pro Rata vaults and their initial cap/timing settings. |
+| `FcfsVaultCreated` | `base_mint`, `quote_mint`, `start_vesting_point`, `end_vesting_point`, `max_depositing_cap`, `pool`, `pool_type`, `depositing_point`, `individual_depositing_cap`, `escrow_fee`, `activation_type` | `initialize_fcfs_vault`, `initialize_vault_with_fcfs_config` | Index new FCFS vaults and their initial cap/timing settings. |
+| `ProrataVaultParametersUpdated` | `vault`, `max_buying_cap`, `start_vesting_point`, `end_vesting_point` | `update_prorata_vault_parameters` | Track admin updates to Pro Rata cap and vesting points. |
+| `FcfsVaultParametersUpdated` | `vault`, `max_depositing_cap`, `start_vesting_point`, `end_vesting_point`, `depositing_point`, `individual_depositing_cap` | `update_fcfs_vault_parameters` | Track admin updates to FCFS caps and timing. |
+
+## Escrow Events
+
+| Event | Fields | Emitted by | Use |
+| --- | --- | --- | --- |
+| `EscrowCreated` | `vault`, `escrow`, `owner`, `vault_total_escrow`, `escrow_fee` | `create_new_escrow`, `create_permissioned_escrow`, `create_permissioned_escrow_with_authority` | Track new user escrows and aggregate escrow count. |
+| `EscrowDeposit` | `vault`, `escrow`, `owner`, `amount`, `vault_total_deposit` | `deposit` | Track accepted quote deposits. `amount` is the transfer-fee excluded amount credited by the program. |
+| `EscrowWithdraw` | `vault`, `escrow`, `owner`, `amount`, `vault_total_deposit` | `withdraw` | Track Pro Rata deposit withdrawals or deposit-overflow withdrawals. |
+| `EscrowRemainingWithdraw` | `vault`, `escrow`, `owner`, `amount`, `vault_remaining_deposit` | `withdraw_remaining_quote` | Track post-buy unused quote refunds. |
+| `EscrowClaimToken` | `vault`, `escrow`, `owner`, `amount`, `vault_total_claimed_token` | `claim_token` | Track vested base token claims. `amount` is the transfer-fee excluded amount sent to the user. |
+| `EscrowClosed` | `vault`, `escrow`, `owner`, `vault_total_escrow` | `close_escrow` | Track closed escrows and aggregate escrow count after close. |
+
+## Fill Events
+
+| Event | Fields | Emitted by | Use |
+| --- | --- | --- | --- |
+| `SwapFill` | `vault`, `pair`, `fill_amount`, `purchased_amount`, `unfilled_amount` | `fill_dlmm`, `fill_dynamic_amm`, `fill_damm_v2` | Track vault purchases from the connected pool. `pair` is the connected pool, `fill_amount` is quote consumed, and `purchased_amount` is base received. |
+
+## Merkle And Metadata Events
+
+| Event | Fields | Emitted by | Use |
+| --- | --- | --- | --- |
+| `MerkleRootConfigCreated` | `admin`, `config`, `vault`, `version`, `root` | `create_merkle_root_config` | Track root versions for Merkle-proof vaults. |
+| `MerkleProofMetadataCreated` | `vault`, `proof_url` | `create_merkle_proof_metadata` | Track the proof URL clients should use for wallet cap proofs. |
+
+## Crank Fee Events
+
+| Event | Fields | Emitted by | Use |
+| --- | --- | --- | --- |
+| `CrankFeeWhitelistCreated` | `cranker` | `create_crank_fee_whitelist` | Track crankers exempt from the crank fee. |
+| `CrankFeeWhitelistClosed` | `cranker` | `close_crank_fee_whitelist` | Track removed crank fee exemptions. |
+
+## Indexing Notes
+
+| Topic | Note |
+| --- | --- |
+| Event CPI accounts | Generated Anchor clients add `event_authority` and `program` accounts for event-emitting instructions. |
+| Amount precision | Amounts are raw token units. Apply mint decimals off-chain for display. |
+| Transfer fees | Deposit, withdrawal, and claim events report the credited or received amount after Token 2022 transfer-fee handling. |
+| Current state | Events are append-only. Read `Vault` and `Escrow` accounts for current counters, refund flags, claim totals, and close eligibility. |
