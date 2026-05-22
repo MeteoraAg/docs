@@ -1,0 +1,147 @@
+---
+title: "DAMM v1 Rust Library"
+sidebarTitle: "Library"
+description: "Learn how DAMM v1 Rust helpers support quotes, PDA derivation, account building, CLI flows, and pool state reads."
+llmsDescription: "Explains the DAMM v1 Rust integration libraries in the damm-v1-sdk repository. Covers dynamic-amm-quote, common PDA helpers, IxAccountBuilder, dynamic-vault helpers, rust-client CLI examples, QuoteData account requirements, compute_quote, compute_pool_tokens, dependency versions, commands, and when to use Rust helpers instead of the TypeScript SDK."
+---
+
+The `damm-v1-sdk` repository includes Rust crates for quote computation, PDA derivation, account construction, and CLI workflows. These are useful for routers, backends, indexers, and programs that need deterministic DAMM v1 account planning.
+
+## Crates
+
+| Crate | Path | Use |
+| --- | --- | --- |
+| `dynamic-amm-quote` | `dynamic-amm-quote` | Pure Rust quote and pool-token computation from fetched account data. |
+| `common` | `common` | PDA helpers and instruction account builders for DAMM v1 and Dynamic Vault. |
+| `cli` | `rust-client` | Example CLI for creating pools, quoting, swapping, depositing, withdrawing, and reading pool info. |
+| `dynamic-amm` | `programs/dynamic-amm` | Anchor client/CPI-compatible program crate used by the helper crates. |
+| `dynamic-vault` | `programs/dynamic-vault` | Dynamic Vault program crate used for vault state and account derivation. |
+
+## Versions
+
+| Dependency | Version |
+| --- | --- |
+| Anchor | `0.28.0` |
+| Solana | `1.16.0` / `1.16` in tests |
+| `spl-token` | `3.5.0` |
+| `spl-token-swap` | `3.0.0` |
+| `spl-associated-token-account` | `2.2.0` |
+| `mpl-token-metadata` | `3.2.3` |
+
+## Quote Library
+
+`dynamic_amm_quote::compute_quote` computes an exact-in swap quote from fully fetched account data.
+
+```rust
+use dynamic_amm_quote::{compute_quote, QuoteData};
+use solana_sdk::pubkey::Pubkey;
+
+let quote = compute_quote(source_mint, in_amount, quote_data)?;
+
+println!("out amount: {}", quote.out_amount);
+println!("fee: {}", quote.fee);
+```
+
+`QuoteData` must include the pool, both Dynamic Vault accounts, the pool's vault LP token accounts, both vault LP mints, both vault token accounts, the clock sysvar, and any stake/depeg account data required by the curve.
+
+| `QuoteData` field | Account source |
+| --- | --- |
+| `pool` | DAMM v1 `Pool` account. |
+| `vault_a`, `vault_b` | Dynamic Vault state accounts from `pool.a_vault` and `pool.b_vault`. |
+| `pool_vault_a_lp_token`, `pool_vault_b_lp_token` | SPL token accounts at `pool.a_vault_lp` and `pool.b_vault_lp`. |
+| `vault_a_lp_mint`, `vault_b_lp_mint` | Vault LP mint accounts from each Dynamic Vault. |
+| `vault_a_token`, `vault_b_token` | Token vault accounts from each Dynamic Vault. |
+| `clock` | Solana clock sysvar. |
+| `stake_data` | Map of depeg or stake accounts for LST stable pools. Empty for non-depeg pools. |
+
+`compute_quote` validates pool status and activation state, updates depeg virtual price, computes the pool's underlying token A/B amounts through Dynamic Vault shares, applies trade and protocol fees, runs the curve calculation, and returns the quoted output amount and fee.
+
+## Pool Token Computation
+
+```rust
+use dynamic_amm_quote::{compute_pool_tokens, VaultInfo};
+
+let (token_a_amount, token_b_amount) = compute_pool_tokens(
+    current_time,
+    vault_a_info,
+    vault_b_info,
+)?;
+```
+
+Use `compute_pool_tokens` when an indexer or backend needs the underlying token balances represented by the pool's Dynamic Vault LP shares.
+
+## PDA Helpers
+
+The `common::dynamic_amm::pda` module mirrors the TypeScript PDA helpers.
+
+| Helper | Use |
+| --- | --- |
+| `derive_permissionless_pool_key(curve_type, token_a_mint, token_b_mint)` | Default-fee permissionless pool PDA. |
+| `derive_permissionless_pool_key_with_fee_tier(curve_type, token_a_mint, token_b_mint, trade_fee_bps)` | Fee-tier permissionless pool PDA. |
+| `derive_permissionless_constant_product_pool_with_config_key(mint_a, mint_b, config)` | Config-based constant-product pool PDA. |
+| `derive_customizable_permissionless_constant_product_pool_key(mint_a, mint_b)` | Customizable constant-product pool PDA. |
+| `derive_lp_mint_key(pool_key)` | Pool LP mint PDA, with compatibility lookup for known legacy non-PDA LP mints. |
+| `derive_protocol_fee_key(mint_key, pool_key)` | Protocol fee token account PDA. |
+| `derive_vault_lp_key(vault_key, pool_key)` | Pool-owned Dynamic Vault LP token account PDA. |
+| `derive_lock_escrow_key(pool_key, owner_key)` | Lock escrow PDA. |
+| `derive_metadata_key(lp_mint)` | LP mint metadata PDA. |
+
+The helper sorts mints before deriving permissionless and config-based pool addresses.
+
+## Instruction Account Builder
+
+`common::dynamic_amm::ix_account_builder::IxAccountBuilder` builds account structs for common pool initialization paths.
+
+| Builder | Use |
+| --- | --- |
+| `initialize_permissionless_pool_accounts(...)` | Account set for default-fee permissionless pool creation. |
+| `initialize_permissionless_pool_with_fee_tier_accounts(...)` | Account set for fee-tier permissionless pool creation. |
+| `initialize_permissionless_constant_product_pool_with_config_accounts(...)` | Account set for config-based constant-product pool creation. |
+
+The builder derives Dynamic Vault keys, vault token accounts, vault LP mints, pool LP mint, protocol fee accounts, vault LP token accounts, LP metadata, and payer ATAs.
+
+## CLI Examples
+
+The `cli` crate demonstrates off-chain instruction construction.
+
+```bash
+cd damm-v1-sdk
+cargo build -p cli
+```
+
+Create a constant-product pool:
+
+```bash
+target/debug/cli \
+  --rpc-url "$RPC_URL" \
+  --priority-fee "$PRIORITY_FEE" \
+  --keypair-path "$KEYPAIR_PATH" \
+  dynamic-amm create-pool \
+  --token-a-mint "$TOKEN_A_MINT" \
+  --token-b-mint "$TOKEN_B_MINT" \
+  --trade-fee-bps "$TRADE_FEE_BPS" \
+  --token-a-amount "$TOKEN_A_AMOUNT" \
+  --token-b-amount "$TOKEN_B_AMOUNT"
+```
+
+Allowed constant-product trade fee bps in the CLI example are `25`, `100`, `400`, and `600`.
+
+## Commands
+
+| Task | Command |
+| --- | --- |
+| Run quote tests | `cd damm-v1-sdk && cargo t -p dynamic-amm-quote test_quote` |
+| Build CLI | `cd damm-v1-sdk && cargo build -p cli` |
+| Inspect CLI flags | `cd damm-v1-sdk && cargo run -p cli -- --help` |
+| Build helper crates | `cd damm-v1-sdk && cargo build -p dynamic-amm-quote -p common` |
+
+## Integration Notes
+
+| Area | Note |
+| --- | --- |
+| Account freshness | Quote accuracy depends on current vault token balances, vault LP supply, pool-held vault LP balances, and clock. |
+| Activation | The quote crate rejects swaps before `pool.bootstrapping.activation_point`. |
+| Disabled pools | The quote crate rejects swaps when `pool.enabled` is false. |
+| Depeg pools | Populate `stake_data` for Marinade, Lido, or SPL stake-pool depeg curves. |
+| Legacy LP mints | `derive_lp_mint_key` has a compatibility map for known pools whose LP mint is not the standard PDA. |
+| Transactions | The Rust CLI examples are off-chain transaction builders, not program-side CPI wrappers. |

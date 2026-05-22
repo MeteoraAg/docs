@@ -1,36 +1,83 @@
 ---
-title: "Overview"
-description: <Tip>**All DAMM V1 APIs have rate limit of 10 Requests per second or 10 RPS.**</Tip>
+title: "DAMM v1 Data API Overview"
+sidebarTitle: "Overview"
+description: "Learn how the DAMM v1 Data API exposes indexed pools, pool metrics, pool configs, fee configs, alpha vaults, and farm-backed pool data."
+llmsDescription: "Explains the DAMM v1 Data API as the indexed data layer for Meteora DAMM v1 integrations. Covers production and devnet hosts, the 10 RPS rate limit, Swagger and OpenAPI references, pools, pool search, pool metrics, pool configs, fee configs, alpha vaults, farms, query filters, generated endpoint routes, and when to use indexed API data instead of direct AMM and Dynamic Vault account reads."
 ---
 
+<Tip>
+  **All DAMM v1 APIs have a rate limit of 10 requests per second (10 RPS).** Explore the production spec at the [Prod Swagger UI](https://damm-api.meteora.ag/swagger-ui/).
+</Tip>
+
+## Base URLs
+
+| Environment | Base URL | Swagger UI |
+| --- | --- | --- |
+| Production | `https://damm-api.meteora.ag` | [Open](https://damm-api.meteora.ag/swagger-ui/) |
+| Devnet | `https://damm-api.devnet.meteora.ag` | Use the checked-in OpenAPI server dropdown when available. |
+
+The checked-in OpenAPI file is refreshed from the production Swagger source at `https://damm-api.meteora.ag/api-docs/openapi.json` and includes both production and devnet servers for docs usage.
+
+## Pools
+
 <CardGroup>
-  <Card title="get_alpha_vaults"  icon="file-code" iconType="solid" href="/api-reference/alpha-vault/get_alpha_vaults">
-    Request for Meteora's DAMM v1 Alpha Vault using `GET` `/alpha-vault`
+  <Card title="Pools" icon="file-code" iconType="solid" href="/api-reference/damm-v1/pools/pools">
+    Returns indexed DAMM v1 pools using `GET` `/pools`
   </Card>
-  <Card title="get_alpha_vault_configs"  icon="file-code" iconType="solid" href="/api-reference/alpha-vault/get_alpha_vault_configs">
-    Request for Meteora's DAMM v1 Alpha Vault configs using `GET` `/alpha-vault-configs`
+  <Card title="Pool Search" icon="file-code" iconType="solid" href="/api-reference/damm-v1/pools/pool-search">
+    Returns paginated pool search results with filters using `GET` `/pools/search`
   </Card>
-
-  <Card title="grouped_pools"  icon="file-code" iconType="solid" href="/api-reference/pools/get_pools_with_farm">
-    Request for Meteora's DAMM v1 Pools with farm using `GET` `/farm`
+  <Card title="Pool Metrics" icon="file-code" iconType="solid" href="/api-reference/damm-v1/pools/pool-metrics">
+    Returns aggregate DAMM v1 pool metrics using `GET` `/pools-metrics`
   </Card>
-  <Card title="get_all_pool_configs"  icon="file-code" iconType="solid" href="/api-reference/pools/get_all_pool_configs">
-    Request for Meteora's DAMM v1 Pools configs using `GET` `/pool-configs`
+  <Card title="Pool Configs" icon="file-code" iconType="solid" href="/api-reference/damm-v1/pools/pool-configs">
+    Returns published pool config accounts using `GET` `/pool-configs`
   </Card>
-  <Card title="get_pools"  icon="file-code" iconType="solid" href="/api-reference/pools/get_pools">
-    Request for Meteora's DAMM v1 Pools using `GET` `/pools`
+  <Card title="Pools With Farms" icon="file-code" iconType="solid" href="/api-reference/damm-v1/pools/pools-with-farms">
+    Returns DAMM v1 pools with farms using `GET` `/farms`
   </Card>
-  <Card title="get_pools_metrics"  icon="file-code" iconType="solid" href="/api-reference/pools/get_pools_metrics">
-    Request for Meteora's DAMM v1 Pools metrics using `GET` `/pools-metrics`
-  </Card>
-  <Card title="filter_and_get_pool_info"  icon="file-code" iconType="solid" href="/api-reference/pools/filter_and_get_pool_info">
-    Request for Meteora's DAMM v1 Pools metrics by search filter using `GET` `/pools/search`
-  </Card>
-  <Card title="get_pools_by_a_vault_lp"  icon="file-code" iconType="solid" href="/api-reference/pools/get_pools_by_a_vault_lp">
-    Request for Meteora's DAMM v1 Pools by tokenA vault lp using `POST` `/get_pools_by_a_vault_lp`
-  </Card>
-
-  <Card title="get_fee_configs"  icon="file-code" iconType="solid" href="/api-reference/fee-configs/get_fee_configs">
-    Request for Meteora's DAMM v1 Pools fee configs using `GET` `/fee-config/{config_address}`
+  <Card title="Pools By A Vault LP" icon="file-code" iconType="solid" href="/api-reference/damm-v1/pools/pools-by-a-vault-lp">
+    Returns pools by token A vault LP address using `POST` `/pools_by_a_vault_lp`
   </Card>
 </CardGroup>
+
+## Alpha Vault
+
+<CardGroup>
+  <Card title="Alpha Vaults" icon="file-code" iconType="solid" href="/api-reference/damm-v1/alpha-vault/alpha-vaults">
+    Returns DAMM v1 alpha vaults using `GET` `/alpha-vault`
+  </Card>
+  <Card title="Alpha Vault Configs" icon="file-code" iconType="solid" href="/api-reference/damm-v1/alpha-vault/alpha-vault-configs">
+    Returns alpha vault configs using `GET` `/alpha-vault-configs`
+  </Card>
+</CardGroup>
+
+## Fee Configs
+
+<CardGroup>
+  <Card title="Fee Configs" icon="file-code" iconType="solid" href="/api-reference/damm-v1/fee-configs/fee-configs">
+    Returns fee configs associated with a config address using `GET` `/fee-config/{config_address}`
+  </Card>
+</CardGroup>
+
+## Query Parameters
+
+| Endpoint | Parameters |
+| --- | --- |
+| `GET /pools` | `address`, `unknown`, `pool_type`, `is_monitoring`, `hide_low_tvl`, `hide_low_apr`, `launchpad`. |
+| `GET /pools/search` | `page`, `size`, `filter`, `sort_key`, `order_by`, `pools_to_top`, `unknown`, `pool_type`, `is_monitoring`, `hide_low_tvl`, `hide_low_apr`, `include_token_mints`, `include_pool_token_pairs`, `launchpad`. |
+| `GET /alpha-vault` | `vault_address`, `pool_address`, `base_mint`. |
+| `GET /fee-config/{config_address}` | `config_address` path parameter. |
+| `POST /pools_by_a_vault_lp` | JSON body with `address` array. |
+
+`pool_type` supports `dynamic`, `multitoken`, `lst`, and `farms`. `sort_key` for pool search supports `tvl`, `volume`, `fee_tvl_ratio`, and `l_m`; `order_by` supports `asc` and `desc`.
+
+## When To Use The API
+
+| Use the Data API for | Read on-chain accounts for |
+| --- | --- |
+| Pool discovery, filtering, and search. | Transaction construction and slippage-sensitive quotes. |
+| Aggregate metrics, TVL, volume, APY, and farm metadata. | Current pool, Dynamic Vault, lock escrow, and protocol fee balances. |
+| Config and alpha-vault discovery. | CPI account validation and exact pool state reconciliation. |
+
+For swaps, deposits, withdrawals, and lock claims, quote from fresh on-chain pool and Dynamic Vault accounts before building transactions.

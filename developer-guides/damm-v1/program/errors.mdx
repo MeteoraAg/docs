@@ -1,0 +1,86 @@
+---
+title: "DAMM v1 Program Errors"
+sidebarTitle: "Errors"
+description: "Understand DAMM v1 dynamic AMM Anchor errors, including codes, enum names, messages, and common integration causes."
+llmsDescription: "Explains the DAMM v1 custom error reference for Meteora's dynamic AMM program. Covers Anchor error codes, PoolError enum names, messages, arithmetic errors, fee validation, vault account validation, pool status, stable curve constraints, depeg account constraints, launch-pool activation constraints, partner and protocol fee errors, zap errors, CPI restrictions, and common remediation guidance."
+---
+
+DAMM v1 custom errors are defined in `PoolError`. Anchor custom errors start at code `6000`.
+
+## Error Reference
+
+| Code | Error | Message | Common cause |
+| --- | --- | --- | --- |
+| `6000` | `MathOverflow` | Math operation overflow | Arithmetic overflow or invalid intermediate value. |
+| `6001` | `InvalidFee` | Invalid fee setup | Fee fraction is invalid, out of bounds, or not allowed for the curve/config. |
+| `6002` | `InvalidInvariant` | Invalid invariant d | Stable invariant calculation failed. |
+| `6003` | `FeeCalculationFailure` | Fee calculation failure | Fee math could not produce a valid value. |
+| `6004` | `ExceededSlippage` | Exceeded slippage tolerance | Output or LP amount did not satisfy the caller's minimum/maximum threshold. |
+| `6005` | `InvalidCalculation` | Invalid curve calculation | Swap, deposit, or withdrawal math failed. |
+| `6006` | `ZeroTradingTokens` | Given pool token amount results in zero trading tokens | LP amount is too small to produce output. |
+| `6007` | `ConversionError` | Math conversion overflow | Numeric cast cannot fit the target type. |
+| `6008` | `FaultyLpMint` | LP mint authority must be 'A' vault lp, without freeze authority, and 0 supply | LP mint does not match required initialization constraints. |
+| `6009` | `MismatchedTokenMint` | Token mint mismatched | Token account or vault mint does not match pool state. |
+| `6010` | `MismatchedLpMint` | LP mint mismatched | LP token account or mint does not match pool state. |
+| `6011` | `MismatchedOwner` | Invalid lp token owner | LP token owner does not match the required signer or escrow. |
+| `6012` | `InvalidVaultAccount` | Invalid vault account | Dynamic Vault account does not match the expected token mint or PDA. |
+| `6013` | `InvalidVaultLpAccount` | Invalid vault lp account | Pool's Dynamic Vault LP token account is invalid. |
+| `6014` | `InvalidPoolLpMintAccount` | Invalid pool lp mint account | Pool LP mint account is invalid. |
+| `6015` | `PoolDisabled` | Pool disabled | Operation is blocked because the pool is disabled. |
+| `6016` | `InvalidAdminAccount` | Invalid admin account | Legacy admin account check failed. |
+| `6017` | `InvalidProtocolFeeAccount` | Invalid protocol fee account | Protocol fee token account does not match expected PDA or mint. |
+| `6018` | `SameAdminAccount` | Same admin account | Old and new admin are identical in a legacy admin flow. |
+| `6019` | `IdenticalSourceDestination` | Identical user source and destination token account | Swap source and destination are the same account. |
+| `6020` | `ApyCalculationError` | Apy calculation error | Legacy APY calculation failed. |
+| `6021` | `InsufficientSnapshot` | Insufficient virtual price snapshot | Missing virtual-price data for yield/APY math. |
+| `6022` | `NonUpdatableCurve` | Current curve is non-updatable | Attempted to override a curve that cannot be updated. |
+| `6023` | `MisMatchedCurve` | New curve is mismatched with old curve | New curve type differs from existing curve type. |
+| `6024` | `InvalidAmplification` | Amplification is invalid | Stable amp is not within the allowed range or permissionless value. |
+| `6025` | `UnsupportedOperation` | Operation is not supported | Instruction is not supported for this pool or curve. |
+| `6026` | `ExceedMaxAChanges` | Exceed max amplification changes | Stable amp update exceeds max allowed change. |
+| `6027` | `InvalidRemainingAccountsLen` | Invalid remaining accounts length | Depeg, referral, zap, or remaining account list length is incorrect. |
+| `6028` | `InvalidRemainingAccounts` | Invalid remaining account | A required remaining account is wrong or in the wrong order. |
+| `6029` | `MismatchedDepegMint` | Token mint B doesn't matches depeg type token mint | Depeg configuration does not match the expected token mint. |
+| `6030` | `InvalidApyAccount` | Invalid APY account | Legacy APY account validation failed. |
+| `6031` | `InvalidTokenMultiplier` | Invalid token multiplier | Stable token multiplier is invalid for the token decimals or precision. |
+| `6032` | `InvalidDepegInformation` | Invalid depeg information | Depeg type, cache, virtual price, or remaining account data is invalid. |
+| `6033` | `UpdateTimeConstraint` | Update time constraint violated | Stable amp or depeg update happened before the cooldown passed. |
+| `6034` | `ExceedMaxFeeBps` | Exceeded max fee bps | Trade fee exceeds the program max. |
+| `6035` | `InvalidAdmin` | Invalid admin | Admin signer is not the configured program admin. |
+| `6036` | `PoolIsNotPermissioned` | Pool is not permissioned | Admin-only permissioned-pool operation was used on another pool type. |
+| `6037` | `InvalidDepositAmount` | Invalid deposit amount | Pool creation or liquidity instruction received invalid token amounts. |
+| `6038` | `InvalidFeeOwner` | Invalid fee owner | Partner or fee owner signer/account does not match pool state. |
+| `6039` | `NonDepletedPool` | Pool is not depleted | Bootstrap liquidity was attempted before the pool was depleted. |
+| `6040` | `AmountNotPeg` | Token amount is not 1:1 | Stable permissionless creation did not satisfy the expected peg ratio. |
+| `6041` | `AmountIsZero` | Amount is zero | Instruction amount is zero where a positive amount is required. |
+| `6042` | `TypeCastFailed` | Type cast error | Numeric cast failed. |
+| `6043` | `AmountIsNotEnough` | Amount is not enough | Provided amount is lower than the required minimum. |
+| `6044` | `InvalidActivationDuration` | Invalid activation duration | Config or customizable activation duration is outside limits. |
+| `6045` | `PoolIsNotLaunchPool` | Pool is not launch pool | Launch-pool-only instruction used on a non-launch pool. |
+| `6046` | `UnableToModifyActivationPoint` | Unable to modify activation point | Activation update attempted after the pre-activation swap window started. |
+| `6047` | `InvalidAuthorityToCreateThePool` | Invalid authority to create the pool | Config has a non-default creator authority and signer does not match. |
+| `6048` | `InvalidActivationType` | Invalid activation type | Activation type is not `0` slot or `1` timestamp. |
+| `6049` | `InvalidActivationPoint` | Invalid activation point | Activation point is not in the allowed window. |
+| `6050` | `PreActivationSwapStarted` | Pre activation swap window started | Attempted restricted activation update after pre-activation swap began. |
+| `6051` | `InvalidPoolType` | Invalid pool type | Pool type does not match the instruction requirement. |
+| `6052` | `InvalidQuoteMint` | Quote token must be SOL,USDC | Mainnet alpha-vault launch path requires SOL or USDC quote-side mint. |
+| `6053` | `InvalidTokenMetadataProgram` | Invalid token metadata program | Metadata program account is not the Metaplex metadata program. |
+| `6054` | `InvalidPermission` | Invalid permission | Operator permission bitmap is zero or exceeds supported operations. |
+| `6055` | `InvalidZapOutParameters` | Invalid zap out parameters | Zap protocol fee route parameters are invalid. |
+| `6056` | `IncorrectATA` | Incorrect ATA | Token account is not the expected associated token account. |
+| `6057` | `InvalidWithdrawProtocolFeeZapAccounts` | Invalid withdraw protocol fee zap accounts | Zap protocol fee account set is malformed. |
+| `6058` | `MintRestrictedFromZap` | SOL,USDC protocol fee cannot be withdrawn via zap | Zap protocol fee attempted for a restricted mint. |
+| `6059` | `CpiDisabled` | CPI disabled | Instruction rejects CPI invocation. |
+| `6060` | `MissingZapOutInstruction` | Missing zap out instruction | Zap route instruction was not found in the transaction sysvar. |
+| `6061` | `InvalidZapAccounts` | Invalid zap accounts | Zap route source/destination or account validation failed. |
+
+## Debugging Checklist
+
+| Symptom | Check |
+| --- | --- |
+| Pool creation fails with fee errors | Convert bps to numerator with `FEE_DENOMINATOR = 100_000`; config and customizable pools validate different fee ranges. |
+| Swap fails before math | Check `pool.enabled`, activation point, source/destination token accounts, protocol fee account, and depeg remaining accounts. |
+| Stable pool operation fails | Confirm the curve is stable, token multipliers match mint decimals, and depeg accounts are supplied when required. |
+| Launch pool activation fails | Verify `activation_type`, current slot or timestamp, alpha-vault timing buffers, and max activation duration. |
+| Partner claim fails | Confirm `pool.partner_info.partner_authority`, partner token accounts, and max claim amounts. |
+| Protocol fee withdrawal fails | Confirm the operator PDA, permission bitmap, treasury ATAs, and mint restrictions for zap flows. |

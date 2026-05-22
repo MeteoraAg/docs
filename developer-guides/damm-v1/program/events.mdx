@@ -1,0 +1,99 @@
+---
+title: "DAMM v1 Program Events"
+sidebarTitle: "Events"
+description: "Understand DAMM v1 dynamic AMM events emitted by pool creation, swaps, liquidity, locks, configs, fees, activation, and admin flows."
+llmsDescription: "Explains the DAMM v1 program event reference for Meteora's dynamic AMM program. Covers Anchor log events, event delivery, pool creation events, liquidity events, swap events, pool info events, fee and config events, lock escrow events, partner and protocol fee events, pool status events, source and SDK IDL compatibility notes, and indexing considerations for trading terminals, analytics, and lock-fee dashboards."
+---
+
+DAMM v1 events are emitted as Anchor log events through `emit!`. Use this page when building indexers, trading terminals, analytics pipelines, or dashboards that need to classify DAMM v1 transactions.
+
+<Note>
+  DAMM v1 does not use the event-CPI pattern used by newer Meteora programs. Parse Anchor logs from the DAMM v1 program ID instead of expecting an `__event_authority` account.
+</Note>
+
+## Event Delivery
+
+| Item | Value |
+| --- | --- |
+| Program ID | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` |
+| Delivery | Anchor `emit!` log events |
+| Source files | `programs/amm/src/event.rs` and instruction handlers that call `emit!` |
+| SDK compatibility | The bundled SDK IDL also includes events used by older client snapshots, including `MoveLockedLp`. |
+
+## Pool Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `PoolCreated` | `initialize_permissioned_pool`, `initialize_permissionless_pool`, `initialize_permissionless_pool_with_fee_tier`, config/customizable initialization paths through the shared initializer | LP mint, token A mint, token B mint, pool type, and pool address. |
+| `PoolEnabled` | `enable_or_disable_pool` | Pool address and enabled flag. |
+| `PoolInfo` | `get_pool_info` | Token A amount, token B amount, virtual price, and current timestamp. |
+| `BootstrapLiquidity` | `bootstrap_liquidity` | LP amount minted, token A amount, token B amount, and pool address. |
+
+`PoolCreated` is the main pool-discovery event. Indexers should still read the current pool account and Dynamic Vault accounts because pool fees, activation state, lock totals, partner fees, and vault balances can change after creation.
+
+## Liquidity Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `AddLiquidity` | `add_balance_liquidity`, `add_imbalance_liquidity` | LP amount minted, token A amount deposited, and token B amount deposited. |
+| `RemoveLiquidity` | `remove_balance_liquidity`, `remove_liquidity_single_side` | LP amount burned, token A amount withdrawn, and token B amount withdrawn. |
+
+For single-sided stable withdrawals, one output side can be zero. For balanced withdrawals, both output sides are populated.
+
+## Swap Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `Swap` | `swap` | Input amount, output amount, LP trade fee, protocol fee, and host fee. |
+
+`Swap` does not include token mint fields. To determine direction, indexers must inspect the transaction accounts or reconcile against pool state and token transfers.
+
+| Field | Meaning |
+| --- | --- |
+| `in_amount` | Source token amount sent into the swap path. |
+| `out_amount` | Destination token amount sent to the user. |
+| `trade_fee` | LP fee component after protocol fee is separated. |
+| `protocol_fee` | Protocol fee component. |
+| `host_fee` | Referral host fee component when a host account is supplied. |
+
+## Config And Fee Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `CreateConfig` | `create_config` | Trade fee numerator, protocol trade fee numerator, and config address. |
+| `CloseConfig` | `close_config` | Config address. |
+| `SetPoolFees` | `set_pool_fees` | New trade fee numerator/denominator, new protocol fee numerator/denominator, and pool address. |
+| `OverrideCurveParam` | `override_curve_param` | New stable amp value, update timestamp, and pool address. |
+| `WithdrawProtocolFees` | `withdraw_protocol_fees` | Pool address, protocol token A/B amounts withdrawn, and protocol fee token account owners. |
+| `PartnerClaimFees` | `partner_claim_fee` | Pool address, token A/B fee amounts, and partner authority. |
+
+Fee numerators use `FEE_DENOMINATOR = 100_000`. Do not interpret event fee numerators directly as basis points without conversion.
+
+## Lock Events
+
+| Event | Emitted by | Payload |
+| --- | --- | --- |
+| `CreateLockEscrow` | `create_lock_escrow` | Pool address and escrow owner. |
+| `Lock` | `lock` | Pool address, escrow owner, and LP amount locked. |
+| `ClaimFee` | `claim_fee` | Pool address, escrow owner, LP amount claimed as fee, token A fee amount, and token B fee amount. |
+| `MoveLockedLp` | `move_locked_lp` in the SDK IDL/program crate | Pool address, source lock escrow, destination lock escrow, and moved LP amount. |
+
+The current `meteora-dynamic-amm/programs/amm` source snapshot emits the first three lock events. The public SDK IDL includes `MoveLockedLp` for SDK compatibility.
+
+## Legacy Event Types
+
+| Event | Notes |
+| --- | --- |
+| `TransferAdmin` | Present in the event type definitions for older permissioned-pool admin flows. It is not emitted by the current source paths inspected for this guide. |
+| `MigrateFeeAccount` | Present in the event type definitions for older fee-account migration flows. It is not emitted by the current source paths inspected for this guide. |
+
+## Indexing Notes
+
+| Task | Recommendation |
+| --- | --- |
+| Pool discovery | Use `PoolCreated`, then fetch the pool, config if present, LP mint, and Dynamic Vault state. |
+| Swap analytics | Combine `Swap` logs with account ordering and SPL token transfers to infer token direction and mint identity. |
+| LP accounting | Use `AddLiquidity` and `RemoveLiquidity` events for activity, but compute current LP value from pool and vault state. |
+| Lock dashboards | Use lock events for activity and read `LockEscrow` for current claimable fee state. |
+| Fee dashboards | Track `SetPoolFees`, `CreateConfig`, `PartnerClaimFees`, and `WithdrawProtocolFees`, then reconcile against protocol fee token accounts. |
+| Source compatibility | Treat event type presence and actual emission separately. Some IDL events exist for older flows that are not emitted by the current source handlers. |
