@@ -1,0 +1,90 @@
+---
+title: "Dynamic Vault Program Events"
+sidebarTitle: "Events"
+description: "Understand Dynamic Vault events emitted by deposits, withdrawals, strategy rebalances, rewards, fees, losses, and unlocked-amount reads."
+llmsDescription: "Explains the Dynamic Vault program event reference for Meteora's vault program. Covers Anchor event log delivery, AddLiquidity, RemoveLiquidity, StrategyDeposit, StrategyWithdraw, ClaimReward, PerformanceFee, ReportLoss, TotalAmount, event payload fields, emitting instructions, indexing notes, strategy and liquidity accounting, and how the Rust client parses TotalAmount simulation logs."
+---
+
+The `vault` program emits Anchor events in program logs. Indexers can use these events to track user liquidity, strategy movements, rewards, performance fees, losses, and simulated unlocked amount reads.
+
+## Event Delivery
+
+| Item | Value |
+| --- | --- |
+| Program ID | `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` |
+| Event source | Anchor `Program data:` logs emitted with `emit!` |
+| Parser | Anchor event discriminator plus Borsh event payload |
+| Rust client example | `rust-client/src/utils.rs` scans `Program data:` logs and deserializes matching event discriminators |
+
+Unlike newer event-CPI programs, Dynamic Vault events are emitted as Anchor logs rather than through a separate event authority account.
+
+## Liquidity Events
+
+| Event | Emitted by | Payload | Use |
+| --- | --- | --- | --- |
+| `AddLiquidity` | `deposit` | `lp_mint_amount: u64`, `token_amount: u64` | Track user deposits and LP minted from the vault's unlocked accounting. |
+| `RemoveLiquidity` | `withdraw`, `withdraw_directly_from_strategy` | `lp_unmint_amount: u64`, `token_amount: u64` | Track user LP burns and underlying tokens returned. |
+
+`RemoveLiquidity.lp_unmint_amount` is the amount of LP burned. In a direct strategy withdrawal, the handler may refine the burn amount when the strategy cannot return the full desired amount.
+
+## Strategy Events
+
+| Event | Emitted by | Payload | Use |
+| --- | --- | --- | --- |
+| `StrategyDeposit` | `deposit_strategy` | `strategy_type: StrategyType`, `token_amount: u64` | Track vault reserve liquidity moved into a strategy. |
+| `StrategyWithdraw` | `withdraw_strategy`, `remove_strategy`, `remove_strategy2`, `withdraw_directly_from_strategy` | `strategy_type: StrategyType`, `collateral_amount: u64`, `estimated_token_amount: u64` | Track strategy collateral redeemed and estimated underlying returned. |
+
+For `remove_strategy`, `estimated_token_amount` is the actual increase in the vault token account after withdrawing all strategy collateral. For normal strategy withdrawal, it is the requested underlying amount.
+
+## Reward And Fee Events
+
+| Event | Emitted by | Payload | Use |
+| --- | --- | --- | --- |
+| `ClaimReward` | `claim_rewards` | `strategy_type: StrategyType`, `token_amount: u64`, `mint_account: Pubkey` | Track strategy rewards claimed to a treasury-owned token account. |
+| `PerformanceFee` | Rebalance wrapper on profit | `lp_mint_more: u64` | Track performance-fee LP minted to `fee_vault`. |
+| `ReportLoss` | Rebalance wrapper on loss | `strategy: Pubkey`, `loss: u64` | Track decreases in vault total amount after strategy accounting. |
+
+The performance fee is calculated only when a rebalance reports gain. The program mints LP tokens to the configured `fee_vault` and adjusts locked profit so the fee accounting does not immediately change virtual price.
+
+## Read Events
+
+| Event | Emitted by | Payload | Use |
+| --- | --- | --- | --- |
+| `TotalAmount` | `get_unlocked_amount` | `total_amount: u64` | Read current unlocked amount through transaction simulation logs. |
+
+The Rust client uses `get_unlocked_amount` by simulating the instruction and parsing `TotalAmount` from logs. Off-chain clients can also compute withdrawable amount locally from vault state and sysvar clock data.
+
+## Indexing Notes
+
+| Use case | Event |
+| --- | --- |
+| Deposit history | `AddLiquidity` |
+| Withdrawal history | `RemoveLiquidity` |
+| Strategy allocation movement | `StrategyDeposit`, `StrategyWithdraw` |
+| Reward collection | `ClaimReward` |
+| Fee accounting | `PerformanceFee` |
+| Loss accounting | `ReportLoss` |
+| Unlocked amount simulation | `TotalAmount` |
+
+Events do not include the vault address in their payloads. Indexers should join the event to the transaction instruction accounts, especially the `vault`, `strategy`, and token accounts, when building vault-level analytics.
+
+## Payload Reference
+
+| Event | Field | Type | Meaning |
+| --- | --- | --- | --- |
+| `AddLiquidity` | `lp_mint_amount` | `u64` | LP tokens minted to the user's LP token account. |
+| `AddLiquidity` | `token_amount` | `u64` | Underlying tokens transferred into the vault. |
+| `RemoveLiquidity` | `lp_unmint_amount` | `u64` | LP tokens burned from the user's LP token account. |
+| `RemoveLiquidity` | `token_amount` | `u64` | Underlying tokens transferred out to the user. |
+| `StrategyDeposit` | `strategy_type` | `StrategyType` | Strategy handler used for the deposit. |
+| `StrategyDeposit` | `token_amount` | `u64` | Underlying amount sent to the strategy. |
+| `StrategyWithdraw` | `strategy_type` | `StrategyType` | Strategy handler used for the withdrawal. |
+| `StrategyWithdraw` | `collateral_amount` | `u64` | Collateral tokens redeemed or accounted for. |
+| `StrategyWithdraw` | `estimated_token_amount` | `u64` | Estimated or actual underlying amount associated with the strategy withdrawal. |
+| `ClaimReward` | `strategy_type` | `StrategyType` | Strategy handler used for reward claiming. |
+| `ClaimReward` | `token_amount` | `u64` | Reward tokens received by the treasury-owned reward account. |
+| `ClaimReward` | `mint_account` | `Pubkey` | Reward token mint. |
+| `PerformanceFee` | `lp_mint_more` | `u64` | LP tokens minted to the fee vault. |
+| `ReportLoss` | `strategy` | `Pubkey` | Strategy account that reported loss through rebalance accounting. |
+| `ReportLoss` | `loss` | `u64` | Loss in underlying token units. |
+| `TotalAmount` | `total_amount` | `u64` | Current unlocked amount in underlying token units. |

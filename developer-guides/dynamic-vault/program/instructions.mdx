@@ -1,0 +1,123 @@
+---
+title: "Dynamic Vault Program Instructions"
+sidebarTitle: "Instructions"
+description: "Explore Dynamic Vault instructions for initialization, deposits, withdrawals, strategy rebalancing, rewards, operators, and admins."
+llmsDescription: "Explains the Dynamic Vault program instruction surface from the current mercurial-vault Anchor source. Covers vault initialization, idle vault initialization, user deposit and withdrawal instructions, direct strategy withdrawals, strategy initialization, add and remove strategy flows, rebalance deposit and withdraw flows, reward claiming, performance fee accounting, admin and operator controls, locked-profit updates, account constraints, remaining accounts, and TypeScript SDK method mappings."
+---
+
+The `vault` program exposes user liquidity instructions, strategy rebalance instructions, and admin/operator instructions. Apps should normally use the TypeScript SDK for transaction construction. Programs using CPI should generate bindings from the IDL and cross-check account order against the current source.
+
+<Note>
+  The current `mercurial-vault/programs/vault` source includes `initialize_idle_vault` and `JupLend` strategy support. The checked-in TypeScript IDL in `vault-sdk` is older in a few places, so this page follows the current program handlers.
+</Note>
+
+## User Liquidity
+
+| Instruction | TypeScript SDK | Accounts | Args | Use |
+| --- | --- | --- | --- | --- |
+| `deposit` | `vault.deposit(owner, amount)` | `vault`, `token_vault`, `lp_mint`, `user_token`, `user_lp`, `user`, `token_program` | `token_amount`, `minimum_lp_token_amount` | Transfer underlying tokens into the vault and mint LP tokens to the user. |
+| `withdraw` | `vault.withdraw(owner, lpAmount)` when reserve liquidity is enough | Same as `deposit` | `unmint_amount`, `min_out_amount` | Burn vault LP tokens and withdraw underlying tokens from the vault reserve. |
+| `withdraw_directly_from_strategy` | `vault.withdraw(owner, lpAmount)` when strategy liquidity is needed | `vault`, `strategy`, `reserve`, `strategy_program`, `collateral_vault`, `token_vault`, `lp_mint`, `fee_vault`, `user_token`, `user_lp`, `user`, `token_program` | `unmint_amount`, `min_out_amount` | Withdraw from a selected strategy first when vault reserves cannot satisfy the desired withdrawal. |
+
+`deposit` rejects zero amounts and rejects deposits when `vault.enabled == 0`. `withdraw` does not check `enabled`, so users can still exit a disabled vault.
+
+## Deposit Accounting
+
+| Step | Behavior |
+| --- | --- |
+| Check amount | `token_amount` must be greater than zero. |
+| Check vault status | Deposits fail with `VaultIsDisabled` when `enabled == 0`. |
+| Calculate LP | Uses unlocked vault amount and current LP supply. Empty vaults mint based on unlocked amount after adding the deposit. |
+| Slippage check | Fails with `ExceededSlippage` if minted LP is below `minimum_lp_token_amount`. |
+| Emit event | Emits `AddLiquidity`. |
+| Token movement | Transfers underlying tokens from `user_token` to `token_vault`, then mints LP to `user_lp`. |
+
+## Withdrawal Accounting
+
+| Step | Behavior |
+| --- | --- |
+| Calculate output | Uses `unmint_amount / lp_supply` over the current unlocked amount. |
+| Slippage check | Fails with `ExceededSlippage` if output is below `min_out_amount`. |
+| Reserve withdrawal | Transfers underlying tokens from `token_vault` to `user_token`. |
+| LP burn | Burns `unmint_amount` from `user_lp`. |
+| Strategy withdrawal | `withdraw_directly_from_strategy` can pull from a strategy first, then refines the burned LP amount if available liquidity is lower than requested. |
+
+## Vault Initialization
+
+| Instruction | Accounts | Args | Use |
+| --- | --- | --- | --- |
+| `initialize` | `vault`, `payer`, `token_vault`, `token_mint`, `lp_mint`, `rent`, `token_program`, `system_program` | none | Create a rebalance vault PDA for a token mint using `get_base_address()`. |
+| `initialize_idle_vault` | Same as `initialize` | none | Create an idle vault PDA for a token mint using the default pubkey as base. |
+
+Initialization sets `admin` and `operator` from the configured program admin, initializes the token vault and LP mint PDAs, clears all strategy slots, initializes locked profit, and enables the vault.
+
+## Strategy Management
+
+| Instruction | Accounts | Args | Authority | Use |
+| --- | --- | --- | --- | --- |
+| `initialize_strategy` | `vault`, `strategy_program`, `strategy`, `reserve`, `collateral_vault`, `collateral_mint`, `admin`, `system_program`, `rent`, `token_program` | `bumps`, `strategy_type` | Admin | Initialize a strategy account, collateral vault, downstream strategy state, and add it to `vault.strategies`. |
+| `add_strategy` | `vault`, `strategy`, `admin` | none | Admin | Re-add an initialized, non-disabled strategy to a vault slot. |
+| `remove_strategy` | `vault`, `strategy`, `strategy_program`, `collateral_vault`, `reserve`, `token_vault`, `fee_vault`, `lp_mint`, `token_program`, `admin` | none | Admin | Withdraw all liquidity from a strategy and remove it from the vault strategy list. |
+| `remove_strategy2` | Same as `remove_strategy` plus advance-payment token accounts | `max_admin_pay_amount` | Admin | Remove a strategy using vault/admin advance payment instead of a normal strategy withdrawal, then mark it disabled. |
+
+`initialize_strategy` requires `vault.fee_vault` to be set. The handler validates the strategy bump layout and fails with `InvalidBump` if `other_bumps[0]` or `other_bumps[1]` do not match the expected strategy index and PDA bump.
+
+## Rebalancing And Rewards
+
+| Instruction | Accounts | Args | Authority | Use |
+| --- | --- | --- | --- | --- |
+| `deposit_strategy` | `vault`, `strategy`, `token_vault`, `fee_vault`, `lp_mint`, `strategy_program`, `collateral_vault`, `reserve`, `token_program`, `operator` | `amount` | Admin or operator | Move vault reserve liquidity into a strategy. |
+| `withdraw_strategy` | Same as `deposit_strategy` | `amount` | Admin or operator | Move liquidity from a strategy back into the vault reserve. |
+| `claim_rewards` | `vault`, `strategy`, `token_program`, `token_reward_acc`, `operator` | none | Admin or operator | Claim strategy rewards to a treasury-owned reward token account. |
+
+Strategy instructions pass protocol-specific remaining accounts to the active strategy handler. The current source-backed external handler is `JupLend`.
+
+## Rebalance Wrapper Behavior
+
+`deposit_strategy`, `withdraw_strategy`, `remove_strategy`, `remove_strategy2`, and `withdraw_directly_from_strategy` run through shared rebalance accounting.
+
+| Step | Behavior |
+| --- | --- |
+| Validate strategy | Fails with `StrategyIsNotExisted` if the strategy is not registered in the vault. |
+| Snapshot liquidity | Reads vault reserve amount and `strategy.current_liquidity` before the strategy call. |
+| Execute handler | Calls the strategy-specific deposit, withdraw, reward, or compatibility path. |
+| Reload accounts | Reloads token and collateral vaults after CPI. |
+| Update total | Updates `vault.total_amount` from reserve and strategy liquidity changes. |
+| Report loss | Emits `ReportLoss` when total amount decreases. |
+| Lock profit | Updates `locked_profit_tracker` when total amount changes. |
+| Mint fee | On profit, mints performance-fee LP tokens to `fee_vault` and emits `PerformanceFee`. |
+
+## Admin And Operator Controls
+
+| Instruction | Accounts | Args | Authority | Use |
+| --- | --- | --- | --- | --- |
+| `enable_vault` | `vault`, `admin` | `enabled` | Admin | Set `vault.enabled`. |
+| `set_operator` | `vault`, `operator`, `admin` | none | Admin | Replace the vault operator. |
+| `update_locked_profit_degradation` | `vault`, `admin` | `locked_profit_degradation` | Admin | Update locked-profit release rate after refreshing current locked profit. |
+| `transfer_admin` | `vault`, `admin`, `new_admin` | none | Current admin and new admin signer | Transfer vault admin authority. |
+| `transfer_fee_vault` | `vault`, `admin`, `new_fee_vault` | none | Admin | Set a treasury-owned LP token account as the fee vault. |
+| `get_unlocked_amount` | `vault` | none | none | Simulate or invoke to emit `TotalAmount` with current unlocked amount. |
+
+All admin and operator controls except `get_unlocked_amount` require a rebalance vault.
+
+## TypeScript SDK Mapping
+
+| SDK method | Program behavior |
+| --- | --- |
+| `VaultImpl.createPermissionlessVaultInstruction(...)` | Builds `initialize`. |
+| `VaultImpl.create(...)` | Derives the vault PDA from token mint and fetches vault, token mint, and LP mint state. |
+| `vault.deposit(...)` | Builds `deposit`, or affiliate wrapper `deposit` when `affiliateId` is configured. |
+| `vault.withdraw(...)` | Builds reserve `withdraw` or strategy-backed withdrawal depending on vault reserve liquidity. |
+| `vault.getWithdrawableAmount()` | Computes the same locked-profit unlock formula client-side from vault state and on-chain time. |
+| `vault.getStrategiesState()` | Fetches strategy accounts from non-default `vault.strategies` entries. |
+
+## Low-Level Gotchas
+
+| Gotcha | Detail |
+| --- | --- |
+| LP amount names | `withdraw` takes LP tokens to burn as `unmint_amount`, not an underlying-token amount. The SDK parameter is named `baseTokenAmount`, but the source uses it as the LP amount to burn. |
+| Strategy remaining accounts | Strategy handlers validate downstream accounts. Account metas vary by strategy type and must match the handler. |
+| Fee vault setup | Rebalance and strategy flows with `has_one = fee_vault` require the vault's fee vault to be configured. |
+| Disabled strategies | `remove_strategy2` calls `strategy.disable()`. A disabled strategy cannot be re-added. |
+| Precision loss | Direct strategy withdrawal fails with `InvalidPrecisionLoss` if the precision loss is greater than one underlying unit. |
+| Older IDL entries | The public TS IDL includes older entries such as `collectDust` and `withdraw2`. They are not present in the current `mercurial-vault` program source handlers and are not documented as current handlers here. |

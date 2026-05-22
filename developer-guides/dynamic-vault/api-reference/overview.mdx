@@ -1,27 +1,114 @@
 ---
-title: "Overview"
-description: <Tip>**Dynamic Vault APIs have no rate limit.**</Tip>
+title: "Dynamic Vault Data API Overview"
+sidebarTitle: "Overview"
+description: "Learn how the Dynamic Vault Data API exposes indexed vault state, vault addresses, APY history, strategy allocation, and virtual price data."
+llmsDescription: "Explains the Dynamic Vault Data API as the indexed read-only data layer for Meteora Dynamic Vault integrations. Covers production host, Swagger and OpenAPI references, vault info, vault addresses, vault state by token mint, APY state, APY time-range filtering, virtual price routes, response fields, generated endpoint routes, API and on-chain source-of-truth guidance, and current source gaps."
 ---
 
+The Dynamic Vault Data API exposes read-only indexed data for supported vaults, including vault addresses, APY snapshots, strategy allocation, LP supply, total amount, fee amount, virtual price, and timestamps.
+
+<Tip>
+  The checked-in Dynamic Vault OpenAPI file does not declare a rate limit. Treat the API as a read-only data source for discovery and dashboards, and use on-chain vault accounts as the source of truth for transaction-critical execution.
+</Tip>
+
+## Base URL
+
+| Environment | Base URL | Notes |
+| --- | --- | --- |
+| Production | `https://merv2-api.meteora.ag` | Verified live for Dynamic Vault routes such as `/vault_info` and `/vault_addresses`. |
+
+The `@meteora-ag/vault-sdk` source also includes older keeper URL constants. Prefer the documented production host above for new Dynamic Vault API integrations.
+
+## Vaults
+
 <CardGroup>
-  <Card title="get_vault_info"  icon="file-code" iconType="solid" href="/api-reference/vaults/get_vault_info">
-    Request for Meteora's Dynamic Vault info using `GET` `/vault_info`
+  <Card title="Vault Info" icon="file-code" iconType="solid" href="/api-reference/dynamic-vault/vaults/get_vault_info">
+    Returns all monitored vault states using `GET` `/vault_info`
   </Card>
-  <Card title="get_vault_addresses"  icon="file-code" iconType="solid" href="/api-reference/vaults/get_vault_addresses">
-    Request for Meteora's Dynamic Vault addresses using `GET` `/vault_addresses`
+  <Card title="Vault Addresses" icon="file-code" iconType="solid" href="/api-reference/dynamic-vault/vaults/get_vault_addresses">
+    Returns vault, LP mint, and fee account addresses using `GET` `/vault_addresses`
   </Card>
-  <Card title="get_vault_state"  icon="file-code" iconType="solid" href="/api-reference/vaults/get_vault_state">
-    Request for Meteora's Dynamic Vault state using `GET` `/vault_state/{token_mint}`
-  </Card>
-
-  <Card title="get_apy_state"  icon="file-code" iconType="solid" href="/api-reference/apy/get_apy_state">
-    Request for Meteora's Dynamic Vault APY state using `GET` `/apy_state/{token_mint}`
-  </Card>
-  <Card title="get_apy_by_time_range"  icon="file-code" iconType="solid" href="/api-reference/apy/get_apy_by_time_range">
-    Request for Meteora's Dynamic Vault APY by time range using `GET` `/apy_filter/{token_mint}/{start_timestamp}/{end_timestamp}`
-  </Card>
-
-  <Card title="get_virtual_price"  icon="file-code" iconType="solid" href="/api-reference/virtual-price/get_virtual_price">
-    Request for Meteora's Dynamic Vault virtual price using `GET` `/virtual_price/{token_mint}/{strategy}`
+  <Card title="Vault State" icon="file-code" iconType="solid" href="/api-reference/dynamic-vault/vaults/get_vault_state">
+    Returns one vault state by token mint using `GET` `/vault_state/{token_mint}`
   </Card>
 </CardGroup>
+
+## APY
+
+<CardGroup>
+  <Card title="APY State" icon="file-code" iconType="solid" href="/api-reference/dynamic-vault/apy/get_apy_state">
+    Returns current APY values for a token mint using `GET` `/apy_state/{token_mint}`
+  </Card>
+  <Card title="APY By Time Range" icon="file-code" iconType="solid" href="/api-reference/dynamic-vault/apy/get_apy_by_time_range">
+    Returns APY data within a Unix timestamp range using `GET` `/apy_filter/{token_mint}/{start_timestamp}/{end_timestamp}`
+  </Card>
+</CardGroup>
+
+## Virtual Price
+
+<CardGroup>
+  <Card title="Virtual Price" icon="file-code" iconType="solid" href="/api-reference/dynamic-vault/virtual-price/get_virtual_price">
+    Returns virtual price records for a token mint and strategy using `GET` `/virtual_price/{token_mint}/{strategy}`
+  </Card>
+</CardGroup>
+
+## Common Response Fields
+
+`VaultState` responses include these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `symbol` | Display symbol for the vault token. |
+| `token_address` | Underlying token mint. |
+| `pubkey` | Vault account address. |
+| `lp_mint` | Vault LP mint. |
+| `fee_pubkey` | Fee vault token account. |
+| `enabled` | Current vault enabled flag from indexed state. |
+| `total_amount` | Total vault amount in base token units. |
+| `total_amount_with_profit` | Total amount including indexed profit accounting. |
+| `token_amount` | Amount currently held in the vault reserve token account. |
+| `fee_amount` | Indexed fee amount. |
+| `lp_supply` | Current LP mint supply. |
+| `virtual_price` | String virtual price derived from vault accounting. |
+| `usd_rate` | Indexed USD rate for the vault token. |
+| `closest_apy`, `average_apy`, `long_apy` | Short, 24-hour, and longer-window APY values from the API schema. |
+| `earned_amount`, `earned_usd_amount` | Indexed earned amount in token units and USD terms. |
+| `strategies` | Strategy allocation array. |
+| `timestamp` | API snapshot timestamp. |
+
+## Strategy Fields
+
+| Field | Meaning |
+| --- | --- |
+| `pubkey` | Strategy account address. |
+| `reserve` | Strategy reserve account. |
+| `strategy_type` | Program strategy enum string. |
+| `strategy_name` | Display name for the strategy. |
+| `liquidity` | Strategy liquidity in base token units. |
+| `max_allocation` | Configured maximum allocation percent. |
+| `isolated` | Whether the strategy is isolated in the API's risk model. |
+| `disabled` | Whether the API marks the strategy disabled. |
+| `safe_utilization_threshold` | API utilization threshold for strategy safety. |
+
+## Query Parameters
+
+| Endpoint | Parameter | Meaning |
+| --- | --- | --- |
+| `/vault_state/{token_mint}` | `token_mint` | Underlying token mint public key. |
+| `/apy_state/{token_mint}` | `token_mint` | Underlying token mint public key. |
+| `/apy_filter/{token_mint}/{start_timestamp}/{end_timestamp}` | `start_timestamp`, `end_timestamp` | Unix timestamps in seconds. `end_timestamp` must be greater than `start_timestamp`. |
+| `/virtual_price/{token_mint}/{strategy}` | `strategy` | Strategy identifier expected by the API. |
+
+## API Or On-Chain Data
+
+| Need | Use |
+| --- | --- |
+| Vault discovery | Data API `/vault_info` or `/vault_addresses`. |
+| Dashboard APY and strategy allocation | Data API APY and vault-state endpoints. |
+| Transaction construction | On-chain vault, LP mint, token vault, and strategy accounts. |
+| Deposit/withdraw execution | TypeScript SDK or CPI with fresh on-chain state and simulation. |
+| Virtual price display | Data API for display, on-chain calculation for execution-sensitive flows. |
+
+## Source Note
+
+The production URL `https://damm-api.meteora.ag/swagger-ui/` serves the Dynamic AMM keeper OpenAPI spec, not the Dynamic Vault routes listed above. The Dynamic Vault routes in this guide are backed by the checked-in `developer-guides/dynamic-vault/api-reference/openapi.json` file and live `merv2-api` route checks.

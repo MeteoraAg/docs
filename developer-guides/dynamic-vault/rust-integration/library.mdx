@@ -1,0 +1,186 @@
+---
+title: "Dynamic Vault Rust Integration Library"
+sidebarTitle: "Library"
+description: "Learn how to read Dynamic Vault state, derive vault accounts, calculate unlocked amount, and use the Rust client helper."
+llmsDescription: "Explains Dynamic Vault Rust integration with the mercurial-vault crate and rust-client helper. Covers Cargo dependencies, program ID, PDA derivation, vault state reads, token vault reserve reads, LP supply reads, unlocked amount calculations, CLI commands, deposit and withdraw examples, event log parsing, source differences between the current program and SDK vendored crate, and when to use Rust versus the TypeScript SDK."
+---
+
+Use Rust when your backend, keeper, or test harness needs direct account reads, transaction simulation, or Anchor instruction construction for Dynamic Vault.
+
+<Note>
+  `vault-sdk/rust-client` is a CLI-style helper, not a broad high-level SDK. It demonstrates PDA derivation, account reads, simulation, deposits, and withdrawals with `anchor-client`.
+</Note>
+
+## Install
+
+For the current program source, depend on the `mercurial-vault` crate from the same workspace or pin the matching repository revision:
+
+```toml
+[dependencies]
+anchor-client = "0.28"
+anchor-lang = "0.28"
+anchor-spl = "0.28"
+anyhow = "1"
+mercurial-vault = { path = "../programs/vault", features = ["cpi"] }
+spl-associated-token-account = { version = "2.1.0", features = ["no-entrypoint"] }
+```
+
+The local `vault-sdk/rust-client` depends on the vendored `vault-sdk/programs/vault` crate by path. The newer `mercurial-vault/programs/vault` source uses Anchor `0.31.1` and has a newer handler surface. Keep your crate, IDL, and deployed program target aligned.
+
+## Program ID
+
+```rust
+pub const VAULT_PROGRAM_ID: &str =
+    "24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi";
+```
+
+The public program ID is the same on mainnet and devnet.
+
+## PDA Derivation
+
+```rust
+use anchor_lang::prelude::*;
+
+let program_id = mercurial_vault::id();
+let base = Pubkey::from_str("HWzXGcGHy4tcpYfaRDCyLNzXqBTv3E6BttpCH2vJxArv")?;
+
+let (vault, _vault_bump) = Pubkey::find_program_address(
+    &[b"vault".as_ref(), token_mint.as_ref(), base.as_ref()],
+    &program_id,
+);
+
+let (token_vault, _token_vault_bump) = Pubkey::find_program_address(
+    &[b"token_vault".as_ref(), vault.as_ref()],
+    &program_id,
+);
+
+let (lp_mint, _lp_mint_bump) = Pubkey::find_program_address(
+    &[b"lp_mint".as_ref(), vault.as_ref()],
+    &program_id,
+);
+```
+
+For idle vaults, use the default pubkey as the base seed instead of `VAULT_BASE_KEY`.
+
+## Read Vault State
+
+```rust
+let vault_state: mercurial_vault::state::Vault =
+    program_client.account(vault)?;
+
+let token_data: anchor_spl::token::TokenAccount =
+    program_client.account(vault_state.token_vault)?;
+
+let lp_mint_data: anchor_spl::token::Mint =
+    program_client.account(vault_state.lp_mint)?;
+
+println!("total amount {}", vault_state.total_amount);
+println!("reserve amount {}", token_data.amount);
+println!("lp supply {}", lp_mint_data.supply);
+```
+
+## Calculate Unlocked Amount
+
+```rust
+use anchor_lang::solana_program::{clock::Clock, sysvar};
+use bincode::deserialize;
+use std::convert::TryFrom;
+
+let clock_account = program_client.rpc().get_account(&sysvar::clock::id())?;
+let clock = deserialize::<Clock>(&clock_account.data)?;
+let current_time = u64::try_from(clock.unix_timestamp)?;
+
+let unlocked_amount = vault_state
+    .get_unlocked_amount(current_time)
+    .ok_or_else(|| anyhow::anyhow!("failed to calculate unlocked amount"))?;
+
+println!("unlocked amount {}", unlocked_amount);
+```
+
+The Rust client also demonstrates an instruction simulation path: simulate `get_unlocked_amount`, parse Anchor `Program data:` logs, and deserialize the `TotalAmount` event.
+
+## Deposit
+
+The Rust client creates or reuses the user's token and LP ATAs, then builds `DepositWithdrawLiquidity`.
+
+```rust
+let user_token = get_or_create_ata(program_client, token_mint, program_client.payer())?;
+let user_lp = get_or_create_ata(program_client, vault_state.lp_mint, program_client.payer())?;
+
+let signature = program_client
+    .request()
+    .accounts(mercurial_vault::accounts::DepositWithdrawLiquidity {
+        vault,
+        token_vault,
+        lp_mint: vault_state.lp_mint,
+        user_token,
+        user_lp,
+        user: program_client.payer(),
+        token_program: anchor_spl::token::spl_token::id(),
+    })
+    .args(mercurial_vault::instruction::Deposit {
+        token_amount,
+        minimum_lp_token_amount: 0,
+    })
+    .send()?;
+
+println!("{}", signature);
+```
+
+## Withdraw
+
+Withdraw burns vault LP tokens. Pass the LP amount as `unmint_amount`.
+
+```rust
+let signature = program_client
+    .request()
+    .accounts(mercurial_vault::accounts::DepositWithdrawLiquidity {
+        vault,
+        token_vault,
+        lp_mint: vault_state.lp_mint,
+        user_token,
+        user_lp,
+        user: program_client.payer(),
+        token_program: anchor_spl::token::spl_token::id(),
+    })
+    .args(mercurial_vault::instruction::Withdraw {
+        unmint_amount,
+        min_out_amount: 0,
+    })
+    .send()?;
+
+println!("{}", signature);
+```
+
+## Rust Client Commands
+
+From `vault-sdk/rust-client`:
+
+```bash
+cargo build
+../target/debug/rust-client --help
+```
+
+| Command | Use |
+| --- | --- |
+| `show` | Prints vault state, unlocked amount, LP supply, token vault amount, and strategy states. |
+| `get-unlocked-amount` | Simulates the read instruction and parses `TotalAmount` from logs. |
+| `deposit <token_amount>` | Deposits underlying tokens through `DepositWithdrawLiquidity`. |
+| `withdraw <unmint_amount>` | Burns LP tokens through `DepositWithdrawLiquidity`. |
+
+Common provider overrides:
+
+```bash
+../target/debug/rust-client show \
+  --provider.cluster mainnet \
+  --provider.token_mint So11111111111111111111111111111111111111112
+```
+
+## Rust Or TypeScript
+
+| Need | Use |
+| --- | --- |
+| App or backend transaction construction | [TypeScript SDK](/developer-guides/dynamic-vault/typescript-sdk/getting-started) |
+| Rust state reads or local CLI scripts | Rust client helper |
+| On-chain program composition | [Rust CPI](/developer-guides/dynamic-vault/rust-integration/cpi) |
+| API dashboards and discovery | [Data API](/developer-guides/dynamic-vault/api-reference/overview) |

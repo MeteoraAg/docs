@@ -1,88 +1,155 @@
 ---
-title: Getting Started
-description: Dynamic Vault
+title: "Dynamic Vault TypeScript SDK Getting Started"
+sidebarTitle: "Getting Started"
+description: "Learn how to install @meteora-ag/vault-sdk, create a vault client, read vault state, deposit, withdraw, and test locally."
+llmsDescription: "Explains how to get started with the Dynamic Vault TypeScript SDK. Covers package installation, dependencies, imports, connection setup, VaultImpl.create, supported token mint inputs, vault state reads, withdrawable amount, LP supply, user balance, deposit and withdraw transaction construction, affiliate initialization, local SDK tests, and production integration cautions."
 ---
 
-This guide provides instructions on how to get started with building on Meteora's Dynamic Vault program using the Dynamic Vault TypeScript SDK.
-
-Before you begin, here are some important resources:
+Use `@meteora-ag/vault-sdk` when building an off-chain app, backend service, or script that needs to read Dynamic Vault state or build deposit and withdrawal transactions.
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/vault-sdk">
-    Meteora Dynamic Vault Typescript SDK
+  <Card title="Vault SDK Repository" icon="github" iconType="solid" href="https://github.com/MeteoraAg/vault-sdk">
+    Public TypeScript SDK source, tests, IDL, and Rust client helper.
   </Card>
-  <Card title="Dynamic Vault NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/vault-sdk">
-    Meteora Dynamic Vault NPM Package
+  <Card title="NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/vault-sdk">
+    Published `@meteora-ag/vault-sdk` package.
   </Card>
 </CardGroup>
 
-# Installation
-
-To use the SDK in your project, install it using your preferred package manager:
+## Install
 
 <Tabs>
   <Tab title="npm">
     ```bash
-    npm install @meteora-ag/vault-sdk @solana/web3.js @solana/spl-token-registry
+    npm install @meteora-ag/vault-sdk @coral-xyz/anchor @solana/web3.js@1 @solana/spl-token bn.js
     ```
   </Tab>
   <Tab title="pnpm">
     ```bash
-    pnpm install @meteora-ag/vault-sdk @solana/web3.js @solana/spl-token-registry
+    pnpm install @meteora-ag/vault-sdk @coral-xyz/anchor @solana/web3.js@1 @solana/spl-token bn.js
     ```
   </Tab>
   <Tab title="yarn">
     ```bash
-    yarn add @meteora-ag/vault-sdk @solana/web3.js @solana/spl-token-registry
+    yarn add @meteora-ag/vault-sdk @coral-xyz/anchor @solana/web3.js@1 @solana/spl-token bn.js
     ```
   </Tab>
 </Tabs>
 
-# Initialization
+The package currently targets the `@solana/web3.js` v1 transaction model.
 
-Once installed, you can initialize the SDK in your TypeScript/JavaScript project like this:
+## Create A Client
+
+`VaultImpl.create` takes a token mint public key. For SOL, use `NATIVE_MINT` from `@solana/spl-token`.
 
 ```typescript
-import { Connection } from "@solana/web3.js";
-import VaultImpl from '@meteora-ag/vault-sdk';
-import { StaticTokenListResolutionStrategy, TokenInfo } from "@solana/spl-token-registry";
+import VaultImpl from "@meteora-ag/vault-sdk";
+import { AnchorProvider, BN, Wallet } from "@coral-xyz/anchor";
+import { NATIVE_MINT } from "@solana/spl-token";
+import { Connection, Keypair } from "@solana/web3.js";
 
-// Initialize a connection to the Solana network (e.g., Mainnet)
-const connection = new Connection("https://api.mainnet-beta.solana.com");
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
 
-// Retrieve the token info for the vault (example: SOL)
-const tokenMap = new StaticTokenListResolutionStrategy().resolve();
-const SOL_TOKEN_INFO = tokenMap.find(token => token.symbol === 'SOL') as TokenInfo;
+// Server-side scripts can use a Keypair-backed Anchor wallet.
+// Browser apps should use the connected wallet's signing adapter instead.
+const signer = Keypair.generate();
+const wallet = new Wallet(signer);
+const provider = new AnchorProvider(connection, wallet, {
+  commitment: "confirmed",
+});
 
-// Getting a Vault Implementation instance (SOL)
-const vault: VaultImpl = await VaultImpl.create(
-    connection,
-    SOL_TOKEN_INFO,
-    {
-        cluster: 'mainnet-beta'
-    }
-);
+const vault = await VaultImpl.create(connection, NATIVE_MINT, {
+  cluster: "mainnet-beta",
+});
+
+console.log({
+  vault: vault.vaultPda.toBase58(),
+  tokenVault: vault.tokenVaultPda.toBase58(),
+  lpMint: vault.vaultState.lpMint.toBase58(),
+});
 ```
 
-# Testing the SDK (for contributors)
+## Read Vault State
 
-If you have cloned the SDK repository and want to run the built-in tests:
+```typescript
+await vault.refreshVaultState();
+
+const lpSupply = await vault.getVaultSupply();
+const withdrawableAmount = await vault.getWithdrawableAmount();
+const userLpBalance = await vault.getUserBalance(wallet.publicKey);
+
+console.log({
+  totalAmount: vault.vaultState.totalAmount.toString(),
+  withdrawableAmount: withdrawableAmount.toString(),
+  lpSupply: lpSupply.toString(),
+  userLpBalance: userLpBalance.toString(),
+});
+```
+
+`getWithdrawableAmount()` computes the unlocked vault amount from on-chain time and `vaultState.lockedProfitTracker`. It is the client-side equivalent of the program's `get_unlocked_amount` simulation flow.
+
+## Deposit
+
+`deposit` returns an unsigned `Transaction` with ATA setup and SOL wrapping instructions when needed.
+
+```typescript
+const amountInLamports = new BN(1_000_000_000); // 1 SOL
+
+const depositTx = await vault.deposit(wallet.publicKey, amountInLamports);
+
+depositTx.feePayer = wallet.publicKey;
+console.log(await connection.simulateTransaction(depositTx));
+
+const depositSignature = await provider.sendAndConfirm(depositTx);
+console.log("Deposit", depositSignature);
+```
+
+## Withdraw
+
+`withdraw` expects the LP token amount to burn. Use `getUserBalance` or `getUnmintAmount` to choose the LP amount.
+
+```typescript
+const userLpBalance = await vault.getUserBalance(wallet.publicKey);
+const withdrawTx = await vault.withdraw(wallet.publicKey, userLpBalance);
+
+withdrawTx.feePayer = wallet.publicKey;
+console.log(await connection.simulateTransaction(withdrawTx));
+
+const withdrawSignature = await provider.sendAndConfirm(withdrawTx);
+console.log("Withdraw", withdrawSignature);
+```
+
+<Warning>
+  The SDK method parameter is named `baseTokenAmount`, but the withdrawal path passes it to the program as LP `unmint_amount`. Treat the value as vault LP tokens to burn.
+</Warning>
+
+## Affiliate Initialization
+
+Affiliate partners pass `affiliateId` when creating the vault client. Deposits and withdrawals then route through the affiliate program wrapper.
+
+```typescript
+import { PublicKey } from "@solana/web3.js";
+
+const affiliateVault = await VaultImpl.create(connection, NATIVE_MINT, {
+  cluster: "mainnet-beta",
+  affiliateId: new PublicKey("YOUR_PARTNER_PUBLIC_KEY"),
+});
+
+const partnerInfo = await affiliateVault.getAffiliateInfo();
+console.log({
+  partnerToken: partnerInfo.partnerToken.toBase58(),
+  feeRatio: partnerInfo.feeRatio.toString(),
+  cumulativeFee: partnerInfo.cummulativeFee.toString(),
+});
+```
+
+## Local SDK Tests
 
 ```bash
-# Install dependencies
-cd ts-client
-bun install
-
-# Run tests
-bun test
+cd vault-sdk/ts-client
+pnpm install
+pnpm test
+pnpm run test-affiliate
 ```
 
-# Development Resources
-
-## Faucets
-
-<CardGroup cols={1}>
-  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.raccoons.dev/">
-    <p>When working on devnet, you might need test tokens. Here is a helpful faucet.</p>
-  </Card>
-</CardGroup>
+Some tests and examples expect live RPC access, deployed vault accounts, or local validator fixtures. For production integrations, simulate transactions and test on devnet before sending mainnet transactions.
