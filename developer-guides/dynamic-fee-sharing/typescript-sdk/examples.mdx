@@ -1,0 +1,176 @@
+---
+title: "Dynamic Fee Sharing TS SDK Examples"
+sidebarTitle: "Examples"
+description: "Learn how to build common Dynamic Fee Sharing TypeScript SDK flows for vault creation, funding, source-program claims, user claims, and state reads."
+llmsDescription: "Explains common Dynamic Fee Sharing TypeScript SDK examples using @meteora-ag/dynamic-fee-sharing-sdk. Covers non-PDA vault creation, PDA vault creation, direct funding, user claims, receiver claims, fee breakdown reads, DAMM v2 fee and reward source funding, DBC source funding wrappers, required signer notes, and local script paths."
+---
+
+These examples show the SDK flow shape. They return unsigned transactions that your app should sign, simulate, submit, and confirm through its own wallet or backend signer flow.
+
+## Create A Non-PDA Fee Vault
+
+```typescript
+import { Keypair } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { DynamicFeeSharingClient } from "@meteora-ag/dynamic-fee-sharing-sdk";
+
+const client = new DynamicFeeSharingClient(connection, "confirmed");
+const feeVault = Keypair.generate();
+
+const tx = await client.createFeeVault({
+  feeVault: feeVault.publicKey,
+  tokenMint,
+  tokenProgram: TOKEN_PROGRAM_ID,
+  owner: owner.publicKey,
+  payer: payer.publicKey,
+  userShare: [
+    { address: userA.publicKey, share: 600 },
+    { address: userB.publicKey, share: 400 },
+  ],
+});
+
+// Sign with payer and feeVault.
+```
+
+Use this flow when the vault address can be generated and stored by your integration.
+
+## Create A PDA Fee Vault
+
+```typescript
+import {
+  deriveFeeVaultPdaAddress,
+  DynamicFeeSharingClient,
+} from "@meteora-ag/dynamic-fee-sharing-sdk";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+
+const client = new DynamicFeeSharingClient(connection, "confirmed");
+const feeVault = deriveFeeVaultPdaAddress(base.publicKey, tokenMint);
+
+const tx = await client.createFeeVaultPda({
+  base: base.publicKey,
+  tokenMint,
+  tokenProgram: TOKEN_PROGRAM_ID,
+  owner: owner.publicKey,
+  payer: payer.publicKey,
+  userShare: [
+    { address: userA.publicKey, share: 600 },
+    { address: userB.publicKey, share: 400 },
+  ],
+});
+
+// Sign with payer and base.
+```
+
+Use this flow when the vault must be recoverable from `(base, tokenMint)` or must sign source-program fee claim instructions.
+
+## Fund A Fee Vault Directly
+
+```typescript
+import BN from "bn.js";
+
+const tx = await client.fundFeeVault({
+  feeVault,
+  funder: funder.publicKey,
+  fundAmount: new BN("1000000"),
+});
+
+// Sign with funder.
+```
+
+The SDK creates the funder's associated token account if needed. For native SOL, it wraps SOL before funding.
+
+## Claim User Fees
+
+```typescript
+const tx = await client.claimUserFee({
+  feeVault,
+  user: userA.publicKey,
+  payer: payer.publicKey,
+});
+
+// Sign with payer and userA.
+```
+
+Use `claimUserFee2` when the claimant signs but receives into another receiver's associated token account:
+
+```typescript
+const tx = await client.claimUserFee2({
+  feeVault,
+  user: userA.publicKey,
+  payer: payer.publicKey,
+  receiver: receiver.publicKey,
+});
+
+// Sign with payer and userA. The receiver does not sign.
+```
+
+## Read Vault State
+
+```typescript
+const feeVaultState = await client.getFeeVault(feeVault);
+
+console.log(feeVaultState.totalFundedFee.toString());
+console.log(feeVaultState.totalShare);
+```
+
+```typescript
+const breakdown = await client.getFeeBreakdown(feeVault);
+
+for (const userFee of breakdown.userFees) {
+  console.log(userFee.address.toBase58(), userFee.feeUnclaimed.toString());
+}
+```
+
+## Fund From DAMM v2
+
+PDA fee vaults can receive DAMM v2 position fees or rewards through `fund_by_claiming_fee`. The fee vault must own the DAMM v2 position NFT account before claiming.
+
+```typescript
+const tx = await client.fundByClaimDammV2Fee({
+  signer: shareholder.publicKey,
+  owner: owner.publicKey,
+  feeVault,
+  dammV2Pool,
+  dammV2Position,
+  dammV2PositionNftAccount,
+});
+
+// Sign with shareholder. Include any other signers required by your transaction flow.
+```
+
+```typescript
+const tx = await client.fundByClaimDammV2Reward({
+  signer: shareholder.publicKey,
+  rewardIndex: 0,
+  feeVault,
+  dammV2Pool,
+  dammV2Position,
+  dammV2PositionNftAccount,
+});
+```
+
+If the position NFT account still belongs to another owner, use `setTokenAccountOwnerTx` to transfer its token-account authority to the fee vault before using these claim helpers.
+
+## Fund From DBC
+
+PDA fee vaults can receive DBC creator fees, partner fees, surplus withdrawals, and migration fees through source-program funding wrappers.
+
+| Flow | SDK method | Vault must be configured as |
+| --- | --- | --- |
+| Creator trading fee | `fundByClaimDbcCreatorTradingFee` | `VirtualPool.creator` |
+| Partner trading fee | `fundByClaimDbcPartnerTradingFee` | `PoolConfig.feeClaimer` |
+| Creator surplus | `fundByWithdrawDbcCreatorSurplus` | `VirtualPool.creator` |
+| Partner surplus | `fundByWithdrawDbcPartnerSurplus` | `PoolConfig.feeClaimer` |
+| Migration fee | `fundByWithdrawDbcMigrationFee` | Creator or partner, based on `isPartner` |
+
+```typescript
+const tx = await client.fundByClaimDbcCreatorTradingFee({
+  signer: shareholder.publicKey,
+  creator: creator.publicKey,
+  feeVault,
+  poolConfig,
+  virtualPool,
+});
+```
+
+The SDK fetches `PoolConfig` and `VirtualPool` state when you do not provide cached state.

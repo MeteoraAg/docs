@@ -1,0 +1,27 @@
+---
+title: "Dynamic Fee Sharing Program Errors"
+sidebarTitle: "Errors"
+description: "Understand Dynamic Fee Sharing custom errors, codes, messages, and common causes for integration debugging."
+llmsDescription: "Explains Dynamic Fee Sharing Anchor custom errors from the local program source and SDK IDL. Covers FeeVaultError codes 6000 through 6009, messages, arithmetic failures, mint support failures, vault parameter validation, zero amount guards, user index and signer validation, PDA vault requirements, and whitelisted source-action validation."
+---
+
+Dynamic Fee Sharing custom errors are emitted by the Anchor `FeeVaultError` enum.
+
+<Tip>
+  Anchor custom error codes start at `6000`. When a transaction log contains a custom program error such as `0x1776`, convert the hex value to decimal to find the matching code. `0x1776` is `6006`, which maps to `ExceededUser`.
+</Tip>
+
+## Error Codes
+
+| Code | Name | Message | Common cause |
+| --- | --- | --- | --- |
+| `6000` | `MathOverflow` | Math operation overflow | Checked arithmetic failed during funding, fee-per-share calculation, claim calculation, or Token 2022 transfer-fee calculation. |
+| `6001` | `InvalidMint` | Mint is not supported | Token 2022 mint has an unsupported extension, or mint account validation failed. |
+| `6002` | `InvalidFeeVaultParameters` | Fee vault parameters are invalid | A configured user share is zero. |
+| `6003` | `AmountIsZero` | Amount is zero | Direct funding resolved to zero after capping by the funder's token account balance. |
+| `6004` | `InvalidUserIndex` | Invalid user index | `claim_fee` was called with an index outside the fixed user array. |
+| `6005` | `InvalidUserAddress` | Invalid user address | Initialization used a default public key, or `claim_fee` signer did not match `users[index].address`. |
+| `6006` | `ExceededUser` | Exceeded number of users allowed | Initialization used fewer than 2 users or more than 5 users. |
+| `6007` | `InvalidFeeVault` | Invalid fee vault | `fund_by_claiming_fee` was called with a non-PDA fee vault. |
+| `6008` | `InvalidSigner` | Invalid signer | Source-program funding signer is not one of the fee vault shareholders. |
+| `6009` | `InvalidAction` | Invalid action | Source program, instruction discriminator, or expected token vault remaining account does not match the whitelist. |

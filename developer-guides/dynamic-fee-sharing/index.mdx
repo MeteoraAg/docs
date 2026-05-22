@@ -1,132 +1,127 @@
 ---
-title: Overview
+title: "Dynamic Fee Sharing Developer Guide"
+sidebarTitle: "Overview"
+description: "Learn how to build Dynamic Fee Sharing integrations with the on-chain program, TypeScript SDK, Rust CPI bindings, and release notes."
+llmsDescription: "Explains the Dynamic Fee Sharing Developer Guide as the integration entry point for Meteora's dynamic_fee_sharing program. Covers fee vault types, program accounts, instructions, events, errors, @meteora-ag/dynamic-fee-sharing-sdk, Rust CPI integration, changelog, program IDs, commands, and source repository paths for builders."
 ---
 
-Before getting started building on Dynamic Fee Sharing, you should read the following resource to get a better understanding of how Meteora's Dynamic Fee Sharing works:
-
-<CardGroup cols={1}>
-  <Card title="What's Dynamic Fee Sharing?" icon="question" iconType="solid" href="/helper-products/dynamic-fee-sharing/what-is-dynamic-fee-sharing">
-    Dynamic Fee Sharing is a program that allows any project to configure a fee sharing mechanism for their fees earned by initializing a fee vault and funding fees into the vault.
-  </Card>
-</CardGroup>
-
----
-
-# Dynamic Fee Sharing Program
-
-At Meteora, we’ve developed a `Node.js <> Typescript SDK` to make deploying and managing your Dynamic Fee Sharing vault easier. The following sections includes information on installing and using the SDK. It also covers where to find the latest code, and how to contribute to these repositories.
-
-## Program Details
+Dynamic Fee Sharing lets a project configure a token fee vault, fund fees into it, and let configured shareholders claim their share over time. To learn more about product behavior, design considerations, compatibility, and formulas, you can read the following documentations.
 
 <CardGroup cols={2}>
-  <Card title="Dynamic Fee Sharing Program" icon="rust" iconType="solid" href="https://github.com/MeteoraAg/dynamic-fee-sharing">
-    Meteora Dynamic Fee Sharing Program
+  <Card title="Learn more about Dynamic Fee Sharing" icon="book-open" iconType="solid" href="/helper-products/dynamic-fee-sharing/what-is-dynamic-fee-sharing">
+    Product overview for fee vaults, fee sharing flows, and high-level integration behavior.
   </Card>
-  <Card title="Dynamic Fee Sharing IDL" icon="code" iconType="solid" href="https://github.com/MeteoraAg/dynamic-fee-sharing-sdk/blob/main/src/idl/idl.json">
-    Meteora Dynamic Fee Sharing Program IDL
+  <Card title="Dynamic Fee Sharing Formulas" icon="calculator" iconType="solid" href="/helper-products/dynamic-fee-sharing/formulas">
+    Formula references for fee allocation, user shares, and claim accounting.
   </Card>
 </CardGroup>
 
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Network</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Program ID</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Mainnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">dfsdo2UqvwfN8DuUVrMRNfQe11VaiNoKcMqLHVvDPzh</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Devnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">dfsdo2UqvwfN8DuUVrMRNfQe11VaiNoKcMqLHVvDPzh</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+## Integration
+
+<CardGroup cols={2}>
+  <Card
+    title="Program Accounts"
+    icon="table-cells"
+    iconType="solid"
+    href="/developer-guides/dynamic-fee-sharing/program/accounts"
+  >
+    Fee vault state, token vault PDA, fee vault authority PDA, constants, and token support.
+  </Card>
+  <Card
+    title="Program Instructions"
+    icon="list"
+    iconType="solid"
+    href="/developer-guides/dynamic-fee-sharing/program/instructions"
+  >
+    Initialization, direct funding, source-program funding, and fee claim instruction details.
+  </Card>
+  <Card
+    title="Program Events"
+    icon="list"
+    iconType="solid"
+    href="/developer-guides/dynamic-fee-sharing/program/events"
+  >
+    Anchor event-CPI payloads for vault initialization, funding, and user claims.
+  </Card>
+  <Card
+    title="Program Errors"
+    icon="triangle-exclamation"
+    iconType="solid"
+    href="/developer-guides/dynamic-fee-sharing/program/errors"
+  >
+    Anchor custom error codes, enum names, messages, and common integration causes.
+  </Card>
+  <Card
+    title="TypeScript SDK"
+    icon="code"
+    iconType="solid"
+    href="/developer-guides/dynamic-fee-sharing/typescript-sdk/getting-started"
+  >
+    TypeScript SDK for creating vaults, funding them, reading state, and claiming user fees.
+  </Card>
+  <Card
+    title="Rust CPI"
+    icon="terminal"
+    iconType="solid"
+    href="/developer-guides/dynamic-fee-sharing/rust-integration/cpi"
+  >
+    Anchor CPI integration with the `dynamic-fee-sharing` program crate.
+  </Card>
+</CardGroup>
+
+## Program IDs
+
+The `dynamic_fee_sharing` program ID is the same on mainnet and devnet:
+
+| Network | Program ID |
+| --- | --- |
+| Mainnet Beta | `dfsdo2UqvwfN8DuUVrMRNfQe11VaiNoKcMqLHVvDPzh` |
+| Devnet | `dfsdo2UqvwfN8DuUVrMRNfQe11VaiNoKcMqLHVvDPzh` |
+
+The program-wide fee vault authority PDA is:
+
+| Authority | Address |
+| --- | --- |
+| Fee Vault Authority | `EYqHRdtepv1KKUkPAYMBYpSfiGfNd8sa55ZtswodTfBS` |
 
 ## Fee Vault Types
 
-Dynamic Fee Sharing offers two types of fee vaults to accommodate different use cases:
+| Vault type | Address model | Created by | Main use |
+| --- | --- | --- | --- |
+| Non-PDA fee vault | External keypair account | `initialize_fee_vault` / `createFeeVault` | Standalone fee sharing when the vault address can be created and stored off-chain. |
+| PDA fee vault | PDA from `["fee_vault", base, token_mint]` | `initialize_fee_vault_pda` / `createFeeVaultPda` | Protocol integrations where a deterministic vault address must sign source-program fee claims. |
+
+Both vault types share the same `FeeVault` state layout and support direct funding plus user claims. Only PDA fee vaults support `fund_by_claiming_fee`, because the vault PDA signs the downstream whitelisted claim or withdrawal instruction.
+
+## Source Repositories
 
 <CardGroup cols={2}>
-  <Card title="Non-PDA Fee Vault" icon="key" iconType="solid">
-    A fee vault created with an external keypair. Provides flexibility for standalone fee-sharing arrangements.
+  <Card title="Dynamic Fee Sharing Program" icon="code" iconType="solid" href="https://github.com/MeteoraAg/dynamic-fee-sharing">
+    Anchor program source for `dynamic_fee_sharing`.
   </Card>
-  <Card title="PDA Fee Vault" icon="link" iconType="solid">
-    A fee vault derived from a base account. Ideal for protocol integrations where the vault is tied to another entity.
+  <Card title="Dynamic Fee Sharing IDL" icon="file-code" iconType="solid" href="https://github.com/MeteoraAg/dynamic-fee-sharing-sdk/blob/main/src/idl/idl.json">
+    Published IDL used by the TypeScript SDK.
+  </Card>
+</CardGroup>
+<CardGroup cols={1}>
+  <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/dynamic-fee-sharing-sdk">
+    SDK for transaction builders, state reads, PDA helpers, and example scripts.
   </Card>
 </CardGroup>
 
-### Non-PDA Fee Vault
+## Commands
 
-A Non-PDA Fee Vault uses a regular Solana account (keypair-based) for the fee vault address. The vault address is generated externally and must be provided as a signer during initialization.
+| Task | Command |
+| --- | --- |
+| Build program | `cd dynamic-fee-sharing && anchor build` |
+| Run program tests | `cd dynamic-fee-sharing && pnpm install && pnpm test` |
+| Build TypeScript SDK | `cd dynamic-fee-sharing-sdk && pnpm install && pnpm run build` |
+| Run TypeScript SDK tests | `cd dynamic-fee-sharing-sdk && bun test` |
 
-**Characteristics:**
-- Fee vault address is a randomly generated keypair
-- The keypair must be stored and managed externally
-- Multiple vaults can be created for the same token mint and owner
-- Simpler to understand and implement
+## Stay Updated
 
-**When to Use:**
-- Creating standalone fee vaults without ties to other protocol entities
-- Need to create multiple fee-sharing arrangements for the same token
-- Vault lifecycle is independent of any base account
-- Simpler integration without deterministic address requirements
-
-**Address Derivation:**
-```
-Fee Vault Account: External keypair (random address)
-Token Vault: PDA([TOKEN_VAULT_PREFIX, fee_vault_address], program_id)
-```
-
-### PDA Fee Vault
-
-A PDA Fee Vault uses a Program Derived Account (PDA) for the fee vault address. The vault address is deterministically derived from a base account and token mint, making it recoverable and tied to a specific entity.
-
-**Characteristics:**
-- Fee vault address is derived from seeds: `[FEE_VAULT_PREFIX, base_address, token_mint]`
-- No external keypair storage needed - address is always recoverable
-- Only ONE vault per (base account, token mint) combination
-- Base account must sign during initialization
-
-**When to Use:**
-- Vault is logically tied to another account (e.g., AMM pool, bonding curve, liquidity position)
-- Need deterministic address derivation for protocol integration
-- Want to avoid external keypair management
-- Address should be recoverable from (base, token_mint) pair
-- Integrating with features that reference a base entity
-
-**Address Derivation:**
-```
-Fee Vault Account: PDA([FEE_VAULT_PREFIX, base_address, token_mint], program_id)
-Token Vault: PDA([TOKEN_VAULT_PREFIX, fee_vault_address], program_id)
-```
-
-### Comparison
-
-| Aspect | Non-PDA Fee Vault | PDA Fee Vault |
-|--------|-------------------|---------------|
-| **Address Generation** | External keypair (random) | Derived from seeds (deterministic) |
-| **Address Recovery** | Requires storing keypair | Derivable from (base, token_mint) |
-| **Uniqueness** | Multiple vaults per (owner, token_mint) | One vault per (base, token_mint) |
-| **Signer Requirement** | Fee vault keypair signs init | Base keypair signs init |
-| **Tied to Entity** | No | Yes (via base account) |
-| **Use Case** | Standalone vaults | Protocol-integrated vaults |
-
-<Note>
-Both vault types share the same underlying state structure and support identical operations after initialization: funding fees, claiming fees, and fee distribution via the checkpoint mechanism.
-</Note>
-
----
-
-## Official SDKs
-
-<CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="/developer-guides/dynamic-fee-sharing/typescript-sdk/getting-started">
-    Official Meteora Dynamic Fee Sharing Typescript SDK
+<CardGroup cols={1}>
+  <Card title="Dynamic Fee Sharing Changelog" icon="newspaper" iconType="solid" href="/developer-guides/dynamic-fee-sharing/changelog">
+    Program and SDK changes for integration planning.
   </Card>
 </CardGroup>

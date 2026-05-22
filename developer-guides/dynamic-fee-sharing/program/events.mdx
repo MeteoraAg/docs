@@ -1,0 +1,61 @@
+---
+title: "Dynamic Fee Sharing Program Events"
+sidebarTitle: "Events"
+description: "Track Dynamic Fee Sharing event payloads for vault initialization, fee funding, and user claims."
+llmsDescription: "Explains Dynamic Fee Sharing events emitted through Anchor event CPI. Covers EvtInitializeFeeVault, EvtFundFee, EvtClaimFee, field-level payloads, source-program funding payloads, direct-funding source defaults, claim event behavior, and indexing notes."
+---
+
+The `dynamic_fee_sharing` program emits Anchor events through event CPI. Indexers should decode these events from Dynamic Fee Sharing program logs and join them with `FeeVault` account reads when current aggregate state is needed.
+
+## Events
+
+| Event | Fields | Emitted by | Use |
+| --- | --- | --- | --- |
+| `EvtInitializeFeeVault` | `fee_vault`, `token_mint`, `owner`, `base`, `params` | `initialize_fee_vault`, `initialize_fee_vault_pda` | Index new fee vaults, token mints, owners, PDA bases, and configured user shares. |
+| `EvtFundFee` | `source_program`, `fee_vault`, `funded_amount`, `fee_per_share`, `payload` | `fund_fee`, `fund_by_claiming_fee` | Track fee vault funding and the updated accumulated fee per share. |
+| `EvtClaimFee` | `fee_vault`, `user`, `index`, `claimed_fee` | `claim_fee` | Track user claims by configured user index. |
+
+## Event Details
+
+### `EvtInitializeFeeVault`
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `fee_vault` | `Pubkey` | Created fee vault account. |
+| `token_mint` | `Pubkey` | Mint accepted by the vault. |
+| `owner` | `Pubkey` | Owner recorded in the vault state. |
+| `base` | `Pubkey` | PDA base for `initialize_fee_vault_pda`; default public key for non-PDA vaults. |
+| `params` | `InitializeFeeVaultParameters` | Includes reserved padding and configured `UserShare[]`. |
+
+### `EvtFundFee`
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `source_program` | `Pubkey` | Default public key for direct `fund_fee`; downstream program ID for `fund_by_claiming_fee`. |
+| `fee_vault` | `Pubkey` | Fee vault that received credited fees. |
+| `funded_amount` | `u64` | Raw token amount credited to share accounting. For Token 2022 transfer-fee mints, this excludes the transfer fee on direct funding. |
+| `fee_per_share` | `u128` | Vault's accumulated Q64 fixed-point fee per share after funding. |
+| `payload` | `Vec<u8>` | Empty for direct `fund_fee`; downstream instruction data for source-program funding. |
+
+`fund_by_claiming_fee` emits `EvtFundFee` only when the downstream invocation increases the fee vault token balance by more than zero.
+
+### `EvtClaimFee`
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `fee_vault` | `Pubkey` | Fee vault being claimed from. |
+| `user` | `Pubkey` | Claiming shareholder. |
+| `index` | `u8` | User index passed to `claim_fee`. |
+| `claimed_fee` | `u64` | Raw token amount transferred to `user_token_vault`. |
+
+`claim_fee` emits `EvtClaimFee` only when the computed claim amount is greater than zero.
+
+## Indexing Notes
+
+| Topic | Note |
+| --- | --- |
+| Event CPI accounts | Generated Anchor clients add `event_authority` and `program` accounts for all event-emitting instructions. |
+| Amount precision | Amounts are raw token units. Apply mint decimals off-chain for display. |
+| Direct funding | `source_program` is the default public key and `payload` is empty. |
+| Source-program funding | Store `source_program` and `payload` if you need to reconstruct which whitelisted DAMM v2 or DBC action funded the vault. |
+| Current state | Events are append-only. Read `FeeVault` for current `total_funded_fee`, `fee_per_share`, and per-user `fee_claimed` counters. |
