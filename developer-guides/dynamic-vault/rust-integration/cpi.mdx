@@ -1,0 +1,151 @@
+---
+title: "Dynamic Vault Rust Integration CPI"
+sidebarTitle: "CPI"
+description: "Learn how to plan Dynamic Vault Anchor CPI integrations with vault accounts, signer seeds, strategy accounts, and failure modes."
+llmsDescription: "Explains Dynamic Vault Rust CPI integration for programs that call the Meteora vault program. Covers program ID, generated bindings, CPI instruction scope, deposit and withdraw account sets, direct strategy withdrawal accounts, rebalance and reward account planning, vault signer seeds, strategy remaining accounts, fee vault requirements, authority checks, common CPI failures, best practices, and testing with localnet, devnet, and simulation."
+---
+
+Use CPI when your Solana program must call Dynamic Vault directly, for example to deposit user funds into a vault, withdraw vault LP, or compose vault withdrawals as part of a larger protocol instruction.
+
+<Warning>
+  Prefer generated Anchor bindings from the IDL and compare account metas against SDK-built instructions. Most CPI failures come from wrong PDA seeds, a stale LP mint, a missing fee vault, or strategy-specific remaining accounts in the wrong order.
+</Warning>
+
+## Program ID
+
+```rust
+pub const VAULT_PROGRAM_ID: Pubkey =
+    pubkey!("24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi");
+```
+
+The public program ID is the same on mainnet and devnet.
+
+## CPI Scope
+
+| Flow | CPI suitability |
+| --- | --- |
+| `deposit` | Suitable for simple integrations that hold or receive user tokens and mint vault LP. |
+| `withdraw` | Suitable when the vault reserve can satisfy the withdrawal. Burns LP and transfers underlying tokens. |
+| `withdraw_directly_from_strategy` | Advanced. Requires selecting a strategy and forwarding strategy-specific remaining accounts. |
+| Strategy rebalance instructions | Keeper/admin style only. Requires admin/operator authorization and strategy handler accounts. |
+| Admin controls | Usually not part of public partner CPI. Requires vault admin signer. |
+
+For off-chain apps, use the TypeScript SDK. For on-chain CPI, your program owns the outer validation, signer seeds, and slippage thresholds.
+
+## Deposit CPI Accounts
+
+`deposit` uses `DepositWithdrawLiquidity`.
+
+| Account | Mutability | Signer | Notes |
+| --- | --- | --- | --- |
+| `vault` | writable | no | Must match `token_vault` and `lp_mint`. |
+| `token_vault` | writable | no | Vault reserve token account. |
+| `lp_mint` | writable | no | Vault LP mint. |
+| `user_token` | writable | no | Source underlying token account. |
+| `user_lp` | writable | no | Destination LP token account. |
+| `user` | readonly | yes | Authority for `user_token`. |
+| `token_program` | readonly | no | SPL Token program. |
+
+Arguments:
+
+| Arg | Type | Meaning |
+| --- | --- | --- |
+| `token_amount` | `u64` | Underlying token amount to deposit. Must be greater than zero. |
+| `minimum_lp_token_amount` | `u64` | Minimum LP tokens to receive. |
+
+## Withdraw CPI Accounts
+
+`withdraw` uses the same `DepositWithdrawLiquidity` accounts.
+
+| Arg | Type | Meaning |
+| --- | --- | --- |
+| `unmint_amount` | `u64` | LP token amount to burn. |
+| `min_out_amount` | `u64` | Minimum underlying tokens to receive. |
+
+Your program should calculate or validate `unmint_amount` in LP units. To withdraw a target underlying amount, convert using current unlocked amount and LP supply.
+
+## Direct Strategy Withdrawal CPI
+
+`withdraw_directly_from_strategy` is used when vault reserve liquidity is not enough and the transaction should pull from a strategy first.
+
+| Account | Notes |
+| --- | --- |
+| `vault` | Writable rebalance vault with `token_vault`, `lp_mint`, and `fee_vault` relationships. |
+| `strategy` | Writable strategy account registered in `vault.strategies`. |
+| `reserve` | Writable strategy reserve, must match `strategy.reserve`. |
+| `strategy_program` | Downstream strategy program. |
+| `collateral_vault` | Writable strategy collateral account, must match `strategy.collateral_vault`. |
+| `token_vault` | Writable vault reserve account. |
+| `lp_mint` | Writable vault LP mint. |
+| `fee_vault` | Writable fee vault account. |
+| `user_token` | Writable destination underlying token account. |
+| `user_lp` | Writable source LP token account. |
+| `user` | LP token owner signer. |
+| `token_program` | SPL Token program. |
+| Remaining accounts | Strategy-handler-specific accounts, currently relevant for `JupLend`. |
+
+Direct strategy withdrawal can refine the LP burn amount if the strategy cannot return the full desired amount. It rejects precision loss greater than one underlying unit.
+
+## Vault Signer Seeds
+
+The vault signs token transfers and LP minting with:
+
+```rust
+let vault_seeds: &[&[u8]] = &[
+    b"vault",
+    vault_state.token_mint.as_ref(),
+    vault_state.base.as_ref(),
+    &[vault_state.bumps.vault_bump],
+];
+```
+
+If your program signs for a PDA-owned user token account in the outer CPI, pass your own signer seeds to the outer token account authority as well. The vault program only signs for vault-owned accounts.
+
+## Account Planning
+
+| Check | Detail |
+| --- | --- |
+| Derive from state | Read `vault.token_vault` and `vault.lp_mint` from vault state instead of recomputing them from user input alone. |
+| Use fresh LP supply | Withdrawal math depends on current LP supply and unlocked amount. |
+| Validate ATAs | User token and LP accounts must match the expected mint and authority for your integration. |
+| Pass slippage thresholds | Do not pass zero thresholds in production CPI unless the outer program has its own protection. |
+| Detect disabled deposits | Deposits fail when `vault.enabled == 0`; withdrawals remain available. |
+| Plan compute | Strategy-backed withdrawals and rebalance flows can require more compute than reserve-only withdrawals. |
+
+## Rebalance CPI Notes
+
+Strategy rebalance instructions are admin/operator flows and require `vault.admin == operator` or `vault.operator == operator`.
+
+| Instruction | Extra planning |
+| --- | --- |
+| `deposit_strategy` | Strategy handler deposit accounts, writable collateral vault, reserve, fee vault, LP mint, and operator signer. |
+| `withdraw_strategy` | Same account set, plus sufficient collateral and strategy liquidity. |
+| `claim_rewards` | Treasury-owned reward token account and strategy-specific remaining accounts. |
+| `initialize_strategy` | Fee vault must already be set, and `StrategyBumps` must match the derived strategy PDA. |
+| `remove_strategy` | Withdraws all strategy liquidity and fails if residual lending liquidity is greater than the allowed precision residue. |
+
+## Common CPI Failures
+
+| Error | Likely cause |
+| --- | --- |
+| `ConstraintHasOne` | `token_vault`, `lp_mint`, `fee_vault`, `admin`, or strategy fields do not match vault or strategy state. |
+| `ConstraintSeeds` | Vault, LP mint, token vault, strategy, or collateral vault PDA was derived with the wrong base or index. |
+| `AccountNotSigner` | `user`, `admin`, or `operator` was not a signer, or PDA signer seeds were not forwarded by the outer program. |
+| `VaultIsDisabled` | Deposit attempted while the vault is disabled. |
+| `ExceededSlippage` | LP minted or underlying output was below threshold. |
+| `StrategyIsNotExisted` | Strategy account is not present in `vault.strategies`. |
+| `InvalidAccountsForStrategy` | Fee vault or strategy remaining accounts do not match expected state. |
+| `FeeVaultIsNotSet` | Strategy initialization attempted before `transfer_fee_vault`. |
+| `InvalidBump` | `StrategyBumps` does not match the strategy PDA. |
+| `InvalidPrecisionLoss` | Direct strategy withdrawal precision loss exceeded one underlying unit. |
+
+## Testing
+
+| Layer | Recommendation |
+| --- | --- |
+| Unit and account tests | Use Anchor or `solana-program-test` with local vault fixtures. |
+| Transaction construction | Compare account metas against `@meteora-ag/vault-sdk` built transactions. |
+| Strategy paths | Test with the exact downstream program fixtures and remaining accounts used by the target strategy. |
+| Devnet rehearsal | Simulate and send small devnet transactions before mainnet CPI rollout. |
+
+For public partner integrations, keep the CPI surface narrow: deposit, reserve withdrawal, and carefully audited direct strategy withdrawal only when your protocol truly needs it.

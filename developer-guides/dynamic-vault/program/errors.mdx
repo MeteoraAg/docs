@@ -1,0 +1,61 @@
+---
+title: "Dynamic Vault Program Errors"
+sidebarTitle: "Errors"
+description: "Understand Dynamic Vault VaultError codes, messages, source and IDL naming notes, and common integration causes."
+llmsDescription: "Explains the Dynamic Vault program error reference from the current mercurial-vault Anchor source. Covers Anchor custom error decoding, VaultError codes, messages, likely causes, source and TypeScript IDL naming differences, slippage failures, disabled vaults, strategy account validation, locked-profit degradation validation, fee vault setup, advance-payment removal, precision loss, and troubleshooting notes."
+---
+
+This page lists Anchor custom errors returned by the current Dynamic Vault `vault` program source.
+
+<Tip>
+  Anchor custom program errors start at `6000`. When a transaction log contains `custom program error: 0x1771`, convert the hex value to decimal and match it against the table below.
+</Tip>
+
+## Error Codes
+
+| Code | Name | Message | Common cause |
+| --- | --- | --- | --- |
+| `6000` | `VaultIsDisabled` | Vault is disabled | A deposit was attempted while `vault.enabled == 0`. |
+| `6001` | `ExceededSlippage` | Exceeded slippage tolerance | Minted LP or output tokens were below the caller's minimum threshold. Refresh vault state and quote. |
+| `6002` | `StrategyIsNotExisted` | Strategy is not existed | The strategy account is not registered in `vault.strategies`. |
+| `6003` | `UnAuthorized` | UnAuthorized | A protected flow was attempted by the wrong authority in older paths or downstream strategy code. |
+| `6004` | `MathOverflow` | Math operation overflow | Checked arithmetic failed during LP math, locked-profit math, strategy accounting, or fee calculations. |
+| `6005` | `ProtocolIsNotSupported` | Protocol is not supported | The selected strategy type does not have a supported handler. |
+| `6006` | `UnMatchReserve` | Reserve does not support token mint | The strategy reserve does not match the vault token mint. |
+| `6007` | `InvalidLockedProfitDegradation` | lockedProfitDegradation is invalid | Admin tried to set a zero or above-denominator locked-profit degradation value. |
+| `6008` | `MaxStrategyReached` | Maximum number of strategies have been reached | All 30 strategy slots are already occupied. |
+| `6009` | `StrategyExisted` | Strategy existed | `initialize_strategy` tried to add a strategy already registered in the vault. |
+| `6010` | `InvalidUnmintAmount` | Invalid unmint amount | Direct strategy withdrawal computed an LP burn amount greater than the requested amount. |
+| `6011` | `InvalidAccountsForStrategy` | Invalid accounts for strategy | Strategy remaining accounts or fee vault did not match vault or strategy state. |
+| `6012` | `InvalidBump` | Invalid bump | Strategy bump args do not match the expected strategy index or PDA bump. |
+| `6013` | `AmountMustGreaterThanZero` | Amount must be greater than 0 | `deposit` received `token_amount == 0`. |
+| `6014` | `MangoIsNotSupportedAnymore` | Mango is not supported anymore | Historical Mango strategy path is blocked. |
+| `6015` | `StrategyIsNotSupported` | Strategy is not supported | The selected strategy variant is not supported by the current source. |
+| `6016` | `PayAmountIsExceeded` | Pay amount is exceeded | `remove_strategy2` required admin advance payment above `max_admin_pay_amount`. |
+| `6017` | `FeeVaultIsNotSet` | Fee vault is not set | Strategy initialization was attempted before configuring a fee vault. |
+| `6018` | `LendingAssertionViolation` | deposit amount in lending is not matched | Downstream lending deposit accounting did not match the expected amount. |
+| `6019` | `HaveMoneyInLending` | Cannot remove strategy because we have some in lending | Strategy removal left more than the allowed residual liquidity in the lending protocol. |
+| `6020` | `InvalidPrecisionLoss` | Invalid precision loss | Direct strategy withdrawal precision loss was greater than one underlying unit. |
+| `6021` | `UndeterminedError` | Undetermined error | Fallback error for unexpected internal state. |
+
+## IDL Naming Notes
+
+| Source | Difference |
+| --- | --- |
+| Current program source | Uses `PayAmountIsExceeded` for code `6016` and includes `InvalidPrecisionLoss` plus `UndeterminedError`. |
+| Checked-in TypeScript IDL | The older IDL spells code `6016` as `PayAmountIsExeeced` and stops at `HaveMoneyInLending`. |
+
+When decoding transactions from logs, match by numeric code first. When matching SDK-generated IDL names, account for the older misspelling in the TypeScript IDL.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Deposit fails immediately | Confirm `vault.enabled == 1`, amount is non-zero, and the user's underlying token ATA has enough balance. |
+| Withdrawal fails with slippage | Refresh vault state, LP supply, and unlocked amount. Increase `min_out_amount` tolerance only after re-quoting. |
+| Strategy rebalance fails | Confirm the strategy is present in `vault.strategies`, the fee vault matches `vault.fee_vault`, and all strategy-specific remaining accounts are in handler order. |
+| Strategy initialization fails | Set `fee_vault` first, verify `StrategyBumps`, and confirm the strategy type has a supported current handler. |
+| Admin action fails | Confirm the vault is a rebalance vault and the signer matches `vault.admin`. |
+| Operator action fails | Confirm the signer is either `vault.admin` or `vault.operator`. |
+| Fee vault transfer fails | The new fee vault must be an LP token account whose owner is the treasury address. |
+| `remove_strategy2` fails | The admin and vault advance-payment token accounts must cover the required underlying amount without exceeding `max_admin_pay_amount`. |

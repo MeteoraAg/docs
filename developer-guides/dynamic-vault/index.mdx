@@ -1,54 +1,113 @@
 ---
-title: Overview
+title: "Dynamic Vault Developer Guide"
+sidebarTitle: "Overview"
+description: "Learn how to build Dynamic Vault integrations with the vault program, TypeScript SDK, Rust helpers, Data API, and release notes."
+llmsDescription: "Explains the Dynamic Vault Developer Guide as the integration entry point for Meteora's vault program. Covers program accounts, instructions, events, errors, @meteora-ag/vault-sdk, Rust library and CPI guides, Data API reference, changelog, program IDs, constants, commands, and public repository paths for Dynamic Vault builders."
 ---
 
-Before getting started building on Dynamic Vault, you should read the following resource to get a better understanding of how Meteora's Dynamic Vault works:
-
-<CardGroup cols={1}>
-  <Card title="What's Dynamic Vault?" icon="question" iconType="solid" href="/overview/other-products/dynamic-vault/what-is-dynamic-vault">
-    Dynamic Vault is a vault that rebalances every minute across lending platforms to find the best possible yield while prioritizing keeping user funds as accessible as possible.
-  </Card>
-</CardGroup>
-
----
-
-# Dynamic Vault Program
-
-At Meteora, we’ve developed a `Node.js <> Typescript SDK` to make deploying and managing your Dynamic Vault easier. The following sections includes information on installing and using the SDK. It also covers where to find the latest code, and how to contribute to these repositories.
-
-## Program Details
-
-<CardGroup cols={1}>
-  <Card title="Dynamic Vault IDL" icon="code" iconType="solid" href="https://github.com/MeteoraAg/vault-sdk/blob/main/ts-client/src/vault/idl.ts">
-    Meteora Dynamic Vault Program IDL
-  </Card>
-</CardGroup>
-
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Network</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Program ID</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Mainnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Devnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-## Official SDKs
+Dynamic Vault is Meteora's yield vault layer on Solana. Integrators deposit a supported token into a vault, receive vault LP tokens, and withdraw by burning LP tokens against the vault's unlocked amount. To learn more about the product model, read the product documentation.
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="/developer-guide/guides/dynamic-vault/typescript-sdk/getting-started">
-    Official Meteora Dynamic Vault Typescript SDK
+  <Card title="Learn more about Dynamic Vault" icon="book-open" iconType="solid" href="/legacy-products/dynamic-vault/what-is-dynamic-vault">
+    Overview of vault behavior, yield routing, access rules, and product concepts.
+  </Card>
+  <Card title="Dynamic Vault Formulas" icon="calculator" iconType="solid" href="/legacy-products/dynamic-vault/formulas">
+    Formulas for virtual price, locked profit, LP share, and withdrawal accounting.
+  </Card>
+</CardGroup>
+
+## Integration
+
+<CardGroup cols={2}>
+  <Card title="Program Accounts" icon="table-cells" iconType="solid" href="/developer-guides/dynamic-vault/program/accounts">
+    Account model for vaults, strategies, locked profit, bumps, PDA seeds, and constants.
+  </Card>
+  <Card title="Program Instructions" icon="list" iconType="solid" href="/developer-guides/dynamic-vault/program/instructions">
+    Instruction families for user deposits, withdrawals, strategy rebalancing, rewards, operators, and admin flows.
+  </Card>
+  <Card title="Program Events" icon="list" iconType="solid" href="/developer-guides/dynamic-vault/program/events">
+    Anchor events emitted by liquidity, strategy, reward, performance fee, loss, and simulation flows.
+  </Card>
+  <Card title="Program Errors" icon="triangle-exclamation" iconType="solid" href="/developer-guides/dynamic-vault/program/errors">
+    Anchor custom errors, messages, likely causes, and source/IDL naming notes.
+  </Card>
+  <Card title="TypeScript SDK" icon="code" iconType="solid" href="/developer-guides/dynamic-vault/typescript-sdk/getting-started">
+    Official TypeScript SDK for creating vault clients, deposits, withdrawals, state reads, helpers, and affiliate flows.
+  </Card>
+  <Card title="Rust Integration" icon="terminal" iconType="solid" href="/developer-guides/dynamic-vault/rust-integration/library">
+    Rust account readers, CLI helpers, and CPI account planning for the vault program.
+  </Card>
+</CardGroup>
+<CardGroup cols={1}>
+  <Card title="Dynamic Vault APIs" icon="database" iconType="solid" href="/developer-guides/dynamic-vault/api-reference/overview">
+    Indexed read-only vault, APY, virtual price, vault address, and strategy allocation data.
+  </Card>
+</CardGroup>
+
+## Program IDs
+
+The public `vault` program ID is the same on mainnet and devnet:
+
+| Network | Program ID |
+| --- | --- |
+| Mainnet Beta | `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` |
+| Devnet | `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` |
+
+The TypeScript SDK also exposes the affiliate program ID:
+
+| Program | Address |
+| --- | --- |
+| Affiliate vault program | `GacY9YuN16HNRTy7ZWwULPccwvfFSBeNLuAQP7y38Du3` |
+
+## Constants
+
+| Constant | Value | Use |
+| --- | --- | --- |
+| `VAULT_BASE_KEY` / `get_base_address()` | `HWzXGcGHy4tcpYfaRDCyLNzXqBTv3E6BttpCH2vJxArv` | Base key used in rebalance vault PDA seeds. |
+| `get_base_address_for_idle_vault()` | `11111111111111111111111111111111` | Base key used in idle vault PDA seeds. |
+| `get_treasury_address()` | `9kZeN47U2dubGbbzMrzzoRAUvpuxVLRcjW9XiFpYjUo4` | Owner required for fee vault and reward destination token accounts. |
+| `MAX_STRATEGY` | `30` | Maximum strategy addresses stored on a vault. |
+| `MAX_BUMPS` | `10` | Maximum bump bytes stored on a strategy. |
+| `LOCKED_PROFIT_DEGRADATION_DENOMINATOR` | `1_000_000_000_000` | Denominator for locked-profit drip calculations. |
+| Performance fee | `500 / 10000` | 5% performance fee minted as vault LP tokens when rebalance reports profit. |
+
+## Source Repositories
+
+<CardGroup cols={2}>
+  <Card title="Vault Program" icon="code" href="https://github.com/MeteoraAg/mercurial-vault/tree/main/programs/vault">
+    Anchor source for the current vault program handlers, accounts, events, and errors.
+  </Card>
+  <Card title="Vault SDK" icon="github" iconType="solid" href="https://github.com/MeteoraAg/vault-sdk">
+    Public TypeScript SDK, Anchor IDL, vendored program crate, tests, and Rust client helper.
+  </Card>
+  <Card title="TypeScript SDK Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/vault-sdk">
+    Published package for transaction builders, state reads, helper functions, and affiliate support.
+  </Card>
+  <Card title="Rust Client" icon="rust" iconType="solid" href="https://github.com/MeteoraAg/vault-sdk/tree/main/rust-client">
+    CLI-style Rust examples for showing vault state, simulating unlocked amount, deposits, and withdrawals.
+  </Card>
+</CardGroup>
+
+<Note>
+  The current program source in `mercurial-vault/programs/vault` is newer than the TypeScript SDK's checked-in IDL in a few areas. These docs call out source-backed behavior and avoid documenting older IDL-only entries as current program handlers.
+</Note>
+
+## Commands
+
+| Task | Command |
+| --- | --- |
+| Build TypeScript SDK | `cd vault-sdk/ts-client && pnpm install && pnpm run build` |
+| Run TypeScript SDK tests | `cd vault-sdk/ts-client && pnpm test` |
+| Run affiliate SDK tests | `cd vault-sdk/ts-client && pnpm run test-affiliate` |
+| Build Rust client | `cd vault-sdk/rust-client && cargo build` |
+| Inspect Rust client commands | `cd vault-sdk/rust-client && ../target/debug/rust-client --help` |
+| Build current vault program | `cd mercurial-vault && NO_DNA=1 anchor build` |
+| Run current vault program tests | `cd mercurial-vault && NO_DNA=1 anchor test` |
+
+## Stay Updated
+
+<CardGroup cols={1}>
+  <Card title="Dynamic Vault Changelog" icon="newspaper" iconType="solid" href="/developer-guides/dynamic-vault/changelog">
+    Program, SDK, IDL, Rust helper, and API notes for integration planning.
   </Card>
 </CardGroup>

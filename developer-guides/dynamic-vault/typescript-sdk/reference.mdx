@@ -1,0 +1,158 @@
+---
+title: "Dynamic Vault TS SDK Reference"
+sidebarTitle: "Reference"
+description: "Understand @meteora-ag/vault-sdk exports, constants, VaultImpl methods, helper functions, utilities, affiliate support, and integration notes."
+llmsDescription: "Explains the Dynamic Vault TypeScript SDK reference based on the local ts-client source. Covers dependencies, package exports, program IDs, constants, VaultImpl static methods, VaultImpl instance properties and methods, helper functions, PDA utilities, account deserializers, SOL wrapping behavior, affiliate program support, strategy reads, transaction return values, source and IDL drift, and integration caveats."
+---
+
+This page is based on the local `vault-sdk/ts-client` source for `@meteora-ag/vault-sdk`.
+
+```typescript
+import VaultImpl, {
+  AFFILIATE_PROGRAM_ID,
+  IDL,
+  KEEPER_URL,
+  PROGRAM_ID,
+  calculateWithdrawableAmount,
+  getAmountByShare,
+  getLpSupply,
+  getOnchainTime,
+  getUnmintAmount,
+  getVaultPdas,
+} from "@meteora-ag/vault-sdk";
+```
+
+## Dependencies
+
+| Package | Use |
+| --- | --- |
+| `@coral-xyz/anchor` | Anchor `Program`, `AnchorProvider`, and `BN`. |
+| `@solana/web3.js` | Connections, transactions, instructions, public keys, and system program helpers. |
+| `@solana/spl-token` | ATA helpers, SPL Token program ID, native mint, mint reads, and token account decoding. |
+| `bn.js` | Integer arithmetic for token amounts and LP balances. |
+| `cross-fetch` | Fetch support used by package consumers that query APIs. |
+| `decimal.js`, `jsbi` | Numeric helpers included by the package. |
+
+## Program IDs And URLs
+
+| Export | Value |
+| --- | --- |
+| `PROGRAM_ID` | `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` |
+| `AFFILIATE_PROGRAM_ID` | `GacY9YuN16HNRTy7ZWwULPccwvfFSBeNLuAQP7y38Du3` |
+| `KEEPER_URL["mainnet-beta"]` | `https://merv2-api.mercurial.finance` |
+| `KEEPER_URL["devnet"]` | `https://dev-keeper.raccoons.dev` |
+| `KEEPER_URL["testnet"]` | `https://staging-keeper.raccoons.dev` |
+
+## Important Constants
+
+| Constant | Meaning |
+| --- | --- |
+| `VAULT_BASE_KEY` | Base key used for standard vault PDA derivation. |
+| `USDC_MINT`, `USDT_MINT` | Mainnet stablecoin mint constants. |
+| `VAULT_STRATEGY_ADDRESS` | Default pubkey sentinel used when filtering empty strategy slots. |
+| `LOCKED_PROFIT_DEGRADATION_DENOMINATOR` | Locked-profit denominator as `BN(1_000_000_000_000)`. |
+| `SEEDS` | Seed strings used by vault and historical strategy PDA derivations. |
+
+## `VaultImpl.create`
+
+```typescript
+static create(
+  connection: Connection,
+  tokenAddress: PublicKey,
+  opt?: {
+    seedBaseKey?: PublicKey;
+    allowOwnerOffCurve?: boolean;
+    cluster?: Cluster;
+    programId?: string;
+    affiliateId?: PublicKey;
+    affiliateProgramId?: string;
+  },
+): Promise<VaultImpl>
+```
+
+Creates one hydrated vault client from an underlying token mint. It derives the vault PDA, fetches vault state, fetches the LP mint, and fetches the underlying token mint.
+
+## Static Methods
+
+| Method | Signature | Description |
+| --- | --- | --- |
+| `createPermissionlessVaultInstruction` | `(connection, payer, tokenMint, opt?) =&gt; Promise&lt;TransactionInstruction&gt;` | Builds the program `initialize` instruction for a token mint. |
+| `fetchMultipleUserBalance` | `(connection, lpMintList, owner) =&gt; Promise&lt;BN[]&gt;` | Batch fetches a user's ATA balances for multiple vault LP mints. |
+| `createMultiple` | `(connection, tokenMints, opt?) =&gt; Promise&lt;VaultImpl[]&gt;` | Batch creates hydrated vault clients from token mint addresses. |
+| `createMultipleWithPda` | `(connection, vaultsPda, opt?) =&gt; Promise&lt;VaultImpl[]&gt;` | Batch creates hydrated vault clients from vault PDA addresses. |
+
+## Instance Properties
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `tokenMint` | `Mint` | Decoded underlying token mint. |
+| `tokenLpMint` | `Mint` | Decoded vault LP mint. |
+| `vaultPda` | `PublicKey` | Vault account PDA. |
+| `tokenVaultPda` | `PublicKey` | Vault-owned reserve token account PDA. |
+| `vaultState` | `VaultState` | Decoded Anchor vault account state. |
+| `seedBaseKey` | `PublicKey | undefined` | Optional base key override stored on the client. |
+
+## Instance Methods
+
+| Method | Signature | Description |
+| --- | --- | --- |
+| `getUserBalance` | `(owner: PublicKey) =&gt; Promise&lt;BN&gt;` | Reads the user's vault LP balance. With affiliate enabled, reads the affiliate user PDA's LP token account. |
+| `getVaultSupply` | `() =&gt; Promise&lt;BN&gt;` | Refetches the LP mint and returns current LP supply. |
+| `getWithdrawableAmount` | `() =&gt; Promise&lt;BN&gt;` | Reads on-chain time and computes unlocked vault amount from `vaultState`. |
+| `refreshVaultState` | `() =&gt; Promise&lt;void&gt;` | Refetches vault state and the underlying token mint. |
+| `deposit` | `(owner: PublicKey, baseTokenAmount: BN) =&gt; Promise&lt;Transaction&gt;` | Builds a transaction to deposit underlying tokens and receive LP tokens. |
+| `getStrategiesState` | `() =&gt; Promise&lt;StrategyState[]&gt;` | Fetches strategy accounts for non-default strategy slots. |
+| `withdraw` | `(owner: PublicKey, baseTokenAmount: BN) =&gt; Promise&lt;Transaction&gt;` | Builds a transaction to burn LP tokens and withdraw underlying tokens. |
+| `getAffiliateInfo` | `() =&gt; Promise&lt;AffiliateInfo&gt;` | Fetches affiliate partner account state when `affiliateId` is configured. |
+
+<Warning>
+  `withdraw` passes its `baseTokenAmount` parameter as the program's LP `unmint_amount`. Use LP token units, not underlying token units.
+</Warning>
+
+## Helper Exports
+
+| Function | Signature | Description |
+| --- | --- | --- |
+| `getAmountByShare` | `(share, withdrawableAmount, totalSupply) =&gt; BN` | Converts LP token share to underlying token amount. |
+| `getUnmintAmount` | `(amount, withdrawableAmount, totalSupply) =&gt; BN` | Converts desired underlying amount to LP tokens to burn. |
+| `calculateWithdrawableAmount` | `(onChainTime, vaultState) =&gt; BN` | Calculates unlocked amount after locked profit degradation. |
+
+## Utility Exports
+
+| Function | Description |
+| --- | --- |
+| `getVaultPdas(tokenMint, programId, seedBaseKey?)` | Derives `vaultPda`, `tokenVaultPda`, and `lpMintPda`. |
+| `getOnchainTime(connection)` | Reads the clock sysvar and returns `unixTimestamp`. |
+| `getLpSupply(connection, tokenMint)` | Reads token supply for a mint and returns a `BN`. |
+| `deserializeAccount(data)` | Decodes SPL token account bytes. |
+| `deserializeMint(data)` | Decodes SPL mint bytes. |
+
+`deserializeAccount` and `deserializeMint` are defined in the source utilities but are not exported from the package root in the current `ts-client/index.ts`.
+
+## SOL Handling
+
+| Flow | SDK behavior |
+| --- | --- |
+| Deposit into SOL vault | Creates the user's wrapped SOL ATA if needed, transfers lamports into it, and syncs native token state before `deposit`. |
+| Withdraw from SOL vault | Adds a close-account post-instruction for the user's wrapped SOL ATA. |
+
+## Affiliate Support
+
+When `affiliateId` is passed to `create`, the SDK initializes an affiliate program client and changes user balance, deposit, and withdraw account planning.
+
+| Item | Behavior |
+| --- | --- |
+| Partner token account | ATA for the underlying token mint and partner public key. |
+| Partner PDA | Derived from vault PDA and partner token account under the affiliate program. |
+| User PDA | Derived from partner PDA and user wallet under the affiliate program. |
+| User LP token account | ATA for the vault LP mint owned by the affiliate user PDA. |
+
+## Integration Notes
+
+| Topic | Detail |
+| --- | --- |
+| Transaction return values | `deposit` and `withdraw` return unsigned `Transaction` objects. The caller signs, simulates, and sends. |
+| State freshness | `deposit` and `withdraw` call `refreshVaultState()` internally. For displayed balances, refresh before showing final amounts. |
+| RPC batching | `createMultiple`, `createMultipleWithPda`, and `fetchMultipleUserBalance` use chunked batch reads for dashboards and portfolios. |
+| Strategy withdrawals | `withdraw` chooses reserve withdrawal when reserve liquidity is enough. Otherwise it selects the strategy with the highest `currentLiquidity`. |
+| Source and IDL drift | Use the SDK reference for public client behavior. For low-level instruction behavior, compare against the current program source. |

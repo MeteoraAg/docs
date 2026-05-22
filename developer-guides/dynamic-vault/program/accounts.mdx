@@ -1,0 +1,132 @@
+---
+title: "Dynamic Vault Program Accounts"
+sidebarTitle: "Accounts"
+description: "Understand Dynamic Vault program accounts, including vaults, strategies, locked profit, PDA seeds, constants, and strategy enums."
+llmsDescription: "Explains the Dynamic Vault program account model for Meteora's vault program. Covers vault and idle-vault PDA seeds, token vault and LP mint PDAs, strategy and collateral vault PDAs, Vault fields, Strategy fields, LockedProfitTracker, VaultBumps, StrategyBumps, constants, StrategyType variants, supported source-backed strategy handlers, account interpretation, and SDK helpers for deriving and fetching accounts."
+---
+
+<Note>
+  This page is based on `mercurial-vault/programs/vault` for the current on-chain program account model and `vault-sdk/ts-client` for public TypeScript helper names.
+</Note>
+
+## PDA Map
+
+| Account | SDK helper | Seeds |
+| --- | --- | --- |
+| Rebalance vault | `getVaultPdas(tokenMint, programId)` | `vault`, token mint, `VAULT_BASE_KEY` |
+| Idle vault | custom derivation | `vault`, token mint, `11111111111111111111111111111111` |
+| Token vault | `getVaultPdas(tokenMint, programId)` | `token_vault`, vault |
+| LP mint | `getVaultPdas(tokenMint, programId)` | `lp_mint`, vault |
+| Strategy | direct derivation | vault, reserve, `strategy_index` byte |
+| Collateral vault | direct derivation | `collateral_vault`, strategy |
+| Affiliate partner PDA | SDK internal affiliate helper | vault, partner token ATA |
+| Affiliate user PDA | SDK internal affiliate helper | partner PDA, user wallet |
+
+The vault signs token transfers and LP minting with the rebalance or idle vault seeds stored in `Vault.bumps`.
+
+## Constants
+
+| Constant | Value | Use |
+| --- | --- | --- |
+| `PROGRAM_ID` | `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` | Public vault program ID. |
+| `AFFILIATE_PROGRAM_ID` | `GacY9YuN16HNRTy7ZWwULPccwvfFSBeNLuAQP7y38Du3` | Public affiliate wrapper program used by the SDK when `affiliateId` is configured. |
+| `VAULT_BASE_KEY` | `HWzXGcGHy4tcpYfaRDCyLNzXqBTv3E6BttpCH2vJxArv` | Base key for rebalance vault PDA derivation. |
+| Treasury | `9kZeN47U2dubGbbzMrzzoRAUvpuxVLRcjW9XiFpYjUo4` | Required owner for `fee_vault` and reward token destination accounts. |
+| `MAX_STRATEGY` | `30` | Number of strategy pubkeys stored in each vault. |
+| `MAX_BUMPS` | `10` | Number of stored bump bytes in each strategy. |
+| `LOCKED_PROFIT_DEGRADATION_DENOMINATOR` | `1_000_000_000_000` | Denominator for locked-profit release math. |
+
+## Vault
+
+`Vault` stores the accounting state for one token mint.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `enabled` | `u8` | `1` allows deposits and withdrawals. `0` blocks deposits; withdrawals still use normal withdrawal handlers. |
+| `bumps` | `VaultBumps` | Vault and token-vault bump bytes used for PDA signer seeds. |
+| `total_amount` | `u64` | Total vault liquidity, including reserve tokens and strategy liquidity. |
+| `token_vault` | `Pubkey` | SPL token account holding vault reserves. |
+| `fee_vault` | `Pubkey` | LP token account owned by treasury that receives performance fee LP. |
+| `token_mint` | `Pubkey` | Underlying token mint accepted by the vault. |
+| `lp_mint` | `Pubkey` | Vault LP mint. Deposits mint LP; withdrawals burn LP. |
+| `strategies` | `[Pubkey; 30]` | Strategy accounts active for the vault. Empty slots are the default pubkey. |
+| `base` | `Pubkey` | Base seed key. Matches rebalance or idle vault base. |
+| `admin` | `Pubkey` | Admin authority for vault configuration and strategy management. |
+| `operator` | `Pubkey` | Operator authority allowed to rebalance and claim strategy rewards. |
+| `locked_profit_tracker` | `LockedProfitTracker` | Tracks profit that unlocks over time after a rebalance reports gain. |
+
+Use the TypeScript SDK's `VaultImpl.create(connection, tokenMint)` or `VaultImpl.createMultiple(...)` for hydrated vault clients. Low-level readers can fetch the Anchor `vault` account directly by PDA.
+
+## LockedProfitTracker
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `last_updated_locked_profit` | `u64` | Locked profit remaining from the last report. |
+| `last_report` | `u64` | Unix timestamp of the last locked-profit update. |
+| `locked_profit_degradation` | `u64` | Per-second unlock rate over `LOCKED_PROFIT_DEGRADATION_DENOMINATOR`. Default fully releases profit over 6 hours. |
+
+`Vault.get_unlocked_amount(current_time)` returns `total_amount - current_locked_profit`. Deposits, withdrawals, virtual price, and SDK helpers use this unlocked amount rather than raw `total_amount`.
+
+## Strategy
+
+`Strategy` stores one external or internal strategy attached to a rebalance vault.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `reserve` | `Pubkey` | External reserve, market, or pool account used by the strategy handler. |
+| `collateral_vault` | `Pubkey` | Vault-owned token account holding strategy collateral tokens. |
+| `strategy_type` | `StrategyType` | Strategy handler enum. |
+| `current_liquidity` | `u64` | Last recorded liquidity in underlying token units. |
+| `bumps` | `[u8; 10]` | Strategy and downstream protocol PDA bump bytes. |
+| `vault` | `Pubkey` | Parent vault account. |
+| `is_disable` | `u8` | Non-zero means the strategy was disabled and cannot be re-added. |
+
+The current program source supports `StrategyType::Vault` and `StrategyType::JupLend` handlers. Other enum variants remain in the enum for historical compatibility, but their handlers panic as unsupported in the current source.
+
+## StrategyType
+
+| Variant | Current source behavior |
+| --- | --- |
+| `PortFinanceWithoutLM` | Unsupported handler. |
+| `PortFinanceWithLM` | Unsupported handler. |
+| `SolendWithoutLM` | Unsupported handler. |
+| `Mango` | Unsupported handler. |
+| `SolendWithLM` | Unsupported handler. |
+| `ApricotWithoutLM` | Unsupported handler. |
+| `Francium` | Unsupported handler. |
+| `Tulip` | Unsupported handler. |
+| `Vault` | Internal vault-reserve handler and compatibility strategy. |
+| `Drift` | Unsupported handler. |
+| `Frakt` | Unsupported handler. |
+| `Marginfi` | Unsupported handler. |
+| `Kamino` | Unsupported handler in the current source. |
+| `JupLend` | Jupiter Lend strategy handler in the current source. |
+
+## Bump Types
+
+| Type | Field | Meaning |
+| --- | --- | --- |
+| `VaultBumps` | `vault_bump` | Bump for the vault PDA. |
+| `VaultBumps` | `token_vault_bump` | Bump for the token-vault PDA. |
+| `StrategyBumps` | `strategy_index` | Seed byte used in strategy PDA derivation. |
+| `StrategyBumps` | `other_bumps` | Ten downstream bump bytes. The current `initialize_strategy` handler requires `other_bumps[0] == strategy_index` and `other_bumps[1] == strategy` PDA bump. |
+
+## Account Reads
+
+| Need | TypeScript SDK | Rust / Anchor |
+| --- | --- | --- |
+| Vault state from token mint | `VaultImpl.create(connection, tokenMint)` | Derive `vault` PDA, then fetch `mercurial_vault::state::Vault`. |
+| Vault state from vault PDA | `VaultImpl.createMultipleWithPda(connection, [vault])` | Fetch `Vault` directly by pubkey. |
+| Vault LP supply | `vault.getVaultSupply()` or `getLpSupply(connection, lpMint)` | Fetch `anchor_spl::token::Mint` for `vault.lp_mint`. |
+| User LP balance | `vault.getUserBalance(owner)` or `VaultImpl.fetchMultipleUserBalance(...)` | Read the owner's ATA for `vault.lp_mint`. |
+| Strategies | `vault.getStrategiesState()` | Iterate non-default `vault.strategies` and fetch `Strategy`. |
+
+## Gotchas
+
+| Topic | Detail |
+| --- | --- |
+| Rebalance vs idle vault | Admin, operator, strategy, fee vault, and rebalance instructions require `vault.get_vault_type() == RebalanceVault`. Idle vaults cannot be rebalanced. |
+| Fee vault | `initialize_strategy` fails with `FeeVaultIsNotSet` unless `fee_vault` was set to a treasury-owned LP token account. |
+| Locked profit | `total_amount` can be higher than the amount available for withdrawal until locked profit has degraded. |
+| Strategy slots | A vault can hold up to 30 strategy pubkeys. Removed strategies clear their slot unless removed through the advance-payment path, which also disables the strategy. |
+| Source and IDL drift | The public TS IDL in `vault-sdk` is older than the current `mercurial-vault` program source. Prefer source-backed docs for low-level program behavior and SDK docs for public client behavior. |

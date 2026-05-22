@@ -1,0 +1,221 @@
+---
+title: "Dynamic Vault TypeScript SDK Examples"
+sidebarTitle: "Examples"
+description: "Explore TypeScript examples for Dynamic Vault state reads, deposits, withdrawals, LP conversions, batch loading, vault creation, and affiliate flows."
+llmsDescription: "Explains practical Dynamic Vault TypeScript SDK examples using @meteora-ag/vault-sdk. Covers setup, fetching vault state, calculating unlocked amount, converting LP shares to underlying tokens, converting desired withdrawals to LP burn amount, depositing, withdrawing, batch loading vaults and balances, creating a permissionless vault instruction, reading strategy accounts, and affiliate account reads."
+---
+
+These examples are based on the local `vault-sdk/ts-client` source and tests. They focus on transaction construction and state reads. For the full method catalog, see the [SDK Reference](/developer-guides/dynamic-vault/typescript-sdk/reference).
+
+## Setup
+
+```typescript
+import VaultImpl, {
+  getAmountByShare,
+  getUnmintAmount,
+  getVaultPdas,
+} from "@meteora-ag/vault-sdk";
+import { AnchorProvider, BN, Wallet } from "@coral-xyz/anchor";
+import { NATIVE_MINT } from "@solana/spl-token";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+} from "@solana/web3.js";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const wallet = new Wallet(Keypair.generate());
+const provider = new AnchorProvider(connection, wallet, {
+  commitment: "confirmed",
+});
+
+const tokenMint = NATIVE_MINT;
+const vault = await VaultImpl.create(connection, tokenMint, {
+  cluster: "mainnet-beta",
+});
+```
+
+Use a real wallet adapter in browser apps. The generated keypair pattern is only suitable for local scripts and tests.
+
+## Fetch Vault State
+
+```typescript
+await vault.refreshVaultState();
+
+const lpSupply = await vault.getVaultSupply();
+const withdrawableAmount = await vault.getWithdrawableAmount();
+const strategies = await vault.getStrategiesState();
+
+console.log({
+  vault: vault.vaultPda.toBase58(),
+  tokenVault: vault.tokenVaultPda.toBase58(),
+  tokenMint: vault.tokenMint.address.toBase58(),
+  lpMint: vault.vaultState.lpMint.toBase58(),
+  totalAmount: vault.vaultState.totalAmount.toString(),
+  withdrawableAmount: withdrawableAmount.toString(),
+  lpSupply: lpSupply.toString(),
+  strategies: strategies.length,
+});
+```
+
+## Convert LP To Underlying
+
+```typescript
+const userLpBalance = await vault.getUserBalance(wallet.publicKey);
+const withdrawableAmount = await vault.getWithdrawableAmount();
+const lpSupply = await vault.getVaultSupply();
+
+const underlyingShare = getAmountByShare(
+  userLpBalance,
+  withdrawableAmount,
+  lpSupply,
+);
+
+console.log("Underlying share", underlyingShare.toString());
+```
+
+## Convert Desired Output To LP Burn
+
+```typescript
+const desiredUnderlyingAmount = new BN(500_000_000); // 0.5 SOL
+
+const lpToBurn = getUnmintAmount(
+  desiredUnderlyingAmount,
+  await vault.getWithdrawableAmount(),
+  await vault.getVaultSupply(),
+);
+
+console.log("LP to burn", lpToBurn.toString());
+```
+
+## Deposit
+
+```typescript
+const depositAmount = new BN(1_000_000_000); // 1 SOL
+const tx = await vault.deposit(wallet.publicKey, depositAmount);
+
+tx.feePayer = wallet.publicKey;
+
+const simulation = await connection.simulateTransaction(tx);
+console.log(simulation.value.err);
+
+if (!simulation.value.err) {
+  const signature = await provider.sendAndConfirm(tx);
+  console.log("Deposit signature", signature);
+}
+```
+
+For a native SOL vault, the SDK wraps SOL into the user's wrapped SOL ATA before the deposit instruction.
+
+## Withdraw
+
+```typescript
+const lpToBurn = await vault.getUserBalance(wallet.publicKey);
+const tx = await vault.withdraw(wallet.publicKey, lpToBurn);
+
+tx.feePayer = wallet.publicKey;
+
+const simulation = await connection.simulateTransaction(tx);
+console.log(simulation.value.err);
+
+if (!simulation.value.err) {
+  const signature = await provider.sendAndConfirm(tx);
+  console.log("Withdraw signature", signature);
+}
+```
+
+For a native SOL vault, the SDK adds a post-instruction to close the wrapped SOL ATA.
+
+## Batch Load Vaults
+
+```typescript
+const tokenMints = [
+  new PublicKey("So11111111111111111111111111111111111111112"),
+  new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+];
+
+const vaults = await VaultImpl.createMultiple(connection, tokenMints, {
+  cluster: "mainnet-beta",
+});
+
+for (const item of vaults) {
+  console.log({
+    vault: item.vaultPda.toBase58(),
+    tokenMint: item.tokenMint.address.toBase58(),
+    lpMint: item.vaultState.lpMint.toBase58(),
+  });
+}
+```
+
+## Batch Load User LP Balances
+
+```typescript
+const lpMints = vaults.map((item) => item.vaultState.lpMint);
+const balances = await VaultImpl.fetchMultipleUserBalance(
+  connection,
+  lpMints,
+  wallet.publicKey,
+);
+
+balances.forEach((balance, index) => {
+  console.log(lpMints[index].toBase58(), balance.toString());
+});
+```
+
+## Derive Vault PDAs
+
+```typescript
+import { PROGRAM_ID } from "@meteora-ag/vault-sdk";
+
+const pdas = getVaultPdas(
+  tokenMint,
+  new PublicKey(PROGRAM_ID),
+);
+
+console.log({
+  vault: pdas.vaultPda.toBase58(),
+  tokenVault: pdas.tokenVaultPda.toBase58(),
+  lpMint: pdas.lpMintPda.toBase58(),
+});
+```
+
+## Create A Permissionless Vault Instruction
+
+```typescript
+const createVaultIx = await VaultImpl.createPermissionlessVaultInstruction(
+  connection,
+  wallet.publicKey,
+  tokenMint,
+  {
+    cluster: "mainnet-beta",
+  },
+);
+
+const tx = new Transaction().add(createVaultIx);
+tx.feePayer = wallet.publicKey;
+tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+console.log(await connection.simulateTransaction(tx));
+```
+
+This helper builds the program `initialize` instruction and derives the vault, token vault, and LP mint PDAs.
+
+## Affiliate Flow
+
+```typescript
+const affiliateVault = await VaultImpl.create(connection, tokenMint, {
+  cluster: "mainnet-beta",
+  affiliateId: new PublicKey("YOUR_PARTNER_PUBLIC_KEY"),
+});
+
+const partnerInfo = await affiliateVault.getAffiliateInfo();
+const userLpBalance = await affiliateVault.getUserBalance(wallet.publicKey);
+
+console.log({
+  partnerToken: partnerInfo.partnerToken.toBase58(),
+  userLpBalance: userLpBalance.toString(),
+});
+```
+
+With `affiliateId`, `deposit` and `withdraw` use the affiliate program wrapper and derive affiliate user LP token accounts internally.
