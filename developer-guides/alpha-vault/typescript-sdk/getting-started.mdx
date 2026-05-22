@@ -1,80 +1,133 @@
 ---
-title: Getting Started
-description: Alpha Vault
+title: "Alpha Vault TS SDK Getting Started"
+sidebarTitle: "Getting Started"
+description: "Learn how to install @meteora-ag/alpha-vault, initialize an AlphaVault client, read vault state, and test the SDK."
+llmsDescription: "Explains the first steps for building with the Alpha Vault TypeScript SDK. Covers installing @meteora-ag/alpha-vault, using the default AlphaVault export, loading vault state with AlphaVault.create, supported clusters, program IDs, core state getters, package scripts, and development resources."
 ---
 
-This guide provides instructions on how to get started with building on Meteora's Alpha Vault program using the Alpha Vault TypeScript SDK.
+This guide shows how to install and initialize the official Alpha Vault TypeScript SDK, `@meteora-ag/alpha-vault`.
 
-Before you begin, here are some important resources:
+Before you begin, here are the main resources:
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/alpha-vault-sdk">
-    Meteora Alpha Vault Typescript SDK
+  <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/alpha-vault-sdk/tree/main/ts-client">
+    SDK source, IDL, transaction helpers, PDA helpers, Merkle tree helpers, and package metadata.
   </Card>
-  <Card title="Alpha Vault NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/alpha-vault">
-    Meteora Alpha Vault NPM Package
+  <Card title="NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/alpha-vault">
+    Published package for Alpha Vault TypeScript integrations.
   </Card>
 </CardGroup>
 
-# Installation
+## Installation
 
-To use the SDK in your project, install it using your preferred package manager:
+Install the SDK and Solana dependencies:
 
 <Tabs>
   <Tab title="npm">
     ```bash
-    npm install @meteora-ag/alpha-vault @solana/web3.js
+    npm install @meteora-ag/alpha-vault @solana/web3.js @solana/spl-token @coral-xyz/anchor bn.js
     ```
   </Tab>
   <Tab title="pnpm">
     ```bash
-    pnpm install @meteora-ag/alpha-vault @solana/web3.js
+    pnpm install @meteora-ag/alpha-vault @solana/web3.js @solana/spl-token @coral-xyz/anchor bn.js
     ```
   </Tab>
   <Tab title="yarn">
     ```bash
-    yarn add @meteora-ag/alpha-vault @solana/web3.js
+    yarn add @meteora-ag/alpha-vault @solana/web3.js @solana/spl-token @coral-xyz/anchor bn.js
+    ```
+  </Tab>
+  <Tab title="bun">
+    ```bash
+    bun add @meteora-ag/alpha-vault @solana/web3.js @solana/spl-token @coral-xyz/anchor bn.js
     ```
   </Tab>
 </Tabs>
 
-# Initialization
+## Initialization
 
-Once installed, you can initialize the SDK in your TypeScript/JavaScript project like this:
+Load an existing Alpha Vault from its vault address:
 
 ```typescript
-import { Connection } from "@solana/web3.js";
-import { AlphaVault } from "@meteora-ag/alpha-vault";
+import AlphaVault, { VaultState } from "@meteora-ag/alpha-vault";
+import { Connection, PublicKey } from "@solana/web3.js";
 
-// Initialize a connection to the Solana network (e.g., Mainnet)
-const connection = new Connection("https://api.mainnet-beta.solana.com");
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const vaultAddress = new PublicKey("ALPHA_VAULT_ADDRESS");
 
-// Intialize the Alpha Vault address
-const vault = new PublicKey("H5g71iFUErXyF5D2NcDxP2bJuhdrPBjnDtrVMuPBtnWz");
+const alphaVault = await AlphaVault.create(connection, vaultAddress, {
+  cluster: "mainnet-beta",
+});
 
-// Create a new instance of the AlphaVault
-const alphaVault = await AlphaVault.create(connection, vault.publicKey);
+console.log(alphaVault.vaultState === VaultState.DEPOSITING);
+console.log(alphaVault.vaultPoint);
 ```
 
-# Testing the SDK (for contributors)
+The package default export is the `AlphaVault` client class. Named exports include enums, types, PDA helpers, Merkle tree helpers, fill helpers, constants, and the IDL.
 
-If you have cloned the SDK repository and want to run the built-in tests:
+## Program ID
+
+The SDK maps clusters to these Alpha Vault program IDs:
+
+| Cluster | Program ID |
+| --- | --- |
+| `mainnet-beta` | `vaU6kP7iNEGkbmPkLmZfGwiGxd4Mob24QQCie5R9kd2` |
+| `devnet` | `vaU6kP7iNEGkbmPkLmZfGwiGxd4Mob24QQCie5R9kd2` |
+| `localhost` | `SNPmGgnywBvvrAKMLundzG6StojyHTHDLu7T4sdhP4k` |
+
+## First Reads
+
+Use these methods and getters before building transactions:
+
+| API | Use |
+| --- | --- |
+| `AlphaVault.create(connection, vaultAddress, opt?)` | Fetches vault, clock, mints, and connected pool timing into an `AlphaVault` instance. |
+| `alphaVault.vault` | Decoded on-chain `Vault` account. |
+| `alphaVault.mode` | SDK `VaultMode` value derived from `vault.vaultMode`. |
+| `alphaVault.vaultPoint` | First join, last join, last buying, start vesting, and end vesting points. |
+| `alphaVault.vaultState` | Current lifecycle state from the clock and vault timing. |
+| `alphaVault.getEscrow(owner)` | Fetches the owner escrow PDA or returns `null`. |
+| `alphaVault.interactionState(escrow, merkleProof?)` | Computes UI-ready deposit, claim, withdrawal, and whitelist booleans. |
+
+## Reference
+
+<CardGroup cols={2}>
+  <Card
+    title="SDK Examples"
+    icon="bolt"
+    iconType="solid"
+    href="/developer-guides/alpha-vault/typescript-sdk/examples"
+  >
+    Explore transaction flows for deposits, claims, fills, Merkle proofs, and authority-created escrows.
+  </Card>
+  <Card
+    title="SDK Reference"
+    icon="code"
+    iconType="solid"
+    href="/developer-guides/alpha-vault/typescript-sdk/reference"
+  >
+    Access the SDK method map, PDA helpers, constants, enums, and exported types.
+  </Card>
+</CardGroup>
+
+## Testing The SDK
+
+The local SDK package uses `tsup` for builds and Jest for tests.
 
 ```bash
-# Install dependencies
-cd ts-client
-bun install
-
-# Run tests
-bun test
+cd alpha-vault-sdk/ts-client
+npm install
+npm run build
+npm test
 ```
 
-# Development Resources
+Some tests require local validator fixtures and launch-pool artifacts. For application integrations, simulate transactions and test the exact vault and pool configuration before mainnet use.
 
 ## Faucets
 
 <CardGroup cols={1}>
-  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.raccoons.dev/">
-    <p>When working on devnet, you might need test tokens. Here is a helpful faucet.</p>
+  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.solana.com/">
+    Request test SOL for devnet integration testing.
   </Card>
 </CardGroup>

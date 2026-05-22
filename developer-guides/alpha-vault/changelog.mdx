@@ -1,0 +1,88 @@
+---
+title: "Alpha Vault Changelog"
+sidebarTitle: "Changelog"
+description: "Track Alpha Vault program and TypeScript SDK versions, source-backed integration notes, and known documentation gaps."
+llmsDescription: "Explains the Alpha Vault changelog for developers. Covers the local alpha_vault program version, @meteora-ag/alpha-vault SDK version, current program IDs, instruction and event coverage, Token 2022 and Merkle proof behavior, no OpenAPI source material, and integration-impacting notes from the inspected local repositories."
+---
+
+<Tip>
+  Track Presale Vault releases here.
+</Tip>
+
+<Update
+ label="alpha-vault 0.4.1"
+  description="Merkle Proof Metadata"
+  rss="Alpha Vault 0.4.1 adds Merkle proof metadata endpoints so vault creators can publish and close proof URLs, adds SDK helpers for proof metadata and proof lookup, and lets users withdraw prorata vault deposit overflow after deposit close. SDK 1.1.14."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.4.1` | [alpha-vault #76](https://github.com/MeteoraAg/alpha-vault/pull/76) |
+  | TypeScript SDK | `1.1.14` | [alpha-vault-sdk #16](https://github.com/MeteoraAg/alpha-vault-sdk/pull/16) |
+
+  ## What We Shipped 
+  - Merkle Proof Metadata
+  - User able to withdraw extra quote token in prorata vault
+
+  ## What To Do
+
+  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrators</th>
+          <th>What Changed</th>
+          <th>What To Do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Partners</strong></td>
+          <td>
+            <ul>
+              <li>Merkle Proof Metadata</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Bump your SDK version to <code>@meteora-ag/alpha-vault-sdk@1.1.14</code> to start testing.</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  ## Program: `alpha-vault` `0.4.1`
+
+  Program ID (mainnet and devnet): `vaU6kP7iNEGkbmPkLmZfGwiGxd4Mob24QQCie5R9kd2`
+
+  [Program PR #76](https://github.com/MeteoraAg/alpha-vault/pull/76)
+
+  ### Changed
+
+  - Allow user to withdraw overflowed deposit (extra token required to fill vault) using `withdraw` endpoint right after deposit close.
+
+  ### Added
+
+  - New endpoints `create_merkle_proof_metadata` and `close_merkle_proof_metadata`, that allows `vault_authority (creator)` to add an url to proof, easier to integrations to get proof
+    
+  ## TypeScript SDK: `@meteora-ag/alpha-vault-sdk` `1.1.14`
+
+  [SDK PR #16](https://github.com/MeteoraAg/alpha-vault-sdk/pull/16)
+
+  ### Added
+
+  - `createMerkleProofMetadata` function. Allow vault creator to submit merkle proof API endpoint.
+  - `closeMerkleProofMetadata` function. Allow vault creator to close merkle proof metadata account.
+  - `getMerkleProofUrl` function. Get merkle proof API endpoint from merkle proof metadata account. If not available, it default back to meteora API endpoint
+  - `deriveMerkleProofMetadata` function. Derive merkle proof metadata account PDA.
+  - `getMerkleProofForDeposit` function. Get merkle proof required for deposit based on merkle proof API stored in `MerkleProofMetadata`.
+
+  ### Changed
+
+  - `withdrawRemainingQuote` can only be invoked after vault fill stage, which the condition is `current_point > last_buying_point`.
+  - `withdraw` have 2 stages now. The first stage is to withdraw from escrow and the second stage is to withdraw excessive quote token from the vault. The second stage (new stage) is only applicable when the vault is in prorata mode. The second stage is triggered when the `current_point >= last_join_point && current_point <= last_buying_point`. The second stage is being represented as `canWithdrawDepositOverflow` in `InteractionState` object, and the amount can be withdrawn in that stage is `availableDepositOverflow` in `InteractionState` object.
+
+</Update>

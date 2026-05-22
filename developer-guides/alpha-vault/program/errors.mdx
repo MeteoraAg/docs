@@ -1,0 +1,59 @@
+---
+title: "Alpha Vault Program Errors"
+sidebarTitle: "Errors"
+description: "Understand Alpha Vault custom errors, codes, messages, and common causes for integration debugging."
+llmsDescription: "Explains Alpha Vault Anchor custom errors from the local program source. Covers VaultError codes 6000 through 6039, messages, timing errors, pool and mint validation errors, mode and cap validation errors, Merkle proof failures, admin and creator authorization failures, crank fee whitelist failures, and common fixes."
+---
+
+This page lists the Anchor custom errors returned by the Presale Vault `presale` program.  Alpha Vault custom errors are emitted by the Anchor `VaultError` enum. 
+
+<Tip>
+   Anchor error codes start at `6000`. When a transaction log contains custom program error: `0x1771`, 
+   convert the hex value to decimal to find the matching code. For example, `0x1771` is `6001`, 
+   which maps to `IncorrectTokenMint`.
+</Tip>
+
+## Error Codes
+
+| Code | Name | Message | Common cause |
+| --- | --- | --- | --- |
+| `6000` | `TimePointNotInFuture` | Time point is not in future | Initialization or update references a pool join point that has already passed. |
+| `6001` | `IncorrectTokenMint` | Token mint is incorrect | Vault base or quote mint does not match the connected pool token order. |
+| `6002` | `IncorrectPairType` | Pair is not permissioned | Legacy pair validation path failed. |
+| `6003` | `PoolHasStarted` | Pool has started | Attempted an action that must happen before launch pool activation. |
+| `6004` | `NotPermitThisActionInThisTimePoint` | This action is not permitted in this time point | Action is outside its deposit, buy, refund, or vesting window. |
+| `6005` | `TheSaleIsOngoing` | The sale is on going, cannot withdraw | Legacy sale-window guard. |
+| `6006` | `EscrowIsNotClosable` | Escrow is not closable | Escrow still has deposit, claim, overflow, or remaining quote work outstanding. |
+| `6007` | `TimePointOrdersAreIncorrect` | Time point orders are incorrect | Activation, vesting, or deposit points are not ordered correctly. |
+| `6008` | `EscrowHasRefunded` | Escrow has refunded | `withdraw_remaining_quote` was called more than once for the same escrow. |
+| `6009` | `MathOverflow` | Math operation overflow | Checked arithmetic failed. |
+| `6010` | `MaxBuyingCapIsZero` | Max buying cap is zero | Pro Rata max buying cap is zero. |
+| `6011` | `MaxAmountIsTooSmall` | Max amount is too small | Legacy maximum amount guard. |
+| `6012` | `PoolTypeIsNotSupported` | Pool type is not supported | Unsupported pool type, or fill instruction does not match the vault's pool type. |
+| `6013` | `InvalidAdmin` | Invalid admin | Signer is not a configured program admin and is not allowed by the instruction. |
+| `6014` | `VaultModeIsIncorrect` | Vault mode is incorrect | Mode-specific instruction was used on the wrong vault mode. |
+| `6015` | `MaxDepositingCapIsInValid` | Max depositing cap is invalid | FCFS cap is zero, invalid, or below current total deposits during update. |
+| `6016` | `VestingDurationIsInValid` | Vesting duration is invalid | Vesting duration is zero, reversed, or exceeds the configured maximum. |
+| `6017` | `DepositAmountIsZero` | Deposit amount is zero | Deposit amount became zero after transfer fee, vault cap, or escrow quota clipping. |
+| `6018` | `PoolOwnerIsMismatched` | Pool owner is mismatched | Dynamic AMM pool account is not owned by the expected program. |
+| `6019` | `WithdrawAmountIsZero` | Withdraw amount is zero | Withdrawal or overflow refund amount resolves to zero. |
+| `6020` | `DepositingDurationIsInvalid` | Depositing duration is invalid | FCFS config deposit duration is shorter than the required buffer. |
+| `6021` | `DepositingTimePointIsInvalid` | Depositing time point is invalid | Deposit start plus buffer is after the pool last join point. |
+| `6022` | `IndividualDepositingCapIsZero` | Individual depositing cap is zero | FCFS individual cap is zero. |
+| `6023` | `InvalidFeeReceiverAccount` | Invalid fee receiver account | Escrow fee or crank fee receiver is missing or not the Alpha Vault treasury. |
+| `6024` | `NotPermissionedVault` | Not permissioned vault | Legacy permissioned vault guard. |
+| `6025` | `NotPermitToDoThisAction` | Not permit to do this action | Instruction is not allowed for the vault's whitelist mode. |
+| `6026` | `InvalidProof` | Invalid Merkle proof | Wallet and `max_cap` proof does not verify against the Merkle root config. |
+| `6027` | `InvalidActivationType` | Invalid activation type | Activation type is not `0` slot or `1` timestamp. |
+| `6028` | `ActivationTypeIsMismatched` | Activation type is mismatched | Config activation type does not match the connected pool activation type. |
+| `6029` | `InvalidPool` | Pool is not connected to the alpha vault | Pool state does not point to the derived Alpha Vault address. |
+| `6030` | `InvalidCreator` | Invalid creator | Authority-created escrow payer is not the vault authority. |
+| `6031` | `PermissionedVaultCannotChargeEscrowFee` | Permissioned vault cannot charge escrow fee | Merkle-proof or authority vault was initialized with a nonzero escrow fee. |
+| `6032` | `EscrowFeeTooHigh` | Escrow fee too high | Escrow fee exceeds `10_000_000` lamports. |
+| `6033` | `LockDurationInvalid` | Lock duration is invalid | Lock duration exceeds the maximum allowed duration. |
+| `6034` | `MaxBuyingCapIsTooSmall` | Max buying cap is too small | Legacy Pro Rata cap guard. |
+| `6035` | `MaxDepositingCapIsTooSmall` | Max depositing cap is too small | Authority-created escrow cap is zero. |
+| `6036` | `InvalidWhitelistWalletMode` | Invalid whitelist wallet mode | Whitelist mode is unsupported or incompatible with the instruction. |
+| `6037` | `InvalidCrankFeeWhitelist` | Invalid crank fee whitelist | Whitelist PDA exists but does not belong to the cranker signer. |
+| `6038` | `MissingFeeReceiver` | Missing fee receiver | Fee receiver account was required but not supplied. |
+| `6039` | `DiscriminatorIsMismatched` | Discriminator is mismatched | Account discriminator does not match the expected layout. |

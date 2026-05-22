@@ -1,0 +1,86 @@
+---
+title: "Alpha Vault Program Instructions"
+sidebarTitle: "Instructions"
+description: "Explore Alpha Vault instructions for initialization, escrow creation, deposits, withdrawals, claims, fills, configs, metadata, and admin flows."
+llmsDescription: "Explains the Alpha Vault instruction surface from the Anchor source and IDL. Covers direct and config-based vault initialization, Pro Rata and FCFS config management, permissionless and permissioned escrow creation, deposits, Pro Rata withdrawals, remaining quote refunds, token claims, DLMM Dynamic AMM and DAMM v2 fill instructions, Merkle root metadata, crank fee whitelist instructions, authority transfer, accounts, parameters, signers, and integration notes."
+---
+
+The `alpha-vault` IDL exposes the instructions below. Integrators should use the TypeScript SDK for transaction construction or build through CPI.
+
+## Vault Initialization
+
+| Instruction | Parameters | Main signers and accounts | Behavior |
+| --- | --- | --- | --- |
+| `initialize_prorata_vault` | `pool_type`, `quote_mint`, `base_mint`, `depositing_point`, `start_vesting_point`, `end_vesting_point`, `max_buying_cap`, `escrow_fee`, `whitelist_mode` | `funder`, `base` signer, `vault`, `pool`, `system_program` | Creates a direct Pro Rata vault PDA from `base` and `pool`. Validates pool linkage, mints, timing, cap, escrow fee, and whitelist mode. |
+| `initialize_fcfs_vault` | `pool_type`, `quote_mint`, `base_mint`, `depositing_point`, `start_vesting_point`, `end_vesting_point`, `max_depositing_cap`, `individual_depositing_cap`, `escrow_fee`, `whitelist_mode` | `funder`, `base` signer, `vault`, `pool`, `system_program` | Creates a direct FCFS vault PDA from `base` and `pool`. Validates pool linkage, mints, timing, caps, escrow fee, and whitelist mode. |
+| `initialize_vault_with_prorata_config` | `pool_type`, `quote_mint`, `base_mint`, `whitelist_mode` | `funder`, `vault`, `pool`, `quote_mint`, `config`, `system_program` | Creates a Pro Rata vault PDA from a reusable config and pool. Computes vesting points from pool activation plus config durations. |
+| `initialize_vault_with_fcfs_config` | `pool_type`, `quote_mint`, `base_mint`, `whitelist_mode` | `funder`, `vault`, `pool`, `quote_mint`, `config`, `system_program` | Creates an FCFS vault PDA from a reusable config and pool. Computes deposit start from pool `last_join_point` minus config deposit duration. |
+| `transfer_vault_authority` | `new_authority` | Current `vault_authority`, `vault` | Updates the vault authority. |
+
+## Config Management
+
+| Instruction | Parameters | Authority | Behavior |
+| --- | --- | --- | --- |
+| `create_prorata_config` | `max_buying_cap`, `start_vesting_duration`, `end_vesting_duration`, `escrow_fee`, `activation_type`, `index` | Program admin | Creates a reusable Pro Rata config PDA from `index`. |
+| `close_prorata_config` | None | Program admin | Closes a Pro Rata config and sends rent to `rent_receiver`. |
+| `create_fcfs_config` | `max_depositing_cap`, `start_vesting_duration`, `end_vesting_duration`, `depositing_duration_until_last_join_point`, `individual_depositing_cap`, `escrow_fee`, `activation_type`, `index` | Program admin | Creates a reusable FCFS config PDA from `index`. |
+| `close_fcfs_config` | None | Program admin | Closes an FCFS config and sends rent to `rent_receiver`. |
+| `update_prorata_vault_parameters` | `max_buying_cap`, `start_vesting_point`, `end_vesting_point` | Program admin | Updates Pro Rata vault cap and vesting points before pool timing constraints expire. |
+| `update_fcfs_vault_parameters` | `max_depositing_cap`, `depositing_point`, `individual_depositing_cap`, `start_vesting_point`, `end_vesting_point` | Program admin | Updates FCFS vault caps and timing. `max_depositing_cap` cannot be below current `total_deposit`. |
+
+## Escrow Creation
+
+| Instruction | Parameters | Main accounts | Behavior |
+| --- | --- | --- | --- |
+| `create_new_escrow` | None | `vault`, `pool`, `escrow`, `owner`, `payer`, optional `escrow_fee_receiver`, `system_program` | Creates a permissionless escrow during the deposit window. Transfers `escrow_fee` to the treasury when the vault charges one. |
+| `create_permissioned_escrow` | `max_cap`, `proof` | `vault`, `pool`, `escrow`, `owner`, `merkle_root_config`, `payer`, optional `escrow_fee_receiver`, `system_program` | Creates a Merkle-proof escrow after verifying that the owner and `max_cap` leaf belongs to the root. |
+| `create_permissioned_escrow_with_authority` | `max_cap` | `vault`, `pool`, `escrow`, `owner`, `payer`, `system_program` | Creates an authority-permissioned escrow. The payer must equal `vault_authority`, and `max_cap` must be greater than zero. |
+| `close_escrow` | None | `vault`, `escrow`, `owner`, `rent_receiver` | Closes an escrow when it is empty or when all required claims and quote refunds are complete. |
+
+## User Token Actions
+
+| Instruction | Parameters | Main accounts | Behavior |
+| --- | --- | --- | --- |
+| `deposit` | `max_amount` | `vault`, `pool`, `escrow`, `source_token`, `token_vault`, `token_mint`, `token_program`, `owner` | Deposits quote during the deposit window. FCFS deposits are clipped to remaining vault capacity; all modes are clipped to escrow quota. |
+| `withdraw` | `amount` | `vault`, `pool`, `escrow`, `destination_token`, `token_vault`, `token_mint`, `token_program`, `owner` | Pro Rata only. During the deposit window, withdraws deposited quote. After the join window and before the buying window ends, withdraws deposit overflow. |
+| `withdraw_remaining_quote` | None | `vault`, `pool`, `escrow`, `token_vault`, `destination_token`, `token_mint`, `token_program`, `owner` | After the buying window, withdraws the escrow's unused quote share once. |
+| `claim_token` | None | `vault`, `escrow`, `token_out_vault`, `destination_token`, `token_mint`, `token_program`, `owner` | Claims vested bought base tokens after `start_vesting_point`. |
+
+## Fill Instructions
+
+Fill instructions can run during the connected pool's pre-activation buy window. They swap from the vault quote token account into the vault base token account.
+
+| Instruction | Parameters | Pool accounts | Behavior |
+| --- | --- | --- | --- |
+| `fill_dlmm` | `max_amount`, `remaining_accounts_info` | DLMM pair, reserves, bin array bitmap extension, oracle, token mint programs, DLMM event authority, memo program, optional Token 2022 transfer-hook remaining accounts | Calls DLMM `swap2`. The SDK estimates a partial quote, passes transfer-hook remaining accounts, and returns `null` when a partial DLMM fill has insufficient liquidity. |
+| `fill_dynamic_amm` | `max_amount` | Dynamic AMM pool, vault A/B accounts, LP mints, LP vaults, admin token fee, Dynamic Vault program | Calls DAMM v1 / Dynamic AMM `swap`. |
+| `fill_damm_v2` | `max_amount` | DAMM v2 pool authority, pool, token A/B vaults, token A/B mints and programs, DAMM v2 event authority | Calls DAMM v2 `swap`. |
+
+Each fill validates the expected `PoolType`, caps the amount by remaining swappable quote, updates `swapped_amount` and `bought_token`, emits `SwapFill`, and charges the crank fee unless a valid `CrankFeeWhitelist` is supplied.
+
+## Merkle Proof Metadata
+
+| Instruction | Parameters | Authority | Behavior |
+| --- | --- | --- | --- |
+| `create_merkle_root_config` | `root`, `version` | Program admin or `vault_authority` | Creates a Merkle root config for `PermissionWithMerkleProof` vaults. |
+| `create_merkle_proof_metadata` | `proof_url` | Program admin or `vault_authority` | Stores an optional proof URL for SDK clients. |
+| `close_merkle_proof_metadata` | None | Program admin or `vault_authority` | Closes Merkle proof metadata and returns rent. |
+
+## Crank Fee Whitelist
+
+| Instruction | Parameters | Authority | Behavior |
+| --- | --- | --- | --- |
+| `create_crank_fee_whitelist` | None | Program admin | Creates a whitelist PDA for a cranker public key. |
+| `close_crank_fee_whitelist` | None | Program admin | Closes the whitelist PDA and emits the removed cranker. |
+
+## Validation Highlights
+
+| Area | Rule |
+| --- | --- |
+| Pool linkage | The connected pool must store the derived Alpha Vault address before initialization succeeds. |
+| Mint order | `quote_mint` must match pool token Y or token B; `base_mint` must match pool token X or token A. |
+| Permissioned fees | Merkle-proof and authority-permissioned vaults must set `escrow_fee` to zero. |
+| Deposit window | Escrow creation and deposits require current slot or timestamp between `depositing_point` and pool `last_join_point`. |
+| Fill window | Fills require current slot or timestamp between pool `pre_activation_start_point` and `last_buying_point`. |
+| Claims | Claims require current slot or timestamp at or after `start_vesting_point`. |
+| Remaining quote | `withdraw_remaining_quote` requires current slot or timestamp after `last_buying_point` and can only run once per escrow. |

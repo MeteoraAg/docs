@@ -1,57 +1,119 @@
 ---
-title: Overview
+title: "Alpha Vault Developer Guide"
+sidebarTitle: "Overview"
+description: "Learn how to build Alpha Vault integrations with the Anchor program, TypeScript SDK, Rust CPI notes, account reference, events, errors, and release notes."
+llmsDescription: "Explains the Alpha Vault Developer Guide as the integration entry point for Meteora's alpha_vault program. Covers program accounts, instructions, events, errors, @meteora-ag/alpha-vault, Rust crate and CPI guidance, Merkle proof metadata URLs, changelog, program IDs, commands, and public repository paths for Alpha Vault builders."
 ---
 
-Before getting started building on Alpha Vault, you should read the following resource to get a better understanding of how Meteora's Alpha Vault works:
+Alpha Vault is Meteora's pre-launch allocation program for DLMM, DAMM v1, and DAMM v2 Launch Pools. Users deposit the pool quote token into a vault before public trading starts; the vault buys the launch token from the connected pool during the protected pre-activation window, then users claim bought tokens and withdraw unused quote according to the vault configuration.
+
+For product and economic concepts, read the Alpha Vault product pages.
 
 <CardGroup cols={2}>
-  <Card title="What's Alpha Vault?" icon="question" iconType="solid" href="/anti-sniper-suite/alpha-vault/what-is-alpha-vault">
-    Alpha Vault is a complementary anti-bot mechanism used together with a Launch Pool that provides early access for genuine supporters to deposit and purchase tokens before the pool starts trading.
+  <Card title="Learn more about Alpha Vault" icon="book-open" iconType="solid" href="/helper-products/alpha-vault/what-is-alpha-vault">
+    Overview of the Alpha Vault lifecycle, pool linkage, deposit window, purchase window, and claim flow.
   </Card>
-  <Card title="Alpha Vault Modes" icon="gear" iconType="solid" href="/anti-sniper-suite/alpha-vault/alpha-vault-modes">
-    Alpha Vault has 2 modes: Prorata and FCFS. Prorata allows users to deposit over the max buying cap, with proportional distribution. FCFS allows users to deposit up to the max buying cap, with first-come-first-serve distribution.
+  <Card title="Alpha Vault Formulas" icon="calculator" iconType="solid" href="/helper-products/alpha-vault/formulas">
+    Formulas and definitions for allocation, refund, vesting, and rounding.
   </Card>
 </CardGroup>
 
----
+## Integration
 
-# Alpha Vault Program
+<CardGroup cols={2}>
+  <Card
+    title="Program Accounts"
+    icon="table-cells"
+    iconType="solid"
+    href="/developer-guides/alpha-vault/program/accounts"
+  >
+    Account model for vaults, escrows, configs, Merkle roots, Merkle proof metadata, crank fee whitelists, PDAs, enums, and constants.
+  </Card>
+  <Card
+    title="Program Instructions"
+    icon="list"
+    iconType="solid"
+    href="/developer-guides/alpha-vault/program/instructions"
+  >
+    Instruction families for vault creation, escrow creation, deposits, withdrawals, claims, fills, metadata, authority, and admin config.
+  </Card>
+  <Card
+    title="Program Events"
+    icon="list"
+    iconType="solid"
+    href="/developer-guides/alpha-vault/program/events"
+  >
+    Event payloads emitted by vault creation, escrow actions, fills, claims, refunds, Merkle metadata, and crank fee whitelist changes.
+  </Card>
+  <Card
+    title="Program Errors"
+    icon="triangle-exclamation"
+    iconType="solid"
+    href="/developer-guides/alpha-vault/program/errors"
+  >
+    Anchor custom error codes, enum names, messages, and common integration causes.
+  </Card>
+  <Card
+    title="TypeScript SDK"
+    icon="code"
+    iconType="solid"
+    href="/developer-guides/alpha-vault/typescript-sdk/getting-started"
+  >
+    TypeScript SDK for reading vault state, creating vaults and escrows, deposits, withdrawals, claims, fills, and Merkle helpers.
+  </Card>
+  <Card
+    title="Rust Integration"
+    icon="terminal"
+    iconType="solid"
+    href="/developer-guides/alpha-vault/rust-integration/cpi"
+  >
+    Rust integration notes for the Anchor crate, `cpi` feature, account types, and CPI call patterns.
+  </Card>
+</CardGroup>
 
-At Meteora, we’ve developed a `Node.js <> Typescript SDK` to make deploying and managing your Alpha Vault easier. The following sections includes information on installing and using the SDKs. It also covers where to find the latest code, and how to contribute to these repositories.
+## Program IDs
 
-## Program Details
+The public Alpha Vault program ID is the same on mainnet and devnet:
+
+| Network | Program ID |
+| --- | --- |
+| Mainnet Beta | `vaU6kP7iNEGkbmPkLmZfGwiGxd4Mob24QQCie5R9kd2` |
+| Devnet | `vaU6kP7iNEGkbmPkLmZfGwiGxd4Mob24QQCie5R9kd2` |
+| Localnet feature | `SNPmGgnywBvvrAKMLundzG6StojyHTHDLu7T4sdhP4k` |
+
+The program treasury used for escrow fees and crank fees is:
+
+| Account | Address |
+| --- | --- |
+| Alpha Vault treasury | `BJQbRiRWhJCyTYZcAuAL3ngDCx3AyFQGKDq8zhiZAKUw` |
+
+<CardGroup cols={2}>
+  <Card title="Alpha Vault IDL" icon="file-code" href="https://github.com/MeteoraAg/alpha-vault-sdk/blob/main/ts-client/src/alpha-vault/alpha_vault.json">
+    Anchor IDL used by the TypeScript SDK.
+  </Card>
+  <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/alpha-vault-sdk">
+    Public SDK for transactions, PDA derivation, account wrappers, Merkle helpers, and examples in tests.
+  </Card>
+</CardGroup>
+
+<Note>
+  Alpha Vault must be connected to a launch pool whose state points back to the vault address. The vault does not price swaps itself; fills call into the connected DLMM, DAMM v1, or DAMM v2 pool.
+</Note>
+
+## Commands
+
+| Task | Command |
+| --- | --- |
+| Install TypeScript SDK dependencies | `cd alpha-vault-sdk/ts-client && npm install` |
+| Build TypeScript SDK | `cd alpha-vault-sdk/ts-client && npm run build` |
+| Run TypeScript SDK tests | `cd alpha-vault-sdk/ts-client && npm test` |
+| Build `alpha_vault` program | `cd alpha-vault && anchor build` |
+| Run Anchor program tests | `cd alpha-vault && anchor test` |
+
+## Stay Updated
 
 <CardGroup cols={1}>
-  <Card title="Alpha Vault IDL" icon="code" iconType="solid" href="https://github.com/MeteoraAg/alpha-vault-sdk/blob/main/idls/alpha_vault.json">
-    Meteora Alpha Vault Program IDL
-  </Card>
-</CardGroup>
-
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Network</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Program ID</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Mainnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">vaU6kP7iNEGkbmPkLmZfGwiGxd4Mob24QQCie5R9kd2</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Devnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">vaU6kP7iNEGkbmPkLmZfGwiGxd4Mob24QQCie5R9kd2</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-## Official SDKs
-
-<CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="/developer-guide/guides/alpha-vault/typescript-sdk/getting-started">
-    Official Meteora Alpha Vault Typescript SDK
+  <Card title="Alpha Vault Changelog" icon="newspaper" iconType="solid" href="/developer-guides/alpha-vault/changelog">
+    Program, SDK, event, and integration notes for release planning.
   </Card>
 </CardGroup>

@@ -1,0 +1,189 @@
+---
+title: "Alpha Vault TS SDK Examples"
+sidebarTitle: "Examples"
+description: "Explore Alpha Vault TypeScript examples for reading vault state, deposits, withdrawals, claims, fills, Merkle proofs, and authority escrows."
+llmsDescription: "Explains practical examples for the Alpha Vault TypeScript SDK. Covers loading an AlphaVault, reading interaction state, creating permissionless deposits, using Merkle proof deposits, authority-created escrow instructions, Pro Rata withdrawals, remaining quote withdrawals, token claims, fillVault cranking, and Merkle metadata helpers."
+---
+
+These examples use the SDK methods exported by `@meteora-ag/alpha-vault`. The SDK returns unsigned `Transaction` objects or instructions; sign and send them with your wallet adapter, backend signer, or test keypair.
+
+## Load A Vault
+
+```typescript
+import AlphaVault from "@meteora-ag/alpha-vault";
+import { Connection, PublicKey } from "@solana/web3.js";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const vaultAddress = new PublicKey("ALPHA_VAULT_ADDRESS");
+
+const alphaVault = await AlphaVault.create(connection, vaultAddress, {
+  cluster: "mainnet-beta",
+});
+
+console.log(alphaVault.vaultState);
+console.log(alphaVault.vaultPoint);
+```
+
+## Read User State
+
+```typescript
+import AlphaVault from "@meteora-ag/alpha-vault";
+import { PublicKey } from "@solana/web3.js";
+
+const owner = new PublicKey("OWNER_ADDRESS");
+const escrow = await alphaVault.getEscrow(owner);
+const merkleProof = await alphaVault.getMerkleProofForDeposit(owner);
+const state = await alphaVault.interactionState(escrow, merkleProof);
+
+console.log({
+  canDeposit: state.canDeposit,
+  canClaim: state.canClaim,
+  availableQuota: state.availableQuota.toString(),
+  totalClaimable: state.claimInfo.totalClaimable.toString(),
+});
+```
+
+## Deposit
+
+`deposit(maxAmount, owner, merkleProof?)` creates the escrow first when needed for permissionless and Merkle-proof vaults. For `PermissionWithAuthority`, the vault authority must create the escrow before the user can deposit.
+
+```typescript
+import { BN } from "@coral-xyz/anchor";
+import { PublicKey } from "@solana/web3.js";
+
+const owner = new PublicKey("OWNER_ADDRESS");
+const maxAmount = new BN(1_000_000);
+const merkleProof = await alphaVault.getMerkleProofForDeposit(owner);
+
+const tx = await alphaVault.deposit(maxAmount, owner, merkleProof ?? undefined);
+tx.feePayer = owner;
+```
+
+## Authority-Created Escrows
+
+Use this flow for `WhitelistMode.PermissionWithAuthority`. The vault authority pays rent and creates an escrow with a wallet-specific cap.
+
+```typescript
+import { BN } from "@coral-xyz/anchor";
+import { PublicKey } from "@solana/web3.js";
+
+const owner = new PublicKey("USER_ADDRESS");
+const vaultAuthority = new PublicKey("VAULT_AUTHORITY");
+const maxCap = new BN(1_000_000);
+
+const tx = await alphaVault.createStakeEscrowByAuthority(
+  maxCap,
+  owner,
+  vaultAuthority,
+);
+```
+
+For batches, build instructions and place them in your own transaction:
+
+```typescript
+const instructions = await alphaVault.createMultipleStakeEscrowByAuthorityInstructions(
+  [
+    { address: new PublicKey("USER_1"), maxAmount: new BN(1_000_000) },
+    { address: new PublicKey("USER_2"), maxAmount: new BN(2_000_000) },
+  ],
+  vaultAuthority,
+);
+```
+
+## Withdraw During Deposit Window
+
+`withdraw` is only available for Pro Rata vaults. During the deposit window it withdraws a user's deposit share. After the join window and before the buying window ends, it can withdraw Pro Rata deposit overflow.
+
+```typescript
+import { BN } from "@coral-xyz/anchor";
+import { PublicKey } from "@solana/web3.js";
+
+const owner = new PublicKey("OWNER_ADDRESS");
+const maxAmount = new BN(500_000);
+
+const tx = await alphaVault.withdraw(maxAmount, owner);
+```
+
+## Withdraw Remaining Quote
+
+After the buying window ends, users can withdraw unused quote once from their escrow.
+
+```typescript
+import { PublicKey } from "@solana/web3.js";
+
+const owner = new PublicKey("OWNER_ADDRESS");
+const tx = await alphaVault.withdrawRemainingQuote(owner);
+```
+
+## Claim Bought Token
+
+Users can claim bought base tokens after the vault's `startVestingPoint`. Claims vest linearly until `endVestingPoint`.
+
+```typescript
+import { PublicKey } from "@solana/web3.js";
+
+const owner = new PublicKey("OWNER_ADDRESS");
+const tx = await alphaVault.claimToken(owner);
+```
+
+## Fill The Vault
+
+`fillVault(payer)` chooses the correct pool-specific fill helper from `vault.poolType`. It returns `null` when no fill transaction should be sent, such as a fully filled vault or a DLMM quote with insufficient liquidity for a partial fill.
+
+```typescript
+import { PublicKey } from "@solana/web3.js";
+
+const payer = new PublicKey("CRANKER_ADDRESS");
+const tx = await alphaVault.fillVault(payer);
+
+if (tx) {
+  tx.feePayer = payer;
+}
+```
+
+<Note>
+  Fill instructions can charge the Alpha Vault crank fee unless the cranker has a `CrankFeeWhitelist` PDA.
+</Note>
+
+## Merkle Proof Metadata
+
+For `PermissionWithMerkleProof`, the vault authority or admin can create an on-chain Merkle root config and optional proof URL metadata. The SDK falls back to Meteora's default proof API when metadata is missing.
+
+```typescript
+import { BN } from "@coral-xyz/anchor";
+import { PublicKey } from "@solana/web3.js";
+
+const vaultCreator = new PublicKey("VAULT_AUTHORITY");
+const version = new BN(0);
+const root = Buffer.from("MERKLE_ROOT_HEX", "hex");
+
+const rootTx = await alphaVault.createMerkleRootConfig(
+  root,
+  version,
+  vaultCreator,
+);
+
+const metadataTx = await alphaVault.createMerkleProofMetadata(
+  vaultCreator,
+  "https://example.com/alpha-vault-proofs",
+);
+```
+
+## Build A Merkle Tree Locally
+
+The SDK exports `BalanceTree` for creating Merkle roots and proofs from wallet caps.
+
+```typescript
+import { BN } from "@coral-xyz/anchor";
+import { BalanceTree } from "@meteora-ag/alpha-vault";
+import { PublicKey } from "@solana/web3.js";
+
+const entries = [
+  { account: new PublicKey("USER_1"), maxCap: new BN(1_000_000) },
+  { account: new PublicKey("USER_2"), maxCap: new BN(2_000_000) },
+];
+
+const tree = new BalanceTree(entries);
+const root = tree.getRoot();
+const proof = tree.getProof(entries[0].account, entries[0].maxCap);
+```

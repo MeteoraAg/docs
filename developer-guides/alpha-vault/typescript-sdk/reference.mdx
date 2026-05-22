@@ -1,0 +1,135 @@
+---
+title: "Alpha Vault TS SDK Reference"
+sidebarTitle: "Reference"
+description: "Explore Alpha Vault TypeScript SDK exports, client methods, PDA helpers, constants, enums, fill helpers, Merkle helpers, and types."
+llmsDescription: "Explains the Alpha Vault TypeScript SDK reference for @meteora-ag/alpha-vault. Covers the default AlphaVault client, static constructors and readers, instance methods for escrow state deposits withdrawals claims fills and Merkle metadata, PDA helpers, fill transaction helpers, Merkle tree helpers, constants, enums, exported account types, package scripts, and no-OpenAPI limitations."
+---
+
+The TypeScript SDK package is `@meteora-ag/alpha-vault`. The package default export is the `AlphaVault` client class. Named exports include types, enums, constants, PDA helpers, fill helpers, Merkle tree helpers, and the IDL.
+
+```typescript
+import AlphaVault, {
+  BalanceTree,
+  PoolType,
+  VaultMode,
+  WhitelistMode,
+  deriveAlphaVault,
+  deriveEscrow,
+} from "@meteora-ag/alpha-vault";
+```
+
+## Client Construction
+
+| API | Signature | Use |
+| --- | --- | --- |
+| `AlphaVault.create` | `(connection, vaultAddress, opt?) => Promise<AlphaVault>` | Loads a vault, sysvar clock, mint accounts, and connected pool timing. |
+| `createProgram` | `(connection, opt?) => Program` | Creates an Anchor program client for Alpha Vault. |
+| `createDlmmProgram` | `(connection, opt?) => Program` | Creates a DLMM Anchor program client used for pool reads. |
+| `createDammProgram` | `(connection, opt?) => Program` | Creates a Dynamic AMM / DAMM v1 program client used for pool reads. |
+| `createCpAmmProgram` | `(connection, opt?) => Program` | Creates a DAMM v2 program client used for pool reads. |
+
+`opt.cluster` supports `mainnet-beta`, `devnet`, and `localhost`.
+
+## Static Vault APIs
+
+| API | Use |
+| --- | --- |
+| `AlphaVault.createCustomizableProrataVault(connection, params, owner, opt?)` | Builds a direct Pro Rata vault initialization transaction. |
+| `AlphaVault.createCustomizableFcfsVault(connection, params, owner, opt?)` | Builds a direct FCFS vault initialization transaction. |
+| `AlphaVault.createPermissionlessVault(connection, vaultParam, owner, opt?)` | Builds a config-based permissionless vault initialization transaction. |
+| `AlphaVault.createPermissionedVaultWithMerkleProof(connection, vaultParam, owner, opt?)` | Builds a config-based vault initialization transaction using Merkle-proof escrow creation. |
+| `AlphaVault.createPermissionedVaultWithAuthorityFund(connection, vaultParam, owner, opt?)` | Builds a config-based vault initialization transaction using authority-created escrows. |
+| `AlphaVault.getFcfsConfigs(connection, opt?)` | Fetches all FCFS vault config accounts. |
+| `AlphaVault.getProrataConfigs(connection, opt?)` | Fetches all Pro Rata vault config accounts. |
+| `AlphaVault.getEscrowByOwner(connection, owner, opt?)` | Fetches all escrow accounts with the owner at account-data offset `40`. |
+
+## Instance Read APIs
+
+| API | Use |
+| --- | --- |
+| `alphaVault.mode` | Returns `VaultMode.PRORATA` or `VaultMode.FCFS`. |
+| `alphaVault.vaultPoint` | Returns first join, last join, last buying, start vesting, and end vesting points. |
+| `alphaVault.vaultState` | Returns `PREPARING`, `DEPOSITING`, `PURCHASING`, `LOCKING`, `VESTING`, or `ENDED`. |
+| `refreshState(clock?)` | Refetches the vault and clock state, or uses a provided clock. |
+| `getEscrow(owner)` | Fetches the owner's escrow or returns `null`. |
+| `getClaimInfo(escrow)` | Calculates total allocated, claimed, and currently claimable base token. |
+| `getDepositInfo(escrow)` | Calculates total deposit, total filled, and total returned quote. |
+| `getAvailableDepositQuota(escrow, merkleProof?)` | Calculates current available deposit quota in raw quote units. |
+| `interactionState(escrow, merkleProof?, clock?)` | Returns UI-ready booleans and amounts for deposit, withdraw, refund, and claim actions. |
+
+## Instance Transaction APIs
+
+| API | Use |
+| --- | --- |
+| `deposit(maxAmount, owner, merkleProof?)` | Builds a deposit transaction. Creates permissionless or Merkle-proof escrow first when needed. |
+| `withdraw(amount, owner)` | Builds a Pro Rata withdraw transaction. |
+| `withdrawRemainingQuote(owner)` | Builds a post-buy remaining quote withdrawal transaction. |
+| `claimToken(owner)` | Builds a vested base token claim transaction. |
+| `closeEscrow(owner)` | Builds an escrow close transaction. |
+| `fillVault(payer)` | Builds the correct DLMM, Dynamic AMM, or DAMM v2 fill transaction, or returns `null` when no fill should be sent. |
+| `createStakeEscrowByAuthority(maxAmount, owner, vaultAuthority)` | Builds one authority-created escrow transaction. |
+| `createMultipleStakeEscrowByAuthorityInstructions(walletDepositCap, vaultAuthority)` | Builds multiple authority-created escrow instructions. |
+| `createMerkleRootConfig(root, version, vaultCreator)` | Builds a Merkle root config creation transaction. |
+| `createMerkleProofMetadata(vaultCreator, proofUrl)` | Builds a Merkle proof metadata creation transaction. |
+| `closeMerkleProofMetadata(vaultCreator)` | Builds a Merkle proof metadata close transaction. |
+| `getMerkleProofUrl()` | Reads on-chain proof metadata or falls back to the SDK default proof API. |
+| `getMerkleProofForDeposit(owner)` | Fetches proof data from `{baseUrl}/{vault}/{owner}` and returns `DepositWithProofParams` or `null`. |
+
+## PDA Helpers
+
+| Helper | Seeds | Returns |
+| --- | --- | --- |
+| `deriveAlphaVault(base, pool, programId)` | `vault`, base, pool | `[PublicKey, bump]` |
+| `deriveEscrow(alphaVault, owner, programId)` | `escrow`, vault, owner | `[PublicKey, bump]` |
+| `deriveMerkleRootConfig(alphaVault, version, programId)` | `merkle_root`, vault, version | `[PublicKey, bump]` |
+| `deriveMerkleProofMetadata(alphaVault, programId)` | `merkle_proof_metadata`, vault | `[PublicKey, bump]` |
+| `deriveCrankFeeWhitelist(cranker, programId)` | `crank_fee_whitelist`, cranker | `[PublicKey, bump]` |
+
+## Transaction Helpers
+
+| Helper | Use |
+| --- | --- |
+| `getOrCreateATAInstruction(connection, tokenMint, owner, payer, tokenProgram, allowOwnerOffCurve?)` | Returns an ATA and an optional create instruction. |
+| `wrapSOLInstruction(from, to, amount)` | Builds native SOL wrap instructions for the owner's WSOL ATA. |
+| `unwrapSOLInstruction(owner)` | Builds a close-account instruction for the owner's WSOL ATA. |
+| `fillDlmmTransaction(program, vaultKey, vault, payer, opt?)` | Builds a DLMM fill transaction with bin arrays and transfer-hook remaining accounts. |
+| `fillDammTransaction(program, vaultKey, vault, payer, opt?)` | Builds a Dynamic AMM / DAMM v1 fill transaction. |
+| `fillDammV2Transaction(program, vaultKey, vault, payer)` | Builds a DAMM v2 fill transaction. |
+| `estimateSlotDate(enableSlot, slotAverageTime, currentSlot)` | Estimates a wall-clock date for a future slot. |
+
+## Merkle Helpers
+
+| Export | Use |
+| --- | --- |
+| `BalanceTree` | Builds Merkle roots and proofs for wallet `maxCap` entries. |
+| `BalanceTree.toNode(account, maxCap)` | Builds the leaf used by the program: wallet address plus `maxCap`, hashed with the leaf prefix. |
+| `BalanceTree.verifyProof(account, maxCap, proof, root)` | Verifies a local proof against a root. |
+| `MerkleTree` | Lower-level sorted, de-duplicated Merkle tree helper. |
+
+## Constants
+
+| Export | Value or use |
+| --- | --- |
+| `PROGRAM_ID` | Cluster map for mainnet, devnet, and localhost Alpha Vault program IDs. |
+| `SEED` | Seed strings for `vault`, `escrow`, `merkle_root`, `crank_fee_whitelist`, and `merkle_proof_metadata`. |
+| `ALPHA_VAULT_TREASURY_ID` | Treasury account used for escrow fees and crank fees. |
+| `VAULT_PROGRAM_ID` | Dynamic Vault program used by Dynamic AMM fill helpers. |
+| `DYNAMIC_AMM_PROGRAM_ID` | Dynamic AMM / DAMM v1 program ID used by fill helpers. |
+| `DLMM_PROGRAM_ID` | DLMM program ID used by fill helpers. |
+| `MERKLE_PROOF_API` | Default devnet and mainnet proof URL base used when on-chain metadata is absent. |
+
+## Enums And Types
+
+| Export | Values or fields |
+| --- | --- |
+| `WhitelistMode` | `Permissionless`, `PermissionWithMerkleProof`, `PermissionWithAuthority`. |
+| `VaultMode` | `PRORATA`, `FCFS`. |
+| `PoolType` | `DLMM`, `DAMM`, `DAMMV2`. `DAMM` maps to Dynamic AMM / DAMM v1. |
+| `ActivationType` | `SLOT`, `TIMESTAMP`. |
+| `VaultState` | `PREPARING`, `DEPOSITING`, `PURCHASING`, `LOCKING`, `VESTING`, `ENDED`. |
+| `VaultParam` | `quoteMint`, `baseMint`, `poolAddress`, `poolType`, `vaultMode`, `config`. |
+| `CustomizableProrataVaultParams` | Direct Pro Rata vault creation fields, including absolute deposit and vesting points. |
+| `CustomizableFcfsVaultParams` | Direct FCFS vault creation fields, including absolute deposit and vesting points. |
+| `DepositWithProofParams` | `merkleRootConfig`, `maxCap`, `proof`. |
+| `InteractionState` | Claim, deposit, quota, whitelist, withdrawal, and refund booleans and amounts. |
+| `Vault`, `Escrow`, `FCFSConfig`, `ProrataConfig` | Generated account types from the IDL. |
