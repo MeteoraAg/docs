@@ -1,54 +1,85 @@
 ---
-title: Overview
+title: "Zap Developer Guide"
+sidebarTitle: "Overview"
+description: "Learn how to build Zap integrations for DAMM v2, DLMM, Jupiter-backed swaps, TypeScript SDK flows, Rust CPI, and release tracking."
+llmsDescription: "Explains the Zap Developer Guide as the integration entry point for Meteora Zap. Covers Zap program IDs, supported zap-in and zap-out flows, program accounts, instructions, errors, absence of custom Zap events, @meteora-ag/zap-sdk TypeScript workflows, local Rust helper crates, CPI guidance, changelog, commands, and public repository paths for builders."
 ---
 
-Before getting started building on Zap, you should read the following resource to get a better understanding of how Meteora's Zap works:
+Zap is Meteora's helper program for composing token movement, swaps, and liquidity actions around DAMM v2, DLMM, and Jupiter routes. It is mainly used to zap into liquidity positions, zap out from token balances produced by another action, or rebalance an existing DLMM position.
 
-<CardGroup cols={1}>
-  <Card title="What's Zap?" icon="question" iconType="solid" href="/helper-products/zap/what-is-zap">
-    Zap is a wrapper program that provides utility functions that allow users to zap in/out from Meteora AMMs or Jupiter. For example, a user can claim both token fee rewards and immediately swap any of the token through DAMM v2, DLMM or Jupiter to receive the other token.
-  </Card>
-</CardGroup>
-
----
-
-# Zap Program
-
-At Meteora, we’ve developed a `Node.js <> Typescript SDK` to make Zapping in or out of AMMs easier. The following sections includes information on installing and using the SDK. It also covers where to find the latest code, and how to contribute to these repositories.
-
-## Program Details
-
-<CardGroup cols={1}>
-  <Card title="Zap IDL" icon="code" iconType="solid" href="https://github.com/MeteoraAg/zap-sdk/blob/main/src/idl/zap/idl.json">
-    Meteora Zap Program IDL
-  </Card>
-</CardGroup>
-
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Network</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Program ID</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Mainnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Devnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-## Official SDKs
+To learn more about Zap, including supported routes, and limits, you can read the following documentations.
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="/developer-guides/zap/typescript-sdk/getting-started">
-    Official Meteora Zap Typescript SDK
+  <Card title="What Is Zap?" icon="book-open" iconType="solid" href="/helper-products/zap/what-is-zap">
+    Product overview for Zap, supported AMM paths, and common user flows.
+  </Card>
+  <Card title="Formula And Limits" icon="calculator" iconType="solid" href="/helper-products/zap/formula-and-limits">
+    Product formulas, limits, and route-level constraints.
+  </Card>
+</CardGroup>
+
+## Integration
+
+<CardGroup cols={2}>
+  <Card title="Program Accounts" icon="table-cells" iconType="solid" href="/developer-guides/zap/program/accounts">
+    Account model, ledger PDA, supported downstream programs, constants, and IDL types.
+  </Card>
+  <Card title="Program Instructions" icon="list" iconType="solid" href="/developer-guides/zap/program/instructions">
+    Instruction flows for ledger setup, zap out, DAMM v2 zap in, DLMM zap in, and DLMM rebalancing.
+  </Card>
+  <Card title="Program Events" icon="list" iconType="solid" href="/developer-guides/zap/program/events">
+    Current event surface and indexing notes for Zap and downstream CPI calls.
+  </Card>
+  <Card title="Program Errors" icon="triangle-exclamation" iconType="solid" href="/developer-guides/zap/program/errors">
+    Anchor custom error codes, messages, common causes, and integration fixes.
+  </Card>
+  <Card title="TypeScript SDK" icon="code" iconType="solid" href="/developer-guides/zap/typescript-sdk/getting-started">
+    TypeScript SDK for building Zap transactions and route-specific swap helpers.
+  </Card>
+  <Card title="Rust Integration" icon="terminal" iconType="solid" href="/developer-guides/zap/rust-integration/cpi">
+    Rust CPI guidance and local helper crates for advanced protocol integrations.
+  </Card>
+</CardGroup>
+
+## Program IDs
+
+The `zap` program ID is the same on mainnet and devnet:
+
+| Network | Program ID |
+| --- | --- |
+| Mainnet Beta | `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz` |
+| Devnet | `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz` |
+
+## Public Source
+
+<CardGroup cols={2}>
+  <Card title="Zap Program" icon="code" iconType="solid" href="https://github.com/MeteoraAg/zap-program">
+    Anchor program source, local Rust helper crates, tests, and changelog.
+  </Card>
+  <Card title="Zap IDL" icon="file-code" iconType="solid" href="https://github.com/MeteoraAg/zap-sdk/blob/main/src/idl/zap/idl.json">
+    Anchor IDL for the deployed `zap` program.
+  </Card>
+</CardGroup>
+<CardGroup cols={1}>
+  <Card title="Zap TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/zap-sdk">
+    TypeScript SDK source, examples, tests, IDL, and package changelog.
+  </Card>
+</CardGroup>
+
+## Commands
+
+| Task | Command |
+| --- | --- |
+| Build program | `cd zap-program && anchor build` |
+| Run program tests | `cd zap-program && pnpm install && pnpm test` |
+| Build TypeScript SDK | `cd zap-sdk && pnpm install && pnpm run build` |
+| Run SDK tests | `cd zap-sdk && pnpm test` |
+| Type-check SDK | `cd zap-sdk && pnpm run typecheck` |
+
+## Stay Updated
+
+<CardGroup cols={1}>
+  <Card title="Zap Changelog" icon="newspaper" iconType="solid" href="/developer-guides/zap/changelog">
+    Program and TypeScript SDK changes that affect integration planning.
   </Card>
 </CardGroup>

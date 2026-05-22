@@ -1,0 +1,130 @@
+---
+title: "Zap Program Instructions"
+sidebarTitle: "Instructions"
+description: "Explore Zap instructions for ledger management, zap out, DAMM v2 zap in, DLMM zap in, and DLMM position rebalancing."
+llmsDescription: "Explains the Zap program instruction surface for the public Meteora Zap program. Covers initialize_ledger_account, close_ledger_account, set_ledger_balance, update_ledger_balance_after_swap, zap_out, zap_in_damm_v2, zap_in_dlmm_for_initialized_position, zap_in_dlmm_for_uninitialized_position, TypeScript SDK method mappings, account planning, payload amount offsets, whitelisted downstream swaps, ledger transaction sequencing, slippage checks, and remaining-account requirements."
+---
+
+The `zap` IDL exposes ledger helpers plus route-specific zap instructions. Most integrations should use the TypeScript SDK builders because they assemble token accounts, ledger transactions, downstream payloads, bin arrays, and cleanup transactions.
+
+## Instruction Index
+
+| Instruction | TypeScript SDK path | Use |
+| --- | --- | --- |
+| `initialize_ledger_account` | Internal to zap-in builders | Create the user's temporary `UserLedger` PDA. |
+| `close_ledger_account` | Internal to zap-in builders | Close the ledger and send rent to `rent_receiver`. |
+| `set_ledger_balance` | Internal to zap-in builders | Set one ledger side directly when the user already holds the pool token. |
+| `update_ledger_balance_after_swap` | Internal to zap-in builders | Store the post-swap token-account balance delta, capped by `max_transfer_amount`. |
+| `zap_out` | `zapOut`, `zapOutThroughDammV2`, `zapOutThroughDlmm`, `zapOutThroughJupiter` | Swap a newly received token-account balance increase through a whitelisted downstream payload. |
+| `zap_in_damm_v2` | `buildZapInDammV2Transaction` | Add ledger balances to a DAMM v2 position, swap surplus, then add remaining liquidity. |
+| `zap_in_dlmm_for_initialized_position` | `rebalanceDlmmPosition` | Rebalance an existing DLMM position using ledger balances and a selected strategy. |
+| `zap_in_dlmm_for_uninitialized_position` | `buildZapInDlmmTransaction` | Initialize a new DLMM position and add liquidity using ledger balances. |
+
+## Ledger Instructions
+
+Zap-in flows use a short-lived ledger to keep token balances consistent across multiple transactions.
+
+| Instruction | Accounts | Arguments | Behavior |
+| --- | --- | --- | --- |
+| `initialize_ledger_account` | `ledger`, `owner`, `payer`, `system_program` | None | Initializes `UserLedger` at `["user_ledger", owner]` and stores `owner`. |
+| `close_ledger_account` | `ledger`, `owner`, `rent_receiver` | None | Requires `ledger.owner == owner`, closes the ledger, and sends rent to `rent_receiver`. |
+| `set_ledger_balance` | `ledger`, `owner` | `amount`, `is_token_a` | Sets `amount_a` when `is_token_a` is true, otherwise sets `amount_b`. |
+| `update_ledger_balance_after_swap` | `ledger`, `token_account`, `owner` | `pre_source_token_balance`, `max_transfer_amount`, `is_token_a` | Reads the current token account amount, stores `min(current - pre_source_token_balance, max_transfer_amount)` into the selected ledger side. |
+
+Use `set_ledger_balance` for a pool token the user already contributes directly. Use `update_ledger_balance_after_swap` when a previous swap transaction produced the token.
+
+## Zap Out
+
+`zap_out` is a generic wrapper around a whitelisted downstream swap instruction.
+
+| Input | Requirement |
+| --- | --- |
+| `percentage` | Must be from `1` to `100`. |
+| `payload_data` | First 8 bytes must match a whitelisted DAMM v2, DLMM, or Jupiter V6 discriminator. |
+| `offset_amount_in` | Must point to an 8-byte `u64` range inside `payload_data`. |
+| `pre_user_token_balance` | Must be read before the upstream action that adds input tokens. |
+| `max_swap_amount` | Caps the computed swap amount. |
+| `remaining_accounts` | Must exactly match the downstream swap instruction account order. |
+
+Execution:
+
+1. Validate zap-out parameters and downstream discriminator.
+2. Read the post-action balance from `user_token_in_account`.
+3. Return without swapping if the balance did not increase.
+4. Compute `swap_amount = min(balance_delta * percentage / 100, max_swap_amount)`.
+5. Overwrite the downstream payload amount at `offset_amount_in`.
+6. Invoke the downstream swap instruction with the provided remaining accounts.
+
+## DAMM v2 Zap In
+
+`zap_in_damm_v2` uses ledger balances to add liquidity to an existing DAMM v2 position.
+
+| Account | Notes |
+| --- | --- |
+| `ledger` | Mutable `UserLedger`; owner must sign. |
+| `pool` | Mutable DAMM v2 pool account. |
+| `position` | Mutable existing DAMM v2 position. |
+| `token_a_account`, `token_b_account` | User token accounts. |
+| `token_a_vault`, `token_b_vault` | Pool token vaults. |
+| `token_a_mint`, `token_b_mint` | Pool token mints. |
+| `position_nft_account` | Position NFT token account proving position ownership to DAMM v2. |
+| `damm_program`, `damm_event_authority` | DAMM v2 program and event authority. |
+
+| Argument | Type | Use |
+| --- | --- | --- |
+| `pre_sqrt_price` | `u128` | Pool square-root price observed before building the transaction. |
+| `max_sqrt_price_change_bps` | `u32` | Maximum allowed square-root price movement after the internal surplus swap. |
+
+Execution:
+
+1. Calculate liquidity from ledger token A/B amounts after transfer-fee exclusion.
+2. Add liquidity once so any following internal swap can still accrue pool fees to the position.
+3. Update the ledger with the amounts consumed by the first add-liquidity call.
+4. If one side remains, calculate a DAMM v2 `swap2` amount for the surplus side and perform the swap through CPI.
+5. Check `post_sqrt_price` against `pre_sqrt_price` and `max_sqrt_price_change_bps`.
+6. Add liquidity again with the newly balanced token amounts.
+7. Update and log remaining ledger balances.
+
+<Note>
+  DAMM v2 rate-limited pools can require extra remaining accounts for the internal `swap2` CPI. Preserve the remaining-account list generated by the SDK.
+</Note>
+
+## DLMM Zap In
+
+DLMM zap-in uses DLMM `rebalance_liquidity` after constructing an add-liquidity distribution from the selected strategy.
+
+| Instruction | Position behavior | Use |
+| --- | --- | --- |
+| `zap_in_dlmm_for_initialized_position` | `position` is an existing DLMM position | Rebalance or add liquidity to an existing position. |
+| `zap_in_dlmm_for_uninitialized_position` | `position` is an uninitialized signer | Create a DLMM position with `initialize_position2`, then rebalance liquidity into it. |
+
+| Argument | Type | Use |
+| --- | --- | --- |
+| `active_id` | `i32` | Active bin expected by the client. |
+| `min_delta_id` | `i32` | Lower bin offset from the pair active bin. Must be less than or equal to `max_delta_id`. |
+| `max_delta_id` | `i32` | Upper bin offset from the pair active bin. |
+| `max_active_bin_slippage` | `u16` | Maximum active-bin movement accepted by DLMM rebalance. |
+| `favor_x_in_active_id` | `bool` | Whether the active bin allocation favors token X. |
+| `strategy` | `StrategyType` | `Spot`, `Curve`, or `BidAsk`. |
+| `remaining_accounts_info` | `RemainingAccountsInfo` | Describes transfer-hook and other DLMM remaining-account slices. |
+
+For uninitialized positions, Zap derives:
+
+| Derived value | Formula |
+| --- | --- |
+| `lower_bin_id` | `lb_pair.active_id + min_delta_id` |
+| `width` | `max_delta_id - min_delta_id + 1` |
+
+The uninitialized `position` account must have the default owner and empty data, and must not equal `owner` or `rent_payer`.
+
+## Transaction Sequencing
+
+| Step | Typical content |
+| --- | --- |
+| 1. Setup | Create ATAs, wrap SOL if needed, and prepare any route-specific accounts. |
+| 2. Swap | Execute Jupiter, DAMM v2, or DLMM swaps that produce pool token balances. |
+| 3. Ledger | Initialize or reset `UserLedger`; set direct balances and record post-swap deltas. |
+| 4. Zap | Call `zap_in_damm_v2`, `zap_in_dlmm_for_uninitialized_position`, or `zap_in_dlmm_for_initialized_position`. |
+| 5. Cleanup | Close `UserLedger`; unwrap SOL if needed. |
+
+For zap out, place the upstream action that creates the input token balance before the `zap_out` instruction in the same transaction or transaction sequence that preserves the pre-balance assumption.

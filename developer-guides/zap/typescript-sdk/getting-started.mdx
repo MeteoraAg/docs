@@ -1,64 +1,116 @@
 ---
-title: Getting Started
-description: Zap
+title: "Zap TS SDK Getting Started"
+sidebarTitle: "Getting Started"
+description: "Learn how to install @meteora-ag/zap-sdk, create a Zap client, configure Jupiter access, and plan Zap transaction sequences."
+llmsDescription: "Explains how to get started with the Meteora Zap TypeScript SDK. Covers package installation, runtime dependencies, creating a Zap client with a Solana connection and optional Jupiter configuration, program IDs, transaction sequencing, supported DAMM v2 and DLMM zap flows, Token 2022 and native SOL handling, and local SDK commands."
 ---
 
-This guide provides instructions on how to get started with building on Meteora's Zap program using the Zap TypeScript SDK.
+This guide shows how to install and initialize the official Zap TypeScript SDK, `@meteora-ag/zap-sdk`.
 
-Before you begin, here are some important resources:
+Before you begin, here are the main resources:
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/zap-sdk">
-    Meteora Zap Typescript SDK
+  <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/zap-sdk">
+    Zap TypeScript SDK repository.
   </Card>
   <Card title="Zap NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/zap-sdk">
-    Meteora Zap NPM Package
+    Published package for transaction builders, state reads, PDA helpers, and examples.
   </Card>
 </CardGroup>
 
-# Installation
+## Install
 
-To use the SDK in your project, install it using your preferred package manager:
+To use the SDK in your project, install it with your preferred package manager:
 
 <Tabs>
   <Tab title="npm">
     ```bash
-    npm install @meteora-ag/zap-sdk @solana/web3.js
+    npm install @meteora-ag/zap-sdk @solana/web3.js @solana/spl-token @coral-xyz/anchor bn.js
     ```
   </Tab>
   <Tab title="pnpm">
     ```bash
-    pnpm install @meteora-ag/zap-sdk @solana/web3.js
+    pnpm install @meteora-ag/zap-sdk @solana/web3.js @solana/spl-token @coral-xyz/anchor bn.js
     ```
   </Tab>
   <Tab title="yarn">
     ```bash
-    yarn add @meteora-ag/zap-sdk @solana/web3.js
+    yarn add @meteora-ag/zap-sdk @solana/web3.js @solana/spl-token @coral-xyz/anchor bn.js
     ```
   </Tab>
 </Tabs>
 
-# Initialization
+## Dependencies
 
-Once installed, you can initialize the SDK in your TypeScript/JavaScript project like this:
+| Package | Version |
+| --- | --- |
+| `@coral-xyz/anchor` | `^0.31.0` |
+| `@solana/web3.js` | `^1.98.0` | 
+| `@solana/spl-token` | `^0.3.10` or newer | 
+| `@meteora-ag/cp-amm-sdk` | Compatible | 
+| `@meteora-ag/dlmm` | Compatible | 
+| `bn.js` | `^5.2.1` | 
+| `decimal.js` | `^10.4.3` | 
+
+## Create A Client
 
 ```typescript
 import { Connection } from "@solana/web3.js";
 import { Zap } from "@meteora-ag/zap-sdk";
 
-// Initialize a connection to the Solana network (e.g., Mainnet)
-const connection = new Connection("https://api.mainnet-beta.solana.com");
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
 
-// Create a new instance of the Zap SDK
-const zap = new Zap(connection);
+const zap = new Zap(connection, {
+  jupiterApiUrl: "https://api.jup.ag",
+  jupiterApiKey: process.env.JUPITER_API_KEY,
+});
 ```
 
-# Development Resources
+`jupiterApiUrl` and `jupiterApiKey` are optional in the SDK constructor. Pass them whenever your Jupiter endpoint requires authenticated quote or swap-instruction requests. You can get the API key from [Jupiter Developer Portal](https://developers.jup.ag/sign-in).
 
-## Faucets
+## Program ID
 
-<CardGroup cols={1}>
-  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.raccoons.dev/">
-    <p>When working on devnet, you might need test tokens. Here is a helpful faucet.</p>
-  </Card>
-</CardGroup>
+| Network | Program ID |
+| --- | --- |
+| Mainnet Beta | `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz` |
+| Devnet | `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz` |
+
+The SDK also exports `ZAP_PROGRAM_ID`, `DAMM_V2_PROGRAM_ID`, `DLMM_PROGRAM_ID`, `JUP_V6_PROGRAM_ID`, and `MEMO_PROGRAM_ID`.
+
+## Transaction Model
+
+Zap builders return unsigned `Transaction` objects. The caller is responsible for fee payer, blockhash, signing, simulation, and submission.
+
+| Flow stage | Purpose |
+| --- | --- |
+| Setup transaction | Create token accounts and wrap native SOL when required. |
+| Swap transaction or transactions | Move the input token into pool token A/B or X/Y before zap-in, or perform a standalone swap used in rebalancing. |
+| Ledger transaction | Initialize or reset `UserLedger`, then record token amounts from direct balances or post-swap deltas. |
+| Zap transaction | Call the Zap program to add liquidity, rebalance DLMM liquidity, or invoke a whitelisted zap-out swap payload. |
+| Cleanup transaction | Close the ledger and unwrap native SOL when required. |
+
+For zap-in flows, preserve this order. The ledger stores intermediate token amounts that the following Zap instruction consumes.
+
+## Supported SDK Workflows
+
+| Workflow | Methods |
+| --- | --- |
+| DAMM v2 zap in, direct input token | `getZapInDammV2DirectPoolParams`, then `buildZapInDammV2Transaction` |
+| DAMM v2 zap in, indirect input token | `getZapInDammV2IndirectPoolParams`, then `buildZapInDammV2Transaction` |
+| DLMM zap in, direct input token | `estimateDlmmDirectSwap`, `getZapInDlmmDirectParams`, then `buildZapInDlmmTransaction` |
+| DLMM zap in, indirect input token | `estimateDlmmIndirectSwap`, `getZapInDlmmIndirectParams`, then `buildZapInDlmmTransaction` |
+| DLMM position rebalance | `estimateDlmmRebalanceSwap`, then `rebalanceDlmmPosition` |
+| Zap out through DAMM v2 | `zapOutThroughDammV2` |
+| Zap out through DLMM | `zapOutThroughDlmm` |
+| Zap out through Jupiter | `getJupiterQuote`, `getJupiterSwapInstruction`, then `zapOutThroughJupiter` |
+| Low-level zap out | `zapOut` with your own whitelisted payload and account metas |
+
+## Testing the SDK
+
+If you have cloned the SDK repository, start with package-level checks and tests:
+
+```bash
+pnpm install
+pnpm run build
+pnpm test
+```

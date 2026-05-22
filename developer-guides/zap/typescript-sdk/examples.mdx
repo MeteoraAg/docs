@@ -1,0 +1,233 @@
+---
+title: "Zap TS SDK Examples"
+sidebarTitle: "Examples"
+description: "Explore Zap TypeScript examples for DAMM v2 zap in, DLMM zap in, zap out through Jupiter, and DLMM position rebalancing."
+llmsDescription: "Explains practical examples for @meteora-ag/zap-sdk. Covers creating a Zap client, ordering setup, swap, ledger, zap, and cleanup transactions, DAMM v2 direct zap-in parameter building, DLMM direct zap-in estimates, Jupiter zap-out transaction construction, DLMM position rebalance estimates, native SOL cleanup, signer requirements, and simulation guidance."
+---
+
+These examples use the SDK methods exported by `@meteora-ag/zap-sdk`. The SDK returns unsigned `Transaction` objects; sign and submit them with your wallet adapter, backend signer, or test keypair.
+
+## Create A Client
+
+```typescript
+import { Connection } from "@solana/web3.js";
+import { Zap } from "@meteora-ag/zap-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const zap = new Zap(connection, {
+  jupiterApiUrl: "https://api.jup.ag",
+  jupiterApiKey: process.env.JUPITER_API_KEY,
+});
+```
+
+## Submit Zap-In Transactions In Order
+
+Zap-in builders return multiple transactions because swaps, ledger writes, zap instructions, and cleanup are deliberately separated.
+
+```typescript
+import { Transaction } from "@solana/web3.js";
+
+const transactions: Transaction[] = [];
+
+if (result.setupTransaction) {
+  transactions.push(result.setupTransaction);
+}
+
+transactions.push(...result.swapTransactions);
+transactions.push(result.ledgerTransaction);
+transactions.push(result.zapInTransaction);
+transactions.push(result.cleanUpTransaction);
+
+for (const tx of transactions) {
+  tx.feePayer = user.publicKey;
+  tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+}
+```
+
+If a DLMM zap-in creates a new position, sign the zap transaction with the generated `position` keypair as well as the user.
+
+## DAMM v2 Direct Zap In
+
+Use this path when the input token is one of the DAMM v2 pool tokens. `dammV2Quote` and `jupiterQuote` are used to choose the swap route for balancing; pass `null` for a route you do not want to consider.
+
+```typescript
+import { BN } from "@coral-xyz/anchor";
+import { PublicKey } from "@solana/web3.js";
+import { getJupiterQuote } from "@meteora-ag/zap-sdk";
+
+const user = wallet.publicKey;
+const pool = new PublicKey("DAMM_V2_POOL_ADDRESS");
+const inputTokenMint = new PublicKey("INPUT_TOKEN_MINT");
+const positionNftMint = new PublicKey("POSITION_NFT_MINT");
+const amountIn = new BN(1_000_000);
+
+const jupiterQuote = await getJupiterQuote(
+  inputTokenMint,
+  new PublicKey("OTHER_POOL_TOKEN_MINT"),
+  amountIn,
+  40,
+  300,
+  false,
+  true,
+  true,
+  { jupiterApiKey: process.env.JUPITER_API_KEY },
+);
+
+const params = await zap.getZapInDammV2DirectPoolParams({
+  user,
+  inputTokenMint,
+  amountIn,
+  pool,
+  positionNftMint,
+  maxSqrtPriceChangeBps: 1_000,
+  maxTransferAmountExtendPercentage: 20,
+  maxAccounts: 40,
+  slippageBps: 300,
+  dammV2Quote: null,
+  jupiterQuote,
+});
+
+const result = await zap.buildZapInDammV2Transaction(params);
+```
+
+<Note>
+  The source repository includes richer DAMM v2 examples that prepare both DAMM v2 and Jupiter quotes. The published package root exports the generic Jupiter helpers; use DAMM v2 SDK quote helpers directly when you want to compare both routes.
+</Note>
+
+## DLMM Direct Zap In
+
+Use this path when the input token is token X or token Y of the DLMM pair.
+
+```typescript
+import { StrategyType } from "@meteora-ag/dlmm";
+import { BN } from "@coral-xyz/anchor";
+import { Keypair, PublicKey } from "@solana/web3.js";
+import { estimateDlmmDirectSwap } from "@meteora-ag/zap-sdk";
+
+const user = wallet.publicKey;
+const lbPair = new PublicKey("DLMM_PAIR_ADDRESS");
+const inputTokenMint = new PublicKey("TOKEN_X_OR_TOKEN_Y_MINT");
+const amountIn = new BN(100_000_000);
+const position = Keypair.generate();
+
+const estimate = await estimateDlmmDirectSwap({
+  amountIn,
+  inputTokenMint,
+  lbPair,
+  connection,
+  swapSlippageBps: 150,
+  minDeltaId: -34,
+  maxDeltaId: 34,
+  strategy: StrategyType.Spot,
+  config: { jupiterApiKey: process.env.JUPITER_API_KEY },
+});
+
+const params = await zap.getZapInDlmmDirectParams({
+  user,
+  directSwapEstimate: estimate.result,
+  maxActiveBinSlippage: 50,
+  favorXInActiveId: false,
+  maxAccounts: 50,
+  maxTransferAmountExtendPercentage: 0,
+  ...estimate.context,
+});
+
+const result = await zap.buildZapInDlmmTransaction({
+  ...params,
+  position: position.publicKey,
+});
+```
+
+The generated `position` keypair must sign the transaction that includes `zapInTransaction` because the Zap program calls DLMM `initialize_position2`.
+
+## Zap Out Through Jupiter
+
+Use zap out when another instruction first creates a balance increase in the user's input token account, for example after a claim or remove-liquidity action.
+
+```typescript
+import { BN } from "@coral-xyz/anchor";
+import { PublicKey, Transaction } from "@solana/web3.js";
+import {
+  getJupiterQuote,
+  getJupiterSwapInstruction,
+  getTokenProgramFromMint,
+} from "@meteora-ag/zap-sdk";
+
+const user = wallet.publicKey;
+const inputMint = new PublicKey("INPUT_MINT");
+const outputMint = new PublicKey("OUTPUT_MINT");
+const maxSwapAmount = new BN(1_000_000);
+
+const quote = await getJupiterQuote(
+  inputMint,
+  outputMint,
+  maxSwapAmount,
+  40,
+  50,
+  false,
+  true,
+  true,
+  { jupiterApiKey: process.env.JUPITER_API_KEY },
+);
+
+if (!quote) {
+  throw new Error("Jupiter quote unavailable");
+}
+
+const swapInstructionResponse = await getJupiterSwapInstruction(user, quote, {
+  jupiterApiKey: process.env.JUPITER_API_KEY,
+});
+
+const inputTokenProgram = await getTokenProgramFromMint(connection, inputMint);
+const outputTokenProgram = await getTokenProgramFromMint(connection, outputMint);
+
+const zapOutTx = await zap.zapOutThroughJupiter({
+  user,
+  inputMint,
+  outputMint,
+  inputTokenProgram,
+  outputTokenProgram,
+  jupiterSwapResponse: swapInstructionResponse,
+  maxSwapAmount,
+  percentageToZapOut: 100,
+});
+
+const tx = new Transaction()
+  .add(upstreamClaimOrWithdrawInstruction)
+  .add(zapOutTx);
+```
+
+`zapOutThroughJupiter` reads the user's input token balance before the zap-out instruction is built. Build the zap-out transaction after you know which token account receives the upstream balance increase.
+
+## DLMM Position Rebalance
+
+`rebalanceDlmmPosition` builds a full rebalance sequence for an existing DLMM position: remove liquidity through DLMM helpers, optionally swap the withdrawn tokens, write ledger balances, zap back in, and clean up.
+
+```typescript
+import { StrategyType } from "@meteora-ag/dlmm";
+import { PublicKey } from "@solana/web3.js";
+import { estimateDlmmRebalanceSwap } from "@meteora-ag/zap-sdk";
+
+const user = wallet.publicKey;
+const lbPair = new PublicKey("DLMM_PAIR_ADDRESS");
+const position = new PublicKey("DLMM_POSITION_ADDRESS");
+
+const estimate = await estimateDlmmRebalanceSwap({
+  lbPair,
+  position,
+  connection,
+  swapSlippageBps: 150,
+  minDeltaId: -34,
+  maxDeltaId: 34,
+  strategy: StrategyType.Spot,
+  config: { jupiterApiKey: process.env.JUPITER_API_KEY },
+});
+
+const result = await zap.rebalanceDlmmPosition({
+  user,
+  liquiditySlippageBps: 50,
+  favorXInActiveId: false,
+  directSwapEstimate: estimate.result,
+  ...estimate.context,
+});
+```

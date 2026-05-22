@@ -1,0 +1,189 @@
+---
+title: "Zap TS SDK Reference"
+sidebarTitle: "Reference"
+description: "Understand @meteora-ag/zap-sdk exports, Zap methods, constants, helper functions, route estimators, types, and transaction outputs."
+llmsDescription: "Explains the @meteora-ag/zap-sdk TypeScript SDK reference. Covers dependencies, program IDs, Zap client construction, public Zap methods for DAMM v2 zap in, DLMM zap in, DLMM rebalance, generic zap out, DAMM v2 zap out, DLMM zap out, Jupiter zap out, estimator functions, Jupiter helpers, DAMM v2 and DLMM helpers, PDA helpers, token helpers, constants, enums, core parameter types, response transaction shapes, and source-material caveats."
+---
+
+This page is based on `@meteora-ag/zap-sdk`. Use it as the high-level map, then open the package types when you need exact parameter shapes.
+
+```typescript
+import {
+  Zap,
+  ZAP_PROGRAM_ID,
+  estimateDlmmDirectSwap,
+  estimateDlmmIndirectSwap,
+  estimateDlmmRebalanceSwap,
+  getJupiterQuote,
+  getJupiterSwapInstruction,
+  deriveLedgerAccount,
+} from "@meteora-ag/zap-sdk";
+```
+
+## Dependencies
+
+| Package | Use |
+| --- | --- |
+| `@coral-xyz/anchor` | Program client, IDL types, and `BN`. |
+| `@solana/web3.js` | Connections, public keys, transactions, and account metas. |
+| `@solana/spl-token` | Token accounts, ATAs, Token 2022, and wrapped SOL helpers. |
+| `@meteora-ag/cp-amm-sdk` | DAMM v2 state, position derivation, token program flags, and swap quote helpers. |
+| `@meteora-ag/dlmm` | DLMM state, strategies, bin arrays, quotes, and rebalance helpers. |
+| `bn.js` | Integer token amount inputs and SDK return values. |
+| `decimal.js` | UI amount conversion, route comparison, and estimate calculations. |
+
+## Program IDs
+
+| Constant | Value |
+| --- | --- |
+| `ZAP_PROGRAM_ID` | `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz` |
+| `DAMM_V2_PROGRAM_ID` | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` |
+| `DLMM_PROGRAM_ID` | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo` |
+| `JUP_V6_PROGRAM_ID` | `JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4` |
+| `MEMO_PROGRAM_ID` | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` |
+
+## Creating A Client
+
+```typescript
+import { Connection } from "@solana/web3.js";
+import { Zap } from "@meteora-ag/zap-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const zap = new Zap(connection, {
+  jupiterApiUrl: "https://api.jup.ag",
+  jupiterApiKey: process.env.JUPITER_API_KEY,
+});
+```
+
+| Constructor option | Type | Default | Use |
+| --- | --- | --- | --- |
+| `jupiterApiUrl` | `string` | `https://api.jup.ag` | Jupiter quote and swap-instruction endpoint base URL. |
+| `jupiterApiKey` | `string` | Empty string | Optional API key header for Jupiter requests. |
+
+## Zap Methods
+
+| Method | Returns | Use |
+| --- | --- | --- |
+| `constructor(connection, config?)` | `Zap` | Create a Zap client with an Anchor `Program` from the bundled IDL. |
+| `getZapInDammV2DirectPoolParams(params)` | `ZapInDammV2DirectPoolParam` | Prepare DAMM v2 zap-in params when the input mint is token A or token B. |
+| `getZapInDammV2IndirectPoolParams(params)` | `ZapInDammV2IndirectPoolParam` | Prepare DAMM v2 zap-in params when the input mint is neither pool token. |
+| `buildZapInDammV2Transaction(params)` | `ZapInDammV2Response` | Build setup, swap, ledger, zap-in, and cleanup transactions for DAMM v2. |
+| `getZapInDlmmDirectParams(params)` | `ZapInDlmmDirectPoolParam` | Prepare DLMM zap-in params when the input mint is token X or token Y. |
+| `getZapInDlmmIndirectParams(params)` | `ZapInDlmmIndirectPoolParam` | Prepare DLMM zap-in params when the input mint is neither pool token. |
+| `buildZapInDlmmTransaction(params)` | `ZapInDlmmResponse` | Build setup, swap, ledger, zap-in, and cleanup transactions for a new DLMM position. |
+| `rebalanceDlmmPosition(params)` | `RebalanceDlmmPositionResponse` | Build a DLMM remove-liquidity, optional swap, ledger, zap-in, and cleanup sequence for an existing position. |
+| `zapOut(params)` | `Transaction` | Low-level generic zap-out builder with caller-supplied payload and account metas. |
+| `zapOutThroughJupiter(params)` | `Transaction` | Build a zap-out transaction using a Jupiter V6 swap-instruction response. |
+| `zapOutThroughDammV2(params)` | `Transaction` | Build a zap-out transaction through DAMM v2 `swap2`. |
+| `zapOutThroughDlmm(params)` | `Transaction` | Build a zap-out transaction through DLMM `swap2`. |
+
+## Zap-In Parameter Builders
+
+| Method | Required route inputs | Important controls |
+| --- | --- | --- |
+| `getZapInDammV2DirectPoolParams` | `user`, `inputTokenMint`, `amountIn`, `pool`, `positionNftMint`, optional DAMM v2 and Jupiter quotes | `maxSqrtPriceChangeBps`, `slippageBps`, `maxAccounts`, `maxTransferAmountExtendPercentage` |
+| `getZapInDammV2IndirectPoolParams` | `user`, `inputTokenMint`, `amountIn`, `pool`, `positionNftMint`, optional Jupiter quotes to token A and token B | Same DAMM v2 controls plus per-side route estimates |
+| `getZapInDlmmDirectParams` | `user`, `lbPair`, `inputTokenMint`, `amountIn`, `directSwapEstimate` | `minDeltaId`, `maxDeltaId`, `strategy`, `favorXInActiveId`, `maxActiveBinSlippage`, `singleSided` |
+| `getZapInDlmmIndirectParams` | `user`, `lbPair`, `inputTokenMint`, `amountIn`, `indirectSwapEstimate` | Same DLMM controls plus Jupiter route caps |
+
+## Zap-In Responses
+
+| Response type | Fields |
+| --- | --- |
+| `ZapInDammV2Response` | `setupTransaction?`, `swapTransactions`, `ledgerTransaction`, `zapInTransaction`, `cleanUpTransaction` |
+| `ZapInDlmmResponse` | `setupTransaction?`, `swapTransactions`, `ledgerTransaction`, `zapInTransaction`, `cleanUpTransaction` |
+| `RebalanceDlmmPositionResponse` | `setupTransaction`, `initBinArrayTransaction?`, `rebalancePositionTransaction?`, `swapTransaction?`, `ledgerTransaction`, `zapInTransaction`, `cleanUpTransaction`, `estimation` |
+
+## Zap-Out Methods
+
+| Method | Route source | Notes |
+| --- | --- | --- |
+| `zapOut` | Caller-supplied whitelisted payload | Lowest-level builder. Use only when you already know the downstream account order and amount offset. |
+| `zapOutThroughJupiter` | Jupiter V6 swap-instruction response | Builds ATAs, calculates reverse amount offset, forwards Jupiter accounts, and unwraps SOL when needed. |
+| `zapOutThroughDammV2` | DAMM v2 pool state and `createDammV2SwapPayload` | Builds DAMM v2 remaining accounts and uses amount offset `8`. |
+| `zapOutThroughDlmm` | DLMM pair state and `createDlmmSwapPayload` | Builds DLMM remaining accounts, including transfer-hook slices when required, and uses amount offset `8`. |
+
+## Estimator Functions
+
+| Function | Use |
+| --- | --- |
+| `estimateDlmmDirectSwap(params)` | Estimate whether and how much to swap when the input mint is token X or token Y. Compares DLMM and Jupiter routes. |
+| `estimateDlmmIndirectSwap(params)` | Estimate split amounts to swap an unrelated input token into token X and/or token Y through Jupiter. |
+| `estimateDlmmRebalanceSwap(params)` | Estimate the swap needed after removing liquidity from an existing DLMM position before zapping back in. |
+
+## Jupiter Helpers
+
+| Function | Use |
+| --- | --- |
+| `getJupiterQuote(inputMint, outputMint, amount, maxAccounts, slippageBps, dynamicSlippage, onlyDirectRoutes, restrictIntermediateTokens, config?)` | Fetch a Jupiter quote. Returns `null` when the request fails or the endpoint rejects it. |
+| `getJupiterSwapInstruction(userPublicKey, quoteResponse, config?)` | Fetch Jupiter swap instructions for a quote. Throws when the request fails. |
+| `buildJupiterSwapTransaction(user, inputMint, outputMint, amount, maxAccounts, slippageBps, quote?, config?)` | Build a transaction containing the Jupiter swap instruction. Reuses a supplied quote when provided. |
+
+## DAMM v2 Helpers
+
+| Function | Use |
+| --- | --- |
+| `getDammV2Pool(connection, poolAddress)` | Fetch a DAMM v2 pool state through `@meteora-ag/cp-amm-sdk`. |
+| `getDammV2RemainingAccounts(poolAddress, user, userInputTokenAccount, userTokenOutAccount, tokenAProgram, tokenBProgram, poolState)` | Build account metas for DAMM v2 `swap2` in zap-out flows. |
+| `createDammV2SwapPayload(amountIn, minimumSwapAmountOut)` | Serialize DAMM v2 `swap2` payload data for generic `zapOut`. |
+| `isSingleSidedA(poolState)` / `isSingleSidedB(poolState)` | Detect DAMM v2 single-sided pool boundary states. |
+
+## DLMM Helpers
+
+| Function | Use |
+| --- | --- |
+| `getLbPairState(connection, lbPair)` | Fetch a DLMM pair state. |
+| `getDlmmRemainingAccounts(connection, lbPair, user, userInputTokenAccount, userTokenOutAccount, tokenXProgram, tokenYProgram, lbPairState)` | Build DLMM swap remaining accounts and `RemainingAccountInfo`. |
+| `createDlmmSwapPayload(amountIn, minimumSwapAmountOut, remainingAccountsInfo)` | Serialize DLMM `swap2` payload data for generic `zapOut`. |
+| `getBinArrayBitmapExtension(connection, binArray)` | Decode a bin array bitmap extension account when it exists. |
+| `getNextBinArrayIndexWithLiquidity(...)` | Scan DLMM bitmap state for the next bin array with liquidity. |
+| `toProgramStrategyType(strategy)` | Convert DLMM SDK strategy enum values into Zap IDL enum values. |
+| `convertAccountTypeToNumber(accountType)` | Encode DLMM remaining-account slice account types. |
+
+## PDA, Token, And Utility Helpers
+
+| Function | Use |
+| --- | --- |
+| `deriveLedgerAccount(owner)` | Derive the Zap user ledger PDA. |
+| `deriveDammV2EventAuthority()` | Derive DAMM v2 event authority. |
+| `deriveDammV2PoolAuthority()` | Derive DAMM v2 pool authority. |
+| `deriveDlmmEventAuthority()` | Derive DLMM event authority. |
+| `getOrCreateATAInstruction(connection, tokenMint, owner, payer, allowOwnerOffCurve, tokenProgram)` | Return an ATA and an idempotent creation instruction. |
+| `getTokenProgramFromMint(connection, mint)` | Detect SPL Token versus Token 2022 from mint ownership, defaulting to SPL Token on lookup failure. |
+| `getTokenAccountBalance(connection, tokenAccount)` | Return a token-account balance string, or `"0"` when the account lookup fails. |
+| `wrapSOLInstruction(from, to, amount, tokenProgram?)` | Build native SOL wrap instructions. |
+| `unwrapSOLInstruction(owner, receiver, allowOwnerOffCurve?)` | Build a wrapped SOL close-account instruction. |
+| `filterOutCloseSplTokenAccountInstructions(instructions)` | Remove SPL Token `CloseAccount` instructions from a list. |
+| `getExtraAccountMetasForTransferHook(connection, mint)` | Return Token 2022 transfer-hook extra accounts for a mint. |
+| `convertLamportsToUiAmount(amount, decimals)` / `convertUiAmountToLamports(amount, decimals)` | Convert between integer and UI decimal amounts. |
+
+## Constants And Enums
+
+| Export | Values or meaning |
+| --- | --- |
+| `AMOUNT_IN_DAMM_V2_OFFSET` | `8` |
+| `AMOUNT_IN_DLMM_OFFSET` | `8` |
+| `AMOUNT_IN_JUP_V6_REVERSE_OFFSET` | `19` |
+| `DAMM_V2_SWAP_DISCRIMINATOR` | DAMM v2 `swap2` discriminator. |
+| `DLMM_SWAP_DISCRIMINATOR` | DLMM `swap2` discriminator. |
+| `DEFAULT_JUPITER_API_URL` | `https://api.jup.ag` |
+| `ZapInDammV2PoolSwapRoute` | `Jupiter`, `DammV2` |
+| `SwapExternalType` | `swapToA`, `swapToB`, `swapToBoth` |
+| `DlmmDirectSwapQuoteRoute` | `Jupiter`, `Dlmm` |
+| `DlmmSwapType` | `XToY`, `YToX`, `NoSwap` |
+| `DlmmSingleSided` | `X`, `Y` |
+| `AccountsType` | Transfer-hook slice account types used for DLMM remaining accounts. |
+
+## Core Types
+
+| Type | Use |
+| --- | --- |
+| `ZapConfig` | Optional Jupiter API URL and API key. |
+| `ZapOutParameters` | IDL-derived payload fields for `zap_out`. |
+| `ZapOutParams` | Low-level generic zap-out builder input. |
+| `ZapOutThroughDammV2Params`, `ZapOutThroughDlmmParams`, `ZapOutThroughJupiterParams` | Route-specific zap-out builder inputs. |
+| `GetZapInDammV2DirectPoolParams`, `GetZapInDammV2IndirectPoolParams` | DAMM v2 zap-in parameter preparation inputs. |
+| `GetZapInDlmmDirectParams`, `GetZapInDlmmIndirectParams` | DLMM zap-in parameter preparation inputs. |
+| `EstimateDlmmDirectSwapParams`, `EstimateDlmmIndirectSwapParams`, `EstimateDlmmRebalanceSwapParams` | DLMM estimate inputs. |
+| `JupiterQuoteResponse`, `JupiterSwapInstructionResponse` | Jupiter API response shapes used by helpers. |
+| `ZapProgram`, `ZapTypes`, `ZapIdl` | Anchor program type, generated IDL type, and bundled IDL JSON. |

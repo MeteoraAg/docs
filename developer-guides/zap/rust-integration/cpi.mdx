@@ -1,0 +1,124 @@
+---
+title: "Zap CPI Integration"
+sidebarTitle: "CPI"
+description: "Learn how to call Zap instructions through Rust CPI, pass ledger and downstream accounts, and handle zap-out payload constraints."
+llmsDescription: "Explains Rust CPI integration for the Meteora Zap Anchor program. Covers enabling the cpi feature, using zap::cpi calls, constructing account contexts for zap_out, ledger management, DAMM v2 zap in, DLMM initialized and uninitialized zap in, payload whitelisting, remaining account ordering, signer requirements, downstream event authority accounts, Token 2022 considerations, and testing guidance."
+---
+
+Use CPI when your Solana program needs to call Zap directly. Most client apps should use the TypeScript SDK instead because Zap flows require careful transaction ordering, token account setup, and downstream remaining accounts.
+
+## Program ID
+
+| Network | Program ID |
+| --- | --- |
+| Mainnet Beta | `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz` |
+| Devnet | `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz` |
+
+## Generated Bindings
+
+For a Rust program in the same workspace, enable the Zap program crate with the `cpi` feature:
+
+```toml
+[dependencies]
+zap = { path = "../zap-program/programs/zap", features = ["cpi"] }
+```
+
+The crate name in Rust code is `zap`.
+
+## CPI Pattern
+
+Anchor generates CPI helpers from the program crate. For low-level zap out:
+
+```rust
+use anchor_lang::prelude::*;
+use zap::cpi;
+use zap::cpi::accounts::ZapOutCtx;
+use zap::ZapOutParameters;
+
+pub fn zap_out_via_cpi<'info>(
+    ctx: Context<'_, '_, '_, 'info, YourZapOutCtx<'info>>,
+    params: ZapOutParameters,
+    remaining_accounts: Vec<AccountInfo<'info>>,
+) -> Result<()> {
+    let cpi_program = ctx.accounts.zap_program.to_account_info();
+    let cpi_accounts = ZapOutCtx {
+        user_token_in_account: ctx.accounts.user_token_in_account.to_account_info(),
+        amm_program: ctx.accounts.amm_program.to_account_info(),
+    };
+
+    cpi::zap_out(
+        CpiContext::new(cpi_program, cpi_accounts)
+            .with_remaining_accounts(remaining_accounts),
+        params,
+    )
+}
+```
+
+The remaining accounts are forwarded by Zap to the whitelisted downstream swap instruction. Their order, signer flags, and writable flags must match the downstream program's expected account list.
+
+## Common CPI Calls
+
+| CPI call | Account context | Parameters | Notes |
+| --- | --- | --- | --- |
+| `cpi::initialize_ledger_account` | `InitializeLedgerAccountCtx` | None | Creates `UserLedger` at `["user_ledger", owner]`. |
+| `cpi::close_ledger_account` | `CloseLedgerAccountCtx` | None | Closes the ledger and sends rent to `rent_receiver`. |
+| `cpi::set_ledger_balance` | `SetLedgerBalanceCtx` | `amount`, `is_token_a` | Writes a direct token A/X or token B/Y amount. |
+| `cpi::update_ledger_balance_after_swap` | `UpdateLedgerBalanceAfterSwapCtx` | `pre_source_token_balance`, `max_transfer_amount`, `is_token_a` | Stores a capped token-account balance delta. |
+| `cpi::zap_out` | `ZapOutCtx` | `ZapOutParameters` | Invokes a whitelisted downstream swap payload. |
+| `cpi::zap_in_damm_v2` | `ZapInDammv2Ctx` | `pre_sqrt_price`, `max_sqrt_price_change_bps` | Adds liquidity to an existing DAMM v2 position and may CPI to DAMM v2 `swap2`. |
+| `cpi::zap_in_dlmm_for_initialized_position` | `ZapInDlmmForInitializedPositionCtx` | DLMM bin, strategy, and remaining-account info args | Rebalances an existing DLMM position. |
+| `cpi::zap_in_dlmm_for_uninitialized_position` | `ZapInDlmmForUnintializedPositionCtx` | DLMM bin, strategy, and remaining-account info args | Initializes a new DLMM position, then rebalances liquidity. |
+
+<Note>
+  The uninitialized DLMM account context name is spelled `ZapInDlmmForUnintializedPositionCtx` in the current Rust source. Use the generated binding name exactly.
+</Note>
+
+## Zap-Out CPI Requirements
+
+| Requirement | Details |
+| --- | --- |
+| Whitelisted program | `amm_program` and the first 8 bytes of `payload_data` must match DAMM v2 `swap2`, DLMM `swap2`, Jupiter V6 `route`, or Jupiter V6 `shared_accounts_route`. |
+| Amount offset | DAMM v2 and DLMM use offset `8`; Jupiter V6 route payloads use `payload_data.length - 19`. |
+| Input token account | `user_token_in_account` is the token account whose balance increase Zap will swap. |
+| Signers | Downstream signer accounts in `remaining_accounts` must already be transaction signers or PDA signer accounts provided by the caller. |
+| Balance delta | Zap swaps only `post_balance - pre_user_token_balance`, multiplied by `percentage` and capped by `max_swap_amount`. |
+
+## Zap-In CPI Requirements
+
+| Flow | Required setup |
+| --- | --- |
+| DAMM v2 zap in | Ledger initialized and populated, existing DAMM v2 position, position NFT account, pool vaults, token mints, token programs, DAMM v2 program, and DAMM v2 event authority. |
+| DLMM initialized zap in | Ledger initialized and populated, existing DLMM position, LbPair, reserves, token accounts, token mints, token programs, memo program, system program, DLMM event authority, bin arrays, and transfer-hook accounts when required. |
+| DLMM uninitialized zap in | Same as initialized, but `position` is a fresh signer and Zap calls DLMM `initialize_position2`. |
+
+Zap does not emit its own custom events, but DAMM v2 and DLMM downstream CPI calls require their event authority accounts.
+
+## Token And Account Planning
+
+| Area | CPI guidance |
+| --- | --- |
+| Token accounts | Create ATAs or token accounts before calling Zap. The CPI helpers do not create them for you. |
+| Native SOL | Wrap SOL into a token account before CPI and unwrap after your flow if needed. |
+| Token 2022 | Pass the correct token program for each mint and include transfer-hook extra accounts for DLMM flows when required. |
+| Ledger cleanup | Close the ledger after the zap-in instruction when it is no longer needed. |
+| Remaining accounts | Preserve the exact downstream account order generated by the corresponding SDK or IDL helper. |
+
+## Common CPI Failures
+
+| Error area | CPI-side fix |
+| --- | --- |
+| `InvalidOffset` | Recalculate `offset_amount_in` for the exact serialized payload. |
+| `AmmIsNotSupported` | Match the payload discriminator to the downstream program ID. |
+| Ledger owner mismatch | Derive the ledger from the same `owner` signer used in the CPI context. |
+| DLMM invalid position | Use the initialized-position path for existing positions, or pass a fresh signer for the uninitialized-position path. |
+| Downstream account error | Include event authorities, bin arrays, token programs, transfer-hook accounts, and any rate-limiter accounts required by the downstream route. |
+
+## Best Practices
+
+| Practice | Why it matters |
+| --- | --- |
+| Prefer generated bindings | Anchor CPI helpers keep account structs and argument order aligned with the IDL. |
+| Use SDK-built payloads as references | The TypeScript SDK source shows the exact DAMM v2, DLMM, and Jupiter payload formats. |
+| Simulate full flows | Zap calls downstream programs and depends on token balance deltas. |
+| Keep caps conservative | `max_transfer_amount` and `max_swap_amount` are safety limits, not quote outputs. |
+| Test every route variant | DAMM v2, DLMM, Jupiter route, Jupiter shared route, Token 2022, and native SOL paths differ in account requirements. |
