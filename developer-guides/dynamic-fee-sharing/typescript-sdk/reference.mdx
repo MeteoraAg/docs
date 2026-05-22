@@ -1,0 +1,119 @@
+---
+title: "Dynamic Fee Sharing TS SDK Reference"
+sidebarTitle: "Reference"
+description: "Explore Dynamic Fee Sharing TypeScript SDK exports, client methods, PDA helpers, constants, types, and source-program funding wrappers."
+llmsDescription: "Explains the Dynamic Fee Sharing TypeScript SDK reference for @meteora-ag/dynamic-fee-sharing-sdk. Covers DynamicFeeSharingClient construction, state readers, fee vault creation methods, direct funding, DAMM v2 and DBC source-program funding wrappers, user claim methods, PDA helpers, token helpers, constants, exported IDL account types, package scripts, and no-OpenAPI limitations."
+---
+
+The TypeScript SDK package is `@meteora-ag/dynamic-fee-sharing-sdk`. It exports the `DynamicFeeSharingClient` class, PDA helpers, token helpers, constants, IDL-backed account types, and parameter types.
+
+```typescript
+import {
+  DynamicFeeSharingClient,
+  DYNAMIC_FEE_SHARING_PROGRAM_ID,
+  deriveFeeVaultPdaAddress,
+  deriveTokenVaultAddress,
+} from "@meteora-ag/dynamic-fee-sharing-sdk";
+```
+
+## Client Construction
+
+| API | Signature | Use |
+| --- | --- | --- |
+| `new DynamicFeeSharingClient` | `(connection: Connection, commitment: Commitment)` | Creates an Anchor program client and caches the fee vault authority PDA. |
+| `createDfsProgram` | `(connection: Connection, commitment?: Commitment) => DynamicFeeSharingProgram` | Creates the raw Anchor program client from the SDK IDL. |
+
+## State Methods
+
+| API | Signature | Use |
+| --- | --- | --- |
+| `getFeeVault` | `(feeVault: PublicKey) => Promise<FeeVault>` | Fetches and decodes one fee vault account. |
+| `getFeeBreakdown` | `(feeVault: PublicKey) => Promise<{ totalFundedFee; totalClaimedFee; totalUnclaimedFee; userFees }>` | Calculates total funded, claimed, unclaimed, and per-user fee totals from fee vault state. |
+
+`getFeeBreakdown` filters out empty user slots where `share` is zero.
+
+## Vault Creation Methods
+
+| API | Parameters | Signers | Use |
+| --- | --- | --- | --- |
+| `createFeeVault` | `feeVault`, `tokenMint`, `tokenProgram`, `owner`, `payer`, `userShare` | `payer`, `feeVault` | Builds a transaction for a keypair-based fee vault. |
+| `createFeeVaultPda` | `base`, `tokenMint`, `tokenProgram`, `owner`, `payer`, `userShare` | `payer`, `base` | Builds a transaction for a deterministic PDA fee vault. |
+
+`userShare` maps to the on-chain `UserShare[]` type:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `address` | `PublicKey` | Must not be the default public key. |
+| `share` | `number` | Must be greater than zero and fit `u32`. |
+
+The program requires 2 to 5 users.
+
+## Funding Methods
+
+| API | Parameters | Signer | Use |
+| --- | --- | --- | --- |
+| `fundFeeVault` | `fundAmount`, `funder`, `feeVault`, optional `feeVaultState` | `funder` | Directly funds a fee vault from the funder's associated token account. |
+| `fundByClaimDammV2Fee` | `signer`, `owner`, `feeVault`, `dammV2Pool`, `dammV2Position`, `dammV2PositionNftAccount`, optional `dammV2PoolState` | `signer` | Claims DAMM v2 position fees into a PDA fee vault. |
+| `fundByClaimDammV2Reward` | `signer`, `rewardIndex`, `feeVault`, `dammV2Pool`, `dammV2Position`, `dammV2PositionNftAccount`, optional `dammV2PoolState` | `signer` | Claims one DAMM v2 reward into a PDA fee vault. |
+| `fundByClaimDbcCreatorTradingFee` | `signer`, `creator`, `feeVault`, `poolConfig`, `virtualPool`, optional cached states | `signer` | Claims DBC creator trading fees into a PDA fee vault. |
+| `fundByClaimDbcPartnerTradingFee` | `signer`, `feeClaimer`, `feeVault`, `poolConfig`, `virtualPool`, optional cached states | `signer` | Claims DBC partner trading fees into a PDA fee vault. |
+| `fundByWithdrawDbcCreatorSurplus` | `signer`, `feeVault`, `poolConfig`, `virtualPool`, optional cached states | `signer` | Withdraws DBC creator surplus into a PDA fee vault. |
+| `fundByWithdrawDbcPartnerSurplus` | `signer`, `feeVault`, `poolConfig`, `virtualPool`, optional cached states | `signer` | Withdraws DBC partner surplus into a PDA fee vault. |
+| `fundByWithdrawDbcMigrationFee` | `signer`, `isPartner`, `feeVault`, `poolConfig`, `virtualPool`, optional cached states | `signer` | Withdraws DBC migration fees into a PDA fee vault. |
+
+The source-program wrappers call the on-chain `fund_by_claiming_fee` instruction. That instruction requires a PDA fee vault and a `signer` that is one of the configured shareholders.
+
+## Claim Methods
+
+| API | Parameters | Signers | Use |
+| --- | --- | --- | --- |
+| `claimUserFee` | `feeVault`, `user`, `payer` | `payer`, `user` | Claims the user's available amount into the user's associated token account. |
+| `claimUserFee2` | `feeVault`, `user`, `payer`, `receiver` | `payer`, `user` | Claims the user's available amount into a receiver-associated token account. The receiver does not sign. |
+
+Both methods fetch the fee vault, find the user's share index, create the destination associated token account if needed, and build `claim_fee`.
+
+## PDA Helpers
+
+| Helper | Seeds | Returns |
+| --- | --- | --- |
+| `deriveFeeVaultAuthorityAddress()` | `fee_vault_authority` | `PublicKey` |
+| `deriveTokenVaultAddress(feeVault)` | `token_vault`, fee vault | `PublicKey` |
+| `deriveFeeVaultPdaAddress(base, tokenMint)` | `fee_vault`, base, token mint | `PublicKey` |
+| `deriveDammV2EventAuthorityAddress()` | `__event_authority` under DAMM v2 | `PublicKey` |
+
+## Token And Transaction Helpers
+
+| Helper | Use |
+| --- | --- |
+| `getTokenProgram(tokenFlag)` | Maps SDK `TokenType.SPL` or `TokenType.Token2022` to the SPL Token or Token 2022 program ID. |
+| `getOrCreateATAInstruction(connection, tokenMint, owner, payer, allowOwnerOffCurve, tokenProgram)` | Returns an associated token account and optional idempotent create instruction. |
+| `wrapSOLInstruction(from, to, amount)` | Builds native SOL wrap instructions for a WSOL token account. |
+| `unwrapSOLInstruction(owner, receiver, allowOwnerOffCurve?)` | Builds a WSOL close-account instruction when claiming native SOL. |
+| `setTokenAccountOwnerTx(tokenAccount, from, to, tokenProgramId)` | Builds a token-account authority transfer transaction, used for DAMM v2 position NFT account ownership handoff. |
+| `convertToLamportsBN(amount, tokenDecimal)` | Converts a UI amount string or number to a raw `BN` token amount. |
+| `checkPositionOwnership(connection, commitment, positionNftAccount, feeVault, tokenProgram?)` | Verifies that a DAMM v2 position NFT account is owned by the fee vault. |
+| `checkFeeVaultTokenMint(feeVaultTokenMint, tokenAMint, tokenBMint)` | Validates that the fee vault mint matches one of a pool's token mints. |
+
+## Constants
+
+| Export | Value or use |
+| --- | --- |
+| `DYNAMIC_FEE_SHARING_PROGRAM_ID` | `dfsdo2UqvwfN8DuUVrMRNfQe11VaiNoKcMqLHVvDPzh` |
+| `FEE_VAULT_PREFIX` | `fee_vault` |
+| `FEE_VAULT_AUTHORITY_PREFIX` | `fee_vault_authority` |
+| `TOKEN_VAULT_PREFIX` | `token_vault` |
+
+## Enums And Types
+
+| Export | Values or fields |
+| --- | --- |
+| `TokenType` | `SPL = 0`, `Token2022 = 1`. |
+| `FeeVault` | Generated IDL account type for `feeVault`. |
+| `InitializeFeeVaultParameters` | `padding`, `users`. |
+| `UserShare` | `address`, `share`. |
+| `CreateFeeVaultParams` | Keypair fee vault creation params. |
+| `CreateFeeVaultPdaParams` | PDA fee vault creation params. |
+| `FundFeeVaultParams` | Direct funding params, with optional cached `feeVaultState`. |
+| `ClaimUserFeeParams` | `feeVault`, `user`, `payer`. |
+| `ClaimUserFee2Params` | `feeVault`, `user`, `payer`, `receiver`. |
+| Source funding params | DAMM v2 and DBC wrapper parameter types listed in the funding API table. |

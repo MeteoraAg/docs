@@ -1,0 +1,118 @@
+---
+title: "Dynamic Fee Sharing Program Instructions"
+sidebarTitle: "Instructions"
+description: "Explore Dynamic Fee Sharing instructions for vault initialization, direct funding, source-program funding, and user fee claims."
+llmsDescription: "Explains the Dynamic Fee Sharing instruction surface from the Anchor source and IDL. Covers initialize_fee_vault, initialize_fee_vault_pda, fund_fee, fund_by_claiming_fee, claim_fee, parameters, account requirements, signers, whitelisted DAMM v2 and DBC source actions, Token 2022 transfer-fee handling, event-CPI accounts, and validation notes."
+---
+
+The `dynamic_fee_sharing` program exposes the instructions below. Integrators should use the TypeScript SDK for normal transaction construction, or build through CPI.
+
+## Instruction Summary
+
+| Instruction | Parameters | Main signers | Behavior |
+| --- | --- | --- | --- |
+| `initialize_fee_vault` | `params: InitializeFeeVaultParameters` | `fee_vault`, `payer` | Creates a non-PDA fee vault account and its token vault PDA. |
+| `initialize_fee_vault_pda` | `params: InitializeFeeVaultParameters` | `base`, `payer` | Creates a deterministic PDA fee vault from `base` and `token_mint`, plus its token vault PDA. |
+| `fund_fee` | `max_amount: u64` | `funder` | Transfers up to `max_amount` from the funder's token account into the vault and updates fee-per-share accounting. |
+| `fund_by_claiming_fee` | `payload: Vec<u8>` | `signer` | Invokes a whitelisted DAMM v2 or DBC instruction with the PDA fee vault as signer, then credits the token vault balance increase. |
+| `claim_fee` | `index: u8` | `user` | Claims the user's currently available fee amount for the configured user index. |
+
+## Initialize Non-PDA Fee Vault
+
+| Account | Writable | Signer | Notes |
+| --- | --- | --- | --- |
+| `fee_vault` | Yes | Yes | New external account initialized with `8 + FeeVault::INIT_SPACE` bytes. |
+| `fee_vault_authority` | No | No | PDA from `["fee_vault_authority"]`. |
+| `token_vault` | Yes | No | PDA token account from `["token_vault", fee_vault]`. |
+| `token_mint` | No | No | Mint for the fee vault. Must be supported by the token utility. |
+| `owner` | No | No | Stored in the `FeeVault` account. |
+| `payer` | Yes | Yes | Pays rent for the new accounts. |
+| `token_program` | No | No | SPL Token or Token 2022 program for `token_mint`. |
+| `system_program` | No | No | System program. |
+
+`params.users` must contain 2 to 5 entries. Each `UserShare.address` must be non-default, and each `UserShare.share` must be greater than zero.
+
+## Initialize PDA Fee Vault
+
+| Account | Writable | Signer | Notes |
+| --- | --- | --- | --- |
+| `fee_vault` | Yes | No | PDA from `["fee_vault", base, token_mint]`. |
+| `fee_vault_authority` | No | No | PDA from `["fee_vault_authority"]`. |
+| `token_vault` | Yes | No | PDA token account from `["token_vault", fee_vault]`. |
+| `token_mint` | No | No | Mint for the fee vault. |
+| `owner` | No | No | Stored in the `FeeVault` account. |
+| `base` | No | Yes | Seed signer used to derive the fee vault PDA. |
+| `payer` | Yes | Yes | Pays rent for the new accounts. |
+| `token_program` | No | No | SPL Token or Token 2022 program for `token_mint`. |
+| `system_program` | No | No | System program. |
+
+Use PDA fee vaults when the fee vault must sign downstream source-program instructions, such as DAMM v2 fee claims or DBC fee withdrawals.
+
+## Direct Funding
+
+| Account | Writable | Signer | Notes |
+| --- | --- | --- | --- |
+| `fee_vault` | Yes | No | Must have `token_vault` and `token_mint` relations. |
+| `token_vault` | Yes | No | Fee vault token account. |
+| `token_mint` | No | No | Fee vault mint. |
+| `fund_token_vault` | Yes | No | Funder's token account. The transferred amount is capped by its balance. |
+| `funder` | No | Yes | Token authority for `fund_token_vault`. |
+| `token_program` | No | No | Token program for checked transfer. |
+
+`fund_fee` transfers `min(max_amount, fund_token_vault.amount)`. If the resulting amount is zero, the instruction returns `AmountIsZero`.
+
+For Token 2022 transfer-fee mints, the vault credits the transfer-fee excluded amount to `total_funded_fee` and `fee_per_share`.
+
+## Source-Program Funding
+
+`fund_by_claiming_fee` is a wrapper for whitelisted source-program actions. The caller passes the downstream instruction data as `payload` and the downstream account metas as remaining accounts.
+
+| Account | Writable | Signer | Notes |
+| --- | --- | --- | --- |
+| `fee_vault` | Yes | No | Must be a PDA fee vault. Used as a signer for the downstream invocation. |
+| `token_vault` | Yes | No | Fee vault token account. The handler measures this balance before and after the downstream CPI. |
+| `signer` | No | Yes | Must be one of the configured shareholders in the fee vault. |
+| `source_program` | No | No | Whitelisted DAMM v2 or DBC program. |
+| Remaining accounts | Varies | Varies | Passed directly to the downstream instruction. One expected account must equal `token_vault`. |
+
+The first 8 bytes of `payload` must be the downstream Anchor instruction discriminator.
+
+## Whitelisted Source Actions
+
+| Source program | Downstream instruction | Expected `token_vault` remaining-account index | SDK wrapper |
+| --- | --- | --- | --- |
+| DAMM v2 `cp_amm` | `claim_position_fee` | `4` | `fundByClaimDammV2Fee` |
+| DAMM v2 `cp_amm` | `claim_reward` | `5` | `fundByClaimDammV2Reward` |
+| DBC `dynamic_bonding_curve` | `creator_withdraw_surplus` | `3` | `fundByWithdrawDbcCreatorSurplus` |
+| DBC `dynamic_bonding_curve` | `claim_creator_trading_fee` | `3` | `fundByClaimDbcCreatorTradingFee` |
+| DBC `dynamic_bonding_curve` | `partner_withdraw_surplus` | `3` | `fundByWithdrawDbcPartnerSurplus` |
+| DBC `dynamic_bonding_curve` | `claim_trading_fee` | `4` | `fundByClaimDbcPartnerTradingFee` |
+| DBC `dynamic_bonding_curve` | `withdraw_migration_fee` | `3` | `fundByWithdrawDbcMigrationFee` |
+
+The index is zero-based within the remaining accounts passed to `fund_by_claiming_fee`.
+
+## User Claim
+
+| Account | Writable | Signer | Notes |
+| --- | --- | --- | --- |
+| `fee_vault` | Yes | No | Must have `token_vault` and `token_mint` relations. |
+| `fee_vault_authority` | No | No | Must equal `EYqHRdtepv1KKUkPAYMBYpSfiGfNd8sa55ZtswodTfBS`. |
+| `token_vault` | Yes | No | Source token account controlled by fee vault authority. |
+| `token_mint` | No | No | Fee vault mint. |
+| `user_token_vault` | Yes | No | Destination token account. |
+| `user` | No | Yes | Must match `fee_vault.users[index].address`. |
+| `token_program` | No | No | Token program for checked transfer. |
+
+If the calculated claim amount is zero, the instruction updates no tokens and emits no claim event.
+
+## Validation
+
+| Area | Rule |
+| --- | --- |
+| User count | Vault initialization requires at least 2 and at most 5 users. |
+| User share | Each share must be greater than zero. |
+| User address | Each address must be non-default. |
+| Mint support | SPL Token mints are supported. Token 2022 mints are supported only with transfer-fee, metadata-pointer, and token-metadata extensions. |
+| Direct funding | `max_amount` is capped by the funder's token account balance. |
+| Source funding | Only PDA fee vaults can be used, the signer must be a configured shareholder, and the downstream action must be whitelisted. |
+| Claims | The `index` must exist in the fixed user array and the signer must match that user entry. |

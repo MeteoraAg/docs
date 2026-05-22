@@ -1,76 +1,172 @@
 ---
-title: Getting Started
-description: Dynamic Fee Sharing
+title: "Dynamic Fee Sharing TS SDK Getting Started"
+sidebarTitle: "Getting Started"
+description: "Learn how to install @meteora-ag/dynamic-fee-sharing-sdk, create a client, derive fee vault PDAs, and build your first transactions."
+llmsDescription: "Explains how to start building with the Dynamic Fee Sharing TypeScript SDK. Covers package installation, dependencies, program ID, client creation, PDA derivation, transaction-building behavior, non-PDA and PDA fee vault creation, direct funding, user claims, local scripts, and contributor test commands."
 ---
 
-This guide provides instructions on how to get started with building on Meteora's Dynamic Fee Sharing program using the Dynamic Fee Sharing TypeScript SDK.
+This guide shows how to install and initialize the official Dynamic Fee Sharing TypeScript SDK, `@meteora-ag/dynamic-fee-sharing-sdk`.
 
-Before you begin, here are some important resources:
+Before you begin, here are the main resources:
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/dynamic-fee-sharing-sdk">
-    Meteora Dynamic Fee Sharing Typescript SDK
+  <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/dynamic-fee-sharing-sdk">
+    Dynamic Fee Sharing TypeScript SDK repository.
   </Card>
   <Card title="Dynamic Fee Sharing NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/dynamic-fee-sharing-sdk">
-    Meteora Dynamic Fee Sharing NPM Package
+    Published package for transaction builders, state reads, PDA helpers, and examples.
   </Card>
 </CardGroup>
 
-# Installation
+## Install
 
-To use the SDK in your project, install it using your preferred package manager:
+To use the SDK in your project, install it with your preferred package manager:
 
 <Tabs>
   <Tab title="npm">
     ```bash
-    npm install @meteora-ag/dynamic-fee-sharing-sdk @solana/web3.js
+    npm install @meteora-ag/dynamic-fee-sharing-sdk @solana/web3.js @solana/spl-token bn.js
     ```
   </Tab>
   <Tab title="pnpm">
     ```bash
-    pnpm install @meteora-ag/dynamic-fee-sharing-sdk @solana/web3.js
+    pnpm install @meteora-ag/dynamic-fee-sharing-sdk @solana/web3.js @solana/spl-token bn.js
     ```
   </Tab>
   <Tab title="yarn">
     ```bash
-    yarn add @meteora-ag/dynamic-fee-sharing-sdk @solana/web3.js
+    yarn add @meteora-ag/dynamic-fee-sharing-sdk @solana/web3.js @solana/spl-token bn.js
     ```
   </Tab>
 </Tabs>
 
-# Initialization
+## Dependencies
 
-Once installed, you can initialize the SDK in your TypeScript/JavaScript project like this:
+| Package | Version range in SDK |
+| --- | --- |
+| `@coral-xyz/anchor` | `^0.31.0` |
+| `@meteora-ag/cp-amm-sdk` | `^1.2.0` |
+| `@meteora-ag/dynamic-bonding-curve-sdk` | `^1.4.5` |
+| `@solana/spl-token` | `^0.4.13` |
+| `@solana/web3.js` | `^1.98.0` |
+| `bn.js` | `^5.2.1` |
+| `decimal.js` | `^10.5.0` |
+
+## Create A Client
 
 ```typescript
 import { Connection } from "@solana/web3.js";
 import { DynamicFeeSharingClient } from "@meteora-ag/dynamic-fee-sharing-sdk";
 
-// Initialize a connection to the Solana network (e.g., Mainnet)
-const connection = new Connection("https://api.mainnet-beta.solana.com");
-
-// Create a new instance of the DynamicFeeSharingClient
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
 const client = new DynamicFeeSharingClient(connection, "confirmed");
 ```
 
-# Testing the SDK (for contributors)
+The client builds unsigned transactions. Your application is responsible for signing, simulating, sending, and confirming them.
 
-If you have cloned the SDK repository and want to run the built-in tests:
+## Program IDs
 
-```bash
-# Install dependencies
-bun install
+| Constant | Value |
+| --- | --- |
+| `DYNAMIC_FEE_SHARING_PROGRAM_ID` | `dfsdo2UqvwfN8DuUVrMRNfQe11VaiNoKcMqLHVvDPzh` |
 
-# Run tests
-bun test
+## Derive Addresses
+
+```typescript
+import {
+  deriveFeeVaultAuthorityAddress,
+  deriveFeeVaultPdaAddress,
+  deriveTokenVaultAddress,
+} from "@meteora-ag/dynamic-fee-sharing-sdk";
+
+const feeVault = deriveFeeVaultPdaAddress(base.publicKey, tokenMint);
+const tokenVault = deriveTokenVaultAddress(feeVault);
+const feeVaultAuthority = deriveFeeVaultAuthorityAddress();
 ```
 
-# Development Resources
+## Create A Fee Vault
 
-## Faucets
+Use `createFeeVault` for a keypair-based fee vault:
+
+```typescript
+import { Keypair } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+
+const feeVault = Keypair.generate();
+
+const tx = await client.createFeeVault({
+  feeVault: feeVault.publicKey,
+  tokenMint,
+  tokenProgram: TOKEN_PROGRAM_ID,
+  owner: owner.publicKey,
+  payer: payer.publicKey,
+  userShare: [
+    { address: userA.publicKey, share: 600 },
+    { address: userB.publicKey, share: 400 },
+  ],
+});
+
+// Sign with payer and feeVault.
+```
+
+Use `createFeeVaultPda` when the vault must be deterministic or must sign whitelisted source-program fee claims:
+
+```typescript
+const tx = await client.createFeeVaultPda({
+  base: base.publicKey,
+  tokenMint,
+  tokenProgram: TOKEN_PROGRAM_ID,
+  owner: owner.publicKey,
+  payer: payer.publicKey,
+  userShare: [
+    { address: userA.publicKey, share: 600 },
+    { address: userB.publicKey, share: 400 },
+  ],
+});
+
+// Sign with payer and base.
+```
+
+## Fund And Claim
+
+```typescript
+import BN from "bn.js";
+
+const fundTx = await client.fundFeeVault({
+  feeVault,
+  funder: funder.publicKey,
+  fundAmount: new BN("1000000"),
+});
+
+// Sign with funder.
+```
+
+```typescript
+const claimTx = await client.claimUserFee({
+  feeVault,
+  user: userA.publicKey,
+  payer: payer.publicKey,
+});
+
+// Sign with payer and userA.
+```
+
+Use `claimUserFee2` when the user signs but the claimed fee should be delivered to a separate receiver token account owner.
+
+## SDK Examples
 
 <CardGroup cols={1}>
-  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.raccoons.dev/">
-    <p>When working on devnet, you might need test tokens. Here is a helpful faucet.</p>
+  <Card title="Dynamic Fee Sharing Examples" icon="code" iconType="solid" href="https://github.com/MeteoraAg/dynamic-fee-sharing-sdk/tree/main/scripts">
+    Example scripts for creating fee vaults, funding vaults, claiming user fees, reading state, and source-program funding.
   </Card>
 </CardGroup>
+
+## Testing The SDK
+
+If you have cloned the SDK repository, start with package-level checks and tests:
+
+```bash
+pnpm install
+pnpm run build
+bun test
+```
