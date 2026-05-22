@@ -1,0 +1,40 @@
+---
+title: "Zap Program Errors"
+sidebarTitle: "Errors"
+description: "Understand Zap custom errors, error codes, validation failures, and integration fixes for zap-in and zap-out flows."
+llmsDescription: "Explains the Zap Anchor custom error surface. Covers MathOverflow, InvalidOffset, InvalidZapOutParameters, TypeCastFailed, AmmIsNotSupported, InvalidPosition, ExceededSlippage, InvalidDlmmZapInParameters, UnsupportedFeeMode, common zap-out payload mistakes, DAMM v2 price movement failures, DLMM bin-range validation, and practical fixes for SDK and CPI callers."
+---
+
+Zap uses Anchor custom errors starting at code `6000`.
+
+## Error Codes
+
+| Code | Name | Message | Common cause | Integration fix |
+| --- | --- | --- | --- | --- |
+| `6000` | `MathOverflow` | `Math operation overflow` | Checked math overflow in balance, percentage, price, or liquidity calculations. | Keep token amounts within `u64`, verify pool math inputs, and avoid invalid price or bin ranges. |
+| `6001` | `InvalidOffset` | `Invalid offset` | `offset_amount_in + 8` exceeds `payload_data.length`. | Use route-specific offsets from the SDK constants and build payload data from the matching helper. |
+| `6002` | `InvalidZapOutParameters` | `Invalid zapout parameters` | `percentage` is `0` or greater than `100`. | Pass a zap-out percentage from `1` to `100`. |
+| `6003` | `TypeCastFailed` | `Type cast error` | A checked conversion from a wider integer failed. | Recheck amount and percentage inputs before building the transaction. |
+| `6004` | `AmmIsNotSupported` | `Amm program is not supported` | Payload discriminator and `amm_program` are not in the Zap whitelist. | Use DAMM v2 `swap2`, DLMM `swap2`, Jupiter V6 `route`, or Jupiter V6 `shared_accounts_route`. |
+| `6005` | `InvalidPosition` | `Position is not empty` | DLMM uninitialized-position zap-in received an already initialized account or a position equal to owner/rent payer. | Generate a fresh signer for `zap_in_dlmm_for_uninitialized_position`, or use the initialized-position path. |
+| `6006` | `ExceededSlippage` | `Exceeded slippage tolerance` | DAMM v2 post-swap square-root price moved beyond `max_sqrt_price_change_bps`. | Refresh pool state, use a tighter transaction path, or increase the accepted price-change bps if appropriate. |
+| `6007` | `InvalidDlmmZapInParameters` | `Invalid dlmm zap in parameters` | `min_delta_id > max_delta_id`. | Build a valid lower-to-upper bin range around the active bin. |
+| `6008` | `UnsupportedFeeMode` | `Unsupported fee mode` | DAMM v2 liquidity handler cannot handle the pool fee mode. | Upgrade to current Zap and SDK versions; verify the pool fee mode is supported by the deployed program. |
+
+## Zap-Out Validation Failures
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| `AmmIsNotSupported` | Wrong program ID for the payload discriminator. | Pair the discriminator with the exact downstream program ID. |
+| `InvalidOffset` | Jupiter payload offset was calculated as a fixed value rather than `payload_data.length - 19`. | Use `zapOutThroughJupiter` or compute the reverse offset from the serialized Jupiter route payload. |
+| No swap occurs | Post-action token balance is less than or equal to `pre_user_token_balance`. | Read the pre-balance before the upstream claim, withdraw, transfer, or remove-liquidity action. |
+| Swapped less than expected | `percentage` or `max_swap_amount` capped the balance delta. | Inspect `ZapOutParameters` and the post-action token-account balance. |
+
+## Zap-In Validation Failures
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| Ledger ownership failure | `owner` signer does not match `UserLedger.owner`. | Derive the ledger from the same user used to sign all ledger and zap-in instructions. |
+| DLMM uninitialized-position failure | Position account is already initialized or is not a fresh signer. | Generate a new keypair and include it as a signer for the zap-in transaction. |
+| DAMM v2 slippage failure | Pool price changed between client quote and on-chain internal swap. | Refresh pool state and rebuild the zap-in route. |
+| Downstream CPI error | DAMM v2 or DLMM account order is incomplete. | Preserve SDK-generated account metas, including event authorities, bin arrays, transfer-hook accounts, and rate-limiter accounts when required. |

@@ -1,0 +1,113 @@
+---
+title: "Zap Program Accounts"
+sidebarTitle: "Accounts"
+description: "Understand Zap accounts, ledger PDA seeds, supported downstream program constants, route discriminators, and IDL parameter types."
+llmsDescription: "Explains the Zap program account model from the local Anchor source and bundled IDL. Covers the UserLedger PDA, ledger fields, supported DAMM v2, DLMM, and Jupiter route constants, zap-out discriminators and amount offsets, StrategyType, ZapOutParameters, RemainingAccountsInfo, downstream accounts, token-account requirements, and TypeScript SDK PDA helpers."
+---
+
+<Note>
+  This page summarizes the `zap` account model from the local Anchor source and bundled IDL. For exact layouts, use the published IDL and generated TypeScript types exported by `@meteora-ag/zap-sdk`.
+</Note>
+
+## Address Map
+
+| Address | How it is chosen | Use |
+| --- | --- | --- |
+| `UserLedger` | PDA from `["user_ledger", owner]` | Temporary per-user state used by zap-in flows to record token A/B or token X/Y balances before the Zap instruction adds liquidity. |
+| DAMM v2 `Pool` | Existing `cp-amm` pool account | Read by `zap_in_damm_v2` to calculate liquidity, detect surplus, and perform an internal DAMM v2 `swap2` when needed. |
+| DAMM v2 position | Existing position account derived from the position NFT mint | Receives liquidity during `zap_in_damm_v2`. Zap does not create the DAMM v2 position. |
+| DLMM `LbPair` | Existing DLMM pair account | Read by DLMM zap-in instructions to derive token mints, reserves, active bin, bin step, and rebalance parameters. |
+| DLMM position | Existing or new position account | Existing positions are rebalanced by `zap_in_dlmm_for_initialized_position`; uninitialized signer accounts are created by `zap_in_dlmm_for_uninitialized_position`. |
+| User token accounts | Associated token accounts for pool tokens | Source balances for zap-in and zap-out flows. SDK builders create ATAs idempotently. |
+| Downstream event authorities | DAMM v2 or DLMM event authority PDAs | Required by downstream DAMM v2 and DLMM CPI calls. Zap itself does not emit custom events. |
+
+## PDA Seeds
+
+| SDK helper | Seeds | Use |
+| --- | --- | --- |
+| `deriveLedgerAccount(owner)` | `["user_ledger", owner]` | Derive the temporary `UserLedger` account for one user. |
+| `deriveDammV2PoolAuthority()` | `["pool_authority"]` under DAMM v2 | Passed to DAMM v2 CPI calls. |
+| `deriveDammV2EventAuthority()` | `["__event_authority"]` under DAMM v2 | Passed to DAMM v2 event-CPI instructions. |
+| `deriveDlmmEventAuthority()` | `["__event_authority"]` under DLMM | Passed to DLMM event-CPI instructions. |
+
+## Program Constants
+
+| Constant | Value | Meaning |
+| --- | --- | --- |
+| `ZAP_PROGRAM_ID` | `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz` | Zap program address. |
+| `DAMM_V2_PROGRAM_ID` | `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` | Supported DAMM v2 program for zap in/out. |
+| `DLMM_PROGRAM_ID` | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo` | Supported DLMM program for zap in/out. |
+| `JUP_V6_PROGRAM_ID` | `JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4` | Supported Jupiter V6 program for zap out. |
+| `MEMO_PROGRAM_ID` | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` | Passed to DLMM CPI flows. |
+| `MAX_BASIS_POINT` | `10_000` | Basis-point denominator used by program math. |
+| `USER_LEDGER_PREFIX` | `user_ledger` | Ledger PDA seed prefix. |
+
+## Whitelisted Zap-Out Payloads
+
+`zap_out` validates the first 8 bytes of `payload_data` against this whitelist before invoking the downstream program.
+
+| Downstream program | Instruction | Discriminator | Amount offset |
+| --- | --- | --- | --- |
+| DAMM v2 | `swap2` | `[248, 198, 158, 145, 225, 117, 135, 200]` | `AMOUNT_IN_DAMM_V2_OFFSET = 8` |
+| DLMM | `swap2` | `[65, 75, 63, 76, 235, 91, 91, 136]` | `AMOUNT_IN_DLMM_OFFSET = 8` |
+| Jupiter V6 | `route` | `[229, 23, 203, 151, 122, 227, 173, 42]` | `payload_data.length - 19` |
+| Jupiter V6 | `shared_accounts_route` | `[193, 32, 155, 51, 65, 214, 156, 129]` | `payload_data.length - 19` |
+
+The amount offset points to the little-endian `u64` input amount that Zap overwrites at runtime with the post-action balance delta.
+
+## UserLedger
+
+`UserLedger` is a zero-copy account. The SDK initializes it before zap-in and closes it during cleanup.
+
+| Field | Type | Use |
+| --- | --- | --- |
+| `owner` | `Pubkey` | User that owns the ledger. Instructions require this signer through `has_one = owner`. |
+| `amount_a` | `u64` | Token A amount for DAMM v2 or token X amount for DLMM. |
+| `amount_b` | `u64` | Token B amount for DAMM v2 or token Y amount for DLMM. |
+
+## ZapOutParameters
+
+| Field | Type | Use |
+| --- | --- | --- |
+| `percentage` | `u8` | Share of the balance increase to swap. Must be greater than `0` and at most `100`. |
+| `offset_amount_in` | `u16` | Byte offset in `payload_data` where the downstream amount-in `u64` should be overwritten. |
+| `pre_user_token_balance` | `u64` | User token-account balance before the action that produced zap-out tokens. |
+| `max_swap_amount` | `u64` | Hard cap applied after percentage calculation. Protects against unrelated deposits into the same token account. |
+| `payload_data` | `bytes` | Serialized downstream swap instruction data with a whitelisted discriminator. |
+
+## DLMM StrategyType
+
+| Variant | Use |
+| --- | --- |
+| `Spot` | Even distribution around the selected bin range. |
+| `Curve` | Curved distribution around the active bin. |
+| `BidAsk` | Bid-ask style distribution across the selected bin range. |
+
+The TypeScript SDK maps `@meteora-ag/dlmm` `StrategyType` values into the Zap IDL enum before building DLMM zap-in instructions.
+
+## RemainingAccountsInfo
+
+| Field | Type | Use |
+| --- | --- | --- |
+| `slices` | `Vec<RemainingAccountsSlice>` | Describes grouped DLMM remaining accounts, including Token 2022 transfer-hook accounts. |
+
+DLMM zap-in and zap-out flows are remaining-account-heavy. Use SDK helpers such as `getDlmmRemainingAccounts` and `getBinArraysRequiredByPositionRange` rather than hand-ordering account metas unless you are writing a low-level client.
+
+## Account Notes
+
+| Flow | Important accounts |
+| --- | --- |
+| DAMM v2 zap in | Pool, position, position NFT token account, token vaults, token mints, token programs, DAMM v2 pool authority, DAMM v2 event authority, and any remaining accounts required by the pool. |
+| DLMM initialized zap in | LbPair, existing position, optional bin array bitmap extension, user token X/Y accounts, reserves, token mints, token programs, memo program, event authority, bin arrays, and transfer-hook accounts when required. |
+| DLMM uninitialized zap in | Same as initialized zap in, but `position` must be an uninitialized signer and Zap calls DLMM `initialize_position2` before rebalancing. |
+| Zap out | User input token account, whitelisted downstream program, and the exact remaining-account list expected by the downstream swap instruction. |
+
+## Account Handling Notes
+
+| Note | Guidance |
+| --- | --- |
+| Ledger accounts are temporary | Close the ledger after zap-in cleanup to recover rent and avoid stale balances. |
+| Zap out uses balance deltas | Read `pre_user_token_balance` before the upstream claim, withdraw, or transfer action. |
+| Payload amount is overwritten | Build the downstream payload with a placeholder amount, then pass the correct offset for that route. |
+| Token 2022 may add accounts | DLMM transfer-hook mints require extra remaining accounts and a matching `RemainingAccountsInfo` slice. |
+| Native SOL is wrapped | SDK builders keep wrapped SOL accounts open until the Zap cleanup stage when needed. |
