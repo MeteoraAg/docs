@@ -1,82 +1,184 @@
 ---
-title: Getting Started
-description: Stake2Earn
+title: "Stake2Earn TypeScript SDK Getting Started"
+sidebarTitle: "Getting Started"
+description: "Learn how to install @meteora-ag/m3m3, create a Stake2Earn client, read vault state, build staking transactions, and handle claim and unstake flows."
+llmsDescription: "Explains how to get started with the Stake2Earn TypeScript SDK package @meteora-ag/m3m3. Covers package installation, dependencies, creating a connection-backed StakeForFee client, reading accountStates, staking, claiming quote fees, requesting unstake, canceling unstake, withdrawing released stake, refreshing state, and sending SDK-built transactions."
 ---
 
-This guide provides instructions on how to get started with building on Meteora's Stake2Earn program using the Stake2Earn TypeScript SDK.
+The Stake2Earn TypeScript SDK is published as `@meteora-ag/m3m3`. It wraps the `stake_for_fee`, DAMM v1, and Dynamic Vault account bundles needed to build Stake2Earn transactions.
 
-Before you begin, here are some important resources:
+<Note>
+  The SDK builds unsigned transactions. Your app is responsible for setting any wallet-specific signing flow, simulating, signing, and submitting the returned transaction.
+</Note>
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/stake-for-fee-sdk">
-    Meteora Stake2Earn Typescript SDK
+  <Card title="SDK Repository" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/stake-for-fee-sdk/tree/main/ts-client">
+    Source for `@meteora-ag/m3m3`, examples, tests, IDLs, helpers, and build scripts.
   </Card>
-  <Card title="Stake2Earn NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/m3m3">
-    Meteora Stake2Earn NPM Package
+  <Card title="NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/m3m3">
+    Published Stake2Earn TypeScript SDK package.
   </Card>
 </CardGroup>
 
-# Installation
+## Installation
 
-To use the SDK in your project, install it using your preferred package manager:
+Install the SDK and the packages you commonly import directly in app code:
 
 <Tabs>
   <Tab title="npm">
     ```bash
-    npm install @meteora-ag/m3m3 @solana/web3.js
+    npm install @meteora-ag/m3m3 @solana/web3.js @solana/spl-token bn.js
     ```
   </Tab>
   <Tab title="pnpm">
     ```bash
-    pnpm install @meteora-ag/m3m3 @solana/web3.js
+    pnpm install @meteora-ag/m3m3 @solana/web3.js @solana/spl-token bn.js
     ```
   </Tab>
   <Tab title="yarn">
     ```bash
-    yarn add @meteora-ag/m3m3 @solana/web3.js
+    yarn add @meteora-ag/m3m3 @solana/web3.js @solana/spl-token bn.js
     ```
   </Tab>
 </Tabs>
 
-# Initialization
+## Create A Client
 
-Once installed, you can initialize the SDK in your TypeScript/JavaScript project like this:
+Create a `StakeForFee` instance from a DAMM v1 pool address. The SDK derives the Stake2Earn vault PDA, top staker list, full balance list, lock escrow, and related Dynamic Vault state.
+
+```typescript
+import StakeForFee from "@meteora-ag/m3m3";
+import { Connection, PublicKey } from "@solana/web3.js";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+
+const poolAddress = new PublicKey(
+  "G2MRSjNjCbFUmMf32Z1aXYhy6pc1ihLyYg6orKedyjJG",
+);
+
+const stakeForFee = await StakeForFee.create(connection, poolAddress);
+
+console.log(stakeForFee.feeVaultKey.toBase58());
+console.log(stakeForFee.accountStates.feeVault.configuration);
+```
+
+## Build Transactions
+
+### Stake
+
+`stake` creates the stake escrow first when it does not exist, estimates compute units, and adds replacement top-list accounts from the current cached state.
+
+```typescript
+import BN from "bn.js";
+
+const amount = new BN("1000000000");
+const tx = await stakeForFee.stake(amount, wallet.publicKey);
+```
+
+### Claim Fees
+
+`claimFee` transfers only the quote token side to the user. The stake/base token side is automatically restaked by the program.
+
+```typescript
+import { U64_MAX } from "@meteora-ag/m3m3";
+
+const tx = await stakeForFee.claimFee(wallet.publicKey, U64_MAX);
+```
+
+### Request Unstake
+
+`unstake` initializes a new `Unstake` account. The new keypair must sign the final transaction.
+
+```typescript
+import { Keypair } from "@solana/web3.js";
+
+const unstakeKeypair = Keypair.generate();
+const tx = await stakeForFee.unstake(
+  amount,
+  unstakeKeypair.publicKey,
+  wallet.publicKey,
+);
+
+tx.partialSign(unstakeKeypair);
+```
+
+### Cancel Or Withdraw
+
+```typescript
+const cancelTx = await stakeForFee.cancelUnstake(
+  unstakeKeypair.publicKey,
+  wallet.publicKey,
+);
+
+const withdrawTx = await stakeForFee.withdraw(
+  unstakeKeypair.publicKey,
+  wallet.publicKey,
+);
+```
+
+`withdraw` only succeeds after the `Unstake.release_at` timestamp has passed.
+
+## Read User State
+
+Refresh cached vault state before calculating claimable balances for a user-facing surface.
+
+```typescript
+await stakeForFee.refreshStates();
+
+const userState = await stakeForFee.getUserStakeAndClaimBalance(
+  wallet.publicKey,
+);
+
+if (userState.stakeEscrow) {
+  console.log(userState.stakeEscrow.stakeAmount.toString());
+  console.log(userState.unclaimFee.feeA?.toString());
+  console.log(userState.unclaimFee.feeB?.toString());
+}
+```
+
+## Create A Vault
+
+Vault creation is an integrator or launch workflow. The pool must be a DAMM v1 constant-product pool, the quote mint must be SOL or USDC, and the lock escrow must be owned by the derived vault PDA.
 
 ```typescript
 import StakeForFee from "@meteora-ag/m3m3";
 import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
 
-// Initialize a connection to the Solana network (e.g., Mainnet)
-const connection = new Connection("https://api.mainnet-beta.solana.com");
-
-// Intialize the DAMM v1 pool
-const poolAddress = new PublicKey(
-  "G2MRSjNjCbFUmMf32Z1aXYhy6pc1ihLyYg6orKedyjJG"
+const tx = await StakeForFee.createFeeVault(
+  connection,
+  poolAddress,
+  stakeMint,
+  payer.publicKey,
+  {
+    topListLength: 10,
+    unstakeLockDuration: new BN(86_400),
+    secondsToFullUnlock: new BN(604_800),
+    startFeeDistributeTimestamp: new BN(startTimestamp),
+  },
 );
-
-// Create a new instance of the Stake2Earn
-const stake2earn = await StakeForFee.create(connection, poolAddress);
 ```
 
-# Testing the SDK (for contributors)
+The SDK also exposes `createFeeVaultWithParams` and `createFeeVaultInstructions` when you already know both pool mints or need raw instructions.
+
+## Contributor Commands
 
 If you have cloned the SDK repository and want to run the built-in tests:
 
 ```bash
-# Install dependencies
-cd ts-client
-bun install
-
-# Run tests
-bun test
+cd stake-for-fee-sdk/ts-client
+pnpm install
+pnpm run build
+pnpm test
 ```
 
-# Development Resources
+## Next Pages
 
-## Faucets
-
-<CardGroup cols={1}>
-  <Card title="Devnet Faucet" icon="faucet" href="https://faucet.raccoons.dev/">
-    <p>When working on devnet, you might need test tokens. Here is a helpful faucet.</p>
+<CardGroup cols={2}>
+  <Card title="SDK Examples" icon="code" iconType="solid" href="/developer-guides/stake2earn/typescript-sdk/examples">
+    Common vault, stake, claim, unstake, and read examples.
+  </Card>
+  <Card title="SDK Reference" icon="book" iconType="solid" href="/developer-guides/stake2earn/typescript-sdk/reference">
+    Complete function, helper, constant, and type map for `@meteora-ag/m3m3`.
   </Card>
 </CardGroup>

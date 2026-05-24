@@ -1,0 +1,115 @@
+---
+title: "Stake2Earn Rust Integration Library"
+sidebarTitle: "Library"
+description: "Understand the Stake2Earn Rust integration surface, including the generated stake_for_fee_interface crate, common PDA helpers, account decoders, instruction builders, events, and errors."
+llmsDescription: "Explains the Stake2Earn Rust integration libraries in the local stake-for-fee-sdk source. Covers stake_for_fee_interface, common PDA helpers, crate dependencies, program ID, generated account wrappers, instruction key structs, instruction argument structs, invoke helpers, event and error exports, Event CPI authority derivation, and current lack of a separate high-level ergonomic Rust SDK."
+---
+
+The local Rust integration source contains two crates:
+
+| Crate | Path | Use |
+| --- | --- | --- |
+| `stake_for_fee_interface` | `stake-for-fee-sdk/stake_for_fee_interface` | Generated Rust interface for accounts, instructions, typedefs, events, and errors. |
+| `common` | `stake-for-fee-sdk/common` | Small PDA helper crate that depends on `stake_for_fee_interface` as `m3m3`. |
+
+<Note>
+  The inspected source does not include a high-level ergonomic Rust SDK like the TypeScript `StakeForFee` class. Rust integrations should use the generated interface crate, PDA helpers, and fresh on-chain account reads.
+</Note>
+
+## Workspace
+
+```toml
+[workspace]
+members = ["stake_for_fee_interface", "common"]
+resolver = "2"
+```
+
+For local development against the source checkout:
+
+```toml
+[dependencies]
+stake_for_fee_interface = { path = "../stake-for-fee-sdk/stake_for_fee_interface" }
+common = { path = "../stake-for-fee-sdk/common" }
+```
+
+## Program ID
+
+`stake_for_fee_interface` declares the public program ID:
+
+| Program | ID |
+| --- | --- |
+| `stake_for_fee` | `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP` |
+
+## PDA Helpers
+
+The `common::pda` module exports:
+
+| Function | Derives |
+| --- | --- |
+| `derive_m3m3_vault_key(pool_key)` | `["vault", pool]` under `stake_for_fee_interface::ID`. |
+| `derive_top_staker_list_key(vault_key)` | `["list", vault]`. |
+| `derive_full_balance_list_key(vault_key)` | `["balance", vault]`. |
+| `derive_m3m3_event_authority_key()` | Anchor Event CPI authority `["__event_authority"]`. |
+
+```rust
+use common::pda::{
+    derive_full_balance_list_key, derive_m3m3_event_authority_key,
+    derive_m3m3_vault_key, derive_top_staker_list_key,
+};
+use solana_sdk::pubkey::Pubkey;
+
+let pool = Pubkey::new_unique();
+let vault = derive_m3m3_vault_key(pool);
+let top_list = derive_top_staker_list_key(vault);
+let full_balance_list = derive_full_balance_list_key(vault);
+let event_authority = derive_m3m3_event_authority_key();
+```
+
+## Generated Modules
+
+| Module | Exports |
+| --- | --- |
+| `accounts` | Account structs, discriminators, and `deserialize` helpers for `FeeVault`, `StakeEscrow`, `Unstake`, list metadata, and dummy account wrappers used for generated types. |
+| `typedefs` | `InitializeVaultParams`, `StakerBalance`, `StakerMetadata`, `Configuration`, `Metrics`, `TopStakerInfo`, and `Rounding`. |
+| `instructions` | Instruction enum, discriminators, key structs, argument structs, `*_ix`, `*_invoke`, and `*_invoke_signed` helpers. |
+| `events` | Event structs matching the Anchor event definitions. |
+| `errors` | `StakeForFeeError` enum with custom codes `6000` through `6022`. |
+
+## Instruction Builders
+
+| Helper | Args | Use |
+| --- | --- | --- |
+| `initialize_vault_ix(keys, args)` | `InitializeVaultIxArgs { params }` | Create the root vault and list accounts. |
+| `initialize_stake_escrow_ix(keys)` | None | Create a user stake escrow. |
+| `stake_ix(keys, args)` | `StakeIxArgs { amount }` | Stake tokens and sync lists. |
+| `claim_fee_ix(keys, args)` | `ClaimFeeIxArgs { max_fee }` | Claim quote fees and restake base fees. |
+| `request_unstake_ix(keys, args)` | `RequestUnstakeIxArgs { unstake_amount }` | Create a pending unstake request. |
+| `cancel_unstake_ix(keys)` | None | Cancel an open unstake request. |
+| `withdraw_ix(keys)` | None | Withdraw released stake. |
+| `claim_fee_crank_ix(keys)` | None | Permissionlessly claim and distribute lock escrow fees. |
+| `update_unstake_lock_duration_ix(keys, args)` | `UpdateUnstakeLockDurationIxArgs { unstake_lock_duration }` | Admin update for future unstake cooldowns. |
+| `update_seconds_to_full_unlock_ix(keys, args)` | `UpdateSecondsToFullUnlockIxArgs { seconds_to_full_unlock }` | Admin update for fee drip duration after a crank. |
+
+Each instruction also has `*_ix_with_program_id`, `*_invoke`, `*_invoke_with_program_id`, `*_invoke_signed`, and verification helpers in the generated source.
+
+## Account Decoding
+
+| Account wrapper | Use |
+| --- | --- |
+| `FeeVaultAccount::deserialize(data)` | Decode root vault state. |
+| `StakeEscrowAccount::deserialize(data)` | Decode a user stake escrow. |
+| `UnstakeAccount::deserialize(data)` | Decode a pending unstake account. |
+| `TopListMetadataAccount::deserialize(data)` | Decode only the top-list header. |
+| `FullBalanceListMetadataAccount::deserialize(data)` | Decode only the full-balance-list header. |
+
+Top and full balance list entries are appended after the account discriminator and metadata header. Use the TypeScript decoder logic as a model if you need to parse appended entries in Rust.
+
+## Error Decoding
+
+`StakeForFeeError` implements `From<StakeForFeeError> for ProgramError`, `DecodeError`, and `PrintProgramError`.
+
+| Code range | Meaning |
+| --- | --- |
+| `6000` to `6022` | Stake2Earn custom errors from `stake_for_fee`. |
+
+See the [program error reference](/developer-guides/stake2earn/program/errors) for the full table.

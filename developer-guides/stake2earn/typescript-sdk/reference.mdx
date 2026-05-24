@@ -1,0 +1,169 @@
+---
+title: "Stake2Earn TypeScript SDK Reference"
+sidebarTitle: "Reference"
+description: "Understand @meteora-ag/m3m3 exports, dependencies, program IDs, constants, transaction builders, state readers, PDA helpers, calculation helpers, and helper utilities."
+llmsDescription: "Explains the Stake2Earn TypeScript SDK reference for @meteora-ag/m3m3. Covers dependencies, program IDs, exported constants, exported types, StakeForFee creation, transaction builders, account-state readers, static scanners, fee calculation helpers, top-list helpers, PDA helpers, program helpers, decoder helpers, compute helpers, and gotchas from the local SDK source."
+---
+
+This page maps the public source surface of `@meteora-ag/m3m3`. Use the package types for exact parameter shapes when building a production integration.
+
+```typescript
+import StakeForFee, {
+  STAKE_FOR_FEE_PROGRAM_ID,
+  DYNAMIC_AMM_PROGRAM_ID,
+  DYNAMIC_VAULT_PROGRAM_ID,
+  U64_MAX,
+  deriveFeeVault,
+  deriveStakeEscrow,
+} from "@meteora-ag/m3m3";
+```
+
+## Dependencies
+
+| Package | Version in `ts-client/package.json` |
+| --- | --- |
+| `@coral-xyz/anchor` | `0.29.0` |
+| `@coral-xyz/borsh` | `^0.30.1` |
+| `@solana/spl-token` | `^0.4.8` |
+| `@solana/web3.js` | `^1.98.0` |
+| `bn.js` | `^5.2.1` |
+| `decimal.js` | `^10.4.3` |
+
+## Program IDs
+
+| Constant | Value |
+| --- | --- |
+| `STAKE_FOR_FEE_PROGRAM_ID` | `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP` |
+| `DYNAMIC_AMM_PROGRAM_ID` | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` |
+| `DYNAMIC_VAULT_PROGRAM_ID` | `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` |
+
+## Constants
+
+| Constant | Value or type | Use |
+| --- | --- | --- |
+| `MAX_COMPUTE_UNITS` | `1_400_000` | Default compute unit limit helper value. |
+| `FULL_BALANCE_LIST_HARD_LIMIT` | `BN(10000)` | Public full-balance list hard limit. |
+| `U64_MAX` | `BN("18446744073709551615")` | Common max quote-claim cap for `claimFee`. |
+| `VAULT_WITH_NON_PDA_BASED_LP_MINTS` | `Map<string, PublicKey>` | Overrides for legacy Dynamic Vault LP mints that are not PDA-derived. |
+| `MIN_LOCK_ESCROW_CLAIM_FEE_DURATION` | `BN(300)` | Minimum lock escrow claim interval in seconds. |
+
+## Core Client
+
+| Method | Returns | Use |
+| --- | --- | --- |
+| `StakeForFee.create(connection, pool, opt?)` | `Promise<StakeForFee>` | Preferred client factory. Derives the vault/list/lock escrow keys and fetches all account state. |
+| `new StakeForFee(...)` | `StakeForFee` | Internal constructor used after account state has been fetched. |
+| `StakeForFee.fetchAccountStates(connection, feeVaultKey, topStakerListKey, fullBalanceListKey, pool, opt?)` | `Promise<AccountStates>` | Fetch and decode `FeeVault`, list states, DAMM v1 pool, Dynamic Vault accounts, token accounts, mints, lock escrow, and clock. |
+| `refreshStates()` | `Promise<AccountStates>` | Re-fetch current account state and return the previous cached state. |
+
+The `opt` object supports `stakeForFeeProgramId`, `dynamicAmmProgramId`, and `dynamicVaultProgramId`.
+
+## Transaction Builders
+
+| Method | Returns | Use |
+| --- | --- | --- |
+| `StakeForFee.createFeeVault(connection, pool, stakeMint, payer, param?, opt?)` | `Promise<Transaction>` | Create a vault, deriving quote mint from the DAMM v1 pool. Creates the DAMM v1 lock escrow if missing. |
+| `StakeForFee.createFeeVaultWithParams(connection, pool, payer, stakeMint, quoteMint, param?, opt?)` | `Promise<Transaction>` | Create a vault with explicit stake and quote mints. |
+| `StakeForFee.createFeeVaultInstructions(connection, pool, payer, stakeMint, quoteMint, param?, opt?)` | `Promise<TransactionInstruction[]>` | Return raw vault-creation instructions for composition. |
+| `initializeStakeEscrow(owner)` | `Promise<Transaction>` | Create the owner's stake escrow for this vault. |
+| `stake(maxAmount, owner, replaceableTopStakerCount = 2)` | `Promise<Transaction>` | Build a stake transaction, adding stake escrow initialization and top-list replacement accounts when needed. |
+| `claimFee(owner, maxFee)` | `Promise<Transaction>` | Build a fee claim transaction. Only quote token is transferred to the user; base/stake token is restaked. |
+| `unstake(amount, unstakeKeypair, owner)` | `Promise<Transaction>` | Build a `request_unstake` transaction. `unstakeKeypair` is a public key for a new signer account. |
+| `cancelUnstake(unstakeKey, owner)` | `Promise<Transaction>` | Cancel a pending unstake and return the amount to active stake. |
+| `withdraw(unstakeKey, owner)` | `Promise<Transaction>` | Withdraw released stake after the cooldown. |
+
+## Account Scanners
+
+| Method | Returns | Use |
+| --- | --- | --- |
+| `StakeForFee.getAllStakedVaultByUser(connection, owner, opt?)` | User stake entries with vault, unstake list, unclaimed fees, and pool info | Find all stake escrows owned by a wallet. |
+| `StakeForFee.getUnstakeByUser(connection, owner, feeVault)` | Program account list | Find open unstake records for a user and vault. |
+| `StakeForFee.getAllFeeVault(connection, programId?)` | Program account list | Fetch all `FeeVault` accounts for the program. |
+
+## Balance And Fee Helpers
+
+| Method or helper | Returns | Use |
+| --- | --- | --- |
+| `getUserStakeAndClaimBalance(user)` | Stake escrow plus `unclaimFee` | Read a user's active stake and claimable fees using current cached vault state. |
+| `getStakeEscrowPendingFees(stakeEscrow)` | `[BN, BN]` | Calculate pending token A and token B fees for a stake escrow. |
+| `StakeForFee.getFarmPendingClaimFees(args)` | `[BN, BN]` | Calculate pending lock escrow fees available to claim from DAMM v1. |
+| `StakeForFee.getFarmReleasedFees(args)` | `[BN, BN]` | Calculate currently released fees after applying the vault's drip duration. |
+| `getTopStakerListEntryStakeAmount()` | `BN` | Minimum stake amount needed to enter the current top list. |
+| `findLargestStakerNotInTopListFromFullBalanceList(lookupNumber)` | `PublicKey[]` | Find candidate stake escrows outside the top list. |
+| `findReplaceableTopStaker(lookupNumber)` | `PublicKey[]` | Find current top stakers that can be replaced. |
+| `findSmallestStakeEscrowInFullBalanceList(skipOwner)` | `PublicKey | null` | Find the smallest tracked full-balance entry for reclaim handling. |
+
+## Exported Helpers
+
+### PDA Helpers
+
+| Helper | Seeds |
+| --- | --- |
+| `deriveFeeVault(pool, programId)` | `["vault", pool]` |
+| `deriveTopStakerList(vault, programId)` | `["list", vault]` |
+| `deriveFullBalanceList(vault, programId)` | `["balance", vault]` |
+| `deriveStakeEscrow(vault, owner, programId)` | `["escrow", vault, owner]` |
+| `deriveLockEscrowPda(pool, owner, ammProgram)` | DAMM v1 `["lock_escrow", pool, owner]` |
+| `deriveLpMint(poolAddress, programId)` | DAMM v1 `["lp_mint", poolAddress]` |
+
+### Program And Account Helpers
+
+| Helper | Use |
+| --- | --- |
+| `createStakeFeeProgram(connection, programId)` | Create an Anchor program for `stake_for_fee`. |
+| `createDynamicAmmProgram(connection, programId)` | Create an Anchor program for DAMM v1. |
+| `createDynamicVaultProgram(connection, programId)` | Create an Anchor program for Dynamic Vault. |
+| `getOrCreateStakeEscrowInstruction(connection, feeVaultKey, ownerKey, programId)` | Return the stake escrow PDA and an initialize instruction when absent. |
+| `getOrCreateATAInstruction(connection, tokenMint, owner, payer?, allowOwnerOffCurve?)` | Return an ATA and optional create instruction. |
+| `decodeFullBalanceState(program, account)` | Decode full balance list metadata and appended `StakerBalance` entries. |
+| `decodeTopStakerListState(program, feeVault, account)` | Decode top list metadata and appended `StakerMetadata` entries. |
+
+### Calculation Helpers
+
+| Helper | Use |
+| --- | --- |
+| `findLargestStakerNotInTopListFromFullBalanceList` | Sort and return largest non-top-list stakers from a decoded full balance list. |
+| `findReplaceableTopStaker` | Sort and return smallest replaceable top stakers. |
+| `getTopStakerListStateEntryStakeAmount` | Compute minimum top-list entry amount. |
+| `calculateFeeFarmPerformance` | Estimate performance between two account-state snapshots. |
+| `parseFeeVaultInfo` | Build display context from two snapshots and USD rates. |
+| `parseTopStakerListState` | Build ordered top staker display rows. |
+| `getStakeEscrowEarningPerDay` | Estimate current daily earning for a stake escrow. |
+| `getStakeEscrowEarningPerDayAfterUnstake` | Estimate daily earning after a proposed unstake. |
+| `getLockedEscrowPendingFee` | Calculate pending DAMM v1 lock escrow fees. |
+| `getVirtualPrice` | Calculate constant-product LP virtual price. |
+| `getTokenBalances` | Calculate Dynamic Vault token balances from LP shares. |
+
+### Transaction Helpers
+
+| Helper | Use |
+| --- | --- |
+| `computeUnitIx(units?)` | Build a compute budget limit instruction. |
+| `getSimulationComputeUnits` | Simulate a transaction to estimate compute units. |
+| `getEstimatedComputeUnitUsageWithBuffer` | Estimate compute with a buffer. |
+| `getEstimatedComputeUnitIxWithBuffer` | Build a compute unit instruction from the buffered estimate. |
+| `unwrapSOLInstruction(owner)` | Build an instruction to close the owner's wrapped SOL ATA. |
+
+## Exported Types
+
+| Type | Use |
+| --- | --- |
+| `AccountStates` | Combined decoded state fetched by the SDK. |
+| `StakeForFeeProgram` | Anchor program type for `stake_for_fee`. |
+| `FeeVault`, `StakeEscrow`, `Unstake` | IDL account types. |
+| `TopListMetadata`, `FullBalanceListMetadata` | List account metadata types. |
+| `StakerMetadata`, `StakerBalance` | Appended list entry types. |
+| `Metrics`, `TopStakerInfo` | Nested vault state types. |
+| `InitializeVaultParams` | IDL parameter type for vault creation. |
+| `FullBalanceListState`, `TopStakerListState` | Decoded list states with metadata and entries. |
+| `TopStakerListStateContext`, `FeeVaultContext` | Display/helper output types. |
+
+## Integration Notes
+
+| Topic | Note |
+| --- | --- |
+| Cached state | Methods use `accountStates` cached on the instance. Call `refreshStates()` after transactions or external state changes. |
+| Claim behavior | `claimFee` transfers quote token only; base/stake token fees are restaked. |
+| Unstake key | `unstake` expects a new account public key and the keypair must sign the transaction. |
+| Admin methods | The TypeScript wrapper does not expose high-level builders for `claim_fee_crank` or admin update instructions. Use the bundled IDL/program helpers for those flows. |
+| Package name | The published package is `@meteora-ag/m3m3`; some source changelog entries use the older `stake-for-fee` naming. |

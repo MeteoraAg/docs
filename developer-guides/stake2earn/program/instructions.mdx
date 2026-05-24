@@ -1,0 +1,182 @@
+---
+title: "Stake2Earn Program Instructions"
+sidebarTitle: "Instructions"
+description: "Explore Stake2Earn stake_for_fee instructions for vault creation, stake escrow creation, staking, fee claiming, unstaking, withdrawal, cranking, and admin updates."
+llmsDescription: "Explains the Stake2Earn program instruction surface from the stake_for_fee source. Covers initialize_vault, initialize_stake_escrow, stake, claim_fee, request_unstake, cancel_unstake, withdraw, claim_fee_crank, update_unstake_lock_duration, update_seconds_to_full_unlock, required accounts, arguments, emitted events, Event CPI requirements, dynamic AMM and Dynamic Vault account bundles, and common integration gotchas."
+---
+
+<Note>
+  Stake2Earn transactions that touch fees must pass fresh DAMM v1 pool, lock escrow, Dynamic Vault, LP mint, and token vault accounts. The TypeScript SDK builds these account bundles automatically.
+</Note>
+
+## Instruction Index
+
+| Instruction | Access | Arguments | Use |
+| --- | --- | --- | --- |
+| `initialize_vault` | Permissionless public build | `InitializeVaultParams` | Create a vault for a DAMM v1 constant-product pool and initialize list accounts. |
+| `initialize_stake_escrow` | Permissionless | None | Create a user's stake escrow and grow the list accounts when needed. |
+| `stake` | Stake escrow owner | `amount: u64` | Claim and distribute lock escrow fees, transfer stake tokens, and sync top/full lists. |
+| `claim_fee` | Stake escrow owner | `max_fee: u64` | Claim quote token fees to the user and automatically restake base/stake token fees. |
+| `request_unstake` | Stake escrow owner | `unstake_amount: u64` | Reserve stake for withdrawal and create an `Unstake` account with a release time. |
+| `cancel_unstake` | Stake escrow owner | None | Close an `Unstake` account and return the amount to active stake. |
+| `withdraw` | Stake escrow owner | None | Transfer released unstaked tokens back to the user and close the `Unstake` account. |
+| `claim_fee_crank` | Permissionless | None | Claim fees from the DAMM v1 lock escrow and update fee drip state without a user claim. |
+| `update_unstake_lock_duration` | Admin signer | `unstake_lock_duration: u64` | Update the cooldown for future unstake requests. |
+| `update_seconds_to_full_unlock` | Admin signer | `seconds_to_full_unlock: u64` | Update fee drip duration after a preceding `claim_fee_crank` instruction. |
+| `_dummy` | Internal | None | IDL-generation helper only. Do not call in integrations. |
+
+All public user/admin instructions in the source use Anchor Event CPI, so generated clients include `event_authority` and `program` accounts.
+
+## `initialize_vault`
+
+Creates the root vault and list accounts for a DAMM v1 pool.
+
+| Requirement | Details |
+| --- | --- |
+| Vault PDA | `["vault", pool]`. There can be one Stake2Earn vault per DAMM v1 pool. |
+| Pool type | DAMM v1 constant product only. |
+| Mints | `stake_mint` and `quote_mint` must both belong to the pool. `quote_mint` must be SOL or USDC; `stake_mint` must not be SOL or USDC. |
+| Lock escrow | DAMM v1 lock escrow must have `owner == vault` and `pool == pool`. |
+| List length | Public builds allow `top_list_length` from `5` to `1000`. |
+| Drip duration | Public builds allow `seconds_to_full_unlock` from `6 hours` to `31 days`. |
+| Unstake lock | Public builds allow `unstake_lock_duration` from `6 hours` to `31 days`. |
+| Start timestamp | Optional. If supplied, it must be no more than `31 days` after the current on-chain timestamp. |
+
+| Account | Role |
+| --- | --- |
+| `vault` | Initialized `FeeVault` PDA. |
+| `stake_token_vault` | ATA for `stake_mint`, owned by the vault PDA. |
+| `quote_token_vault` | ATA for `quote_mint`, owned by the vault PDA. |
+| `top_staker_list` | Initialized `TopListMetadata` PDA. |
+| `full_balance_list` | Initialized `FullBalanceListMetadata` PDA. |
+| `pool` | DAMM v1 pool account. |
+| `stake_mint`, `quote_mint` | Pool mints. |
+| `lock_escrow` | DAMM v1 lock escrow owned by the vault PDA. |
+| `payer` | Signer paying account rent. |
+| `system_program`, `token_program`, `associated_token_program` | Required Solana programs. |
+
+Emits `VaultCreated`.
+
+## `initialize_stake_escrow`
+
+Creates a user stake escrow for one vault.
+
+| Account | Role |
+| --- | --- |
+| `vault` | Parent `FeeVault`. |
+| `escrow` | Initialized PDA `["escrow", vault, owner]`. |
+| `full_balance_list` | Reallocated to append the user if under the hard limit. |
+| `top_staker_list` | Reallocated while `current_length < top_list_length`. |
+| `owner` | Wallet that owns the stake escrow. |
+| `payer` | Signer paying rent and realloc costs. |
+| `system_program` | Required for account creation and realloc. |
+
+The handler increments `total_stake_escrow_count`, initializes an empty stake escrow, and appends a full-balance entry when capacity remains. Emits `StakeEscrowCreated`.
+
+## Fee Claim Account Bundle
+
+These accounts are required by `stake`, `claim_fee`, `request_unstake`, `cancel_unstake`, and `claim_fee_crank` because each flow first claims and distributes fees from the DAMM v1 lock escrow.
+
+| Account | Requirement |
+| --- | --- |
+| `pool` | DAMM v1 pool; must reference the supplied vaults, LP accounts, and LP mint. |
+| `lp_mint` | DAMM v1 LP mint. |
+| `lock_escrow` | Lock escrow stored on the `FeeVault`. |
+| `escrow_vault` | Token account for locked LP; validated by the DAMM v1 program. |
+| `a_token_vault`, `b_token_vault` | Token vault accounts for Dynamic Vault reserves. |
+| `a_vault`, `b_vault` | Dynamic Vault accounts from the DAMM v1 pool. |
+| `a_vault_lp`, `b_vault_lp` | DAMM v1 pool LP token accounts for each Dynamic Vault. |
+| `a_vault_lp_mint`, `b_vault_lp_mint` | LP mints for the Dynamic Vault accounts. |
+| `amm_program` | DAMM v1 program. |
+| `vault_program` | Dynamic Vault program. |
+| `token_program` | SPL Token program. |
+
+## `stake`
+
+Transfers stake tokens from the user into the vault and syncs list state.
+
+| Behavior | Details |
+| --- | --- |
+| Amount | The handler stakes `min(amount, user_stake_token.amount)`. |
+| Auto-create helper | The TypeScript SDK includes `initialize_stake_escrow` as a pre-instruction when the stake escrow does not exist. |
+| Top list sync | Provide replaceable top staker accounts in `remaining_accounts` when the new stake can affect rankings. |
+| Full list reclaim | Provide `smallest_stake_escrow` when reclaiming a full-balance index from the smallest tracked staker. |
+| Events | Emits `FeeEmission`, optional list movement events, and `UserStake`. |
+
+## `claim_fee`
+
+Claims fees from a stake escrow.
+
+| Behavior | Details |
+| --- | --- |
+| Fee update | Claims from the DAMM v1 lock escrow, releases dripped fees, updates the caller's stake escrow, then claims user fees. |
+| Quote transfer | Only quote token fees are transferred to `user_quote_token`. |
+| Base restake | Base/stake token fees are kept in the vault and added to the user's active `stake_amount`. |
+| `max_fee` | Caps the quote token amount the user receives. The stake/base side is fully restaked. |
+| SOL handling | The TypeScript SDK adds a post-instruction to close the user's wrapped SOL ATA after claiming. |
+| Events | Emits `FeeEmission`, `ClaimFeeSucceed`, optional list movement events, and `UserStake`. |
+
+## `request_unstake`
+
+Creates a pending unstake request.
+
+| Account or argument | Details |
+| --- | --- |
+| `unstake` | New arbitrary account keypair initialized by the instruction. |
+| `unstake_amount` | Must be less than or equal to the active `stake_amount`. |
+| Release time | `Clock::unix_timestamp + vault.configuration.unstake_lock_duration`. |
+| List sync | Removes stake from active balances and updates top/full lists. |
+| Events | Emits `FeeEmission`, optional top list movement events, and `UnstakeCreated`. |
+
+## `cancel_unstake`
+
+Closes an open `Unstake` account and returns the amount to active stake.
+
+| Behavior | Details |
+| --- | --- |
+| Fee update | Claims and distributes pending lock escrow fees before mutating stake. |
+| Stake update | Increases `stake_amount` and decreases ongoing unstake counters. |
+| List sync | Re-ranks the user and replacement candidates. |
+| Events | Emits `FeeEmission`, optional list movement events, and `CancelUnstakeSucceed`. |
+
+## `withdraw`
+
+Transfers stake tokens from the vault back to the owner after the release time.
+
+| Requirement | Details |
+| --- | --- |
+| Release check | Fails until `Clock::unix_timestamp >= unstake.release_at`. |
+| Transfer authority | The vault PDA signs for `stake_token_vault` with `["vault", pool, bump]`. |
+| Close behavior | Closes the `Unstake` account to the owner. |
+| Events | Emits `WithdrawSucceed`. |
+
+## `claim_fee_crank`
+
+Permissionlessly claims fees from the DAMM v1 lock escrow and updates drip accounting without a user claim.
+
+| Behavior | Details |
+| --- | --- |
+| Minimum interval | Public builds require at least `5 minutes` between lock escrow fee claims. |
+| User account | No stake escrow is required. |
+| Events | Emits `FeeEmission` when fees are claimed/released. |
+| Admin dependency | `update_seconds_to_full_unlock` requires the immediately preceding instruction to be `claim_fee_crank` for the same vault. |
+
+## Admin Updates
+
+| Instruction | Constraints | Event |
+| --- | --- | --- |
+| `update_unstake_lock_duration` | Admin signer; value from `6 hours` to `31 days`; must differ from current value. | `UpdateUnstakeLockDuration` |
+| `update_seconds_to_full_unlock` | Admin signer; value from `6 hours` to `31 days`; immediately preceding instruction must be `claim_fee_crank` for the same vault. | `UpdateSecondsToFullUnlock` |
+
+Admin public keys are hardcoded in the program source for public builds.
+
+## Gotchas
+
+| Gotcha | Integration impact |
+| --- | --- |
+| Event CPI accounts | Include `event_authority` and `program` when using low-level clients. |
+| DAMM v1 only | DAMM v2 and DLMM pools are not accepted by `initialize_vault`. |
+| Quote mint restriction | Only SOL and USDC quote mints pass validation on public builds. |
+| Remaining accounts | Top list replacements require candidate stake escrow accounts in `remaining_accounts`. |
+| Open unstake keypair | `request_unstake` initializes a caller-provided account; it must sign the transaction. |
+| Fee crank ordering | Admin `update_seconds_to_full_unlock` must be placed immediately after `claim_fee_crank` in the same transaction. |

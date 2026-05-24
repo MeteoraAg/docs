@@ -1,0 +1,74 @@
+---
+title: "Stake2Earn Program Events"
+sidebarTitle: "Events"
+description: "Track Stake2Earn stake_for_fee events for vault creation, stake escrow creation, staking, fee emission, user claims, unstake flows, list movement, and admin updates."
+llmsDescription: "Explains the Stake2Earn event surface from the stake_for_fee source. Covers VaultCreated, StakeEscrowCreated, FeeEmission, UserStake, ClaimFeeSucceed, UnstakeCreated, CancelUnstakeSucceed, WithdrawSucceed, AddNewUserToTopHolder, RemoveUserFromTopHolder, ReclaimIndex, UpdateUnstakeLockDuration, UpdateSecondsToFullUnlock, ConfigCreated, ConfigClosed, Event CPI delivery, fields, and indexing guidance."
+---
+
+Stake2Earn emits Anchor events with Event CPI (`emit_cpi!`) in the inspected user and admin flows. Indexers should parse inner instructions from the `stake_for_fee` program, not only log strings.
+
+## Event Delivery
+
+| Detail | Value |
+| --- | --- |
+| Program | `stake_for_fee` |
+| Public program ID | `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP` |
+| Delivery path | Anchor Event CPI |
+| Event authority PDA | `["__event_authority"]` |
+| Client requirement | Low-level transactions must include Anchor Event CPI accounts when an instruction struct uses `#[event_cpi]`. |
+
+## Vault Lifecycle
+
+| Event | Emitted by | Fields | Use |
+| --- | --- | --- | --- |
+| `VaultCreated` | `initialize_vault` | `pool`, `token_a_mint`, `token_b_mint`, `vault`, `stake_mint`, `quote_mint`, `creator`, `top_list_length`, `seconds_to_full_unlock`, `unstake_lock_duration`, `start_fee_distribute_timestamp` | Discover a new Stake2Earn vault and its launch configuration. |
+| `StakeEscrowCreated` | `initialize_stake_escrow` | `pool`, `vault`, `escrow`, `owner`, `full_balance_index` | Index a user's stake escrow for one vault. |
+
+## Fee And Stake Events
+
+| Event | Emitted by | Fields | Use |
+| --- | --- | --- | --- |
+| `FeeEmission` | `stake`, `claim_fee`, `request_unstake`, `cancel_unstake`, `claim_fee_crank` | `pool`, `vault`, `token_a_claimed`, `token_b_claimed`, `token_a_released`, `token_b_released`, `cumulative_fee_a_per_liquidity`, `cumulative_fee_b_per_liquidity`, `effective_stake_amount` | Track lock escrow fee claims and drip release into top staker accounting. |
+| `UserStake` | `stake`, `claim_fee` | `pool`, `vault`, `owner`, `stake_amount`, `total_stake_amount`, `fee_a_pending`, `fee_b_pending`, fee checkpoints | Track direct stakes and automatic restake of base/stake-token fee claims. |
+| `ClaimFeeSucceed` | `claim_fee` | `stake_escrow`, `pool`, `vault`, `owner`, `fee_a_amount`, `fee_b_amount`, `total_fee_a_amount`, `total_fee_b_amount` | Track user fee claims. The quote side is transferred; the stake/base side is restaked. |
+
+## Unstake Events
+
+| Event | Emitted by | Fields | Use |
+| --- | --- | --- | --- |
+| `UnstakeCreated` | `request_unstake` | `unstake`, `pool`, `vault`, `owner`, `amount`, `new_stake_escrow_amount`, `new_stake_escrow_ongoing_total_unstake_amount`, pending fees, fee checkpoints, `start_at`, `end_at` | Track a new pending unstake and its release timestamp. |
+| `CancelUnstakeSucceed` | `cancel_unstake` | `unstake`, `pool`, `vault`, `owner`, `amount`, `new_stake_escrow_amount`, `new_stake_escrow_ongoing_total_unstake_amount`, pending fees, fee checkpoints | Track cancellation of a pending unstake. |
+| `WithdrawSucceed` | `withdraw` | `unstake`, `pool`, `vault`, `owner`, `amount`, `new_stake_escrow_ongoing_total_unstake_amount` | Track final withdrawal of released stake tokens. |
+
+## Top List Events
+
+| Event | Emitted by | Fields | Use |
+| --- | --- | --- | --- |
+| `AddNewUserToTopHolder` | `stake`, `claim_fee`, `request_unstake`, `cancel_unstake` when list sync promotes a staker | `pool`, `vault`, `owner`, `stake_amount`, pending fees, fee checkpoints | Track a staker entering the top list. |
+| `RemoveUserFromTopHolder` | `stake`, `claim_fee`, `request_unstake`, `cancel_unstake` when list sync removes a staker | `pool`, `vault`, `owner`, `stake_amount`, pending fees, fee checkpoints | Track a staker leaving the top list. |
+| `ReclaimIndex` | `stake`, `claim_fee`, `cancel_unstake` when the full balance list index is reclaimed | `vault`, `in_owner`, `in_owner_balance`, `out_owner`, `out_owner_balance`, `reclaim_index` | Track replacement of the smallest tracked full-balance entry. |
+
+## Admin Events
+
+| Event | Emitted by | Fields | Use |
+| --- | --- | --- | --- |
+| `UpdateUnstakeLockDuration` | `update_unstake_lock_duration` | `vault`, `old_value`, `new_value` | Track changes to the cooldown used by future unstake requests. |
+| `UpdateSecondsToFullUnlock` | `update_seconds_to_full_unlock` | `vault`, `old_value`, `new_value` | Track changes to the fee drip duration. |
+
+## Defined But Not Emitted By Current Handlers
+
+| Event | Fields | Source note |
+| --- | --- | --- |
+| `ConfigCreated` | `config`, `index`, `seconds_to_full_unlock`, `unstake_lock_duration`, `join_window_duration`, `top_list_length` | Defined in `events.rs`, but no matching active handler is exposed by the inspected `lib.rs`. |
+| `ConfigClosed` | `config`, `index` | Defined in `events.rs`, but no matching active handler is exposed by the inspected `lib.rs`. |
+
+## Indexing Notes
+
+| Need | Recommended event |
+| --- | --- |
+| New vault discovery | `VaultCreated` |
+| User stake escrow discovery | `StakeEscrowCreated` |
+| Current user active stake changes | `UserStake`, `UnstakeCreated`, `CancelUnstakeSucceed`, `WithdrawSucceed` |
+| Fee drip accounting | `FeeEmission` |
+| User quote-claim accounting | `ClaimFeeSucceed` |
+| Leaderboard movements | `AddNewUserToTopHolder`, `RemoveUserFromTopHolder`, `ReclaimIndex` |
