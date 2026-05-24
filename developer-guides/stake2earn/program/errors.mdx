@@ -1,0 +1,44 @@
+---
+title: "Stake2Earn Program Errors"
+sidebarTitle: "Errors"
+description: "Understand Stake2Earn stake_for_fee Anchor custom errors, numeric codes, messages, and common integration causes."
+llmsDescription: "Explains the Stake2Earn custom error surface from the stake_for_fee source. Covers Anchor error codes 6000 through 6022, enum names, messages, validation causes, account mismatch causes, admin update causes, fee crank ordering, top list synchronization errors, and transaction debugging guidance."
+---
+
+Stake2Earn uses Anchor custom errors. Numeric codes start at `6000`.
+
+| Code | Enum | Message | Common cause |
+| --- | --- | --- | --- |
+| `6000` | `InvalidEscrowOwner` | Escrow owner is not vault | DAMM v1 lock escrow owner does not equal the Stake2Earn vault PDA. |
+| `6001` | `InvalidTopListLength` | Invalid top list length | `top_list_length` is outside the public `5` to `1000` range. |
+| `6002` | `InvalidSecondsToFullUnlock` | Invalid seconds to full unlock | Fee drip duration is outside the public `6 hours` to `31 days` range. |
+| `6003` | `MustHaveQuoteTokenOrInvalidStakeMint` | Pool missing SOL/USDC token or invalid stake mint | Quote mint is not SOL/USDC or the stake mint is a quote mint. |
+| `6004` | `MissingDroppedStakeEscrow` | Missing dropped stake escrow | A top-list replacement needs the dropped stake escrow account but it was not supplied. |
+| `6005` | `InvalidStakeEscrow` | Invalid stake escrow | A supplied stake escrow does not match the expected vault, owner, or list index. |
+| `6006` | `FullBalanceListFull` | Full balance list is full | The full balance list reached its hard limit and no valid reclaim path was supplied. |
+| `6007` | `MintDoesNotBelongToPool` | Mint does not belong to the pool | `stake_mint` or `quote_mint` is not one of the DAMM v1 pool mints. |
+| `6008` | `InsufficientStakeAmount` | Insufficient stake amount | `request_unstake` amount exceeds active stake amount. |
+| `6009` | `CannotWithdrawUnstakeAmount` | Unstake amount release date not reached | `withdraw` was called before `unstake.release_at`. |
+| `6010` | `InvalidAdmin` | Invalid admin | Admin instruction signer is not one of the hardcoded program admins. |
+| `6011` | `InvalidUnstakeLockDuration` | Invalid unstake lock duration | Unstake cooldown is outside the public `6 hours` to `31 days` range. |
+| `6012` | `InvalidJoinWindowDuration` | Invalid join window duration | Custom fee distribution start time is more than `31 days` after the current timestamp. |
+| `6013` | `InvalidCustomStartFeeDistributeTimestamp` | Invalid custom start fee distribute timestamp | Defined in the error enum; use source/IDL to confirm when handling legacy flows. |
+| `6014` | `InvalidSmallestStakeEscrow` | Invalid smallest stake escrow | The supplied `smallest_stake_escrow` does not match the expected reclaim index or vault. |
+| `6015` | `MathOverflow` | MathOverflow | Checked arithmetic overflow or division failure. |
+| `6016` | `TypeCastFailed` | Type casting failed | Checked numeric conversion failed. |
+| `6017` | `InvalidLockEscrowRelatedAccounts` | Invalid lock escrow related accounts | DAMM v1 pool, Dynamic Vault, LP mint, LP account, or token vault accounts do not match each other. |
+| `6018` | `OnlyConstantProductPool` | Only constant product pool is supported | `initialize_vault` was called for a non-constant-product DAMM v1 pool. |
+| `6019` | `UndeterminedError` | Undetermined error | Internal invariant failure in list synchronization. |
+| `6020` | `MissingSmallestStakeEscrow` | Missing smallest stake escrow | Reclaiming a full-balance-list index requires the smallest tracked stake escrow account. |
+| `6021` | `UpdatedValueIsTheSame` | Updated value is the same as old value | Admin update supplied the current value. |
+| `6022` | `InvalidFeeCrankIx` | Invalid fee crank instruction | `update_seconds_to_full_unlock` was not immediately preceded by `claim_fee_crank` for the same vault/program. |
+
+## Debugging Checklist
+
+| Symptom | Check |
+| --- | --- |
+| Vault initialization fails | Confirm the pool is DAMM v1 constant product, mints belong to the pool, quote mint is SOL/USDC, and the lock escrow owner is the vault PDA. |
+| Stake or claim fails with account mismatch | Re-fetch the DAMM v1 pool, Dynamic Vault accounts, LP mints, token vaults, and lock escrow before building the transaction. |
+| Top list sync fails | Include the SDK-provided replacement stake escrows in `remaining_accounts`; do not omit `smallest_stake_escrow` when reclaiming a full-balance entry. |
+| Withdraw fails | Compare the current on-chain timestamp with `unstake.release_at`. |
+| Admin drip update fails | Put `claim_fee_crank` immediately before `update_seconds_to_full_unlock` in the same transaction. |

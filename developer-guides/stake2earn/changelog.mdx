@@ -1,0 +1,54 @@
+---
+title: "Stake2Earn Changelog"
+sidebarTitle: "Changelog"
+description: "Track Stake2Earn program, SDK, Rust interface, API, and documentation changes that affect integrations."
+llmsDescription: "Explains the Stake2Earn developer changelog. Covers source-noted stake_for_fee program changes, @meteora-ag/m3m3 TypeScript SDK package changes, Rust interface and common PDA helper changes, claim fee behavior changes, dependency updates, API documentation notes, and current source gaps for release tracking."
+---
+
+This changelog summarizes integration-relevant changes from the inspected local `stake-for-fee` and `stake-for-fee-sdk` source repos.
+
+<Note>
+  The checked-in SDK changelog uses both `@meteora-ag/stake-for-fee` and `@meteora-ag/m3m3` naming. The published TypeScript package inspected in `ts-client/package.json` is `@meteora-ag/m3m3` version `1.0.10`.
+</Note>
+
+## Current Snapshot
+
+| Area | Version or source |
+| --- | --- |
+| Program crate | `stake-for-fee` `0.1.1` |
+| Public program ID | `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP` |
+| TypeScript package | `@meteora-ag/m3m3` `1.0.10` |
+| Rust interface crate | `stake_for_fee_interface` `0.1.0` |
+| Common Rust helper crate | `common` `0.0.1` |
+| Anchor version in program source | `0.28.0` |
+| Solana version in program source | `1.16.12` |
+
+## Integration-Relevant Changes
+
+| Version or source note | Area | Change |
+| --- | --- | --- |
+| `stake-for-fee` `0.1.1` | Program | `claim_fee` behavior changed so users can partially claim only the quote token side; the base/stake token side is automatically restaked. |
+| SDK changelog `1.0.10` | TypeScript SDK | Removed `@solana-developers/helpers` dependency and replaced `@mercurial-finance/dynamic-amm-sdk` with `@meteora-ag/dynamic-amm-sdk`. |
+| SDK changelog `1.0.9` | TypeScript SDK | Moved `@mercurial-finance/dynamic-amm-sdk` from dev dependency to dependency in the historical package lineage. |
+| SDK changelog `common` `0.0.1` | Rust helpers | Added PDA helper functions to derive Stake2Earn vault, top staker list, full balance list, and event authority keys. |
+| SDK changelog `1.0.1` | TypeScript SDK | Refactored `findLargestStakerNotInTopListFromFullBalanceList` and `findReplaceableTopStaker`. |
+| Program source | Admin flows | `update_seconds_to_full_unlock` requires the immediately preceding instruction to be `claim_fee_crank` for the same vault and program. |
+| Program source | Events | User and admin flows emit Anchor events through Event CPI. |
+| Live production API | API | Production exposes `/analytics/all`, `/vault/all`, `/vault/filter`, and `/vault/{vault_address}`. |
+
+## Documentation Notes
+
+| Date | Change |
+| --- | --- |
+| 2026-05-22 | Rebuilt the Stake2Earn developer guide around program accounts, instructions, events, errors, TypeScript SDK, Rust integration, API overview, and changelog pages. |
+| 2026-05-22 | Replaced legacy long-form TypeScript script page with focused SDK getting-started, examples, and reference pages. |
+| 2026-05-22 | Replaced legacy CPI examples page with Rust library and CPI integration pages based on the local Rust interface source. |
+| 2026-05-22 | Updated the checked-in API spec to resolve the production vault-detail schema reference with observed production response fields. |
+
+## Gaps To Watch
+
+| Gap | Impact |
+| --- | --- |
+| No high-level Rust SDK in inspected source | Rust integrations should use `stake_for_fee_interface`, `common` PDA helpers, and custom account fetching/parsing. |
+| No TypeScript high-level admin builders | `claim_fee_crank` and admin update flows require low-level Anchor program usage or custom builders. |
+| Production OpenAPI omits `VaultDetailWithLeaderboard` from live components | The docs include a local resolved schema, but integrators should still test API responses against the live host. |

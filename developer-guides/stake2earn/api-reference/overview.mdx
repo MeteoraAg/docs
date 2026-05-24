@@ -1,20 +1,95 @@
 ---
-title: "Overview"
-description: <Tip>**Stake2earn APIs have no rate limit.**</Tip>
+title: "Stake2Earn Data API Overview"
+sidebarTitle: "Overview"
+description: "Learn how the Stake2Earn Data API exposes indexed vault analytics, vault discovery, vault filtering, vault details, and top-list leaderboard data."
+llmsDescription: "Explains the Stake2Earn Data API as the indexed read-only data layer for Meteora Stake2Earn integrations. Covers production and devnet hosts, Swagger and OpenAPI references, analytics, vault list, vault filter, vault detail, leaderboard fields, query parameters, generated endpoint routes, API and on-chain source-of-truth guidance, and current OpenAPI schema notes."
 ---
 
-<CardGroup>
-  <Card title="get_all_analytics"  icon="file-code" iconType="solid" href="/api-reference/analytics/get_all_analytics">
-    Request for Meteora's Stake2Earn Analytics using `GET` `/analytics/all`
-  </Card>
+The Stake2Earn Data API exposes read-only indexed data for Stake2Earn vault discovery, aggregate analytics, vault filters, and leaderboard views.
 
-  <Card title="get_all_vaults"  icon="file-code" iconType="solid" href="/api-reference/vaults/get_all_vaults">
-    Request for Meteora's Stake2Earn Vaults using `GET` `/vault/all`
-  </Card>
-  <Card title="filter_vaults"  icon="file-code" iconType="solid" href="/api-reference/vaults/filter_vaults">
-    Request for Meteora's Stake2Earn Vaults by filter using `GET` `/vault/filter`
-  </Card>
-  <Card title="get_one_vault"  icon="file-code" iconType="solid" href="/api-reference/vaults/get_one_vault">
-    Request for Meteora's Stake2Earn Vaults by vault address using `GET` `/vault/{vault_address}`
+<Tip>
+  The checked-in Stake2Earn OpenAPI file does not declare a rate limit. Treat the API as a read-only discovery and dashboard source, and use on-chain `stake_for_fee` accounts as the source of truth for transaction construction.
+</Tip>
+
+## Base URLs
+
+| Environment | Base URL | Swagger UI |
+| --- | --- | --- |
+| Production | `https://stake-for-fee-api.meteora.ag` | [Open](https://stake-for-fee-api.meteora.ag/swagger-ui/) |
+| Devnet | `https://devnet.stake-for-fee-api.meteora.ag` | [Open](https://devnet.stake-for-fee-api.meteora.ag/swagger-ui/) |
+
+The checked-in OpenAPI file is based on the production Swagger spec. The production spec references a vault-detail schema that is omitted from the live components; the local checked-in file includes the observed production vault-detail response fields so generated docs can resolve the endpoint.
+
+## Analytics
+
+<CardGroup>
+  <Card title="get_all_analytics" icon="file-code" iconType="solid" href="/api-reference/stake2earn/analytics/get_all_analytics">
+    Returns aggregate Stake2Earn counts and USD stake totals using `GET` `/analytics/all`
   </Card>
 </CardGroup>
+
+## Vaults
+
+<CardGroup>
+  <Card title="get_all_vaults" icon="file-code" iconType="solid" href="/api-reference/stake2earn/vault/get_all_vaults">
+    Returns all indexed Stake2Earn vaults using `GET` `/vault/all`
+  </Card>
+  <Card title="filter_vaults" icon="file-code" iconType="solid" href="/api-reference/stake2earn/vault/filter_vaults">
+    Returns vaults filtered by pool address using `GET` `/vault/filter`
+  </Card>
+  <Card title="get_one_vault" icon="file-code" iconType="solid" href="/api-reference/stake2earn/vault/get_one_vault">
+    Returns one vault and its top-list holders using `GET` `/vault/{vault_address}`
+  </Card>
+</CardGroup>
+
+## Query Parameters
+
+| Endpoint | Parameter | Meaning |
+| --- | --- | --- |
+| `/vault/filter` | `pool_address` | Optional array of pool addresses. Production spec documents a maximum of `100` pool addresses. |
+| `/vault/{vault_address}` | `vault_address` | Stake2Earn fee vault address. |
+
+## Common Vault Fields
+
+`Vault` list responses include:
+
+| Field | Meaning |
+| --- | --- |
+| `vault_address` | Stake2Earn `FeeVault` account address. |
+| `pool_address` | DAMM v1 pool linked to the vault. |
+| `token_a_mint`, `token_b_mint` | DAMM v1 pool token mints. |
+| `stake_mint` | Mint users stake in this vault. |
+| `token_a_symbol`, `token_b_symbol` | Indexed token display symbols when available. |
+| `total_staked_amount` | Indexed total stake amount in decimalized token units. |
+| `total_staked_amount_usd` | Indexed USD value of total stake. |
+| `current_reward_token_a_usd`, `current_reward_token_b_usd` | Indexed reward values by pool token. |
+| `current_reward_usd` | Combined indexed reward value. |
+| `daily_reward_usd` | Estimated daily reward based on indexed data. |
+| `created_at_slot`, `created_at_slot_timestamp`, `created_at_tx_sig` | Creation slot, timestamp, and transaction signature. |
+| `seconds_to_full_unlock` | Fee drip duration from vault configuration. |
+| `start_fee_distribute_timestamp` | Timestamp when fee distribution begins. |
+| `marketcap` | Indexed market cap value when available. |
+| `flags` | API flags such as TVL threshold status. |
+
+## Vault Detail Fields
+
+`GET /vault/{vault_address}` returns the common vault fields plus `top_lists`.
+
+| Field | Meaning |
+| --- | --- |
+| `top_lists` | Array of top-list holder entries for the vault. |
+| `owner` | Holder wallet address. |
+| `staked_amount` | Holder stake amount in decimalized token units. |
+| `token_a_accumulated_reward`, `token_b_accumulated_reward` | Indexed accumulated rewards by pool token. |
+| `token_a_accumulated_reward_usd`, `token_b_accumulated_reward_usd` | Indexed USD values for accumulated rewards. |
+| `daily_reward_usd` | Holder's estimated daily reward. |
+
+## API Or On-Chain Data
+
+| Need | Use |
+| --- | --- |
+| Vault discovery and dashboards | Data API `/vault/all`, `/vault/filter`, `/vault/{vault_address}`. |
+| Aggregate product metrics | Data API `/analytics/all`. |
+| Transaction construction | On-chain `FeeVault`, DAMM v1 pool, lock escrow, Dynamic Vault, token vault, and list accounts. |
+| Claimable fee execution | TypeScript SDK or CPI with fresh on-chain state and simulation. |
+| Leaderboard display | Data API for indexed display, on-chain top/full list accounts for execution-sensitive ranking. |

@@ -1,56 +1,150 @@
 ---
-title: Overview
+title: "Stake2Earn Developer Guide"
+sidebarTitle: "Overview"
+description: "Learn how to build Stake2Earn integrations with the stake_for_fee program, TypeScript SDK, Rust helpers, Data API, and release notes."
+llmsDescription: "Explains the Stake2Earn Developer Guide as the integration entry point for Meteora's stake_for_fee program. Covers program accounts, instructions, events, errors, @meteora-ag/m3m3, Rust interface and CPI guides, Data API reference, changelog, program IDs, command references, constants, and public source paths for Stake2Earn builders."
 ---
 
-Before getting started building on Stake2Earn, you should read the following resource to get a better understanding of how Meteora's Stake2Earn works:
+Stake2Earn is Meteora's stake-for-fee program for DAMM v1 constant-product pools. Pool creators lock DAMM v1 LP into a program-owned lock escrow, and token holders stake the pool's base token to compete for the top staker list that receives released LP fees.
 
-<CardGroup cols={1}>
-  <Card title="What's Stake2Earn?" icon="question" iconType="solid" href="/overview/other-products/stake2earn/what-is-stake2earn">
-    Stake2Earn is a helper program that allows token holders to stake their tokens and pool creators to delegate LP fees to the top token stakers.
-  </Card>
-</CardGroup>
-
-<Warning>Stake2Earn is currently only compatible with DAMM v1 Pools.</Warning>
-
----
-
-# Stake2Earn Program
-
-At Meteora, we’ve developed a `Node.js <> Typescript SDK` to make deploying and managing your Stake2Earn easier. The following sections includes information on installing and using the SDK. It also covers where to find the latest code, and how to contribute to these repositories.
-
-## Program Details
-
-<CardGroup cols={1}>
-  <Card title="Stake2Earn IDL" icon="code" iconType="solid" href="https://github.com/MeteoraAg/stake-for-fee-sdk/blob/main/ts-client/src/stake-for-fee/idls/stake_for_fee.ts">
-    Meteora Stake2Earn Program IDL
-  </Card>
-</CardGroup>
-
-<div className="overflow-x-auto">
-  <table className="w-full border-collapse">
-    <thead>
-      <tr className="border-b border-gray-300 dark:border-gray-600">
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Network</th>
-        <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Program ID</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Mainnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP</code></td>
-      </tr>
-      <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-        <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">Devnet</strong></td>
-        <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP</code></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-## Official SDKs
+To learn the product flow, configuration limits, and formulas before integrating, read the product documentation.
 
 <CardGroup cols={2}>
-  <Card title="Typescript SDK" icon="node-js" iconType="solid" href="/developer-guide/guides/stake2earn/typescript-sdk/getting-started">
-    Official Meteora Stake2Earn Typescript SDK
+  <Card title="What Is Stake2Earn" icon="book-open" iconType="solid" href="/legacy-products/stake2earn/what-is-stake2earn">
+    Product overview for Stake2Earn staking, LP fee delegation, and top staker rewards.
+  </Card>
+  <Card title="Configuration And Limits" icon="sliders" iconType="solid" href="/legacy-products/stake2earn/configuration-and-limits">
+    Product-level settings and launch constraints for Stake2Earn vaults.
+  </Card>
+  <Card title="Stake2Earn Formulas" icon="calculator" iconType="solid" href="/legacy-products/stake2earn/formulas">
+    Product formulas for staking, fees, and reward distribution.
   </Card>
 </CardGroup>
+
+<Warning>
+  Stake2Earn only supports DAMM v1 constant-product pools where the quote mint is SOL or USDC and the stake mint is the non-quote pool token.
+</Warning>
+
+## Integration
+
+<CardGroup cols={2}>
+  <Card
+    title="Program Accounts"
+    icon="table-cells"
+    iconType="solid"
+    href="/developer-guides/stake2earn/program/accounts"
+  >
+    PDA seeds, vault state, stake escrow state, unstake requests, and top/full balance list layouts.
+  </Card>
+  <Card
+    title="Program Instructions"
+    icon="list"
+    iconType="solid"
+    href="/developer-guides/stake2earn/program/instructions"
+  >
+    Vault creation, staking, claiming, unstaking, withdrawal, crank, and admin instruction details.
+  </Card>
+  <Card
+    title="Program Events"
+    icon="list"
+    iconType="solid"
+    href="/developer-guides/stake2earn/program/events"
+  >
+    Event CPI emissions for vault lifecycle, staking, fee release, top list movement, and admin updates.
+  </Card>
+  <Card
+    title="Program Errors"
+    icon="triangle-exclamation"
+    iconType="solid"
+    href="/developer-guides/stake2earn/program/errors"
+  >
+    Anchor custom error codes, enum names, messages, and common integration causes.
+  </Card>
+  <Card
+    title="TypeScript SDK"
+    icon="node-js"
+    iconType="solid"
+    href="/developer-guides/stake2earn/typescript-sdk/getting-started"
+  >
+    Transaction builders, state readers, PDA helpers, and examples from `@meteora-ag/m3m3`.
+  </Card>
+  <Card
+    title="Rust Integration"
+    icon="terminal"
+    iconType="solid"
+    href="/developer-guides/stake2earn/rust-integration/library"
+  >
+    Generated Rust instruction/account interface, PDA helpers, and CPI guidance.
+  </Card>
+  <Card
+    title="Stake2Earn API"
+    icon="database"
+    iconType="solid"
+    href="/developer-guides/stake2earn/api-reference/overview"
+  >
+    Indexed read-only vault discovery, analytics, filter routes, and leaderboard responses.
+  </Card>
+  <Card
+    title="Changelog"
+    icon="newspaper"
+    iconType="solid"
+    href="/developer-guides/stake2earn/changelog"
+  >
+    Program, SDK, API, and source-noted release changes that affect integrations.
+  </Card>
+</CardGroup>
+
+## Program IDs
+
+The public `stake_for_fee` program ID is the same on mainnet and devnet:
+
+| Network | Program ID |
+| --- | --- |
+| Mainnet Beta | `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP` |
+| Devnet | `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP` |
+| Local feature build | `M5c95Zio3HQ1gvQ3pjhh8BsscrDcKnN28gxnQD1E17U` |
+
+Related program IDs used by the SDK:
+
+| Program | ID |
+| --- | --- |
+| DAMM v1 | `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB` |
+| Dynamic Vault | `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi` |
+
+<CardGroup cols={2}>
+  <Card title="Stake2Earn Program" icon="code" href="https://github.com/MeteoraAg/stake-for-fee/tree/main/programs/stake-for-fee">
+    Anchor program source for `stake_for_fee`.
+  </Card>
+  <Card title="Stake2Earn IDL" icon="file-code" href="https://github.com/MeteoraAg/stake-for-fee-sdk/blob/main/ts-client/src/stake-for-fee/idls/stake_for_fee.ts">
+    TypeScript IDL bundled by the public SDK.
+  </Card>
+  <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/stake-for-fee-sdk/tree/main/ts-client">
+    `@meteora-ag/m3m3` SDK source for transaction builders and state helpers.
+  </Card>
+  <Card title="Rust Interface" icon="terminal" iconType="solid" href="https://github.com/MeteoraAg/stake-for-fee-sdk/tree/main/stake_for_fee_interface">
+    Generated Rust instruction, account, event, and error interface.
+  </Card>
+</CardGroup>
+
+## Important Constants
+
+| Constant | Public value | Use |
+| --- | --- | --- |
+| `MIN_LIST_LENGTH` / `MAX_LIST_LENGTH` | `5` / `1000` | Allowed top staker list length on public builds. |
+| `FULL_BALANCE_LIST_HARD_LIMIT` | `10000` | Maximum tracked full-balance entries on public builds. |
+| `MIN_SECONDS_TO_FULL_UNLOCK` / `MAX_SECONDS_TO_FULL_UNLOCK` | `6 hours` / `31 days` | Allowed fee drip duration range. |
+| `MIN_UNSTAKE_LOCK_DURATION` / `MAX_UNSTAKE_LOCK_DURATION` | `6 hours` / `31 days` | Allowed unstake cooldown range. |
+| `MAX_JOIN_WINDOW_DURATION` | `31 days` | Maximum delay before fee distribution begins. |
+| `MIN_LOCK_ESCROW_CLAIM_FEE_DURATION` | `5 minutes` | Minimum interval before another lock escrow fee claim. |
+| `SCALE_OFFSET` | `64` | Fixed-point scale used for cumulative fee-per-liquidity checkpoints. |
+| Quote mints | SOL, USDC | Only SOL and USDC are accepted as quote mints. |
+
+## Commands
+
+| Task | Command |
+| --- | --- |
+| Build TypeScript SDK | `cd stake-for-fee-sdk/ts-client && pnpm install && pnpm run build` |
+| Run TypeScript SDK tests | `cd stake-for-fee-sdk/ts-client && pnpm test` |
+| Build local program | `cd stake-for-fee && anchor build -p stake_for_fee -- --features local` |
+| Run local program tests | `cd stake-for-fee && yarn test` |
+| Check Rust interface workspace | `cd stake-for-fee-sdk && cargo check` |

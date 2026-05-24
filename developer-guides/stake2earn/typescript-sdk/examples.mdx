@@ -1,0 +1,192 @@
+---
+title: "Stake2Earn TypeScript SDK Examples"
+sidebarTitle: "Examples"
+description: "Explore Stake2Earn TypeScript examples for connecting to a vault, creating a vault, staking, reading balances, claiming fees, requesting unstake, canceling unstake, and withdrawing released stake."
+llmsDescription: "Explains practical examples for @meteora-ag/m3m3. Covers StakeForFee.create, createFeeVault, createFeeVaultWithParams, lock-liquidity context from the local examples, stake, claimFee, getUserStakeAndClaimBalance, getUnstakeByUser, unstake, cancelUnstake, withdraw, refreshStates, U64_MAX, transaction signing, and integration gotchas."
+---
+
+These examples are based on the local `stake-for-fee-sdk/ts-client/src/examples` source and the public SDK surface.
+
+## Connect To A Vault
+
+```typescript
+import StakeForFee from "@meteora-ag/m3m3";
+import { Connection, PublicKey } from "@solana/web3.js";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const pool = new PublicKey("G2MRSjNjCbFUmMf32Z1aXYhy6pc1ihLyYg6orKedyjJG");
+
+const feeVault = await StakeForFee.create(connection, pool);
+
+console.log("vault", feeVault.feeVaultKey.toBase58());
+console.log("stake mint", feeVault.accountStates.feeVault.stakeMint.toBase58());
+```
+
+## Create A Fee Vault
+
+```typescript
+import StakeForFee from "@meteora-ag/m3m3";
+import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+
+const pool = new PublicKey("...");
+const stakeMint = new PublicKey("...");
+
+const currentSlot = await connection.getSlot("confirmed");
+const currentTimestamp = await connection.getBlockTime(currentSlot);
+
+const tx = await StakeForFee.createFeeVault(
+  connection,
+  pool,
+  stakeMint,
+  payer.publicKey,
+  {
+    topListLength: 10,
+    unstakeLockDuration: new BN(86_400),
+    secondsToFullUnlock: new BN(604_800),
+    startFeeDistributeTimestamp: new BN(currentTimestamp! + 10),
+  },
+);
+```
+
+`createFeeVault` fetches the DAMM v1 pool, infers the quote mint as the other pool mint, derives the vault/list/token accounts, creates the DAMM v1 lock escrow if missing, and returns one transaction.
+
+## Create A Fee Vault With Explicit Mints
+
+```typescript
+const tx = await StakeForFee.createFeeVaultWithParams(
+  connection,
+  pool,
+  payer.publicKey,
+  stakeMint,
+  quoteMint,
+  {
+    topListLength: 10,
+    unstakeLockDuration: new BN(86_400),
+    secondsToFullUnlock: new BN(604_800),
+    startFeeDistributeTimestamp: new BN(currentTimestamp! + 10),
+  },
+);
+```
+
+Use `createFeeVaultInstructions` when you need to compose the vault creation instructions into a larger transaction builder.
+
+## Lock DAMM v1 LP To The Vault
+
+The local SDK examples lock DAMM v1 LP with `@meteora-ag/dynamic-amm-sdk` after the Stake2Earn vault is created:
+
+```typescript
+import AmmImpl from "@meteora-ag/dynamic-amm-sdk";
+import { deriveFeeVault, STAKE_FOR_FEE_PROGRAM_ID } from "@meteora-ag/m3m3";
+import Decimal from "decimal.js";
+
+const amm = await AmmImpl.create(connection, pool);
+const feeVaultKey = deriveFeeVault(pool, STAKE_FOR_FEE_PROGRAM_ID);
+
+const tx = await amm.lockLiquidity(feeVaultKey, lpAmount, owner.publicKey, {
+  stakeLiquidity: {
+    ratio: new Decimal(1),
+  },
+});
+```
+
+The lock escrow owner must be the Stake2Earn vault PDA. Fees from that locked LP flow into Stake2Earn distribution instead of the creator wallet.
+
+## Stake Tokens
+
+```typescript
+import BN from "bn.js";
+
+await feeVault.refreshStates();
+
+const stakeAmount = new BN("1000000000");
+const tx = await feeVault.stake(stakeAmount, owner.publicKey);
+```
+
+`stake` includes `initializeStakeEscrow` when needed. If you have just changed vault state in another transaction, call `refreshStates()` before building the stake transaction.
+
+## Read Stake And Claimable Balance
+
+```typescript
+await feeVault.refreshStates();
+
+const { stakeEscrow, unclaimFee } =
+  await feeVault.getUserStakeAndClaimBalance(owner.publicKey);
+
+if (stakeEscrow) {
+  console.log("active stake", stakeEscrow.stakeAmount.toString());
+  console.log("claimable token A", unclaimFee.feeA?.toString());
+  console.log("claimable token B", unclaimFee.feeB?.toString());
+}
+```
+
+For a top-list staker, the SDK calculates newly released fees from current vault and lock escrow state before returning `unclaimFee`.
+
+## Claim Fees
+
+```typescript
+import { U64_MAX } from "@meteora-ag/m3m3";
+
+const tx = await feeVault.claimFee(owner.publicKey, U64_MAX);
+```
+
+`claimFee` claims quote token fees up to `maxFee`. Any base/stake token fee is automatically added back to the user's stake escrow.
+
+## Request Unstake
+
+```typescript
+import { Keypair } from "@solana/web3.js";
+
+const unstake = Keypair.generate();
+
+const tx = await feeVault.unstake(
+  stakeEscrow.stakeAmount,
+  unstake.publicKey,
+  owner.publicKey,
+);
+
+tx.partialSign(unstake);
+```
+
+Store the `unstake.publicKey`. It is required for `cancelUnstake` and `withdraw`.
+
+## Cancel Unstake
+
+```typescript
+const tx = await feeVault.cancelUnstake(unstake.publicKey, owner.publicKey);
+```
+
+Canceling returns the requested amount to active stake and closes the `Unstake` account.
+
+## Withdraw Released Stake
+
+```typescript
+const tx = await feeVault.withdraw(unstake.publicKey, owner.publicKey);
+```
+
+The transaction fails until the current on-chain timestamp is at or after the `Unstake.release_at` value.
+
+## Find User Vaults And Unstakes
+
+```typescript
+const vaults = await StakeForFee.getAllStakedVaultByUser(
+  connection,
+  owner.publicKey,
+);
+
+const unstakeRecords = await StakeForFee.getUnstakeByUser(
+  connection,
+  owner.publicKey,
+  feeVault.feeVaultKey,
+);
+```
+
+## Gotchas
+
+| Gotcha | Recommendation |
+| --- | --- |
+| `claimFee` returns one transaction | Send the returned transaction directly; do not iterate over it. |
+| `unstake` needs a new signer | Generate and partial-sign with the `Unstake` keypair. |
+| Cached account state | Call `refreshStates()` before building transactions after recent vault mutations. |
+| Top-list replacement accounts | Let the SDK build stake/claim/unstake transactions unless you are comfortable supplying replacement stake escrows manually. |
+| Quote-only user claim | Expect only the quote token to leave the vault on `claimFee`; the stake/base token side is restaked. |

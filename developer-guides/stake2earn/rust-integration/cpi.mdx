@@ -1,0 +1,101 @@
+---
+title: "Stake2Earn Rust CPI Integration"
+sidebarTitle: "CPI"
+description: "Learn how to integrate with Stake2Earn through Rust CPI, including required accounts, Event CPI accounts, generated invoke helpers, signer seeds, and instruction-specific constraints."
+llmsDescription: "Explains how to integrate with Stake2Earn through Rust CPI. Covers stake_for_fee_interface invoke helpers, CPI account bundles, Event CPI authority, initialize_vault accounts, stake and claim fee account bundles, request_unstake, cancel_unstake, withdraw, claim_fee_crank, admin update ordering, vault PDA signer seeds, remaining accounts, and common CPI gotchas."
+---
+
+Rust CPI integrations should prefer the generated `stake_for_fee_interface` invoke helpers over hand-built discriminators. The helpers expose both `*_invoke` and `*_invoke_signed` variants for every instruction.
+
+<Warning>
+  Stake2Earn instructions use Anchor Event CPI. CPI callers must include the generated `event_authority` account and the Stake2Earn program account where the generated key structs require them.
+</Warning>
+
+## CPI Helper Families
+
+| Flow | Generated helper |
+| --- | --- |
+| Initialize vault | `initialize_vault_invoke` / `initialize_vault_invoke_signed` |
+| Initialize stake escrow | `initialize_stake_escrow_invoke` / `initialize_stake_escrow_invoke_signed` |
+| Stake | `stake_invoke` / `stake_invoke_signed` |
+| Claim fee | `claim_fee_invoke` / `claim_fee_invoke_signed` |
+| Request unstake | `request_unstake_invoke` / `request_unstake_invoke_signed` |
+| Cancel unstake | `cancel_unstake_invoke` / `cancel_unstake_invoke_signed` |
+| Withdraw | `withdraw_invoke` / `withdraw_invoke_signed` |
+| Claim fee crank | `claim_fee_crank_invoke` / `claim_fee_crank_invoke_signed` |
+| Admin updates | `update_unstake_lock_duration_invoke`, `update_seconds_to_full_unlock_invoke` |
+
+## Initialize Vault CPI
+
+`initialize_vault` creates the Stake2Earn vault and two list accounts.
+
+| Account | Requirement |
+| --- | --- |
+| `vault` | PDA `["vault", pool]`, initialized by the instruction. |
+| `stake_token_vault` | ATA for `stake_mint`, authority `vault`. |
+| `quote_token_vault` | ATA for `quote_mint`, authority `vault`. |
+| `top_staker_list` | PDA `["list", vault]`, initialized by the instruction. |
+| `full_balance_list` | PDA `["balance", vault]`, initialized by the instruction. |
+| `pool` | DAMM v1 constant-product pool containing the stake and quote mints. |
+| `stake_mint`, `quote_mint` | Pool mints; quote must be SOL or USDC. |
+| `lock_escrow` | DAMM v1 lock escrow owned by `vault`. |
+| `payer` | Rent payer signer. |
+| `event_authority`, `program` | Anchor Event CPI accounts. |
+
+| Parameter | Constraint |
+| --- | --- |
+| `top_list_length` | Public range `5` to `1000`. |
+| `seconds_to_full_unlock` | Public range `6 hours` to `31 days`. |
+| `unstake_lock_duration` | Public range `6 hours` to `31 days`. |
+| `start_fee_distribute_timestamp` | Optional; max join window is `31 days`. |
+| `padding` | `[0; 64]` in current clients. |
+
+## Stake And Claim CPI
+
+`stake` and `claim_fee` are not isolated stake-account mutations. They first claim and distribute pending DAMM v1 lock escrow fees, so callers must include the full DAMM v1 and Dynamic Vault account bundle.
+
+| Account group | Accounts |
+| --- | --- |
+| Stake2Earn state | `vault`, `stake_token_vault`, `quote_token_vault`, `top_staker_list`, `full_balance_list`, `stake_escrow`, optional `smallest_stake_escrow` |
+| User accounts | `owner`, `user_stake_token` for `stake`, `user_quote_token` for `claim_fee` |
+| DAMM v1 lock escrow | `pool`, `lp_mint`, `lock_escrow`, `escrow_vault` |
+| Dynamic Vault accounts | `a_token_vault`, `b_token_vault`, `a_vault`, `b_vault`, `a_vault_lp`, `b_vault_lp`, `a_vault_lp_mint`, `b_vault_lp_mint` |
+| Programs | DAMM v1 program, Dynamic Vault program, SPL Token program, Event CPI accounts |
+
+Top-list synchronization may require additional stake escrow accounts in `remaining_accounts`. If the full balance list index must be reclaimed, pass the expected `smallest_stake_escrow`.
+
+## Unstake CPI
+
+| Instruction | CPI notes |
+| --- | --- |
+| `request_unstake` | Initializes a caller-provided `Unstake` account, claims/distributes lock escrow fees, decreases active stake, updates list state, and sets `release_at`. |
+| `cancel_unstake` | Closes `Unstake` to the owner, claims/distributes fees, returns the amount to active stake, and syncs list state. |
+| `withdraw` | Does not need the DAMM v1 fee-claim bundle. It checks `release_at`, transfers stake tokens from `stake_token_vault` to `user_stake_token`, updates ongoing unstake counters, and closes `Unstake`. |
+
+## Vault PDA Signer Seeds
+
+When the Stake2Earn program signs for its token vaults internally, it uses:
+
+| PDA | Seeds |
+| --- | --- |
+| `FeeVault` signer | `["vault", pool, bump]` |
+
+External CPI callers do not sign as the Stake2Earn vault PDA unless they are invoking another program directly. If your program composes DAMM v1 lock escrow setup before calling Stake2Earn, ensure the lock escrow owner is the Stake2Earn vault PDA.
+
+## Crank And Admin CPI
+
+| Instruction | Notes |
+| --- | --- |
+| `claim_fee_crank` | Permissionless. Requires the same DAMM v1 and Dynamic Vault fee-claim bundle but no user stake escrow. |
+| `update_unstake_lock_duration` | Admin signer only. New value affects future unstake requests. |
+| `update_seconds_to_full_unlock` | Admin signer only. The immediately preceding instruction in the same transaction must be `claim_fee_crank` for the same vault and program. |
+
+## CPI Gotchas
+
+| Gotcha | Resolution |
+| --- | --- |
+| Missing Event CPI accounts | Derive `["__event_authority"]` and include the `stake_for_fee` program account when the generated key struct requires them. |
+| Stale DAMM v1 or Dynamic Vault accounts | Re-read account state before building fee-claim flows. |
+| Wrong quote mint | Only SOL and USDC quote mints are accepted on public builds. |
+| Missing replacement stake escrows | Supply remaining accounts for top-list promotion/removal when stake changes can affect rankings. |
+| Withdraw before release | Read the `Unstake` account and compare `release_at` with the current clock before sending. |

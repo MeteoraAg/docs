@@ -1,0 +1,135 @@
+---
+title: "Stake2Earn Program Accounts"
+sidebarTitle: "Accounts"
+description: "Understand Stake2Earn stake_for_fee accounts, including vaults, stake escrows, unstake requests, top staker lists, full balance lists, metrics, configuration, and PDA seeds."
+llmsDescription: "Explains the Stake2Earn program account model from the stake_for_fee source. Covers FeeVault, Configuration, Metrics, TopStakerInfo, StakeEscrow, Unstake, TopListMetadata, FullBalanceListMetadata, StakerMetadata, StakerBalance, PDA seeds, variable-size list accounts, and how these accounts are used by staking and fee-claim flows."
+---
+
+<Note>
+  This page summarizes the account model used by `stake_for_fee`. For exact binary layouts, use the Anchor IDL or the generated TypeScript and Rust types exported by `@meteora-ag/m3m3` and `stake_for_fee_interface`.
+</Note>
+
+## PDA Map
+
+| Account | Seeds | Notes |
+| --- | --- | --- |
+| `FeeVault` | `["vault", pool]` | One Stake2Earn vault per DAMM v1 pool. |
+| `TopListMetadata` | `["list", vault]` | Header plus appended `StakerMetadata` entries for top stakers. |
+| `FullBalanceListMetadata` | `["balance", vault]` | Header plus appended `StakerBalance` entries for tracked stakers. |
+| `StakeEscrow` | `["escrow", vault, owner]` | User stake account for one vault and owner. |
+| DAMM v1 `LockEscrow` | `["lock_escrow", pool, vault]` in the DAMM v1 program | Holds locked LP for the Stake2Earn vault owner PDA. |
+| Event authority | `["__event_authority"]` | Anchor Event CPI authority used by generated clients. |
+
+The SDK exports `deriveFeeVault`, `deriveTopStakerList`, `deriveFullBalanceList`, `deriveStakeEscrow`, `deriveLockEscrowPda`, and `deriveLpMint`.
+
+## FeeVault
+
+`FeeVault` is the root Stake2Earn account.
+
+| Field | Meaning |
+| --- | --- |
+| `lock_escrow` | DAMM v1 lock escrow whose owner is the Stake2Earn vault PDA. |
+| `stake_mint` | Pool token that users stake. Must not be SOL or USDC. |
+| `quote_mint` | Quote mint. Public builds accept SOL or USDC. |
+| `pool` | DAMM v1 constant-product pool linked to the vault. |
+| `stake_token_vault` | Token account owned by the vault PDA for staked base tokens. |
+| `quote_token_vault` | Token account owned by the vault PDA for quote fee claims. |
+| `top_staker_list` | PDA storing top staker entries. |
+| `full_balance_list` | PDA storing tracked staker balances. |
+| `metrics` | Aggregate stake, escrow count, ongoing unstake, and fee totals. |
+| `configuration` | Fee drip and unstake configuration. |
+| `top_staker_info` | Top list size, effective stake, locked fees, and fee-per-liquidity checkpoints. |
+| `creator` | Creator that initialized the vault. |
+| `created_at` | Unix timestamp when the vault was initialized. |
+| `bump` | PDA bump for vault signing. |
+
+## Configuration
+
+| Field | Meaning |
+| --- | --- |
+| `seconds_to_full_unlock` | Time required for locked claimed fees to drip fully to top stakers. |
+| `unstake_lock_duration` | Cooldown before a requested unstake can be withdrawn. |
+| `start_fee_distribute_timestamp` | Timestamp when fee distribution begins. Defaults to vault creation time when not provided. |
+
+## Metrics
+
+| Field | Meaning |
+| --- | --- |
+| `total_staked_amount` | Total active staked amount across stake escrows. |
+| `total_stake_escrow_count` | Number of stake escrows initialized for the vault. |
+| `ongoing_total_partial_unstake_amount` | Stake amount currently locked in pending unstake requests. |
+| `total_fee_a_amount` / `total_fee_b_amount` | Lifetime fees claimed from the DAMM v1 lock escrow. |
+| `user_total_claimed_fee_a` / `user_total_claimed_fee_b` | Lifetime fees claimed through user `claim_fee` flows. |
+
+## TopStakerInfo
+
+| Field | Meaning |
+| --- | --- |
+| `top_list_length` | Configured maximum number of top stakers. |
+| `current_length` | Current allocated top list length used for account resizing. |
+| `effective_stake_amount` | Total stake amount currently in the top list. |
+| `last_claim_fee_at` | Last time the vault claimed from the DAMM v1 lock escrow. |
+| `last_updated_at` | Last fee drip update timestamp. |
+| `locked_fee_a` / `locked_fee_b` | Claimed fees still locked for drip release. |
+| `cumulative_fee_a_per_liquidity` / `cumulative_fee_b_per_liquidity` | Fee growth checkpoints scaled by `2^64`. |
+
+## StakeEscrow
+
+`StakeEscrow` is the user position account for one vault.
+
+| Field | Meaning |
+| --- | --- |
+| `owner` | Wallet that owns the stake escrow. |
+| `vault` | Parent `FeeVault`. |
+| `full_balance_index` | Index into the full balance list, or `FULL_BALANCE_LIST_HARD_LIMIT` when not tracked. |
+| `stake_amount` | Active stake amount. |
+| `in_top_list` | `1` when the escrow is currently in the top list. |
+| `ongoing_total_partial_unstake_amount` | Amount reserved by open unstake requests for this escrow. |
+| `created_at` | Unix timestamp when the stake escrow was initialized. |
+| `fee_a_claimed_amount` / `fee_b_claimed_amount` | Lifetime user-claimed fee totals. |
+| `fee_a_per_liquidity_checkpoint` / `fee_b_per_liquidity_checkpoint` | Last fee-per-liquidity checkpoints for this escrow. |
+| `fee_a_pending` / `fee_b_pending` | Pending fee balances not yet claimed by the user. |
+
+When a user calls `claim_fee`, the base/stake token side is automatically restaked. Only the quote token side is transferred to the user, capped by `max_fee`.
+
+## Unstake
+
+`Unstake` stores one pending withdrawal request.
+
+| Field | Meaning |
+| --- | --- |
+| `stake_escrow` | Stake escrow that requested the unstake. |
+| `unstake_amount` | Amount reserved for withdrawal. |
+| `created_at` | Timestamp when the request was created. |
+| `release_at` | Earliest timestamp when `withdraw` can transfer stake tokens back. |
+| `owner` | Owner that can cancel or withdraw. |
+| `vault` | Parent `FeeVault`. |
+
+`request_unstake` creates this account with an arbitrary keypair supplied by the caller. `cancel_unstake` and `withdraw` close it to the owner.
+
+## Top List Account
+
+`TopListMetadata` is a zero-copy account header followed by `StakerMetadata` entries.
+
+| Type | Field | Meaning |
+| --- | --- | --- |
+| `TopListMetadata` | `vault` | Parent vault. |
+| `StakerMetadata` | `stake_amount` | Stake amount used for ranking. |
+| `StakerMetadata` | `full_balance_index` | Index in the full balance list. Negative values mark empty slots. |
+| `StakerMetadata` | `owner` | Owner wallet for indexing and PDA derivation. |
+
+Ranking uses stake amount first. For equal balances, earlier full balance indexes rank ahead of later joiners.
+
+## Full Balance List Account
+
+`FullBalanceListMetadata` is a zero-copy account header followed by `StakerBalance` entries.
+
+| Type | Field | Meaning |
+| --- | --- | --- |
+| `FullBalanceListMetadata` | `vault` | Parent vault. |
+| `FullBalanceListMetadata` | `length` | Number of tracked entries. |
+| `StakerBalance` | `balance` | Current stake amount for the owner. |
+| `StakerBalance` | `owner` | Owner wallet. |
+| `StakerBalance` | `is_in_top_list` | `1` when the entry is also in the top staker list. |
+
+The public hard limit is `10000` tracked entries. If the full balance list is full, a new or returning large staker can reclaim the smallest tracked index only when the required `smallest_stake_escrow` account is provided.
