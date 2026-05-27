@@ -6,7 +6,7 @@ llmsDescription: "Explains the DAMM v1 program account model for Meteora's dynam
 ---
 
 <Note>
-  This page summarizes the local `amm` program source and the public `damm-v1-sdk` account helpers. For exact generated layouts, use the bundled IDL and TypeScript types exported by `@meteora-ag/dynamic-amm-sdk`.
+  This page summarizes the `amm` program and the `damm-v1-sdk` account helpers. For exact generated layouts, use the bundled IDL and TypeScript types exported by `@meteora-ag/dynamic-amm-sdk`.
 </Note>
 
 ## PDA Map
@@ -62,7 +62,7 @@ Permissioned pools use an arbitrary signer account for the pool address rather t
 
 ## Pool
 
-`Pool` is the primary DAMM v1 state account. The local source asserts a `Pool` struct size of `944` bytes before the Anchor discriminator.
+`Pool` is the primary DAMM v1 state account.
 
 | Field | Use |
 | --- | --- |
@@ -83,11 +83,9 @@ Permissioned pools use an arbitrary signer account for the pool address rather t
 | `padding` | Reserved bytes for future layout compatibility. |
 | `curve_type` | Constant product or stable-swap curve parameters. |
 
-Use `AmmImpl.create(connection, pool)` or `AmmImpl.createMultiple(connection, pools)` to fetch pool state, Dynamic Vault state, reserves, LP supply, and derived pool information together.
-
 ## Config
 
-`Config` defines config-based constant-product launch pools. The source asserts a `Config` struct size of `336` bytes before the Anchor discriminator.
+`Config` defines config-based constant-product launch pools.
 
 | Field | Use |
 | --- | --- |
@@ -116,19 +114,15 @@ The TypeScript SDK exposes `createConfig`, `getPoolConfig`, `getFeeConfiguration
 | `unclaimed_fee_pending` | Pending LP-denominated fee amount. |
 | `a_fee`, `b_fee` | Lifetime token A and token B fees claimed from this escrow. |
 
-Use `AmmImpl.getLockedLpAmountByUser(connection, owner)`, `pool.getUserLockEscrow(owner)`, `pool.lockLiquidity(...)`, `pool.claimLockFee(...)`, or `pool.claimLockFee2(...)` for SDK-based lock reads and transactions.
-
 ## Operator
 
-`Operator` is a zero-copy admin-created permission account. The source asserts an `Operator` init space of `64` bytes.
+`Operator` is a zero-copy admin-created permission account.
 
 | Field | Use |
 | --- | --- |
 | `whitelisted_address` | Address authorized for the permission bitmap. |
 | `permission` | `u128` bitmap. Bit `0` allows protocol fee claiming. Bit `1` allows zap protocol fee. |
 | `padding` | Reserved bytes. |
-
-Operator flows are admin or protocol operations and are not exposed through the public TypeScript SDK class.
 
 ## Nested Types
 
