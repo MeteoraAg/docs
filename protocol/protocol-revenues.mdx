@@ -1,70 +1,75 @@
 ---
 title: "Protocol Revenues"
-description: "MET Protocol Revenues - How Meteora generates revenue"
+description: "Meteora protocol revenues and protocol fee distribution across DLMM, DAMM v2, DAMM v1, and DBC"
 ---
 
-Meteora earns a share of the trading fees generated on swaps routed through its pools. These fees constitute the protocol's revenue. The specific "Take Rate" (the percentage of the trading fee that goes to the protocol) varies depending on the pool type.
+Meteora earns a share of the trading fees generated on swaps routed through its pools. These protocol fee percentages apply to the trading fee, not to the full swap notional.
 
-# Fee Distribution logic
+# Fee Distribution Logic
 
-Conceptually, the Total Swap Fee paid by a user is split between the liquidity providers (or launch partners) and the Meteora Protocol.
-
-## DLMM + DAMM pools
+The pool first calculates the total trading fee for the swap. The program then splits that trading fee between LPs, market makers, limit order owners, launch partners, token creators, the protocol, and optional referral or host accounts depending on the product.
 
 ```
-Trading Fees = LP Fees + Protocol Revenues
+Trading Fee = LP/MM/LO/Trading Fee Share + Protocol-Side Fee
 ```
 
-## DBC pools
+When a referral or host fee account is included, that fee is paid from the protocol-side fee:
 
 ```
-Trading Fees = Launch Partner Fees + Token Creator Fees + Protocol Revenues
+Protocol Revenue = Protocol-Side Fee - Referral/Host Fee
 ```
 
-<div className="mb-6">
-  <div className="overflow-x-auto mt-2">
-    <table className="w-full border-collapse">
-      <thead>
-        <tr className="border-b border-gray-300 dark:border-gray-600">
-          <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Pool Type</th>
-          <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Fee Model</th>
-          <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">LP's Share</th>
-          <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-gray-100">Protocol Revenues</th>
+<Note>Referral and host fees do not increase the total trading fee paid by the swapper. They are carved out of the protocol-side fee when the swap includes the required referral or host account.</Note>
 
-        </tr>
-      </thead>
-      <tbody>
-        <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-          <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">DAMM v1</strong></td>
-          <td className="py-3 px-4 text-center">Base Only</td>
-          <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">80%</code></td>
-          <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">20%</code></td>
-        </tr>
-        <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-          <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">DAMM v2</strong></td>
-          <td className="py-3 px-4 text-center">Base + Dynamic</td>
-          <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">80%</code></td>
-          <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">20%</code></td>
-        </tr>
-        <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-          <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">DLMM</strong></td>
-          <td className="py-3 px-4 text-center">Base + Dynamic</td>
-          <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">95%</code></td>
-          <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">5%</code></td>
-        </tr>
-        <tr className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-          <td className="py-3 px-4"><strong className="text-gray-900 dark:text-gray-100">DBC</strong></td>
-          <td className="py-3 px-4 text-center">Base + Dynamic</td>
-          <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">80% (Launch Partner + Token Creator Share)</code></td>
-          <td className="py-3 px-4"><code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm font-mono">20%</code></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
+# DLMM
 
-<Note>It is important to understand that Meteora's revenues are not automatically converted to stablecoins (USDC) at the moment of collection.</Note>
+DLMM fees can be split between market-maker liquidity, limit-order liquidity, protocol fees, and host fees.
+
+| Fee Source | Pool Type | Protocol-Side Fee | LP/Owner Fee | Notes |
+| --- | --- | --- | --- | --- |
+| MM position | Standard pools | `10%` | `90%` LP fee | Standard pool protocol share is set by the operator or preset. |
+| MM position | Launch pools | `20%` | `80%` LP fee | Launch pools use the ILM protocol share. |
+| Limit order | Limit-order supported pools | `50%` | `50%` limit-order owner fee | Applies to the limit-order portion of the trading fee. |
+
+DLMM swaps can include a host fee account. When present, the host fee is `20%` of the eligible protocol-side fee. If no host fee account is provided, the host fee is `0`.
+
+# DAMM v2
+
+DAMM v2 applies the same protocol split to standard pools and launch pools.
+
+| Fee Source | Pool Type | Protocol-Side Fee | LP Fee |
+| --- | --- | --- | --- |
+| MM position | Standard pools | `20%` | `80%` |
+| MM position | Launch pools | `20%` | `80%` |
+
+DAMM v2 swaps can include a referral token account. When present, the referral fee is `20%` of the protocol-side fee. If no referral account is provided, the referral fee is `0`.
+
+<Note>For DAMM v2 compounding pools, the LP side can be split between claimable fees and auto-compounded fees after the protocol fee is removed.</Note>
+
+# DAMM v1
+
+DAMM v1 fee distribution depends on whether the pool is constant product or stable swap.
+
+| Pool Type | Protocol-Side Fee | LP Fee | Trade Fee |
+| --- | --- | --- | --- |
+| Constant product standard pools | `20%` | `80%` | `0.25%` |
+| Constant product launch pools | `20%` | `80%` | Customizable |
+| Stable swap pools | `0%` | `100%` | `0.01%` |
+
+DAMM v1 swaps can include a referral or host fee account. When present, the referral/host fee is `20%` of the protocol-side fee. If no referral or host account is provided, the referral/host fee is `0`.
+
+# DBC
+
+DBC splits bonding-curve swap fees between protocol fees and the virtual liquidity trading fee share.
+
+| Fee Source | Protocol-Side Fee | Trading Fee Share | Notes |
+| --- | --- | --- | --- |
+| Virtual liquidity position | `20%` | `80%` | The trading fee share is split between partner and creator according to the config's creator trading fee percentage. |
+
+DBC swaps can include a referral token account. When present, the referral fee is `20%` of the protocol-side fee. If no referral account is provided, the referral fee is `0`.
 
 # Collection in Base or Quote Tokens
 
-Revenues are derived from swap fees, which are collected in the tokens currently being swapped. Therefore, Meteora accumulates a diverse basket of Base and Quote tokens (e.g., SOL, USDC, MET, etc.).
+Revenues are derived from swap fees, which are collected in the tokens currently being swapped. Therefore, Meteora accumulates a diverse basket of base and quote tokens, such as SOL, USDC, MET, and other pool assets.
+
+<Note>Meteora's revenues are not automatically converted to stablecoins such as USDC at the moment of collection.</Note>

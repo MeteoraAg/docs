@@ -1,0 +1,54 @@
+---
+title: "Overview"
+description: "Choose a Meteora Invent launch-pool path for DBC, DLMM, DAMM v2, or DAMM v1 token liquidity."
+llmsDescription: "Overview of Meteora Invent launch pools, explaining how to choose between DBC token launch pools, DLMM launch pools, DAMM v2 launch pools, and DAMM v1 launch pools. Covers bonding curve launches and DAMM migration, concentrated liquidity with LFG or single-bin seeding, balanced and one-sided DAMM v2 pools, DAMM v1 liquidity locks and Stake2Earn workflows, shared Studio setup, config files, and dry-run validation."
+---
+
+Launch pools are the Meteora Invent workflows for creating token liquidity with a configuration file and CLI commands. Use this overview to choose between Dynamic Bonding Curve (DBC), DLMM, DAMM v2, and DAMM v1 launch paths before jumping into the step-by-step guide.
+
+<CardGroup cols={2}>
+  <Card title="DBC Token Launch Pool" icon="chart-simple" iconType="solid" href="/invent/launch-pools/dbc-token-launch-pool">
+    Launch a new token on a customizable bonding curve, then graduate the pool to DAMM v1 or DAMM v2 when the migration threshold is reached.
+  </Card>
+  <Card title="DLMM Launch Pool" icon="bolt-lightning" iconType="solid" href="/invent/launch-pools/dlmm-launch-pool">
+    Create a DLMM pool with dynamic fees and precise liquidity concentration, then seed liquidity with an LFG curve or a single bin.
+  </Card>
+  <Card title="DAMM v2 Launch Pool" icon="scale-balanced" iconType="solid" href="/invent/launch-pools/damm-v2-launch-pool">
+    Create a balanced or one-sided DAMM v2 constant-product pool with configurable fee schedules, dynamic fees, optional compounding, and position NFTs.
+  </Card>
+  <Card title="DAMM v1 Launch Pool" icon="rocket" iconType="solid" href="/invent/launch-pools/damm-v1-launch-pool">
+    Create a DAMM v1 constant-product pool with optional liquidity locking and Stake2Earn workflows.
+  </Card>
+</CardGroup>
+
+## Which launch pool should you use?
+
+| Use case | Recommended pool | Why |
+| --- | --- | --- |
+| You are launching a brand-new token and want users to buy along a curve before AMM graduation. | DBC | DBC creates the token pool first, handles bonding curve trading, and can migrate liquidity to DAMM v1 or DAMM v2. |
+| You want concentrated liquidity with dynamic fees and custom liquidity seeding before trading starts. | DLMM | DLMM gives LPs discrete-bin liquidity concentration and volatility-aware fees. |
+| You want a modern constant-product AMM launch with flexible fee logic and NFT positions. | DAMM v2 | DAMM v2 supports balanced and one-sided pool creation, dynamic fees, fee schedulers, optional compounding, and more flexible liquidity management. |
+| You need the legacy DAMM v1 flow, liquidity locks, or Stake2Earn. | DAMM v1 | DAMM v1 is the legacy constant-product AMM path with existing lock-liquidity and Stake2Earn tooling. |
+
+## Shared setup
+
+All launch-pool guides use the same Meteora Invent Studio setup:
+
+```bash Terminal
+git clone https://github.com/MeteoraAg/meteora-invent.git
+cd meteora-invent
+pnpm install
+cp studio/.env.example studio/.env
+pnpm studio generate-keypair
+```
+
+Each guide then points you to its matching config file in `studio/config`:
+
+- `dlmm_config.jsonc`
+- `damm_v2_config.jsonc`
+- `damm_v1_config.jsonc`
+- `dbc_config.jsonc`
+
+<Tip>
+Start with `"dryRun": true` while validating your configuration. Set it to `false` only when you understand which transactions will be sent on-chain.
+</Tip>
