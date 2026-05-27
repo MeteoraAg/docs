@@ -7,159 +7,43 @@ rss: true
 ---
 
 <Tip>
-  Track DAMM v1 integration changes here. The source changelog is maintained in the `damm-v1-sdk` repository.
+  Track DAMM v1 releases here.
 </Tip>
 
 <Update
-  label="@meteora-ag/dynamic-amm-sdk 1.4.0"
-  description="Lock fee claim post-instruction update"
-  rss="DAMM v1 SDK 1.4.0 adds post instructions to claimLockFee2."
+  label="meteora-dynamic-amm 0.5.3"
+  description="Zap Protocol Fee Support"
+  rss="DAMM v1 meteora-dynamic-amm 0.5.3 adds Zap Protocol Fee Support, operator account management, and protocol fee zapping, with withdraw_protocol_fees account and argument changes. No SDK update required."
 >
-  ## Release Summary
+  <Info>
+    Mainnet deployment for Release 0.5.3 is planned for February 10, 2026, at 11:00 AM UTC+8 (Tuesday).
+  </Info>
+
+  ## Release summary
 
   | Component | Version | PR |
   | --- | --- | --- |
-  | TypeScript SDK | `1.4.0` | [dynamic-amm-sdk #224](https://github.com/MeteoraAg/dynamic-amm-sdk/pull/224) |
+  | TypeScript SDK | N/A | No update required for SDK |
 
-  ## Changed
+  ## What We Shipped 
+  - Zap Protocol Fee Support
 
-  - Added post instructions to `claimLockFee2`.
+  ## Program: `meteora-dynamic-amm` `0.5.3`
 
-  ## Integration Impact
+  Program ID (mainnet and devnet): `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`
 
-  | Integrator | What To Check |
-  | --- | --- |
-  | Lock-fee claimers | Re-test claim flows for pools involving native SOL and receiver handling. |
-  | Transaction pipelines | Confirm post instructions are preserved when composing or reserializing SDK transactions. |
+  ### Changed
+
+  - Upgrade to anchor 0.31.1
+  - Add new endpoint `create_operator_account` and `close_operator_account` that allows admin to manage different operator accounts
+  - Add new account `Operator`, that would stores `whitelisted_address` as well as their operational permissions
+  - Add new endpoint `zap_protocol_fee` that allow operator to claim protocol fees and zap out to SOL/USDC or other token in pool and send to treasury address
+
+  ### Breaking Changes
+
+  - `withdraw_protocol_fees` can only be performed by an operator. The endpoint now requires `max_amount_a` and `max_amount_b` as arguments. The accounts passed in have also been changed.
+
+  ### Fixed
+
+  - Fixed initialization of stable swap error with `AmountNotPeg` due to the precision loss of the underlying vault exchange rate.
 </Update>
-
-<Update
-  label="@meteora-ag/dynamic-amm-sdk 1.3.9"
-  description="Newer lock fee claim helper"
-  rss="DAMM v1 SDK 1.3.9 adds claimLockFee2 and simplifies claimLockFee behavior."
->
-  ## Release Summary
-
-  | Component | Version | PR |
-  | --- | --- | --- |
-  | TypeScript SDK | `1.3.9` | [dynamic-amm-sdk #222](https://github.com/MeteoraAg/dynamic-amm-sdk/pull/222) |
-
-  ## Changed
-
-  - Removed ternary logic in `claimLockFee`.
-  - Added `claimLockFee2` to claim lock fees without `tempWSolAcc`.
-
-  ## Integration Impact
-
-  | Integrator | What To Check |
-  | --- | --- |
-  | Lock-fee dashboards | Prefer `claimLockFee2` for new integrations. |
-  | Native SOL pools | Keep `claimLockFee` only when the older temporary wrapped-SOL flow is required. |
-</Update>
-
-<Update
-  label="@meteora-ag/dynamic-amm-sdk 1.3.7"
-  description="Config-based pool creation fix"
-  rss="DAMM v1 SDK 1.3.7 fixes createPermissionlessConstantProductPoolWithConfig2 fee farm configuration handling."
->
-  ## Release Summary
-
-  | Component | Version | PR |
-  | --- | --- | --- |
-  | TypeScript SDK | `1.3.7` | [dynamic-amm-sdk #217](https://github.com/MeteoraAg/dynamic-amm-sdk/pull/217) |
-
-  ## Fixed
-
-  - Fixed `createPermissionlessConstantProductPoolWithConfig2` so callers can pass fee farm configuration values.
-
-  ## Integration Impact
-
-  | Integrator | What To Check |
-  | --- | --- |
-  | Launch-pool creators | Re-test config-based pool creation with `stakeLiquidity` or fee farm settings. |
-</Update>
-
-<Update
-  label="@meteora-ag/dynamic-amm-sdk 1.3.1"
-  description="Locked LP transfer helper"
-  rss="DAMM v1 SDK 1.3.1 adds moveLockedLP for transferring locked LP between escrow owners."
->
-  ## Release Summary
-
-  | Component | Version | PR |
-  | --- | --- | --- |
-  | TypeScript SDK | `1.3.1` | [dynamic-amm-sdk #202](https://github.com/MeteoraAg/dynamic-amm-sdk/pull/202) |
-
-  ## Added
-
-  - Added `moveLockedLP` for transferring locked LP tokens from one owner's escrow to another owner's escrow.
-
-  ## Integration Impact
-
-  | Integrator | What To Check |
-  | --- | --- |
-  | Lock managers | Confirm both source and destination lock escrow derivations and owner expectations. |
-</Update>
-
-<Update
-  label="commons 0.0.5"
-  description="Rust PDA helpers"
-  rss="DAMM v1 commons 0.0.5 adds PDA helpers for dynamic AMM and Dynamic Vault accounts."
->
-  ## Release Summary
-
-  | Component | Version | PR |
-  | --- | --- | --- |
-  | Rust commons | `0.0.5` | [dynamic-amm-sdk #195](https://github.com/MeteoraAG/dynamic-amm-sdk/pull/195) |
-
-  ## Added
-
-  - Added PDA helpers for DAMM v1 and Dynamic Vault accounts.
-
-  ## Integration Impact
-
-  | Integrator | What To Check |
-  | --- | --- |
-  | Rust routers and backends | Prefer `common::dynamic_amm::pda` and `common::dynamic_vault::pda` helpers over manual seed construction. |
-</Update>
-
-<Update
-  label="dynamic-amm 0.6.1"
-  description="Customizable pools and partner fees"
-  rss="DAMM v1 dynamic-amm 0.6.1 adds customizable constant-product pool creation and partner fee claiming, with PartnerInfo added to Pool state."
->
-  ## Release Summary
-
-  | Component | Version | PR |
-  | --- | --- | --- |
-  | Program crate | `0.6.1` | [mercurial dynamic AMM #180](https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk/pull/180) |
-  | TypeScript SDK | `1.1.19` | [mercurial dynamic AMM #180](https://github.com/mercurial-finance/mercurial-dynamic-amm-sdk/pull/180) |
-
-  ## Added
-
-  - Added `initialize_customizable_permissionless_constant_product_pool`.
-  - Added `partner_claim_fees`.
-  - Added SDK `createCustomizablePermissionlessConstantProductPool`.
-  - Added SDK `partnerClaimFees`.
-
-  ## Changed
-
-  - `create_config` now requires `partner_fee_numerator`.
-  - `Pool` state includes `PartnerInfo` for partner fee sharing.
-
-  ## Integration Impact
-
-  | Integrator | What To Check |
-  | --- | --- |
-  | Pool creators | Pass partner fee parameters when creating configs. |
-  | Indexers | Decode `PartnerInfo` from pool state. |
-  | Fee claimers | Separate protocol fee balances from partner pending fee amounts. |
-</Update>
-
-## Source Changelog
-
-<CardGroup cols={1}>
-  <Card title="DAMM v1 SDK Changelog" icon="github" iconType="solid" href="https://github.com/MeteoraAg/damm-v1-sdk/blob/main/CHANGELOG.md">
-    Full source changelog for SDK, Rust helper, and historical package updates.
-  </Card>
-</CardGroup>

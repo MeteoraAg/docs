@@ -1,131 +1,129 @@
 ---
-title: "DAMM v1 Instructions"
+title: "DAMM v1 Program Instructions"
 sidebarTitle: "Instructions"
-description: "Explore DAMM v1 dynamic AMM instructions for pool creation, swaps, liquidity, locks, configs, fees, activation, operators, and admin flows."
-llmsDescription: "Explains the DAMM v1 program instruction surface for Meteora's dynamic AMM program. Covers pool initialization variants, config-based pools, customizable pools, swaps, balanced and imbalanced liquidity, single-sided withdrawals, bootstrap liquidity, LP locks, lock fee claims, config creation, activation updates, fee updates, partner fee claims, protocol fee withdrawal, operator permissions, TypeScript SDK method mappings, account planning, Dynamic Vault accounts, launch-pool activation constraints, and integration gotchas."
+description: "Explore all DAMM v1 amm instructions for pool creation, swaps, liquidity, locks, configs, fees, activation, operators, and admin flows."
+llmsDescription: "Explains the full DAMM v1 amm program instruction surface from meteora-dynamic-amm/programs/amm. Covers permissioned and permissionless pool initialization, config-based launch pools, customizable pools, swaps, balanced and imbalanced liquidity, single-sided withdrawals, bootstrap liquidity, LP locks, lock fee claims, config creation and closure, activation updates, whitelisted vault updates, fee updates, partner fee claims, protocol fee withdrawal, protocol fee zaps, operator account management, pool enablement, mint metadata creation, get_pool_info, Dynamic Vault account requirements, activation constraints, and integration gotchas."
 ---
 
-The DAMM v1 program exposes a broad instruction surface because it covers legacy permissioned pools, permissionless pools, launch pools, stable pools, Dynamic Vault integration, LP locks, and operator-controlled fee flows. Most application integrations should use the TypeScript SDK for transaction construction.
-
-<Note>
-  The public SDK IDL and the current `meteora-dynamic-amm/programs/amm` source are not identical snapshots. This page maps the public SDK methods where they exist and calls out operator/admin flows separately.
-</Note>
+The `amm` IDL exposes many instructions. Integrators can choose to either use the TypeScript SDK for transaction construction or build through CPI.
 
 ## Pool Creation
 
-| Instruction | TypeScript SDK | Use |
-| --- | --- | --- |
-| `initialize_permissioned_pool` | Low-level only | Create a permissioned pool from an arbitrary signer pool account. |
-| `initialize_permissionless_pool` | `createPermissionlessPool` | Create a permissionless pool using the curve default fee. |
-| `initialize_permissionless_pool_with_fee_tier` | `createPermissionlessPool` | Create a permissionless stable or constant-product pool with an allowed fee tier. |
-| `initialize_permissionless_constant_product_pool_with_config` | `createPermissionlessConstantProductPoolWithConfig` | Create a constant-product pool from a config PDA. |
-| `initialize_permissionless_constant_product_pool_with_config2` | `createPermissionlessConstantProductPoolWithConfig2` | Create a config-based constant-product pool and optionally override the activation point within config limits. |
-| `initialize_customizable_permissionless_constant_product_pool` | `createCustomizablePermissionlessConstantProductPool` | Create a customizable constant-product launch pool without a config PDA. |
-| `create_mint_metadata` | Low-level only | Create missing Metaplex LP mint metadata for old pools. |
+| Instruction | Use |
+| --- | --- |
+| `initialize_permissioned_pool` | Creates a permissioned pool from an arbitrary signer pool account. |
+| `initialize_permissionless_pool` | Creates a permissionless pool with the curve's default fee. |
+| `initialize_permissionless_pool_with_fee_tier` | Creates a permissionless pool with an allowed trade fee tier. |
+| `initialize_permissionless_constant_product_pool_with_config` | Creates a config-based constant-product pool with the config's default activation point. |
+| `initialize_permissionless_constant_product_pool_with_config2` | Creates a config-based constant-product pool with an optional activation point override. |
+| `initialize_customizable_permissionless_constant_product_pool` | Creates a customizable constant-product launch pool without a config PDA. |
+| `create_mint_metadata` | Creates missing Metaplex LP mint metadata for older pools. |
 
-Pool creation initializes the pool, LP mint, pool-owned Dynamic Vault LP token accounts, protocol fee token accounts, initial liquidity, and LP mint metadata. New pool builders must provide or create the two Dynamic Vault accounts before the DAMM v1 initialization instruction can complete.
+Pool initialization creates or initializes the pool, LP mint, pool-owned Dynamic Vault LP token accounts, protocol fee token accounts, initial liquidity, and LP mint metadata. The two Dynamic Vault accounts and their token vaults must exist or be created as part of the setup flow.
 
 ## Pool PDA Variants
 
 | Pool type | Address behavior |
 | --- | --- |
 | Permissioned | Pool address is an arbitrary signer account. |
-| Permissionless default fee | PDA from curve type byte and sorted mints. |
-| Permissionless fee tier | PDA from curve type byte, sorted mints, and optional fee-bps seed. The default fee tier omits the fee seed. |
-| Config-based constant product | PDA from sorted mints and config key. |
-| Customizable constant product | PDA from `pool` and sorted mints. |
+| Permissionless default fee | PDA from curve type byte and sorted token mints. |
+| Permissionless fee tier | PDA from curve type byte, sorted token mints, and optional fee-bps seed. The default fee tier omits the fee seed. |
+| Config-based constant product | PDA from sorted token mints and config key. |
+| Customizable constant product | PDA from `pool` and sorted token mints. |
 
 Use the SDK or Rust helper derivations instead of rebuilding seeds manually.
 
 ## Swaps
 
-| Instruction | TypeScript SDK | Use |
-| --- | --- | --- |
-| `swap` | `pool.swap`, `pool.getSwapQuote` | Swap token A to B or token B to A with an exact input amount and minimum output. |
+| Instruction | Use |
+| --- | --- |
+| `swap` | Swaps token A to B or token B to A with exact input and minimum output protection. |
 
-`swap` validates the pool is enabled, validates activation state, updates depeg virtual price when needed, deposits input through the relevant Dynamic Vault, computes trade/protocol/host fees, and withdraws output through the opposite vault.
+`swap` validates pool enablement and launch activation, updates depeg virtual price when required, deposits input through one Dynamic Vault, computes trade, protocol, partner, and optional host fees, then withdraws output through the opposite vault.
 
 | Parameter | Meaning |
 | --- | --- |
 | `in_amount` | Exact source token amount. |
 | `minimum_out_amount` | Minimum destination token amount accepted by the user. |
-| Remaining depeg accounts | Required for stable LST/depeg pools. The SDK supplies them from the curve. |
-| Optional host fee account | Referral token account receiving the host fee share when passed as a remaining account. |
+| Remaining depeg accounts | Required for stable LST/depeg pools. |
+| Optional host fee account | Referral token account that receives the host fee share when provided. |
 
 ## Liquidity
 
-| Instruction | TypeScript SDK | Use |
-| --- | --- | --- |
-| `add_balance_liquidity` | `pool.deposit` | Add balanced liquidity to an existing pool. Used by constant-product pools after bootstrap. |
-| `add_imbalance_liquidity` | `pool.deposit` | Add imbalanced liquidity. Only supported by stable pools. |
-| `remove_balance_liquidity` | `pool.withdraw` | Burn pool LP and withdraw both tokens proportionally. Allowed even when the pool is disabled. |
-| `remove_liquidity_single_side` | `pool.withdraw` | Burn pool LP and withdraw one token. Only supported by stable pools. |
-| `bootstrap_liquidity` | `pool.deposit` | Re-seed a depleted pool. |
-| `get_pool_info` | Low-level only; SDK computes locally | Emit pool token amounts, virtual price, and timestamp. |
+| Instruction | Use |
+| --- | --- |
+| `add_balance_liquidity` | Adds balanced liquidity by minting a target amount of pool LP, bounded by max token A and B inputs. |
+| `add_imbalance_liquidity` | Adds liquidity with imbalanced token A/B inputs. Only supported by stable pools. |
+| `remove_balance_liquidity` | Burns pool LP and withdraws token A/B proportionally. This remains available when a pool is disabled. |
+| `remove_liquidity_single_side` | Burns pool LP and withdraws one token. Only supported by stable pools. |
+| `bootstrap_liquidity` | Re-seeds a depleted pool with token A and token B liquidity. |
+| `get_pool_info` | Emits pool token amounts, virtual price, and timestamp for read-style integrations. |
 
-The SDK chooses the deposit or withdrawal instruction based on pool type, current LP supply, and whether the requested output is balanced or single-sided.
+Balanced operations are the normal constant-product path. Stable pools additionally support imbalanced deposits and single-sided withdrawals.
 
 ## LP Locks
 
-| Instruction | TypeScript SDK | Use |
-| --- | --- | --- |
-| `create_lock_escrow` | `pool.lockLiquidity` | Initialize a lock escrow for an owner and pool. |
-| `lock` | `pool.lockLiquidity` | Move LP tokens into the escrow and update the virtual-price checkpoint. |
-| `claim_fee` | `pool.claimLockFee`, `pool.claimLockFee2` | Claim token A/B fees generated by locked LP. |
-| `move_locked_lp` | `pool.moveLockedLP` | Move locked LP from one escrow owner to another. Present in the SDK IDL and SDK program crate. |
+| Instruction | Use |
+| --- | --- |
+| `create_lock_escrow` | Initializes a lock escrow PDA for an owner and pool. |
+| `lock` | Transfers LP tokens into the escrow and updates the virtual-price checkpoint. |
+| `claim_fee` | Claims token A/B fees accrued by locked LP, bounded by `max_amount`. |
 
-Lock fee accounting is LP-denominated internally. The SDK converts the claimable LP amount into token A/B output by quoting a balanced withdrawal of the accrued LP fee.
+Lock fee accounting is LP-denominated internally. Claiming converts claimable LP value into token A/B by using the pool's balanced withdrawal logic.
 
 ## Configs And Activation
 
-| Instruction | TypeScript SDK | Use |
-| --- | --- | --- |
-| `create_config` | `AmmImpl.createConfig` | Create a fee and activation config PDA by index. Admin-only in program source. |
-| `close_config` | Low-level only | Close a config PDA. Admin-only in program source. |
-| `update_activation_point` | Low-level only | Update a launch pool activation point before the pre-activation swap window starts. |
-| `set_whitelisted_vault` | Low-level only | Set the whitelisted alpha vault for a launch pool. |
-
-Config-based pools inherit `pool_fees`, `activation_duration`, `vault_config_key`, `pool_creator_authority`, `activation_type`, and `partner_fee_numerator`. If `pool_creator_authority` is not the default pubkey, only that signer can create pools from the config.
-
-## Fees And Operators
-
-| Instruction | TypeScript SDK | Use |
-| --- | --- | --- |
-| `set_pool_fees` | Low-level only | Update a pool fee configuration. Restricted by fee update authority rules and fee bounds. |
-| `override_curve_param` | Low-level only | Update stable curve amp parameters without changing curve type. |
-| `partner_claim_fee` | `pool.partnerClaimFees` | Claim pending partner fee amounts for config-based pools. |
-| `withdraw_protocol_fees` | Operator-only | Withdraw protocol token A/B fees. Requires a claim-protocol-fee operator. |
-| `zap_protocol_fee` | Operator-only | Zap protocol fee through approved Jupiter v6 route accounts. Requires a zap operator. |
-| `create_operator_account` | Admin-only | Create an operator permission PDA for a whitelisted address. |
-| `close_operator_account` | Admin-only | Close an operator account. |
-| `enable_or_disable_pool` | Low-level only | Enable or disable a pool. Disabled pools still allow balanced withdrawal. |
-
-Operator permissions are stored as a bitmap: bit `0` for protocol fee claim and bit `1` for protocol fee zap.
-
-## SDK Transaction Construction
-
-| Flow | Recommended SDK calls |
+| Instruction | Use |
 | --- | --- |
-| Load one pool | `const pool = await AmmImpl.create(connection, poolAddress)` |
-| Load many pools | `await AmmImpl.createMultiple(connection, poolAddresses)` |
-| Quote and swap | `pool.getSwapQuote(...)`, then `pool.swap(...)` |
-| Deposit | `pool.getDepositQuote(...)`, then `pool.deposit(...)` |
-| Withdraw | `pool.getWithdrawQuote(...)`, then `pool.withdraw(...)` |
-| Config-based pool creation | `AmmImpl.createPermissionlessConstantProductPoolWithConfig(...)` |
-| Customizable pool creation | `AmmImpl.createCustomizablePermissionlessConstantProductPool(...)` |
-| Lock and claim | `pool.lockLiquidity(...)`, `pool.getUserLockEscrow(...)`, `pool.claimLockFee2(...)` |
+| `create_config` | Admin-only instruction that creates a config PDA from `config` + `index`. |
+| `close_config` | Admin-only instruction that closes a config account and returns rent. |
+| `update_activation_point` | Admin-only instruction that updates a launch pool's activation point before the program-defined cutoff. |
+| `set_whitelisted_vault` | Admin-only instruction that updates the launch pool whitelisted alpha vault before pre-activation swaps begin. |
 
-All returned transactions are unsigned. Callers still sign, simulate when appropriate, and submit through their own wallet or backend signer.
+Config-created pools inherit `pool_fees`, `activation_duration`, `vault_config_key`, `pool_creator_authority`, `activation_type`, and `partner_fee_numerator`. If `pool_creator_authority` is not the default pubkey, that authority must sign pool creation from the config.
 
-## Integration Gotchas
+| `ConfigParameters` field | Meaning |
+| --- | --- |
+| `trade_fee_numerator` | Trade fee numerator using `FEE_DENOMINATOR = 100_000`. |
+| `protocol_trade_fee_numerator` | Protocol share numerator using `FEE_DENOMINATOR = 100_000`. |
+| `activation_duration` | Duration added to the current slot or timestamp to derive default activation. |
+| `vault_config_key` | Alpha Vault config/base key. Default pubkey means no alpha vault. |
+| `pool_creator_authority` | Public config when default; private config when non-default. |
+| `activation_type` | `0` for slot activation, `1` for timestamp activation. |
+| `index` | Config PDA index. |
+| `partner_fee_numerator` | Partner share of protocol fees using `FEE_DENOMINATOR = 100_000`. |
 
-| Area | Gotcha |
+## Pool Controls And Fees
+
+| Instruction | Use |
+| --- | --- |
+| `enable_or_disable_pool` | Admin-only instruction that toggles pool enablement. Disabled pools still allow balanced withdrawals. |
+| `set_pool_fees` | Updates pool trade, protocol, and partner fee settings, subject to fee authority and validation rules. |
+| `override_curve_param` | Updates stable-swap curve parameters without changing the curve type. Only stable amp changes are honored. |
+| `partner_claim_fee` | Lets the configured partner authority claim pending partner token A/B fees. |
+
+`trade_fee_numerator`, `protocol_trade_fee_numerator`, host fee, and partner fee values use `FEE_DENOMINATOR = 100_000`, not direct basis points.
+
+## Operator And Admin Instructions
+
+| Instruction | Use |
+| --- | --- |
+| `withdraw_protocol_fees` | Operator-gated instruction that withdraws protocol token A/B fees up to caller-provided maximums. |
+| `zap_protocol_fee` | Operator-gated instruction that zaps protocol fees through approved Jupiter v6 route accounts. |
+| `create_operator_account` | Admin-only instruction that creates an operator permission PDA for a whitelisted address. |
+| `close_operator_account` | Admin-only instruction that closes an operator account and returns rent. |
+
+Operator permissions are stored as a bitmap. Bit `0` allows protocol fee claiming, and bit `1` allows protocol fee zapping.
+
+## Validation
+
+| Area | Rule |
 | --- | --- |
 | Dynamic Vaults | Pool quotes and transactions need vault state, vault token accounts, vault LP mints, and pool-held vault LP token accounts. Reading only the pool account is not enough. |
 | Activation | Launch pools can block swaps until `bootstrapping.activation_point`. Slot and timestamp activation use different current-point sources. |
 | Alpha Vault | Config or customizable pools with alpha-vault support apply stricter activation timing and quote-mint checks on mainnet builds. |
 | Stable pools | Single-sided withdrawal and imbalanced deposits are stable-pool features. Constant-product pools should use balanced liquidity operations. |
 | Depeg pools | LST/depeg stable pools need remaining stake/depeg accounts for quotes and swaps. |
-| Fees | `trade_fee_numerator` and `protocol_trade_fee_numerator` use `FEE_DENOMINATOR = 100_000`, not basis points. SDK config creation multiplies bps by `10`. |
+| Fees | Fee numerators use `FEE_DENOMINATOR = 100_000`. SDK config helpers that accept bps convert bps into this denominator. |
 | Referrals | Host fee routing depends on an optional referral token account passed as a swap remaining account. |
 | Disabled pools | Swaps and most liquidity operations are blocked, but balanced withdrawal remains available so LPs can exit. |

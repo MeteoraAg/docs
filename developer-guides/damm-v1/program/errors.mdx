@@ -5,7 +5,11 @@ description: "Understand DAMM v1 dynamic AMM Anchor errors, including codes, enu
 llmsDescription: "Explains the DAMM v1 custom error reference for Meteora's dynamic AMM program. Covers Anchor error codes, PoolError enum names, messages, arithmetic errors, fee validation, vault account validation, pool status, stable curve constraints, depeg account constraints, launch-pool activation constraints, partner and protocol fee errors, zap errors, CPI restrictions, and common remediation guidance."
 ---
 
-DAMM v1 custom errors are defined in `PoolError`. Anchor custom errors start at code `6000`.
+This page lists the Anchor custom errors returned by the DAMM v1 `amm` program.
+
+<Tip>
+  Anchor custom program errors start at `6000`. When a transaction log contains `custom program error: 0x1771`, convert the hex value to decimal to find the matching code. For example, `0x1771` is `6001`, which maps to `InvalidFee`.
+</Tip>
 
 ## Error Reference
 
@@ -73,14 +77,3 @@ DAMM v1 custom errors are defined in `PoolError`. Anchor custom errors start at 
 | `6059` | `CpiDisabled` | CPI disabled | Instruction rejects CPI invocation. |
 | `6060` | `MissingZapOutInstruction` | Missing zap out instruction | Zap route instruction was not found in the transaction sysvar. |
 | `6061` | `InvalidZapAccounts` | Invalid zap accounts | Zap route source/destination or account validation failed. |
-
-## Debugging Checklist
-
-| Symptom | Check |
-| --- | --- |
-| Pool creation fails with fee errors | Convert bps to numerator with `FEE_DENOMINATOR = 100_000`; config and customizable pools validate different fee ranges. |
-| Swap fails before math | Check `pool.enabled`, activation point, source/destination token accounts, protocol fee account, and depeg remaining accounts. |
-| Stable pool operation fails | Confirm the curve is stable, token multipliers match mint decimals, and depeg accounts are supplied when required. |
-| Launch pool activation fails | Verify `activation_type`, current slot or timestamp, alpha-vault timing buffers, and max activation duration. |
-| Partner claim fails | Confirm `pool.partner_info.partner_authority`, partner token accounts, and max claim amounts. |
-| Protocol fee withdrawal fails | Confirm the operator PDA, permission bitmap, treasury ATAs, and mint restrictions for zap flows. |
