@@ -1,32 +1,49 @@
 ---
 title: "Documentation MCP"
-description: "Search and query Meteora docs and APIs from your AI editor via Model Context Protocol."
-llmsDescription: "Meteora supports the Model Context Protocol (MCP) through Mintlify's native MCP server at https://docs.meteora.ag/mcp. This enables AI tools like Claude Code, Cursor, Windsurf, and other MCP-compatible editors to search and query Meteora documentation and OpenAPI specifications in-context. The MCP server allows AI assistants to look up API endpoints, read documentation guides, and understand API schemas without leaving the editor. It is a read-only documentation server, not a tool for executing API calls or scripts."
+sidebarTitle: "Documentation MCP"
+description: "Connect AI tools to Meteora docs through Mintlify's hosted Model Context Protocol server."
+llmsDescription: "Meteora exposes a Mintlify-generated documentation MCP server at https://docs.meteora.ag/mcp. It is a read-only HTTP MCP endpoint for AI tools to search Meteora documentation, retrieve full page content through a virtual docs filesystem, inspect indexed API reference and OpenAPI documentation, and discover skill.md resources if available. It does not execute API calls, sign transactions, mutate docs, or manage funds. Use it with Claude, Claude Code, Cursor, VS Code, Windsurf, ChatGPT, and other MCP-compatible clients; use llms.txt and raw Markdown exports for static ingestion."
 ---
 
-Meteora supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) through Mintlify's native integration. This lets AI tools search and query Meteora's documentation and API specifications directly from your editor.
+Meteora's documentation MCP is the live, tool-call version of these docs for AI agents. It is hosted by Mintlify at `https://docs.meteora.ag/mcp` and follows Mintlify's documentation MCP model: agents can search indexed documentation, then read exact page content from a read-only docs filesystem.
 
 ## What is MCP?
 
-MCP is an open protocol that connects AI assistants to external data sources and tools. With Meteora's MCP server, your AI editor can:
+MCP is an open protocol that connects AI assistants to external data sources and tools. With Meteora's documentation MCP server, your AI tool can:
 
-- **Search documentation**: find relevant developer guides, and APIs.
-- **Read OpenAPI specs**: access full request/response schemas
-- **Understand API contracts**: look up parameters, response fields, and error codes
+- **Search documentation**: find relevant product docs, developer guides, SDK references, and API references
+- **Read exact pages**: retrieve full MDX/Markdown content through Mintlify's virtual docs filesystem
+- **Inspect API reference content**: look up indexed endpoint docs, request/response schemas, parameters, and errors where available
+- **Use docs without web-search noise**: answer from the current indexed Meteora documentation instead of generic search results
 
 <Note>
-This is a read-only documentation server. It helps your AI assistant understand Meteora's APIs, but does not execute API calls. For liquidity provisioning or pool creation via AI tools, see [Meteora CLI](/ai/cli).
+This is a read-only documentation server. It does not execute API calls, submit transactions, sign with a wallet, mutate documentation, or manage funds.
 </Note>
 
-## Mintlify Native MCP
+## Endpoint
 
-Every Mintlify documentation site includes a built-in MCP server. Meteora's is available at:
+Meteora's public documentation MCP server is available at:
 
 ```
 https://docs.meteora.ag/mcp
 ```
 
-This server exposes all Meteora documentation and OpenAPI specifications through the MCP protocol, with no additional setup required.
+<Card title="Meteora Docs MCP" href="https://docs.meteora.ag/mcp" icon="plug" horizontal>
+  Connect an MCP-compatible AI tool to Meteora documentation
+</Card>
+
+This endpoint uses HTTP transport and exposes Meteora's indexed documentation through MCP.
+
+## Documentation MCP vs Mintlify MCP
+
+Mintlify offers two related MCP experiences:
+
+| Server | Audience | What it can do |
+|:-------|:---------|:---------------|
+| **Documentation MCP** at `https://docs.meteora.ag/mcp` | Meteora builders and users | Search and read Meteora's published docs |
+| **Mintlify MCP** at `https://mcp.mintlify.com` | Trusted documentation teams | Edit Mintlify content, update navigation, modify `docs.json`, and open pull requests |
+
+Use Meteora's documentation MCP when an agent needs current Meteora context. Use Mintlify's authenticated MCP only if you are part of the docs team and want an agent to make documentation changes through Mintlify's branch and pull request workflow.
 
 ## What You Get
 
@@ -34,25 +51,26 @@ Once connected, your AI assistant can search and read:
 
 | Resource | Description |
 |:---------|:------------|
-| **Documentation pages** | All guides, tutorials, and reference docs |
-| **OpenAPI specifications** | Complete API schemas for Swap, Tokens, Price, and more |
-| **Error references** | Common error codes and troubleshooting guides |
+| **Documentation pages** | Product explanations, user guides, developer guides, and reference docs |
+| **API references** | Indexed endpoint docs and OpenAPI-backed request/response details where available |
+| **Program references** | Account, instruction, event, and error documentation for Meteora programs |
+| **Skill resources** | `skill.md` resources, when available through the docs site |
 
 <Tip>
-Combine MCP with [llms.txt](/ai/llms-txt) for the best results: use MCP for in-editor queries and llms.txt for batch processing or RAG pipelines.
+Combine MCP with [llms.txt](/agents/llms-txt): use MCP for in-editor queries and use `llms.txt`, `llms-full.txt`, or raw Markdown exports for batch processing and RAG pipelines.
 </Tip>
 
 ## Setup
 
 <Tabs>
   <Tab title="Claude Code">
-  **How to enable Meteora MCP in Claude Code:**
+  **How to enable Meteora Docs MCP in Claude Code:**
 
   1. Open your terminal.
   2. Add Meteora's MCP server by running:
 
     ```bash
-    claude mcp add --scope user --transport http meteora https://docs.meteora.ag/mcp
+    claude mcp add --transport http meteora https://docs.meteora.ag/mcp
     ```
   3. Launch Claude Code and start chatting with Meteora.
 
@@ -74,7 +92,7 @@ Combine MCP with [llms.txt](/ai/llms-txt) for the best results: use MCP for in-e
   </Tab>
 
   <Tab title="Claude">
-  **Setup Meteora MCP in Claude:**
+  **Setup Meteora Docs MCP in Claude:**
 
   1. Go to [**Connectors**](https://claude.ai/settings/connectors) in your Claude settings.
   2. Select **Add custom connector**.
@@ -83,7 +101,7 @@ Combine MCP with [llms.txt](/ai/llms-txt) for the best results: use MCP for in-e
   </Tab>
 
   <Tab title="Cursor">
-  **Setup Meteora MCP in Cursor:**
+  **Setup Meteora Docs MCP in Cursor:**
 
   1. Open the command palette with `Cmd + Shift + P` (or `Ctrl + Shift + P` on Windows).
   2. Search for **Open MCP settings**.
@@ -102,8 +120,28 @@ Combine MCP with [llms.txt](/ai/llms-txt) for the best results: use MCP for in-e
   4. Save and reload Cursor.
   </Tab>
 
+  <Tab title="VS Code">
+  **Setup Meteora Docs MCP in VS Code:**
+
+  1. Create or open `.vscode/mcp.json`.
+  2. Add the following server configuration:
+
+    ```json
+    {
+      "servers": {
+        "meteora": {
+          "type": "http",
+          "url": "https://docs.meteora.ag/mcp"
+        }
+      }
+    }
+    ```
+
+  3. Save the file and reload your MCP-enabled VS Code environment.
+  </Tab>
+
   <Tab title="Windsurf">
-  **Using Meteora MCP in Windsurf:**
+  **Using Meteora Docs MCP in Windsurf:**
 
   1. Open the command palette with `Cmd + Shift + P` (or `Ctrl + Shift + P` on Windows).
   2. Search for **Windsurf: Configure MCP Servers**.
@@ -123,4 +161,22 @@ Combine MCP with [llms.txt](/ai/llms-txt) for the best results: use MCP for in-e
 
 ### Other MCP-Compatible Tools
 
-Any tool that supports the MCP protocol can connect to `https://docs.meteora.ag/mcp` using HTTP transport.
+Any tool that supports HTTP MCP servers can connect to `https://docs.meteora.ag/mcp`.
+
+## Example Prompts
+
+```text
+Use the Meteora Docs MCP to find the current DLMM TypeScript SDK swap flow, then summarize the files I should read before implementing it.
+```
+
+```text
+Search Meteora docs for DAMM v2 fee scheduler and rate limiter behavior. Cite the relevant docs pages before suggesting configuration values.
+```
+
+```text
+Read the DBC migration docs and program error reference, then help me design a defensive integration checklist.
+```
+
+<Note>
+For onchain execution, keep signing and transaction submission in your own scripts, wallet, SDK integration, or [Meteora Invent](/invent/actions). The documentation MCP supplies context; it does not perform the action.
+</Note>

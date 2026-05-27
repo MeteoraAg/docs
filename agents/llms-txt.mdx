@@ -1,22 +1,24 @@
 ---
 title: "llms.txt"
-description: "Structured documentation index optimised for LLM and AI agent consumption."
-llmsDescription: "Meteora provides two LLM-optimised documentation files: llms.txt, a structured Markdown index of Meteora docs covering Core Products, Helper Products, Developer Guides, Invent, Agents, Protocol, and Resources; and llms-full.txt, the complete documentation site content including code examples, guides, API references, and product explanations. Both follow the llmstxt.org standard. Any Meteora documentation page can also be accessed as raw Markdown by appending .md to the URL or using the Accept: text/markdown header."
+sidebarTitle: "llms.txt"
+description: "Static documentation indexes and raw Markdown endpoints for LLMs and AI agents."
+llmsDescription: "Meteora exposes AI-readable documentation through llms.txt, llms-full.txt, raw Markdown page exports, and the documentation MCP server. llms.txt is a compact Markdown index of Meteora documentation for discovery. llms-full.txt contains the full documentation corpus for bulk ingestion and RAG pipelines. Individual pages can be fetched as raw Markdown by appending .md to the URL or using the Accept: text/markdown header. The documentation MCP complements these static files by letting MCP-capable clients search indexed docs and read exact page content in-context."
 ---
 
 Meteora provides structured documentation files purpose-built for LLMs and AI agents, following the [llmstxt.org](https://llmstxt.org) standard.
 
 <Note>
-Meteora's `llms.txt` is generated from the documentation structure and page metadata. It gives AI tools a compact map of the docs before they decide which product guide, SDK reference, API reference, or raw Markdown page to read next.
+Use `llms.txt` when your agent needs a compact map of the docs. Use [Documentation MCP](/agents/mcp) when your AI tool can call MCP tools and should search or read pages interactively.
 </Note>
 
 ## llms.txt
 
-A plain Markdown file containing a structured index of Meteora documentation with titles and descriptions for each page:
+A plain Markdown file containing a structured index of Meteora documentation with titles and descriptions for each indexed page:
 
 - **Site title** as an H1 heading
-- **Sections** for each major area, including Get Started, Core Products, Developer Guides, Invent, Agents, Protocol, and Resources
-- **Links with descriptions** for documentation pages, product guides, SDK references, API references, and resources
+- **Sections** for major areas such as Get Started, User Guides, Core Products, Helper Products, Developer Guides, Invent, Agents, Protocol, and Resources
+- **Links with descriptions** for product guides, SDK references, API references, and resources
+- **OpenAPI spec links** where API reference specifications are indexed
 
 <Card title="llms.txt" href="https://docs.meteora.ag/llms.txt" icon="file" horizontal>
   Open the llms.txt for Meteora docs
@@ -28,15 +30,16 @@ A plain Markdown file containing a structured index of Meteora documentation wit
 ## Get Started
 
 - [We Build Liquidity Pools](https://docs.meteora.ag/get-started.md): The Most Composable Liquidity Layer...
-- [What is DLMM?](https://docs.meteora.ag/core-products/dlmm/what-is-dlmm.md): Learn how Meteora's DLMM uses price bins...
-- [What is DAMM v2?](https://docs.meteora.ag/core-products/damm-v2/what-is-damm-v2.md): Learn how Meteora's DAMM v2 uses price bins...
-- [What is Dynamic Bonding Curve?](https://docs.meteora.ag/core-products/dbc/what-is-dbc.md): Learn how Meteora's Dynamic Bonding Curve uses price bins...
-- [DLMM Developer Guide](https://docs.meteora.ag/developer-guides/dlmm.md): Learn how to build DLMM integrations...
-- [DAMM v2 Developer Guide](https://docs.meteora.ag/developer-guides/damm-v2.md): Learn how to build DAMM v2 integrations...
-- [Dynamic Bonding Curve Developer Guide](https://docs.meteora.ag/developer-guides/dbc.md): Learn how to build Dynamic Bonding Curve integrations...
+- [What is DLMM?](https://docs.meteora.ag/core-products/dlmm/what-is-dlmm.md): Learn how Meteora's DLMM organizes liquidity...
+- [DAMM v2 Developer Guide](https://docs.meteora.ag/developer-guides/damm-v2/index.md): Learn how to build DAMM v2 integrations...
+- [Dynamic Bonding Curve Developer Guide](https://docs.meteora.ag/developer-guides/dbc/index.md): Learn how to build Dynamic Bonding Curve integrations...
+
+## OpenAPI Specs
+
+- [openapi](https://docs.meteora.ag/api-reference/dlmm/openapi.json)
 ```
 
-This is the perfect entrypoint for LLMs and AI agents to get started. It allows them to efficiently locate relevant content at a high level without processing the entire documentation.
+This is the best first fetch for agents that need to decide which Meteora product, guide, SDK reference, API reference, or raw Markdown page to read next.
 
 ## llms-full.txt
 
@@ -44,7 +47,7 @@ This is the perfect entrypoint for LLMs and AI agents to get started. It allows 
   Open the llms-full.txt for Meteora docs
 </Card>
 
-While `llms.txt` provides a concise index, `llms-full.txt` contains the **entire documentation site** as context, including every description, code example, and parameter detail.
+While `llms.txt` provides a concise index, `llms-full.txt` contains the **entire documentation site** as context, including descriptions, code examples, guides, API references, and product explanations.
 
 Use `llms-full.txt` when:
 
@@ -52,9 +55,9 @@ Use `llms-full.txt` when:
 - You're building **custom RAG pipelines** over Meteora docs
 - You want **every code example** available for reference
 
-## Markdown Export
+## Raw Markdown Pages
 
-Any documentation page can be accessed as raw markdown, making it easy for AI agents to consume individual pages programmatically.
+Any documentation page can be accessed as raw Markdown, making it easy for AI agents to consume individual pages programmatically.
 
 **Method 1: Append `.md` to the URL**
 
@@ -74,3 +77,16 @@ curl -H "Accept: text/markdown" https://docs.meteora.ag/developer-guides/damm-v2
 ```
 
 Both methods return the page content as `text/markdown`.
+
+## How Agents Should Use These Files
+
+| Need | Best entrypoint |
+|:-----|:----------------|
+| Discover the docs structure | `https://docs.meteora.ag/llms.txt` |
+| Ingest the full docs corpus | `https://docs.meteora.ag/llms-full.txt` |
+| Read one exact page | Append `.md` to the page URL |
+| Search and read from an MCP client | `https://docs.meteora.ag/mcp` |
+
+<Tip>
+For most agent workflows, start with `llms.txt`, fetch only the relevant `.md` pages, and use `llms-full.txt` only when you intentionally want the full corpus in one document.
+</Tip>
