@@ -5,7 +5,7 @@ description: "Understand DBC dynamic_bonding_curve events emitted by config, tra
 llmsDescription: "Explains the DBC program event reference for the public Meteora dynamic_bonding_curve program. Covers Anchor event-CPI delivery, event authority PDA requirements, config and transfer-hook config events, metadata events, EvtInitializePool, EvtInitializePoolWithTransferHook, EvtSwap and EvtSwap2, EvtSwap2WithTransferHook, EvtCurveComplete, EvtCurveCompleteWithTransferHook, fee claim events, migration events, surplus and leftover events, operator events, deprecated EvtCreateConfig compatibility behavior, and indexing considerations for trading terminals and analytics."
 ---
 
-The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use this page when building indexers, analytics pipelines, charting systems, or low-level clients that need to map transactions back to DBC pool activity.
+The `dynamic-bonding-curve` program emits most Anchor events through event CPI. Use this page when building indexers, analytics pipelines, charting systems, or low-level clients that need to map transactions back to DBC pool activity.
 
 ## Event CPI
 
@@ -16,6 +16,7 @@ The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use t
 | Primary standard swap event | `EvtSwap2` |
 | Primary transfer-hook swap event | `EvtSwap2WithTransferHook` |
 | Deprecated compatibility event | `EvtCreateConfig` is deprecated; prefer `EvtCreateConfigV2`. |
+| Log-event exception | `EvtClaimProtocolFee2` is emitted with `emit!`, not event CPI. |
 
 ## Config And Metadata Events
 
@@ -68,7 +69,7 @@ The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use t
 | --- | --- | --- | --- |
 | `EvtClaimTradingFee` | `claim_trading_fee`, `claim_trading_fee2` | `pool`, `token_base_amount`, `token_quote_amount` | Partner trading fee claim. |
 | `EvtClaimCreatorTradingFee` | `claim_creator_trading_fee`, `claim_creator_trading_fee2` | `pool`, `token_base_amount`, `token_quote_amount` | Creator trading fee claim. |
-| `EvtClaimProtocolFee` | `claim_protocol_fee` | `pool`, `token_base_amount`, `token_quote_amount` | Protocol trading fee claim. |
+| `EvtClaimProtocolFee` | `claim_protocol_fee` | `pool`, `token_base_amount`, `token_quote_amount` | Deprecated protocol trading fee claim. |
 | `EvtClaimProtocolFee2` | `claim_protocol_fee2` | `pool`, `receiver_token_account`, `token_mint`, `amount` | Protocol fee claim through the newer single-mint claim path. |
 | `EvtClaimPoolCreationFee` | `claim_protocol_pool_creation_fee` | `pool`, `receiver`, `creation_fee` | Protocol share of pool creation fee. |
 | `EvtPartnerClaimPoolCreationFee` | `claim_partner_pool_creation_fee` | `pool`, `partner`, `creation_fee`, `fee_receiver` | Partner share of pool creation fee. |
@@ -87,7 +88,6 @@ The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use t
 
 | Event | Emitted by | Important fields | Use |
 | --- | --- | --- | --- |
-| `EvtCreateClaimFeeOperator` | Operator creation flow | `operator` | Track protocol fee operator creation. |
 | `EvtCloseClaimFeeOperator` | `close_claim_protocol_fee_operator` | `claim_fee_operator`, `operator` | Track protocol fee operator closure. |
 
 ## Indexing Notes

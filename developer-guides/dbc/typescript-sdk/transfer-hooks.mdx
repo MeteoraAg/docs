@@ -53,6 +53,7 @@ Transfer-hook configs require `TokenType.Token2022` and a valid executable trans
 import {
   buildCurveWithMarketCap,
   DynamicBondingCurveClient,
+  SwapMode,
   TokenAuthorityOption,
   TokenDecimal,
   TokenType,
@@ -115,6 +116,8 @@ const createPoolTx = await client.creator.createPoolWithTransferHook({
 ```
 
 The SDK derives the pool and vault accounts inside the transaction builder. If you need the pool address, use `deriveDbcPoolAddress(quoteMint, baseMint, config)`.
+
+Transfer-hook first-buy builders also use the transfer-hook swap path. They attempt to resolve the base mint's hook remaining accounts automatically. If the hook cannot be resolved while bundling pool initialization with the first buy, pass `transferHookAccountsInfo` and `transferHookAccounts` on the first-buy params.
 
 ## Swap A Transfer-Hook Pool
 

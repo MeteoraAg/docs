@@ -20,13 +20,14 @@ llmsDescription: "Explains the DBC program account model for the public Meteora 
 | Base vault | PDA token account from pool and base mint | Program-controlled token account for launched base tokens. |
 | Quote vault | PDA token account from pool and quote mint | Program-controlled token account for quote tokens. |
 | Pool authority | PDA from `pool_authority` | Program authority over vaults and migration flows. The deployed address is `FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM`. |
+| Protocol fee authority | PDA from `protocol_fee_authority` under the protocol fee program | Fixed signer expected by `claim_protocol_fee2`, usually through the protocol fee wrapper program. |
 | Event authority | PDA from `__event_authority` | Anchor event-CPI authority required by event-emitting instructions. |
 | Partner metadata | PDA from `partner_metadata` and fee claimer | Optional public metadata for a partner. |
 | Virtual pool metadata | PDA from `virtual_pool_metadata` and pool | Optional public metadata for a pool. |
 | DAMM v1 migration metadata | PDA from `meteora` and pool | Metadata used by DAMM v1 migration and LP lock/claim flows. |
 | DAMM v2 migration metadata | PDA from `damm_v2` and pool | Deprecated in the program; DAMM v2 migration no longer requires a separate metadata setup step. |
-| Operator | PDA from `operator` | Admin-created permission account for protocol fee claim and zap flows. |
-| Claim fee operator | PDA from `cf_operator` | Protocol fee claim authorization account. |
+| Operator | PDA from `operator` | Admin-created permission account for protocol pool creation fee claims and deprecated protocol fee or zap flows. |
+| Claim fee operator | PDA from `cf_operator` | Legacy protocol fee claim authorization account. |
 
 ## Constants
 
@@ -138,7 +139,7 @@ Both accounts store the active pool fields under `pool_state` in the IDL and `po
 | --- | --- | --- |
 | `PartnerMetadata` | `fee_claimer`, `name`, `website`, `logo` | Optional partner profile keyed by fee claimer. |
 | `VirtualPoolMetadata` | `virtual_pool`, `name`, `website`, `logo` | Optional pool profile keyed by pool. |
-| `Operator` | `whitelisted_address`, `permission` | Admin-created operator permission bitmap. |
-| `ClaimFeeOperator` | `operator` | Protocol fee claim authorization account. |
+| `Operator` | `whitelisted_address`, `permission` | Admin-created operator permission bitmap for protocol pool creation fee claims and deprecated protocol fee or zap flows. |
+| `ClaimFeeOperator` | `operator` | Legacy protocol fee claim authorization account. |
 | `MeteoraDammMigrationMetadata` | `virtual_pool`, `partner`, `lp_mint`, partner/creator locked and claimable liquidity, claim and lock statuses | DAMM v1 migration and LP claim state. |
 | `LockEscrow` | `pool`, `owner`, `escrow_vault`, `total_locked_amount`, `lp_per_token`, fee fields | Locker escrow state used by locked vesting and DAMM v1 LP locks. |
