@@ -17,13 +17,13 @@ This page summarizes the DBC implementation details that are useful when reading
 | `TransferHookPool` | Transfer-hook pool state. It stores the same `PoolState` fields as `VirtualPool` with a separate discriminator. |
 | `PartnerMetadata` | Optional partner metadata used by launchpad partners. |
 | `VirtualPoolMetadata` | Optional metadata account for a launched virtual pool, created by the pool creator. |
-| `Operator` | Admin-created permission account used for protocol operations such as claiming protocol fees or zapping protocol fees. |
+| `Operator` | Admin-created permission account used for legacy protocol fee operations and protocol pool creation fee claims. |
 
 SDK state readers normalize standard and transfer-hook account variants. Raw account readers and indexers should still distinguish `PoolConfig` from `ConfigWithTransferHook`, and `VirtualPool` from `TransferHookPool`.
 
 ## Lifecycle State
 
-`VirtualPool` tracks migration progress with four states.
+The shared `PoolState` inside `VirtualPool` and `TransferHookPool` tracks migration progress with four states.
 
 | State | Meaning |
 | --- | --- |
@@ -67,10 +67,11 @@ When the quote reserve reaches `migration_quote_threshold`, normal curve trading
 | Withdraw partner migration fee | Config `fee_claimer`. |
 | Withdraw creator migration fee | Current pool creator. |
 | Withdraw leftover | Permissionless instruction, but funds can only go to the config `leftover_receiver` ATA after migration. |
-| Claim protocol fees | Operator with `ClaimProtocolFee` permission. |
-| Zap protocol fee | Operator with `ZapProtocolFee` permission. |
+| Claim protocol trading or migration fees | `claim_protocol_fee2` uses the fixed `protocol_fee_authority` signer. Deprecated `claim_protocol_fee` uses an operator with `ClaimProtocolFee` permission. |
+| Claim protocol pool creation fee | Operator with `ClaimProtocolFee` permission. |
+| Zap protocol fee | Deprecated; operator with `ZapProtocolFee` permission. |
 
-Several claim paths also use one-time flags on `VirtualPool`, so a valid signer cannot claim the same surplus, migration fee, pool creation fee, or leftover more than once.
+Several claim paths also use one-time flags on the pool state, so a valid signer cannot claim the same surplus, migration fee, pool creation fee, or leftover more than once.
 
 ## Claims by Lifecycle Stage
 
