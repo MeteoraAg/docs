@@ -1,8 +1,8 @@
 ---
 title: "DBC Token 2022 Support"
 sidebarTitle: "Token 2022 Support"
-description: "Learn how DBC supports Token 2022 launches, metadata handling, supported quote tokens, authority choices, supply models, and DAMM v2 migration behavior."
-llmsDescription: "Explains DBC Token 2022 support, including SPL Token and Token 2022 base token launches, Token 2022 metadata pointer and token metadata handling, DAMM v2 migration, DAMM v1 restrictions, supported Token 2022 quote token extensions, unsupported native Token 2022 mint behavior, token authority options, fixed and dynamic supply, leftover handling, and product considerations."
+description: "Learn how DBC supports Token 2022 launches, metadata handling, transfer-hook pools, supported quote tokens, authority choices, supply models, and DAMM v2 migration behavior."
+llmsDescription: "Explains DBC Token 2022 support, including SPL Token and Token 2022 base token launches, Token 2022 metadata pointer and token metadata handling, transfer-hook pool support, DAMM v2 migration, DAMM v1 restrictions, supported Token 2022 quote token extensions, unsupported native Token 2022 mint behavior, token authority options, fixed and dynamic supply, leftover handling, and product considerations."
 ---
 
 DBC supports both SPL Token and Token 2022 base token launches.
@@ -10,7 +10,7 @@ DBC supports both SPL Token and Token 2022 base token launches.
 Token 2022 support helps launch teams use newer Solana token capabilities while still accessing DBC's bonding curve, launch fee controls, and DAMM migration flow. 
 
 <Note>
-  Token 2022 support in DBC does not allow you to utilize any token extensions.
+  DBC supports the standard Token 2022 metadata path and a dedicated Token 2022 transfer-hook path. Other base-token extensions should not be assumed compatible unless they are explicitly supported by the DBC launch flow.
 </Note>
 
 ## SPL Token vs Token 2022
@@ -19,6 +19,7 @@ Token 2022 support helps launch teams use newer Solana token capabilities while 
 | --- | --- |
 | SPL Token | Standard Solana token launch path. Can migrate to DAMM v1 or DAMM v2 depending on configuration. |
 | Token 2022 | Modern token launch path with Token 2022 metadata handling. Must use DAMM v2 migration in the DBC configuration flow. |
+| Token 2022 with transfer hook | Dedicated launch path where the base mint has a transfer hook during bonding-curve trading. The hook is revoked when the curve completes so the token can migrate to DAMM v2. |
 
 ## Token 2022 Base Tokens
 
@@ -36,11 +37,27 @@ DBC handles:
 
 This lets creators launch a Token 2022 token through the same product flow as a standard DBC launch.
 
+## Transfer Hook Base Tokens
+
+DBC supports Token 2022 base mints with transfer hooks through separate config, pool, swap, and fee-claim paths.
+
+| Item | Behavior |
+| --- | --- |
+| Config account | `ConfigWithTransferHook`, which wraps the normal `PoolConfig` and stores the executable transfer-hook program. |
+| Pool account | `TransferHookPool`, which wraps the same `PoolState` layout used by standard virtual pools. |
+| Trading path | Transfer-hook pools use `swap2_with_transfer_hook`, not the standard `swap` or `swap2` instructions. |
+| Fee claims | Partner and creator trading fee claims use transfer-hook-aware `claim_trading_fee2` and `claim_creator_trading_fee2`. |
+| Completion | DBC revokes the transfer-hook program id and transfer-hook authority from the base mint when the curve completes. |
+
+For details, see [DBC Transfer Hook Pools](/core-products/dbc/transfer-hook-pools).
+
 ## Migration Target
 
 Token 2022 launches must use DAMM v2 migration in the DBC configuration flow.
 
 DAMM v2 is the modern migration target for Token 2022 support, advanced collect fee modes, dynamic fees, and vesting behavior.
+
+For transfer-hook launches, the hook is active during bonding-curve trading only. The base mint's transfer hook is revoked before DAMM v2 migration because the graduated pool does not support active transfer hooks.
 
 <Warning>
   DAMM v1 migration is restricted to SPL Token launches. A Token 2022 base-token launch cannot use DAMM v1 migration in DBC config validation.
@@ -77,6 +94,8 @@ Launch teams can configure whether authority is:
 - Extended to include mint authority options for advanced configurations.
 
 Authority choices should match the launch's trust model. Immutable settings may be easier for communities to reason about, while retained authority may be useful for managed launchpad flows.
+
+The mint-authority options, `CreatorUpdateAndMintAuthority` and `PartnerUpdateAndMintAuthority`, are only allowed for transfer-hook configs. Standard SPL Token and standard Token 2022 pool initialization rejects those options and revokes mint authority at launch.
 
 ## Fixed and Dynamic Supply
 

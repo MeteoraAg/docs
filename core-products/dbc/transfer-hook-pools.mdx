@@ -1,0 +1,88 @@
+---
+title: "DBC Transfer Hook Pools"
+sidebarTitle: "Transfer Hook Pools"
+description: "Learn how DBC supports Token 2022 transfer-hook launches during the bonding-curve phase and how those pools graduate to DAMM v2."
+llmsDescription: "Explains DBC Token 2022 transfer-hook pool behavior. Covers ConfigWithTransferHook, TransferHookPool, transfer_hook_program validation, transfer-hook pool initialization, swap2_with_transfer_hook, transfer-hook fee claims, remaining account slices, transfer-hook event variants, mint authority rules, hook revocation when the curve completes, and DAMM v2 migration."
+---
+
+Transfer-hook pools are Token 2022 DBC launches where the base mint has an active transfer hook during bonding-curve trading.
+
+Use this path when a launch needs token-transfer logic during the DBC phase, such as allowlist checks or transfer accounting that lives in a separate transfer-hook program. The hook is a pre-migration feature. When the curve completes, DBC revokes the transfer-hook program and transfer-hook authority from the base mint so the token can graduate to DAMM v2 liquidity.
+
+## Account Model
+
+Transfer-hook launches use separate account discriminators while keeping the same core config and pool fields.
+
+| Account | What It Stores |
+| --- | --- |
+| `ConfigWithTransferHook` | A `PoolConfig` plus the executable `transfer_hook_program` configured by the partner. |
+| `TransferHookPool` | A `PoolState` for the launched pool. It has the same fields as a standard `VirtualPool`, but a different discriminator. |
+
+The TypeScript SDK's state service fetches both account families. `client.state.getPoolConfig`, `getPoolConfigs`, `getPool`, and pool list helpers return normalized config and pool shapes for both standard and transfer-hook accounts.
+
+## Launch Rules
+
+| Rule | Behavior |
+| --- | --- |
+| Base token type | Transfer-hook configs must use `Token2022`. |
+| Migration target | Use DAMM v2. DAMM v1 does not support Token 2022 launches. |
+| Transfer hook program | Must be executable and cannot be the DBC program, SPL Token program, Token 2022 program, or the default pubkey. |
+| Config instruction | Use `create_config_with_transfer_hook`, or the SDK's `client.partner.createConfigWithTransferHook`. |
+| Pool instruction | Use `initialize_virtual_pool_with_token2022_transfer_hook`, or the SDK's `client.creator.createPoolWithTransferHook`. |
+| Transfer hook authority | DBC initializes the base mint with the pool authority as transfer-hook authority. |
+| Mint authority options | `CreatorUpdateAndMintAuthority` and `PartnerUpdateAndMintAuthority` are only valid for transfer-hook configs. Standard configs reject those options. |
+
+## Trading
+
+Transfer-hook pools must use the transfer-hook swap path.
+
+| Pool Type | Swap Path |
+| --- | --- |
+| Standard `VirtualPool` | `swap` or `swap2`; SDK: `client.pool.swap` or `client.pool.swap2`. |
+| `TransferHookPool` | `swap2_with_transfer_hook`; SDK: `client.pool.swap2WithTransferHook`. |
+
+`swap2_with_transfer_hook` supports the same swap modes as `swap2`: exact in, partial fill, and exact out. It also accepts `TransferHookAccountsInfo`, which describes how the remaining accounts are sliced for the transfer-hook CPI.
+
+| Remaining Account Slice | Use |
+| --- | --- |
+| `TransferHookBase` | Extra accounts for base-token transfers between the user and the pool. |
+| `TransferHookBaseReferral` | Extra accounts for referral transfers when referral fees are paid in the base token. |
+
+If a transfer-hook pool is sent through a standard swap instruction, the program returns `PoolTypeMismatch`. If transfer-hook remaining accounts are missing, malformed, duplicated, or use the wrong slice type, the transfer fails before token movement.
+
+## Fee Claims
+
+Transfer-hook pools also use transfer-hook-aware trading fee claim paths.
+
+| Claim Type | Program Instruction | SDK Method |
+| --- | --- | --- |
+| Partner trading fees | `claim_trading_fee2` | `client.partner.claimPartnerTradingFee2` |
+| Creator trading fees | `claim_creator_trading_fee2` | `client.creator.claimCreatorTradingFee2` |
+
+For standard pools, use `claim_trading_fee` / `claim_creator_trading_fee`, or the SDK's `claimPartnerTradingFee`, `claimPartnerTradingFeeToReceiver`, `claimCreatorTradingFee`, and `claimCreatorTradingFeeToReceiver` methods.
+
+## Completion And Migration
+
+Transfer hooks are active only while the pool is trading on the bonding curve.
+
+When a transfer-hook pool reaches the configured migration quote threshold, DBC:
+
+1. Marks the curve complete.
+2. Moves the pool to `PostBondingCurve` when locked vesting is configured, or `LockedVesting` otherwise.
+3. Revokes the transfer-hook program id and transfer-hook authority from the base mint.
+4. Emits `EvtCurveCompleteWithTransferHook`.
+
+After that, the pool follows the normal DAMM v2 migration flow. The migrated DAMM v2 pool receives a Token 2022 mint without an active transfer hook.
+
+## Events
+
+Indexers should handle the transfer-hook-specific event variants.
+
+| Event | Use |
+| --- | --- |
+| `EvtCreateConfigV2WithTransferHook` | Index transfer-hook configs and their `transfer_hook_program`. |
+| `EvtInitializePoolWithTransferHook` | Index transfer-hook pool creation. |
+| `EvtSwap2WithTransferHook` | Track transfer-hook swaps, quote progress, fees, and partial fills. |
+| `EvtCurveCompleteWithTransferHook` | Mark transfer-hook pool completion and hook revocation. |
+
+See [DBC Program Events](/developer-guides/dbc/program/events) for the full event table.

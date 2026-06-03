@@ -1,8 +1,8 @@
 ---
 title: "DBC Launch Configuration"
 sidebarTitle: "Launch Configuration"
-description: "Review the DBC configuration fields that sit around the curve, including token settings, fees, migration, supply, liquidity locks, and claim addresses."
-llmsDescription: "Concise DBC launch configuration reference covering quote mint, activation type, token decimals, token authority, fixed and dynamic supply, migration target, migration fee, migrated DAMM v2 pool fees, liquidity distribution, pool creation fee, first swap with minimum fee, fee claimer, leftover receiver, and links to deeper DBC pages."
+description: "Review the DBC configuration fields that sit around the curve, including token settings, transfer hooks, fees, migration, supply, liquidity locks, and claim addresses."
+llmsDescription: "Concise DBC launch configuration reference covering quote mint, activation type, token decimals, token authority, transfer-hook configs, fixed and dynamic supply, migration target, migration fee, migrated DAMM v2 pool fees, liquidity distribution, pool creation fee, first swap with minimum fee, fee claimer, leftover receiver, and links to deeper DBC pages."
 ---
 
 DBC configs are reusable launch templates. The curve defines price discovery; the surrounding config defines which token can launch, how fees behave, how migration works, and who can claim each economic bucket.
@@ -18,7 +18,12 @@ Use this page as a checklist. For implementation limits and permissions, see [DB
 | Token decimals | Must be from `6` to `9`. |
 | Token type | SPL Token or Token 2022. Token 2022 launches must use DAMM v2 migration. |
 | Token authority option | Controls whether creator, partner, or no one receives update authority, and whether creator or partner receives mint authority. |
+| Transfer hook program | Optional Token 2022 transfer-hook path. Use a `ConfigWithTransferHook`; the program must be executable and cannot be DBC, SPL Token, Token 2022, or the default pubkey. |
 | Collect fee mode | `QuoteToken` or `OutputToken` for bonding-curve trading. |
+
+<Note>
+  Mint-authority token authority options are only valid for transfer-hook configs. Standard configs reject `CreatorUpdateAndMintAuthority` and `PartnerUpdateAndMintAuthority`.
+</Note>
 
 ## Supply
 
@@ -44,6 +49,8 @@ Fixed-supply cleanup is covered in [DBC Surplus and Leftover](/core-products/dbc
 
 For the migration flow and liquidity ownership, see [DBC Migration and Liquidity](/core-products/dbc/migration-and-liquidity).
 
+Transfer-hook launches use DAMM v2. The hook is revoked from the base mint when the DBC curve completes, before migrated DAMM v2 liquidity is created.
+
 ## Liquidity Distribution
 
 The migrated liquidity distribution must add to `100%` across:
@@ -68,3 +75,5 @@ At least `10%` of migrated liquidity must still be locked after one day. DAMM v2
 | First swap with minimum fee | Optional narrow path for an initialize-pool transaction that includes the first swap, targets that new pool, and has no referral account. |
 
 Bonding-curve fee modes are covered in [DBC Fees](/core-products/dbc/fees/overview).
+
+Transfer-hook launch behavior is covered in [DBC Transfer Hook Pools](/core-products/dbc/transfer-hook-pools).

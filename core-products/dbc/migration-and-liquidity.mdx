@@ -1,8 +1,8 @@
 ---
 title: "DBC Migration and Liquidity"
 sidebarTitle: "Migration and Liquidity"
-description: "Learn how DBC graduates a completed bonding curve into DAMM liquidity, including DAMM v1 and DAMM v2 migration, liquidity ownership, locks, vesting, and protocol migration fees."
-llmsDescription: "Explains DBC migration and liquidity behavior, including curve completion, migration progress states, DAMM v1 migration, DAMM v2 migration, locked vesting step, migrated liquidity ownership, DAMM v1 LP token claims, DAMM v2 position NFT creation and ownership transfer, unlocked liquidity, permanently locked liquidity, vesting liquidity, 10 percent day-one locked liquidity requirement, two-year vesting duration cap, dead liquidity, leftover handling, and protocol liquidity migration fee."
+description: "Learn how DBC graduates a completed bonding curve into DAMM liquidity, including DAMM v1 and DAMM v2 migration, transfer-hook completion, liquidity ownership, locks, vesting, and protocol migration fees."
+llmsDescription: "Explains DBC migration and liquidity behavior, including curve completion, transfer-hook revocation on completion, migration progress states, DAMM v1 migration, DAMM v2 migration, locked vesting step, migrated liquidity ownership, DAMM v1 LP token claims, DAMM v2 position NFT creation and ownership transfer, unlocked liquidity, permanently locked liquidity, vesting liquidity, 10 percent day-one locked liquidity requirement, two-year vesting duration cap, dead liquidity, leftover handling, and protocol liquidity migration fee."
 ---
 
 DBC migration is the handoff from launch trading to long-term Meteora liquidity.
@@ -12,6 +12,8 @@ During the bonding curve phase, traders buy and sell against a DBC virtual pool.
 ```text
 Virtual pool trading -> Curve complete -> Migration steps -> DAMM pool live
 ```
+
+For Token 2022 transfer-hook pools, curve completion also revokes the base mint's transfer-hook program id and transfer-hook authority. DBC does this before DAMM v2 migration because migrated DAMM liquidity does not support an active transfer hook on the base mint.
 
 ## Migration Progress
 
@@ -36,6 +38,8 @@ DBC supports two migration targets.
 | DAMM v2 | Creates a more configurable migrated pool with position NFTs, advanced fee settings, compounding options, and vesting support. |
 
 DAMM v2 is the more flexible path for modern launches, especially Token 2022 launches and teams that need detailed post-migration liquidity controls.
+
+Transfer-hook launches also use DAMM v2. The hook is active only during the DBC bonding-curve phase and is revoked when the curve completes.
 
 <Warning>
   DAMM v1 migration is restricted to SPL Token base mints and SPL Token quote mints. Token 2022 launches must migrate to DAMM v2.
