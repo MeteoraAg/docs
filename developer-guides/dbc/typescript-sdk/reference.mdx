@@ -64,7 +64,7 @@ import {
 | Enum | Values |
 | --- | --- |
 | `ActivationType` | `Slot = 0`, `Timestamp = 1`. |
-| `TokenType` | `SPL = 0`, `Token2022 = 1`. |
+| `TokenType` | `SPLToken = 0`, `Token2022 = 1`. |
 | `CollectFeeMode` | `QuoteToken = 0`, `OutputToken = 1`. |
 | `MigratedCollectFeeMode` | `QuoteToken = 0`, `OutputToken = 1`, `Compounding = 2`. |
 | `DammV2DynamicFeeMode` | `Disabled = 0`, `Enabled = 1`. |
@@ -75,7 +75,7 @@ import {
 | `TokenDecimal` | `SIX = 6`, `SEVEN = 7`, `EIGHT = 8`, `NINE = 9`. |
 | `TradeDirection` | `BaseToQuote = 0`, `QuoteToBase = 1`. |
 | `SwapMode` | `ExactIn = 0`, `PartialFill = 1`, `ExactOut = 2`. |
-| `TokenUpdateAuthorityOption` | `CreatorUpdateAuthority = 0`, `Immutable = 1`, `PartnerUpdateAuthority = 2`, `CreatorUpdateAndMintAuthority = 3`, `PartnerUpdateAndMintAuthority = 4`. |
+| `TokenAuthorityOption` | `CreatorUpdateAuthority = 0`, `Immutable = 1`, `PartnerUpdateAuthority = 2`, `CreatorUpdateAndMintAuthority = 3`, `PartnerUpdateAndMintAuthority = 4`. |
 
 ## Important Constants
 
@@ -127,7 +127,7 @@ The client creates service instances for transactions, quotes, and account reads
 | `new DynamicBondingCurveProgram(connection, commitment)` | `DynamicBondingCurveProgram` | Construct the base program service used by concrete services. |
 | `DynamicBondingCurveProgram.getProgram()` | `Program<DynamicBondingCurve>` | Return the underlying Anchor program instance. |
 | `createDbcProgram(connection, commitment?)` | DBC program wrapper | Create an Anchor program for the DBC IDL and program ID. |
-| `createVaultProgram(connection, commitment?)` | Dynamic Vault program wrapper | Create an Anchor program for Dynamic Vault migration helpers. |
+| `createDynamicVaultProgram(connection, commitment?)` | Dynamic Vault program wrapper | Create an Anchor program for Dynamic Vault migration helpers. |
 | `createDammV1Program(connection, commitment?)` | DAMM v1 program wrapper | Create an Anchor program for DAMM v1 migration helpers. |
 | `createDammV2Program(connection, commitment?)` | DAMM v2 program wrapper | Create an Anchor program for DAMM v2 migration helpers. |
 
@@ -136,9 +136,15 @@ The client creates service instances for transactions, quotes, and account reads
 | Method | Returns | Use |
 | --- | --- | --- |
 | `createConfig(params)` | `Promise<Transaction>` | Create a `PoolConfig` from `CreateConfigParams`. |
+| `createConfigWithTransferHook(params)` | `Promise<Transaction>` | Create a `ConfigWithTransferHook` from `CreateConfigWithTransferHookParams`. |
+| `createConfigAndPool(params)` | `Promise<Transaction>` | Build one transaction that creates a config and initializes a standard pool. |
+| `createConfigAndPoolWithTransferHook(params)` | `Promise<Transaction>` | Build one transaction that creates a transfer-hook config and initializes a transfer-hook pool. |
+| `createConfigAndPoolWithFirstBuy(params)` | `Promise<{ createConfigTx; createPoolWithFirstBuyTx }>` | Build separate config and pool-with-first-buy transactions for a standard pool. |
+| `createConfigAndPoolWithFirstBuyWithTransferHook(params)` | `Promise<{ createConfigTx; createPoolWithFirstBuyTx }>` | Build separate config and pool-with-first-buy transactions for a transfer-hook pool. |
 | `createPartnerMetadata(params)` | `Promise<Transaction>` | Create partner metadata for a fee claimer. |
 | `claimPartnerTradingFee(params)` | `Promise<Transaction>` | Claim partner trading fees with optional SOL wrapping behavior. |
-| `claimPartnerTradingFee2(params)` | `Promise<Transaction>` | Claim partner trading fees with explicit receiver accounts. |
+| `claimPartnerTradingFeeToReceiver(params)` | `Promise<Transaction>` | Claim standard-pool partner trading fees to an explicit receiver. |
+| `claimPartnerTradingFee2(params)` | `Promise<Transaction>` | Claim transfer-hook pool partner trading fees. |
 | `partnerWithdrawSurplus(params)` | `Promise<Transaction>` | Withdraw partner surplus after migration. |
 | `partnerWithdrawMigrationFee(params)` | `Promise<Transaction>` | Withdraw the partner share of migration fees. |
 | `claimPartnerPoolCreationFee(params)` | `Promise<Transaction>` | Claim the partner share of pool creation fees. |
@@ -147,13 +153,9 @@ The client creates service instances for transactions, quotes, and account reads
 
 | Method | Returns | Use |
 | --- | --- | --- |
-| `createPool(params)` | `Promise<Transaction>` | Create a virtual pool from an existing config and base mint. |
-| `createConfigAndPool(params)` | `Promise<Transaction>` | Create a config and pool in one builder path. |
-| `createConfigAndPoolWithFirstBuy(params)` | `Promise<{ createConfigTx; createPoolWithFirstBuyTx }>` | Build config, pool, and first-buy transactions. Current SDK returns config and pool-with-first-buy transactions separately. |
-| `createPoolWithFirstBuy(params)` | `Promise<Transaction>` | Create a pool and include an initial buy. |
-| `createPoolWithPartnerAndCreatorFirstBuy(params)` | `Promise<Transaction>` | Create a pool with partner and creator first-buy handling. |
 | `swap(params)` | `Promise<Transaction>` | Build the legacy exact-in swap transaction. |
 | `swap2(params)` | `Promise<Transaction>` | Build the preferred swap transaction for exact-in, partial-fill, and exact-out modes. |
+| `swap2WithTransferHook(params)` | `Promise<Transaction>` | Build the transfer-hook swap transaction for exact-in, partial-fill, and exact-out modes. |
 | `swapQuote(params)` | `SwapQuoteResult` | Quote the legacy exact-in swap path. |
 | `swapQuote2(params)` | `SwapQuote2Result` | Quote `SwapMode.ExactIn`, `PartialFill`, or `ExactOut`. |
 
@@ -161,9 +163,16 @@ The client creates service instances for transactions, quotes, and account reads
 
 | Method | Returns | Use |
 | --- | --- | --- |
+| `createPool(params)` | `Promise<Transaction>` | Create a standard virtual pool from an existing config and base mint. |
+| `createPoolWithTransferHook(params)` | `Promise<Transaction>` | Create a transfer-hook pool from an existing transfer-hook config. |
+| `createPoolWithFirstBuy(params)` | `Promise<Transaction>` | Create a standard pool and include an initial buy. |
+| `createPoolWithFirstBuyWithTransferHook(params)` | `Promise<Transaction>` | Create a transfer-hook pool and include an initial buy. |
+| `createPoolWithPartnerAndCreatorFirstBuy(params)` | `Promise<Transaction>` | Create a standard pool with partner and creator first-buy handling. |
+| `createPoolWithPartnerAndCreatorFirstBuyWithTransferHook(params)` | `Promise<Transaction>` | Create a transfer-hook pool with partner and creator first-buy handling. |
 | `createPoolMetadata(params)` | `Promise<Transaction>` | Create optional metadata for a virtual pool. |
 | `claimCreatorTradingFee(params)` | `Promise<Transaction>` | Claim creator trading fees with optional SOL wrapping behavior. |
-| `claimCreatorTradingFee2(params)` | `Promise<Transaction>` | Claim creator trading fees with explicit receiver accounts. |
+| `claimCreatorTradingFeeToReceiver(params)` | `Promise<Transaction>` | Claim standard-pool creator trading fees to an explicit receiver. |
+| `claimCreatorTradingFee2(params)` | `Promise<Transaction>` | Claim transfer-hook pool creator trading fees. |
 | `creatorWithdrawSurplus(params)` | `Promise<Transaction>` | Withdraw creator surplus after migration. |
 | `transferPoolCreator(params)` | `Promise<Transaction>` | Transfer creator rights to a new creator. |
 | `creatorWithdrawMigrationFee(params)` | `Promise<Transaction>` | Withdraw the creator share of migration fees. |
@@ -184,20 +193,19 @@ The client creates service instances for transactions, quotes, and account reads
 
 | Method | Returns | Use |
 | --- | --- | --- |
-| `getPoolConfig(configAddress)` | `Promise<PoolConfig>` | Fetch one config account. |
-| `getPoolConfigs()` | `Promise<ProgramAccount<PoolConfig>[]>` | Fetch all config accounts. |
-| `getPoolConfigsByOwner(owner)` | `Promise<ProgramAccount<PoolConfig>[]>` | Fetch configs by partner owner or fee claimer. |
-| `getPool(poolAddress)` | `Promise<VirtualPool>` | Fetch one virtual pool account. |
-| `getPools()` | `Promise<ProgramAccount<VirtualPool>[]>` | Fetch all virtual pool accounts. |
-| `getPoolsByConfig(configAddress)` | `Promise<ProgramAccount<VirtualPool>[]>` | Fetch pools created from one config. |
-| `getPoolsByCreator(creatorAddress)` | `Promise<ProgramAccount<VirtualPool>[]>` | Fetch pools by creator. |
-| `getPoolByBaseMint(baseMint)` | `Promise<ProgramAccount<VirtualPool> or null>` | Resolve a pool by base mint. |
+| `getPoolConfig(configAddress)` | `Promise<PoolConfig or null>` | Fetch one standard or transfer-hook config. Transfer-hook configs return the embedded `PoolConfig`. |
+| `getPoolConfigs()` | `Promise<ProgramAccount<PoolConfig>[]>` | Fetch all standard and transfer-hook configs. |
+| `getPoolConfigsByOwner(owner)` | `Promise<ProgramAccount<PoolConfig>[]>` | Fetch standard and transfer-hook configs by partner owner or fee claimer. |
+| `getPool(poolAddress)` | `Promise<VirtualPool or null>` | Fetch one standard or transfer-hook pool account. |
+| `getPools()` | `Promise<ProgramAccount<VirtualPool>[]>` | Fetch all standard and transfer-hook pool accounts. |
+| `getPoolsByConfig(configAddress)` | `Promise<ProgramAccount<VirtualPool>[]>` | Fetch standard and transfer-hook pools created from one config. |
+| `getPoolsByCreator(creatorAddress)` | `Promise<ProgramAccount<VirtualPool>[]>` | Fetch standard and transfer-hook pools by creator. |
+| `getPoolByBaseMint(baseMint)` | `Promise<ProgramAccount<VirtualPool> or null>` | Resolve a standard or transfer-hook pool by base mint. |
 | `getPoolMigrationQuoteThreshold(poolAddress)` | `Promise<BN>` | Read the migration quote threshold for a pool. |
 | `getPoolQuoteTokenCurveProgress(poolAddress)` | `Promise<number>` | Calculate quote-side curve progress. |
 | `getPoolBaseTokenCurveProgress(poolAddress)` | `Promise<number>` | Calculate base-side curve progress. |
-| `getPoolMetadata(pool)` | `Promise<VirtualPoolMetadata>` | Fetch optional pool metadata. |
-| `getPartnerMetadata(feeClaimer)` | `Promise<PartnerMetadata>` | Fetch optional partner metadata. |
-| `getDammV1LockEscrow(pool)` | `Promise<LockEscrow>` | Fetch DAMM v1 lock escrow state. |
+| `getPoolMetadata(pool)` | `Promise<VirtualPoolMetadata[]>` | Fetch optional pool metadata accounts. |
+| `getPartnerMetadata(feeClaimer)` | `Promise<PartnerMetadata[]>` | Fetch optional partner metadata accounts. |
 | `getPoolFeeMetrics(poolAddress)` | Fee metrics object | Read lifetime fee metrics for one pool. |
 | `getPoolFeeBreakdown(poolAddress)` | Fee breakdown object | Read current claimable fee breakdown for partner and creator. |
 | `getPoolsFeesByConfig(configAddress)` | Aggregated fee metrics | Aggregate fee metrics across pools for one config. |
@@ -252,7 +260,7 @@ All curve builders return `ConfigParameters`.
 | `getDynamicFeeParams` | Build dynamic-fee params from base fee and optional price-change limit. |
 | `getStartingBaseFeeBpsFromBaseFeeParams` | Recover starting base-fee bps from base-fee params. |
 | `computeSqrtPriceStepBps` | Calculate bps step between two square-root prices. |
-| `getMigratedPoolMarketCapFeeSchedulerParams` | Build DAMM v2 market-cap fee scheduler params for migrated pools. |
+| `getMigratedPoolMarketCapFeeSchedulerParams` | Build DAMM v2 market-cap fee scheduler params for migrated pools using `priceMultiple`. |
 | `getLockedVestingParams` | Convert locked vesting inputs into program vesting params. |
 | `getLiquidityVestingInfoParams` | Convert migrated-liquidity vesting inputs into program vesting params. |
 | `getTwoCurve` | Build a two-segment curve from target inputs. |
@@ -341,7 +349,10 @@ All curve builders return `ConfigParameters`.
 | `validateLPPercentages` | Validate migrated-liquidity percentage split. |
 | `validateCurve` | Validate curve checkpoint count, ordering, and bounds. |
 | `validateTokenSupply` | Validate token supply against curve and vesting requirements. |
-| `validateTokenUpdateAuthorityOptions` | Validate mint update-authority option. |
+| `validateTokenAuthorityOptions` | Validate mint update-authority and mint-authority option. |
+| `hasMintAuthority` | Check whether a token authority option assigns mint authority. |
+| `validateTransferHookProgram` | Validate that a transfer-hook program id is not default, DBC, SPL Token, or Token 2022. |
+| `validateTransferHookProgramExecutable` | Validate that a transfer-hook program id resolves to an executable account. |
 | `validatePoolCreationFee` | Validate pool creation fee bounds. |
 | `validateLiquidityVestingInfo` | Validate migrated-liquidity vesting schedule. |
 | `validateMinimumLockedLiquidity` | Validate minimum locked liquidity requirements. |
@@ -461,18 +472,20 @@ All curve builders return `ConfigParameters`.
 | Type group | Types |
 | --- | --- |
 | Program and IDL | `DynamicCurveProgram`, `DynamicBondingCurveTypes`, `DynamicBondingCurveIdl`. |
-| Account states | `PoolConfig`, `VirtualPool`, `MeteoraDammMigrationMetadata`, `LockEscrow`, `PartnerMetadata`, `VirtualPoolMetadata`. |
-| Config structs | `ConfigParameters`, `PoolFeeParameters`, `DynamicFeeParameters`, `LiquidityDistributionParameters`, `LockedVestingParameters`, `LiquidityVestingInfoParameters`, `MigratedPoolMarketCapFeeSchedulerParameters`. |
-| Builder config inputs | `TokenConfig`, `FeeConfig`, `BaseFeeParams`, `FeeSchedulerParams`, `RateLimiterParams`, `MigrationConfig`, `MigrationFee`, `MigratedPoolFeeConfig`, `LiquidityDistributionConfig`, `LockedVestingParams`. |
+| Account states | `PoolConfig`, `ConfigWithTransferHook`, `VirtualPool`, `TransferHookPool`, `MeteoraDammMigrationMetadata`, `LockEscrow`, `PartnerMetadata`, `VirtualPoolMetadata`. |
+| Config structs | `ConfigParameters`, `PoolFeeParameters`, `DynamicFeeParameters`, `LiquidityDistributionParameters`, `LockedVestingParameters`, `LiquidityVestingInfoParameters`, `MigratedPoolMarketCapFeeSchedulerParameters`, `TransferHookAccountsInfo`. |
+| Builder config inputs | `TokenConfig`, `FeeConfig`, `BaseFeeParams`, `FeeSchedulerParams`, `RateLimiterParams`, `MigrationConfig`, `MigrationFee`, `MigratedPoolFeeConfig`, `MigratedPoolMarketCapFeeSchedulerParams`, `LiquidityDistributionConfig`, `LockedVestingParams`. |
 | Curve builder params | `BuildCurveBaseParams`, `BuildCurveParams`, `BuildCurveWithMarketCapParams`, `BuildCurveWithTwoSegmentsParams`, `BuildCurveWithMidPriceParams`, `BuildCurveWithLiquidityWeightsParams`, `BuildCurveWithCustomSqrtPricesParams`. |
-| Pool and swap params | `CreatePoolParams`, `CreateConfigAndPoolParams`, `CreateConfigAndPoolWithFirstBuyParams`, `CreatePoolWithFirstBuyParams`, `CreatePoolWithPartnerAndCreatorFirstBuyParams`, `SwapParams`, `Swap2Params`, `SwapQuoteParams`, `SwapQuote2Params`. |
+| Pool and swap params | `CreatePoolParams`, `CreatePoolWithTransferHookParams`, `CreateConfigAndPoolParams`, `CreateConfigAndPoolWithFirstBuyParams`, `CreateConfigAndPoolWithTransferHookParams`, `CreateConfigAndPoolWithFirstBuyWithTransferHookParams`, `CreatePoolWithFirstBuyParams`, `CreatePoolWithFirstBuyWithTransferHookParams`, `CreatePoolWithPartnerAndCreatorFirstBuyParams`, `CreatePoolWithPartnerAndCreatorFirstBuyWithTransferHookParams`, `FirstBuyWithTransferHookParams`, `PartnerFirstBuyWithTransferHookParams`, `CreatorFirstBuyWithTransferHookParams`, `SwapParams`, `Swap2Params`, `SwapQuoteParams`, `SwapQuote2Params`. |
 | Migration params | `MigrateToDammV1Params`, `MigrateToDammV2Params`, `MigrateToDammV2Response`, `DammLpTokenParams`, `CreateLockerParams`, `CreateDammV1MigrationMetadataParams`. |
-| Claim and withdraw params | `ClaimTradingFeeParams`, `ClaimTradingFee2Params`, `WithdrawSurplusParams`, `WithdrawMigrationFeeParams`, `ClaimPartnerPoolCreationFeeParams`. |
+| Claim and withdraw params | `ClaimPartnerTradingFeeParams`, `ClaimPartnerTradingFeeToReceiverParams`, `ClaimCreatorTradingFeeParams`, `ClaimCreatorTradingFeeToReceiverParams`, `PartnerWithdrawSurplusParams`, `CreatorWithdrawSurplusParams`, `WithdrawMigrationFeeParams`, `ClaimPartnerPoolCreationFeeParams`. |
 | Quote and fee results | `SwapResult`, `SwapResult2`, `SwapQuoteResult`, `SwapQuote2Result`, `VolatilityTracker`, `MigratedPoolFee`. |
 
 ## Config Creation Types
 
 `client.partner.createConfig` accepts `CreateConfigParams`. The type combines the accounts required by the `create_config` instruction with the SDK's computed `ConfigParameters`.
+
+`client.partner.createConfigWithTransferHook` accepts `CreateConfigWithTransferHookParams`, which adds `transferHookProgram`.
 
 | Account field | Type | Use |
 | --- | --- | --- |
@@ -481,8 +494,9 @@ All curve builders return `ConfigParameters`.
 | `leftoverReceiver` | `PublicKey` | Receiver for leftover base tokens after migration. |
 | `quoteMint` | `PublicKey` | Quote token mint used by pools created from the config. |
 | `payer` | `PublicKey` | Transaction fee payer and account initializer. |
+| `transferHookProgram` | `PublicKey` | Transfer-hook program for `createConfigWithTransferHook`; it must be executable and cannot be DBC, SPL Token, Token 2022, or the default pubkey. |
 
-`ConfigParameters` is usually produced by one of the curve builders. Pass the returned object directly into `createConfig`, `createConfigAndPool`, or `createConfigAndPoolWithFirstBuy`.
+`ConfigParameters` is usually produced by one of the curve builders. Pass the returned object directly into `createConfig`, `createConfigWithTransferHook`, `createConfigAndPool`, or `createConfigAndPoolWithFirstBuy`.
 
 | Field | Meaning |
 | --- | --- |
@@ -500,12 +514,12 @@ All curve builders return `ConfigParameters`.
 | `migrationFeeOption`, `migrationFee` | Fixed or customizable migration fee settings. |
 | `tokenSupply` | Total base-token supply for the launch. |
 | `creatorTradingFeePercentage` | Creator share of trading fees. |
-| `tokenUpdateAuthority` | Base mint update-authority behavior. |
+| `tokenAuthorityOption` | Base mint update-authority and mint-authority behavior. Mint-authority options are only valid for transfer-hook configs. |
 | `migratedPoolFee` | Fee settings applied to the migrated DAMM pool. |
 | `poolCreationFee` | Pool creation fee in lamports. |
 | `partnerLiquidityVestingInfo`, `creatorLiquidityVestingInfo` | Optional vesting schedule for migrated liquidity shares. |
 | `migratedPoolBaseFeeMode` | Optional DAMM v2 base-fee mode for graduated pools. |
-| `migratedPoolMarketCapFeeSchedulerParams` | Optional market-cap fee scheduler for DAMM v2 migration. |
+| `migratedPoolMarketCapFeeSchedulerParams` | Optional market-cap fee scheduler for DAMM v2 migration. Current helper inputs use `priceMultiple`. |
 | `enableFirstSwapWithMinFee` | Allows the first eligible swap to use the configured minimum-fee path. |
 | `compoundingFeeBps` | DAMM v2 compounding fee bps when migrated collect-fee mode is compounding. |
 | `curve` | Up to `MAX_CURVE_POINT` curve checkpoints. |
@@ -516,7 +530,7 @@ All curve builders share `BuildCurveBaseParams`, then add builder-specific targe
 
 | Group | Fields |
 | --- | --- |
-| `token` | `tokenType`, `tokenBaseDecimal`, `tokenQuoteDecimal`, `tokenUpdateAuthority`, `totalTokenSupply`, `leftover`. |
+| `token` | `tokenType`, `tokenBaseDecimal`, `tokenQuoteDecimal`, `tokenAuthorityOption`, `totalTokenSupply`, `leftover`. |
 | `fee` | `baseFeeParams`, `dynamicFeeEnabled`, `collectFeeMode`, `creatorTradingFeePercentage`, `poolCreationFee`, `enableFirstSwapWithMinFee`. |
 | `migration` | `migrationOption`, `migrationFeeOption`, `migrationFee`, optional `migratedPoolFee`. |
 | `liquidityDistribution` | Partner and creator migrated-liquidity percentages, permanent-lock percentages, and optional vesting info for each side. |
@@ -530,6 +544,7 @@ All curve builders share `BuildCurveBaseParams`, then add builder-specific targe
 | `RateLimiterParams` | `baseFeeBps`, `feeIncrementBps`, `referenceAmount`, `maxLimiterDuration` | Uses quote-token decimals and activation type when converted into program params. |
 | `MigrationFee` | `feePercentage`, `creatorFeePercentage` | Required only when `migrationFeeOption` is `Customizable`. |
 | `MigratedPoolFeeConfig` | `collectFeeMode`, `dynamicFee`, `poolFeeBps`, optional `compoundingFeeBps`, optional graduated fee fields | Applies to the migrated DAMM pool, not to the DBC virtual pool. |
+| `MigratedPoolMarketCapFeeSchedulerParams` | `endingBaseFeeBps`, `numberOfPeriod`, `priceMultiple`, `schedulerExpirationDuration` | Applies when using a DAMM v2 migrated-pool market-cap fee scheduler. |
 | `LiquidityVestingInfoParams` | `vestingPercentage`, `bpsPerPeriod`, `numberOfPeriods`, `cliffDurationFromMigrationTime`, `totalDuration` | Optional migrated-liquidity vesting schedule. |
 | `LockedVestingParams` | `totalLockedVestingAmount`, `numberOfVestingPeriod`, `cliffUnlockAmount`, `totalVestingDuration`, `cliffDurationFromMigrationTime` | Base-token vesting locked during migration. |
 
@@ -558,6 +573,22 @@ const tx = await client.partner.createConfig({
   payer,
 });
 ```
+
+### Create A Pool From An Existing Config
+
+```typescript
+const tx = await client.creator.createPool({
+  baseMint,
+  config,
+  name,
+  symbol,
+  uri,
+  payer,
+  poolCreator,
+});
+```
+
+For transfer-hook configs, use `client.creator.createPoolWithTransferHook`.
 
 ### Quote And Build A `swap2` Transaction
 
@@ -593,5 +624,6 @@ const tx = await client.pool.swap2({
 | Rate limiter pools | The SDK adds the instructions sysvar when the current fee mode requires single-swap validation. |
 | First-swap minimum fee | Set `eligibleForFirstSwapWithMinFee` only when quoting a transaction that satisfies the program's first-swap validation path. |
 | Token-2022 pools | Use SDK builders so the correct token program, metadata, and ATA handling are included. |
+| Transfer-hook pools | Use `createConfigWithTransferHook`, `createPoolWithTransferHook`, `swap2WithTransferHook`, and transfer-hook fee claim methods. Standard swap and claim paths reject transfer-hook pools. |
 | DAMM v2 compounding | `MigratedCollectFeeMode.Compounding` requires `compoundingFeeBps`; non-compounding modes require it to be zero. |
-| Market-cap scheduler | Market-cap scheduler params use `startingMarketCap` and `endingMarketCap` in current SDK helpers. |
+| Market-cap scheduler | Market-cap scheduler params use `priceMultiple` in current SDK helpers. |

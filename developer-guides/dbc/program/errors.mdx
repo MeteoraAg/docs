@@ -1,8 +1,8 @@
 ---
 title: "DBC Program Errors"
 sidebarTitle: "Errors"
-description: "Understand DBC dynamic_bonding_curve error codes, messages, SDK validation checks, and common causes for integration debugging."
-llmsDescription: "Explains the DBC program error reference based on PoolError in MeteoraAg/dynamic-bonding-curve. Covers Anchor custom error codes 6000-6067, messages, common causes, migration errors, swap errors, fee scheduler and rate limiter errors, first-swap validation errors, zap errors, compounding errors, TypeScript SDK validation helpers, and debugging steps for DBC integrations."
+description: "Understand DBC dynamic_bonding_curve error codes, messages, SDK validation checks, transfer-hook errors, and common causes for integration debugging."
+llmsDescription: "Explains the DBC program error reference based on PoolError in MeteoraAg/dynamic-bonding-curve. Covers Anchor custom error codes 6000-6077, messages, common causes, migration errors, swap errors, fee scheduler and rate limiter errors, first-swap validation errors, zap errors, compounding errors, transfer-hook remaining account errors, pool type mismatch errors, TypeScript SDK validation helpers, and debugging steps for DBC integrations."
 ---
 
 This page lists the Anchor custom errors returned by the `dynamic-bonding-curve` program.
@@ -83,6 +83,20 @@ This page lists the Anchor custom errors returned by the `dynamic-bonding-curve`
 | `6065` | `MissingZapOutInstruction` | Missing zap out instruction | Required zap instruction was not found. |
 | `6066` | `InvalidZapAccounts` | Invalid zap accounts | Zap accounts do not match the expected route. |
 | `6067` | `InvalidCompoundingParameters` | Invalid compounding parameters | DAMM v2 compounding fee settings are invalid. |
+| `6068` | `InvalidClaimProtocolFeeAccounts` | Invalid claim protocol fee accounts | Protocol fee claim account list does not match the selected mint, pool, receiver, or pool type. |
+| `6069` | `InvalidInstructionsSysvar` | Invalid instructions sysvar account | Instructions sysvar account is missing or not the canonical sysvar account. |
+| `6070` | `InvalidRemainingAccountsLength` | Invalid remaining accounts length | Transfer-hook remaining account slices require more accounts than were provided. |
+| `6071` | `MissingRemainingAccountForTransferHook` | Missing remaining account for transfer hook | A base mint has a transfer hook, but required extra accounts were not supplied. |
+| `6072` | `NoTransferHookProgram` | No transfer hook program | Transfer-hook accounts were supplied for a mint without an active transfer-hook program. |
+| `6073` | `DuplicatedRemainingAccountTypes` | Duplicated remaining account types | `TransferHookAccountsInfo` contains duplicate slice types. |
+| `6074` | `InvalidTransferHookProgram` | Invalid transfer hook program | Transfer-hook program is missing, non-executable, default, or one of the disallowed program IDs. |
+| `6075` | `InvalidPoolAccount` | Invalid pool account | Pool account owner, discriminator, or expected account variant is invalid. |
+| `6076` | `PoolTypeMismatch` | Pool type does not match instruction | A standard pool was sent to a transfer-hook-only instruction, or a transfer-hook pool was sent to a standard-only instruction. |
+| `6077` | `InvalidRemainingAccountSliceType` | Invalid remaining account slice type for this instruction | Transfer-hook remaining account metadata includes a slice type that the instruction does not accept. |
+
+<Note>
+  The SDK `1.5.9` bundled IDL lists DBC errors through `6076`. The local program source also defines `InvalidRemainingAccountSliceType` as the next error variant. If you decode from the bundled IDL only, handle unknown custom errors defensively or regenerate the IDL from the matching program source.
+</Note>
 
 ## TypeScript SDK Validation Helpers
 
@@ -96,6 +110,7 @@ The TypeScript SDK performs many checks before building transactions. These help
 | `validateDynamicFee` | `InvalidInput`, `MathOverflow`. |
 | `validateMigrationFeeOption` | `InvalidMigrationFeeOption`, `InvalidMigratedPoolFee`. |
 | `validateMigratedPoolFee` | `InvalidMigratedPoolFee`, `InvalidFeeMarketCapScheduler`, `InvalidCompoundingParameters`. |
+| `validateTransferHookProgram`, `validateTransferHookProgramExecutable` | `InvalidTransferHookProgram`. |
 | `validateLiquidityVestingInfo` | `InvalidVestingParameters`, `InvalidMigrationLockedLiquidity`. |
 | `validateTokenSupply` | `InvalidTokenSupply`, `InvalidLeftoverAddress`, `TotalBaseTokenExceedMaxSupply`. |
 | `validateBaseTokenType` | `InvalidTokenType`, `UnsupportNativeMintToken2022`. |

@@ -1,8 +1,8 @@
 ---
 title: "DBC Program Instructions"
 sidebarTitle: "Instructions"
-description: "Explore DBC dynamic_bonding_curve instructions for partners, creators, swaps, migration, fee claims, operators, and state transitions."
-llmsDescription: "Explains the DBC program instruction surface for the public Meteora dynamic_bonding_curve program. Covers partner config and metadata instructions, SPL Token and Token-2022 pool creation, swap and swap2 modes, migration to DAMM v1 and DAMM v2, locker and leftover flows, partner and creator fee claims, operator instructions, TypeScript SDK method mappings, event-CPI accounts, sysvar remaining-account requirements, and raw account planning."
+description: "Explore DBC dynamic_bonding_curve instructions for partners, creators, transfer-hook pools, swaps, migration, fee claims, operators, and state transitions."
+llmsDescription: "Explains the DBC program instruction surface for the public Meteora dynamic_bonding_curve program. Covers partner config and metadata instructions, transfer-hook config instructions, SPL Token and Token-2022 pool creation, transfer-hook pool creation, swap and swap2 modes, swap2_with_transfer_hook, migration to DAMM v1 and DAMM v2, locker and leftover flows, partner and creator fee claims, operator instructions, TypeScript SDK method mappings, event-CPI accounts, sysvar remaining-account requirements, transfer-hook remaining accounts, and raw account planning."
 ---
 
 The `dynamic-bonding-curve` IDL exposes many instructions. Integrators can choose to either use the TypeScript SDK for transaction construction or build through CPI.
@@ -12,8 +12,10 @@ The `dynamic-bonding-curve` IDL exposes many instructions. Integrators can choos
 | Instruction | Args | SDK path | Purpose |
 | --- | --- | --- | --- |
 | `create_config` | `ConfigParameters` | `client.partner.createConfig` | Create a partner config for fees, curve, token behavior, migration, pool creation fee, and graduated-pool settings. |
+| `create_config_with_transfer_hook` | `ConfigParameters` | `client.partner.createConfigWithTransferHook` | Create a Token 2022 transfer-hook config with an executable transfer-hook program. |
 | `create_partner_metadata` | `CreatePartnerMetadataParameters` | `client.partner.createPartnerMetadata` | Create optional metadata for the partner fee claimer. |
-| `claim_trading_fee` | `max_amount_a`, `max_amount_b` | `client.partner.claimPartnerTradingFee`, `claimPartnerTradingFee2` | Claim partner trading fees from a virtual pool. |
+| `claim_trading_fee` | `max_amount_a`, `max_amount_b` | `client.partner.claimPartnerTradingFee`, `claimPartnerTradingFeeToReceiver` | Claim partner trading fees from a standard virtual pool. |
+| `claim_trading_fee2` | `max_amount_a`, `max_amount_b`, `TransferHookAccountsInfo` | `client.partner.claimPartnerTradingFee2` | Claim partner trading fees from a transfer-hook pool. |
 | `claim_partner_pool_creation_fee` | None | `client.partner.claimPartnerPoolCreationFee` | Claim the partner share of pool creation fees. |
 | `partner_withdraw_surplus` | None | `client.partner.partnerWithdrawSurplus` | Withdraw partner quote surplus after migration when allowed. |
 
@@ -21,10 +23,12 @@ The `dynamic-bonding-curve` IDL exposes many instructions. Integrators can choos
 
 | Instruction | Args | SDK path | Purpose |
 | --- | --- | --- | --- |
-| `initialize_virtual_pool_with_spl_token` | `InitializePoolParameters` | `client.pool.createPool` | Create a DBC pool with an SPL Token base mint and Metaplex metadata. |
-| `initialize_virtual_pool_with_token2022` | `InitializePoolParameters` | `client.pool.createPool` | Create a DBC pool with a Token-2022 base mint. |
+| `initialize_virtual_pool_with_spl_token` | `InitializePoolParameters` | `client.creator.createPool` | Create a DBC pool with an SPL Token base mint and Metaplex metadata. |
+| `initialize_virtual_pool_with_token2022` | `InitializePoolParameters` | `client.creator.createPool` | Create a DBC pool with a Token 2022 base mint. |
+| `initialize_virtual_pool_with_token2022_transfer_hook` | `InitializePoolParameters` | `client.creator.createPoolWithTransferHook` | Create a DBC transfer-hook pool with a Token 2022 base mint. |
 | `create_virtual_pool_metadata` | `CreateVirtualPoolMetadataParameters` | `client.creator.createPoolMetadata` | Create optional metadata for a virtual pool. |
-| `claim_creator_trading_fee` | `max_base_amount`, `max_quote_amount` | `client.creator.claimCreatorTradingFee`, `claimCreatorTradingFee2` | Claim creator trading fees from a virtual pool. |
+| `claim_creator_trading_fee` | `max_base_amount`, `max_quote_amount` | `client.creator.claimCreatorTradingFee`, `claimCreatorTradingFeeToReceiver` | Claim creator trading fees from a standard virtual pool. |
+| `claim_creator_trading_fee2` | `max_base_amount`, `max_quote_amount`, `TransferHookAccountsInfo` | `client.creator.claimCreatorTradingFee2` | Claim creator trading fees from a transfer-hook pool. |
 | `creator_withdraw_surplus` | None | `client.creator.creatorWithdrawSurplus` | Withdraw creator surplus after migration when allowed. |
 | `transfer_pool_creator` | None | `client.creator.transferPoolCreator` | Transfer creator rights and creator fee claim authority to a new address. |
 
@@ -32,8 +36,9 @@ The `dynamic-bonding-curve` IDL exposes many instructions. Integrators can choos
 
 | Instruction | Args | Modes | Notes |
 | --- | --- | --- | --- |
-| `swap` | `SwapParameters` | Exact in | Legacy exact-in swap path. It emits both `EvtSwap` and `EvtSwap2`. |
-| `swap2` | `SwapParameters2` | Exact in, partial fill, exact out | Preferred for trading integrations because the args map directly to `SwapMode`. |
+| `swap` | `SwapParameters` | Exact in | Legacy exact-in swap path for standard pools. It emits both `EvtSwap` and `EvtSwap2`. |
+| `swap2` | `SwapParameters2` | Exact in, partial fill, exact out | Preferred for standard-pool trading integrations because the args map directly to `SwapMode`. |
+| `swap2_with_transfer_hook` | `SwapParameters2`, `TransferHookAccountsInfo` | Exact in, partial fill, exact out | Transfer-hook pool swap path. SDK: `client.pool.swap2WithTransferHook`. |
 
 `SwapParameters2` uses these fields:
 
@@ -46,6 +51,15 @@ The `dynamic-bonding-curve` IDL exposes many instructions. Integrators can choos
 <Note>
   If the config uses rate limiter fees, or `enable_first_swap_with_min_fee` is enabled, swap instructions require the instructions sysvar in remaining accounts. The SDK adds `SYSVAR_INSTRUCTIONS_PUBKEY` when needed.
 </Note>
+
+Transfer-hook swaps also pass extra remaining accounts described by `TransferHookAccountsInfo`.
+
+| Remaining account slice | Meaning |
+| --- | --- |
+| `TransferHookBase` | Extra accounts for base-token transfer-hook CPIs. |
+| `TransferHookBaseReferral` | Extra accounts for base-token referral transfers when a referral account is present. |
+
+Standard swap instructions reject `TransferHookPool` accounts, and `swap2_with_transfer_hook` rejects standard `VirtualPool` accounts with `PoolTypeMismatch`.
 
 ## Migration Instructions
 

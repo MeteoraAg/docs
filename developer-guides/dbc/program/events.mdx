@@ -1,8 +1,8 @@
 ---
 title: "DBC Program Events"
 sidebarTitle: "Events"
-description: "Understand DBC dynamic_bonding_curve events emitted by config, pool, swap, fee claim, migration, metadata, and operator flows."
-llmsDescription: "Explains the DBC program event reference for the public Meteora dynamic_bonding_curve program. Covers Anchor event-CPI delivery, event authority PDA requirements, config and metadata events, EvtInitializePool, EvtSwap and EvtSwap2, EvtCurveComplete, fee claim events, migration events, surplus and leftover events, operator events, deprecated EvtCreateConfig compatibility behavior, and indexing considerations for trading terminals and analytics."
+description: "Understand DBC dynamic_bonding_curve events emitted by config, transfer-hook, pool, swap, fee claim, migration, metadata, and operator flows."
+llmsDescription: "Explains the DBC program event reference for the public Meteora dynamic_bonding_curve program. Covers Anchor event-CPI delivery, event authority PDA requirements, config and transfer-hook config events, metadata events, EvtInitializePool, EvtInitializePoolWithTransferHook, EvtSwap and EvtSwap2, EvtSwap2WithTransferHook, EvtCurveComplete, EvtCurveCompleteWithTransferHook, fee claim events, migration events, surplus and leftover events, operator events, deprecated EvtCreateConfig compatibility behavior, and indexing considerations for trading terminals and analytics."
 ---
 
 The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use this page when building indexers, analytics pipelines, charting systems, or low-level clients that need to map transactions back to DBC pool activity.
@@ -13,7 +13,8 @@ The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use t
 | --- | --- |
 | Event authority seed | `__event_authority` |
 | SDK helper | `deriveDbcEventAuthority()` |
-| Primary swap event | `EvtSwap2` |
+| Primary standard swap event | `EvtSwap2` |
+| Primary transfer-hook swap event | `EvtSwap2WithTransferHook` |
 | Deprecated compatibility event | `EvtCreateConfig` is deprecated; prefer `EvtCreateConfigV2`. |
 
 ## Config And Metadata Events
@@ -22,9 +23,11 @@ The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use t
 | --- | --- | --- | --- |
 | `EvtCreateConfig` | `create_config` | `config`, `quote_mint`, `fee_claimer`, fee and curve fields | Deprecated config payload kept for compatibility. |
 | `EvtCreateConfigV2` | `create_config` | `config`, `quote_mint`, `fee_claimer`, `leftover_receiver`, `config_parameters` | Preferred config creation payload. |
+| `EvtCreateConfigV2WithTransferHook` | `create_config_with_transfer_hook` | `config`, `quote_mint`, `fee_claimer`, `leftover_receiver`, `config_parameters`, `transfer_hook_program` | Index transfer-hook configs. |
 | `EvtPartnerMetadata` | `create_partner_metadata` | `partner_metadata`, `fee_claimer` | Link partner metadata to a fee claimer. |
 | `EvtVirtualPoolMetadata` | `create_virtual_pool_metadata` | `virtual_pool_metadata`, `virtual_pool` | Link pool metadata to a virtual pool. |
 | `EvtInitializePool` | `initialize_virtual_pool_with_spl_token`, `initialize_virtual_pool_with_token2022` | `pool`, `config`, `creator`, `base_mint`, `pool_type`, `activation_point` | Index new DBC pools. |
+| `EvtInitializePoolWithTransferHook` | `initialize_virtual_pool_with_token2022_transfer_hook` | `pool`, `config`, `creator`, `base_mint`, `pool_type`, `activation_point` | Index new transfer-hook DBC pools. |
 | `EvtUpdatePoolCreator` | `transfer_pool_creator` | `pool`, `creator`, `new_creator` | Track creator authority transfer. |
 
 ## Swap Events
@@ -34,6 +37,8 @@ The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use t
 | `EvtSwap` | `swap`, `swap2` | `pool`, `config`, `trade_direction`, `has_referral`, `params`, `swap_result`, `amount_in`, `current_timestamp` | Legacy/simple swap payload. |
 | `EvtSwap2` | `swap`, `swap2` | `pool`, `config`, `trade_direction`, `has_referral`, `swap_parameters`, `swap_result`, `quote_reserve_amount`, `migration_threshold`, `current_timestamp` | Preferred swap payload for charting, progress, fees, and exact-out or partial-fill support. |
 | `EvtCurveComplete` | `swap`, `swap2` when the threshold is reached | `pool`, `config`, `base_reserve`, `quote_reserve` | Mark bonding curve completion and migration readiness. |
+| `EvtSwap2WithTransferHook` | `swap2_with_transfer_hook` | `pool`, `config`, `trade_direction`, `has_referral`, `swap_parameters`, `swap_result`, `quote_reserve_amount`, `migration_threshold`, `current_timestamp` | Preferred transfer-hook swap payload. |
+| `EvtCurveCompleteWithTransferHook` | `swap2_with_transfer_hook` when the threshold is reached | `pool`, `config`, `base_reserve`, `quote_reserve` | Mark transfer-hook bonding curve completion and hook revocation. |
 
 ### EvtSwap2 Payload
 
@@ -61,12 +66,12 @@ The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use t
 
 | Event | Emitted by | Important fields | Use |
 | --- | --- | --- | --- |
-| `EvtClaimTradingFee` | `claim_trading_fee` | `pool`, `token_base_amount`, `token_quote_amount` | Partner trading fee claim. |
-| `EvtClaimCreatorTradingFee` | `claim_creator_trading_fee` | `pool`, `token_base_amount`, `token_quote_amount` | Creator trading fee claim. |
+| `EvtClaimTradingFee` | `claim_trading_fee`, `claim_trading_fee2` | `pool`, `token_base_amount`, `token_quote_amount` | Partner trading fee claim. |
+| `EvtClaimCreatorTradingFee` | `claim_creator_trading_fee`, `claim_creator_trading_fee2` | `pool`, `token_base_amount`, `token_quote_amount` | Creator trading fee claim. |
 | `EvtClaimProtocolFee` | `claim_protocol_fee` | `pool`, `token_base_amount`, `token_quote_amount` | Protocol trading fee claim. |
+| `EvtClaimProtocolFee2` | `claim_protocol_fee2` | `pool`, `receiver_token_account`, `token_mint`, `amount` | Protocol fee claim through the newer single-mint claim path. |
 | `EvtClaimPoolCreationFee` | `claim_protocol_pool_creation_fee` | `pool`, `receiver`, `creation_fee` | Protocol share of pool creation fee. |
 | `EvtPartnerClaimPoolCreationFee` | `claim_partner_pool_creation_fee` | `pool`, `partner`, `creation_fee`, `fee_receiver` | Partner share of pool creation fee. |
-| `EvtClaimProtocolLiquidityMigrationFee` | Migration claim path | `pool`, `token_base_amount`, `token_quote_amount` | Protocol liquidity migration fee claim. |
 
 ## Migration And Withdrawal Events
 
@@ -77,7 +82,6 @@ The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use t
 | `EvtCreatorWithdrawSurplus` | `creator_withdraw_surplus` | `pool`, `surplus_amount` | Creator surplus withdrawal. |
 | `EvtWithdrawLeftover` | `withdraw_leftover` | `pool`, `leftover_receiver`, `leftover_amount` | Leftover base-token withdrawal. |
 | `EvtWithdrawMigrationFee` | `withdraw_migration_fee` | `pool`, `fee`, `flag` | Migration fee withdrawal with role flag. |
-| `EvtPartnerWithdrawMigrationFee` | Partner migration fee withdrawal path | `pool`, `fee` | Partner-specific migration fee withdrawal compatibility event. |
 
 ## Operator Events
 
@@ -90,6 +94,6 @@ The `dynamic-bonding-curve` program emits Anchor events through event CPI. Use t
 
 1. Treat `EvtSwap2.quote_reserve_amount / EvtSwap2.migration_threshold` as the event-side progress signal.
 2. Reconcile event-derived progress with `VirtualPool.quote_reserve` from account state.
-3. Index both `EvtInitializePool` and pool accounts so pools created before your indexer starts are still discoverable.
+3. Index both `EvtInitializePool` and `EvtInitializePoolWithTransferHook`, plus pool accounts, so pools created before your indexer starts are still discoverable.
 4. Store raw `swap_result` values for analytics; rounded UI values can lose fee and partial-fill detail.
 5. For migrated pools, use DBC events to identify completion and destination AMM state to track post-migration trading.

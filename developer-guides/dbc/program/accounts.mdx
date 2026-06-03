@@ -1,8 +1,8 @@
 ---
 title: "DBC Program Accounts"
 sidebarTitle: "Accounts"
-description: "Understand DBC dynamic_bonding_curve accounts, including configs, virtual pools, metadata, operators, migration state, constants, and PDA seeds."
-llmsDescription: "Explains the DBC program account model for the public Meteora dynamic_bonding_curve program. Covers PoolConfig, VirtualPool, PartnerMetadata, VirtualPoolMetadata, Operator, ClaimFeeOperator, MeteoraDammMigrationMetadata, LockEscrow, config signer accounts, token vaults, constants, enums, PDA seeds, state interpretation, and SDK methods for fetching and deriving accounts."
+description: "Understand DBC dynamic_bonding_curve accounts, including configs, transfer-hook configs, virtual pools, metadata, operators, migration state, constants, and PDA seeds."
+llmsDescription: "Explains the DBC program account model for the public Meteora dynamic_bonding_curve program. Covers PoolConfig, ConfigWithTransferHook, VirtualPool, TransferHookPool, PoolState, PartnerMetadata, VirtualPoolMetadata, Operator, ClaimFeeOperator, MeteoraDammMigrationMetadata, LockEscrow, config signer accounts, token vaults, constants, enums, PDA seeds, state interpretation, and SDK methods for fetching and deriving accounts."
 ---
 
 <Note>
@@ -14,7 +14,9 @@ llmsDescription: "Explains the DBC program account model for the public Meteora 
 | Address | How it is chosen | Use |
 | --- | --- | --- |
 | `PoolConfig` | New signer account passed to `create_config` | Partner config for quote mint, fee claimer, leftover receiver, fees, curve, token behavior, migration settings, and graduated-pool settings. |
-| `VirtualPool` | PDA from quote mint, base mint, and config | Active DBC pool for one base mint and config. Stores creator, vaults, reserves, current price, fee accruals, metrics, and migration progress. |
+| `ConfigWithTransferHook` | New signer account passed to `create_config_with_transfer_hook` | Transfer-hook config. It stores an embedded `PoolConfig` plus the executable transfer-hook program. |
+| `VirtualPool` | PDA from quote mint, base mint, and config | Standard active DBC pool for one base mint and config. Stores `pool_state`. |
+| `TransferHookPool` | Same pool PDA derivation, initialized by `initialize_virtual_pool_with_token2022_transfer_hook` | Transfer-hook active DBC pool. Stores the same `pool_state` layout as `VirtualPool`, with a separate discriminator. |
 | Base vault | PDA token account from pool and base mint | Program-controlled token account for launched base tokens. |
 | Quote vault | PDA token account from pool and quote mint | Program-controlled token account for quote tokens. |
 | Pool authority | PDA from `pool_authority` | Program authority over vaults and migration flows. The deployed address is `FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM`. |
@@ -61,6 +63,8 @@ llmsDescription: "Explains the DBC program account model for the public Meteora 
 
 `PoolConfig` is the partner-created account that defines all pools launched with a config.
 
+`ConfigWithTransferHook` embeds the same `PoolConfig` as `config` and appends `transfer_hook_program`. The SDK's `StateService.getPoolConfig` returns the embedded `PoolConfig` for both account variants.
+
 | Field | Use |
 | --- | --- |
 | `quote_mint` | Quote mint for every pool using the config. |
@@ -85,9 +89,11 @@ llmsDescription: "Explains the DBC program account model for the public Meteora 
 | `pool_creation_fee` | Lamport fee charged on pool creation. |
 | `sqrt_start_price`, `curve` | Q64.64 start price and fixed array of liquidity distribution points. |
 
-## VirtualPool
+## VirtualPool And TransferHookPool
 
-`VirtualPool` is the account traders, indexers, and migration keepers read most often.
+`VirtualPool` and `TransferHookPool` are the accounts traders, indexers, and migration keepers read most often.
+
+Both accounts store the active pool fields under `pool_state` in the IDL and `poolState` in the TypeScript SDK. Older integrations that read flat fields such as `pool.config`, `pool.baseMint`, or `pool.quoteReserve` must read `pool.poolState.config`, `pool.poolState.baseMint`, and `pool.poolState.quoteReserve`.
 
 | Field | Use |
 | --- | --- |

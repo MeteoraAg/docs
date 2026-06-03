@@ -1,0 +1,192 @@
+---
+title: "DBC TS SDK Transfer Hooks"
+sidebarTitle: "Transfer Hooks"
+description: "Build Token 2022 transfer-hook DBC integrations with @meteora-ag/dynamic-bonding-curve-sdk."
+llmsDescription: "Explains TypeScript SDK integration for DBC Token 2022 transfer-hook pools. Covers SDK 1.5.9 state fetching, createConfigWithTransferHook, createPoolWithTransferHook, transfer-hook first-buy builders, swap2WithTransferHook, claimPartnerTradingFee2, claimCreatorTradingFee2, TransferHookAccountsInfo, AccountsType, poolState access, and non-transfer-hook method alternatives."
+---
+
+The SDK supports Token 2022 transfer-hook DBC pools through dedicated config, pool, swap, and fee-claim builders.
+
+Use this page for the TypeScript integration surface. For product behavior, see [DBC Transfer Hook Pools](/core-products/dbc/transfer-hook-pools).
+
+## Method Map
+
+| Flow | SDK Method |
+| --- | --- |
+| Create transfer-hook config | `client.partner.createConfigWithTransferHook` |
+| Create transfer-hook config and pool | `client.partner.createConfigAndPoolWithTransferHook` |
+| Create transfer-hook config and pool with first buy | `client.partner.createConfigAndPoolWithFirstBuyWithTransferHook` |
+| Create pool from transfer-hook config | `client.creator.createPoolWithTransferHook` |
+| Create pool with first buy | `client.creator.createPoolWithFirstBuyWithTransferHook` |
+| Create pool with partner and creator first buys | `client.creator.createPoolWithPartnerAndCreatorFirstBuyWithTransferHook` |
+| Swap | `client.pool.swap2WithTransferHook` |
+| Claim partner trading fee | `client.partner.claimPartnerTradingFee2` |
+| Claim creator trading fee | `client.creator.claimCreatorTradingFee2` |
+
+<Note>
+  In SDK `1.5.8+`, `claimPartnerTradingFee2` and `claimCreatorTradingFee2` are transfer-hook fee claim builders. For standard pools with explicit receivers, use `claimPartnerTradingFeeToReceiver` and `claimCreatorTradingFeeToReceiver`.
+</Note>
+
+## State Reads
+
+SDK `1.5.9` fetches both standard and transfer-hook account variants through the same state methods.
+
+```typescript
+const configState = await client.state.getPoolConfig(config);
+const poolState = await client.state.getPool(pool);
+
+if (!configState || !poolState) {
+  throw new Error("DBC account not found");
+}
+
+const configAddress = poolState.poolState.config;
+const baseMint = poolState.poolState.baseMint;
+```
+
+Raw Anchor account fetchers still use different account names: `poolConfig` versus `configWithTransferHook`, and `virtualPool` versus `transferHookPool`.
+
+## Create A Transfer-Hook Config
+
+Transfer-hook configs require `TokenType.Token2022` and a valid executable transfer-hook program.
+
+```typescript
+import {
+  buildCurveWithMarketCap,
+  DynamicBondingCurveClient,
+  TokenAuthorityOption,
+  TokenDecimal,
+  TokenType,
+} from "@meteora-ag/dynamic-bonding-curve-sdk";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { NATIVE_MINT } from "@solana/spl-token";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = DynamicBondingCurveClient.create(connection, "confirmed");
+
+const payer = Keypair.generate();
+const config = Keypair.generate();
+
+const configParams = buildCurveWithMarketCap({
+  token: {
+    tokenType: TokenType.Token2022,
+    tokenBaseDecimal: TokenDecimal.SIX,
+    tokenQuoteDecimal: TokenDecimal.NINE,
+    tokenAuthorityOption: TokenAuthorityOption.CreatorUpdateAndMintAuthority,
+    totalTokenSupply: 1_000_000_000,
+    leftover: 0,
+  },
+  fee,
+  migration,
+  liquidityDistribution,
+  lockedVesting,
+  activationType,
+  initialMarketCap,
+  migrationMarketCap,
+});
+
+const createConfigTx = await client.partner.createConfigWithTransferHook({
+  ...configParams,
+  config: config.publicKey,
+  feeClaimer: payer.publicKey,
+  leftoverReceiver: payer.publicKey,
+  payer: payer.publicKey,
+  quoteMint: NATIVE_MINT,
+  transferHookProgram: new PublicKey("TRANSFER_HOOK_PROGRAM"),
+});
+```
+
+`CreatorUpdateAndMintAuthority` and `PartnerUpdateAndMintAuthority` are only valid for transfer-hook configs. Standard configs reject mint-authority options.
+
+## Create A Transfer-Hook Pool
+
+```typescript
+const baseMint = Keypair.generate();
+
+const createPoolTx = await client.creator.createPoolWithTransferHook({
+  baseMint: baseMint.publicKey,
+  config: config.publicKey,
+  name: "TEST",
+  symbol: "TEST",
+  uri: "https://example.com/token.json",
+  payer: payer.publicKey,
+  poolCreator: payer.publicKey,
+  transferHookProgram: new PublicKey("TRANSFER_HOOK_PROGRAM"),
+});
+```
+
+The SDK derives the pool and vault accounts inside the transaction builder. If you need the pool address, use `deriveDbcPoolAddress(quoteMint, baseMint, config)`.
+
+## Swap A Transfer-Hook Pool
+
+`swap2WithTransferHook` uses the same `SwapMode` variants as `swap2`. The SDK resolves transfer-hook extra accounts from the base mint and passes `TransferHookAccountsInfo` for you.
+
+```typescript
+const quote = client.pool.swapQuote2({
+  virtualPool: poolState,
+  config: configState,
+  swapBaseForQuote: false,
+  hasReferral: false,
+  eligibleForFirstSwapWithMinFee: false,
+  currentPoint,
+  swapMode: SwapMode.ExactIn,
+  amountIn,
+  slippageBps: 100,
+});
+
+const swapTx = await client.pool.swap2WithTransferHook({
+  owner,
+  payer,
+  pool,
+  swapBaseForQuote: false,
+  referralTokenAccount: null,
+  swapMode: SwapMode.ExactIn,
+  amountIn,
+  minimumAmountOut: quote.minimumAmountOut!,
+});
+```
+
+When a referral account is present and the referral fee is paid in base tokens, the SDK includes both `AccountsType.TransferHookBase` and `AccountsType.TransferHookBaseReferral` slices.
+
+## Claim Trading Fees
+
+```typescript
+const partnerClaimTx = await client.partner.claimPartnerTradingFee2({
+  feeClaimer,
+  payer,
+  pool,
+  receiver: feeReceiver,
+  maxBaseAmount,
+  maxQuoteAmount,
+});
+
+const creatorClaimTx = await client.creator.claimCreatorTradingFee2({
+  creator,
+  payer,
+  pool,
+  receiver: creatorReceiver,
+  maxBaseAmount,
+  maxQuoteAmount,
+});
+```
+
+For standard pools, use the non-transfer-hook claim methods:
+
+| Standard Pool Claim | SDK Method |
+| --- | --- |
+| Partner claim with optional receiver and temporary wSOL account | `client.partner.claimPartnerTradingFee` |
+| Partner claim to explicit receiver | `client.partner.claimPartnerTradingFeeToReceiver` |
+| Creator claim with optional receiver and temporary wSOL account | `client.creator.claimCreatorTradingFee` |
+| Creator claim to explicit receiver | `client.creator.claimCreatorTradingFeeToReceiver` |
+
+## Completion
+
+When the transfer-hook pool completes its bonding curve, DBC revokes the base mint's transfer-hook program id and transfer-hook authority. After completion, use the normal DAMM v2 migration methods:
+
+```typescript
+const { transaction, firstPositionNftKeypair, secondPositionNftKeypair } =
+  await client.migration.migrateToDammV2({
+    payer,
+    pool,
+    dammConfig,
+  });
+```

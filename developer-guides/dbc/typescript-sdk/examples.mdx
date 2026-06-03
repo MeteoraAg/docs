@@ -29,7 +29,7 @@ import {
   SwapMode,
   TokenDecimal,
   TokenType,
-  TokenUpdateAuthorityOption,
+  TokenAuthorityOption,
 } from "@meteora-ag/dynamic-bonding-curve-sdk";
 
 const connection = new Connection(process.env.RPC_URL!, "confirmed");
@@ -49,10 +49,10 @@ const sqrtPrices = createSqrtPrices(
 
 const curveConfig = buildCurveWithCustomSqrtPrices({
   token: {
-    tokenType: TokenType.SPL,
+    tokenType: TokenType.SPLToken,
     tokenBaseDecimal: TokenDecimal.SIX,
     tokenQuoteDecimal: TokenDecimal.NINE,
-    tokenUpdateAuthority: TokenUpdateAuthorityOption.PartnerUpdateAuthority,
+    tokenAuthorityOption: TokenAuthorityOption.PartnerUpdateAuthority,
     totalTokenSupply: 1_000_000_000,
     leftover: 1_000,
   },
@@ -131,7 +131,7 @@ The transaction must be signed by the payer and the new `config` signer.
 const creator = Keypair.generate();
 const baseMint = Keypair.generate();
 
-const createPoolTx = await client.pool.createPool({
+const createPoolTx = await client.creator.createPool({
   baseMint: baseMint.publicKey,
   config: config.publicKey,
   name: "TEST",
@@ -154,7 +154,7 @@ const pool = deriveDbcPoolAddress(
 
 ```typescript
 const poolState = await client.state.getPool(pool);
-const configState = await client.state.getPoolConfig(poolState.config);
+const configState = await client.state.getPoolConfig(poolState.poolState.config);
 
 const currentPoint =
   configState.activationType === ActivationType.Slot
@@ -224,15 +224,16 @@ const feeBreakdown = await client.state.getPoolFeeBreakdown(pool);
 console.log({
   quoteProgress,
   baseProgress,
-  totalProtocolQuoteFee: feeMetrics.totalProtocolQuoteFee.toString(),
-  currentPartnerQuoteFee: feeBreakdown.partnerQuoteFee.toString(),
+  currentPartnerQuoteFee: feeMetrics.current.partnerQuoteFee.toString(),
+  totalTradingQuoteFee: feeMetrics.total.totalTradingQuoteFee.toString(),
+  partnerUnclaimedQuoteFee: feeBreakdown.partner.unclaimedQuoteFee.toString(),
 });
 ```
 
 ## Claim Fees
 
 ```typescript
-const partnerClaimTx = await client.partner.claimPartnerTradingFee2({
+const partnerClaimTx = await client.partner.claimPartnerTradingFeeToReceiver({
   feeClaimer: partner.publicKey,
   payer: partner.publicKey,
   pool,
@@ -241,7 +242,7 @@ const partnerClaimTx = await client.partner.claimPartnerTradingFee2({
   receiver: partner.publicKey,
 });
 
-const creatorClaimTx = await client.creator.claimCreatorTradingFee2({
+const creatorClaimTx = await client.creator.claimCreatorTradingFeeToReceiver({
   creator: creator.publicKey,
   payer: creator.publicKey,
   pool,
@@ -261,7 +262,7 @@ const creatorClaimTx = await client.creator.claimCreatorTradingFee2({
 ```typescript
 const { transaction: migrateToDammV2Tx } = await client.migration.migrateToDammV2({
   payer: new PublicKey("MIGRATOR"),
-  virtualPool: pool,
+  pool,
   dammConfig: new PublicKey("DAMM_V2_CONFIG"),
 });
 ```
