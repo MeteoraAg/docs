@@ -2,7 +2,7 @@
 title: "Dynamic Fee Sharing Program Instructions"
 sidebarTitle: "Instructions"
 description: "Explore Dynamic Fee Sharing instructions for vault initialization, direct funding, source-program funding, and user fee claims."
-llmsDescription: "Explains the Dynamic Fee Sharing instruction surface from the Anchor source and IDL. Covers initialize_fee_vault, initialize_fee_vault_pda, fund_fee, fund_by_claiming_fee, claim_fee, parameters, account requirements, signers, whitelisted DAMM v2 and DBC source actions, Token 2022 transfer-fee handling, event-CPI accounts, and validation notes."
+llmsDescription: "Explains the Dynamic Fee Sharing instruction surface from the Anchor source and IDL. Covers initialize_fee_vault, initialize_fee_vault_pda, fund_fee, fund_by_claiming_fee, claim_fee, parameters, account requirements, signers, whitelisted DAMM v2 and DBC source actions, the single-token-mint design that requires source pools to use the default quote-token-only CollectFeeMode, Token 2022 transfer-fee handling, event-CPI accounts, and validation notes."
 ---
 
 The `dynamic_fee_sharing` program exposes the instructions below. Integrators should use the TypeScript SDK for normal transaction construction, or build through CPI.
@@ -90,6 +90,10 @@ The first 8 bytes of `payload` must be the downstream Anchor instruction discrim
 | DBC `dynamic_bonding_curve` | `withdraw_migration_fee` | `3` | `fundByWithdrawDbcMigrationFee` |
 
 The index is zero-based within the remaining accounts passed to `fund_by_claiming_fee`.
+
+<Warning>
+  A fee vault is designed to support a single token mint and a single token vault. `fund_by_claiming_fee` credits only the balance increase of the fee vault's `token_vault`, and the whitelist check pins exactly one token account of the downstream instruction to it. The source pool's `CollectFeeMode` must therefore collect fees only in the fee vault's token mint: `OnlyB` for DAMM v2 and `QuoteToken` for DBC. This quote-token-only mode is the default configuration, and partners must always use it. If the source pool collects fees in both tokens, fees paid in the second token go to the other recipient token account in the downstream instruction and are not credited to fee-vault accounting.
+</Warning>
 
 ## User Claim
 

@@ -109,6 +109,8 @@ Use this path for:
 - Supported DBC fee, surplus, or migration-fee claims.
 - Product-native revenue sharing where the fee vault should receive claimable fees directly.
 
+Because a fee vault supports a single token mint and a single token vault, the source pool's `CollectFeeMode` must collect fees only in the fee vault's token mint: `OnlyB` for DAMM v2 and `QuoteToken` for DBC. This quote-token-only mode is the default configuration, and partners must always use it.
+
 See [Compatibilities](/helper-products/dynamic-fee-sharing/compatibilities) for the exact whitelisted actions and signer requirements.
 
 ## Communicate the Vault Clearly
@@ -151,6 +153,9 @@ If funding amounts are very small relative to total shares, tell recipients to c
   </Accordion>
   <Accordion title="Expecting unsupported products to claim directly">
     Claim-by-integration funding only works for whitelisted actions. Other revenue can still use manual funding.
+  </Accordion>
+  <Accordion title="Pairing a fee vault with a pool that collects fees in both tokens">
+    A fee vault tracks a single token mint and a single token vault. Keep the source pool on the default quote-token-only `CollectFeeMode` (`OnlyB` for DAMM v2, `QuoteToken` for DBC) so all claimed fees arrive in the fee vault's token mint. Fees collected in a second token are not tracked by the fee vault.
   </Accordion>
   <Accordion title="Treating owner as an admin">
     The fee vault stores an `owner` field, but the current instructions do not use it for editing recipients, changing shares, withdrawing funds, or closing the vault.
