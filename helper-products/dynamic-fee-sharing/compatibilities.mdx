@@ -2,7 +2,7 @@
 title: "Dynamic Fee Sharing Compatibilities"
 sidebarTitle: "Compatibilities"
 description: "Review Dynamic Fee Sharing limits, supported token mints, vault types, funding paths, and whitelisted source-program actions."
-llmsDescription: "Reference page for Dynamic Fee Sharing compatibility from source code: recipient count 2 to 5, non-zero shares, non-default addresses, duplicate addresses not rejected, SPL Token and Token 2022 mints with only TransferFeeConfig, MetadataPointer, and TokenMetadata extensions, Non-PDA and PDA fee vaults, manual fund_fee, PDA-only fund_by_claiming_fee, share-holder signer requirement, and whitelisted DAMM v2 and Dynamic Bonding Curve actions."
+llmsDescription: "Reference page for Dynamic Fee Sharing compatibility from source code: recipient count 2 to 5, non-zero shares, non-default addresses, duplicate addresses not rejected, SPL Token and Token 2022 mints with only TransferFeeConfig, MetadataPointer, and TokenMetadata extensions, Non-PDA and PDA fee vaults, manual fund_fee, PDA-only fund_by_claiming_fee, share-holder signer requirement, whitelisted DAMM v2 and Dynamic Bonding Curve actions, and the single-token-mint design that requires source pools to use the default quote-token-only CollectFeeMode."
 ---
 
 Dynamic Fee Sharing is intentionally narrow. This page is the compatibility reference for what the current program accepts.
@@ -87,6 +87,10 @@ Additional requirements:
 - The whitelisted token-vault account index must point to the fee vault's token vault.
 - The signer must be one of the configured share-holder addresses.
 - The fee vault must be a PDA vault.
+
+<Warning>
+  A fee vault is designed to support a single token mint and a single token vault, and `fund_by_claiming_fee` credits only the balance increase of that one token vault. The source pool's `CollectFeeMode` must therefore be configured to collect fees only in the fee vault's token mint: `OnlyB` for DAMM v2 and `QuoteToken` for DBC. This quote-token-only mode is the default configuration, and partners must always use it. If a pool collects fees in both tokens, fees paid in the second token are transferred to the other recipient token account in the claim instruction and are not tracked by the fee vault.
+</Warning>
 
 ## Compatible Source Programs and Actions
 
