@@ -1,8 +1,8 @@
 ---
 title: "DBC Token Launch Pool"
 sidebarTitle: "DBC Token Launch Pool"
-description: "Learn how to create a Meteora DBC token launch pool with configurable bonding curves, launch fees, token metadata, DAMM migration, and liquidity distribution."
-llmsDescription: "Guide to creating a DBC token launch pool with Meteora Invent Studio, covering setup, local validator, environment variables, keypair generation, dbc_config.jsonc, quote mint, curve build modes, token supply and authority settings, fee scheduler, rate limiter, dynamic fee, pool creation fee, creator trading fee split, migration to DAMM v1 or DAMM v2, migration fees, migrated DAMM v2 pool fees, liquidity distribution, locked vesting, leftover receiver, fee claimer, dbcPool metadata, swaps, pool creator transfer, and dbc-create-pool commands."
+description: "Learn how to create a Meteora DBC token launch pool with configurable bonding curves, launch fees, token metadata, transfer hooks, DAMM migration, and liquidity distribution."
+llmsDescription: "Guide to creating a DBC token launch pool with Meteora Invent Studio, covering setup, local validator, environment variables, keypair generation, dbc_config.jsonc, quote mint, curve build modes, token supply and authority settings, token authority option, fee scheduler, rate limiter, dynamic fee, pool creation fee, creator trading fee split, migration to DAMM v1 or DAMM v2, migration fees, migrated DAMM v2 pool fees, market cap fee scheduler price multiple, compounding fee, Token 2022 transfer hook launches, liquidity distribution, locked vesting, leftover receiver, fee claimer, dbcPool metadata, swaps, pool creator transfer, and dbc-create-pool commands."
 ---
 
 This guide walks you through the steps to create a DBC token launch pool on Meteora. Whether you’re a seasoned developer or just starting out, this guide has got you covered to deploy liquidity and launch your project on Meteora.
@@ -22,7 +22,7 @@ Meteora is a hyper optimized liquidity layer that ensures that your project's pr
 
 # Prerequisites
 
-- Node.js >= 18.0.0
+- Node.js >= 22.12.0
 - pnpm >= 10.0.0
 
 *If you don't have pnpm installed, you can install it by running the following command.*
@@ -190,8 +190,8 @@ npm install -g pnpm
           "totalTokenSupply": 1000000000, // total token supply (not in lamports)
           "tokenBaseDecimal": 6, // token base decimal
           "tokenQuoteDecimal": 9, // token quote decimal
-          "tokenType": 0, // 0 - SPL | 1 - Token 2022
-          "tokenUpdateAuthority": 1, // 0 - CreatorUpdateAuthority | 1 - Immutable | 2 - PartnerUpdateAuthority | 3 - CreatorUpdateAndMintAuthority | 4 - PartnerUpdateAndMintAuthority
+          "tokenType": 0, // 0 - SPL Token | 1 - Token 2022
+          "tokenAuthorityOption": 1, // 0 - CreatorUpdateAuthority | 1 - Immutable | 2 - PartnerUpdateAuthority | 3 - CreatorUpdateAndMintAuthority | 4 - PartnerUpdateAndMintAuthority (3 and 4 are only allowed for transfer hook configs)
           "leftover": 0 // leftover tokens in the bonding curve (claimable once pool migrates)
         },
 
@@ -240,14 +240,15 @@ npm install -g pnpm
           * Note: When marketCapFeeSchedulerParams is configured, the SDK will automatically set migrationFeeOption to Customizable (6).
           */
           // "migratedPoolFee": {
-          //   "collectFeeMode": 0, // 0 - Quote Token | 1 - Output Token
+          //   "collectFeeMode": 0, // 0 - Quote Token | 1 - Output Token | 2 - Compounding
           //   "dynamicFee": 0, // 0: Disabled, 1: Enabled
           //   "poolFeeBps": 100, // The pool fee in basis points. Minimum 10, Maximum 1000 bps. Required when marketCapFeeSchedulerParams is configured.
+          //   "compoundingFeeBps": 5000, // Portion of trading fees compounded back into pool liquidity (0 to 10000 bps). Only for collectFeeMode: 2 (Compounding)
           //   "baseFeeMode": 3, // 3 - FeeMarketCapSchedulerLinear | 4 - FeeMarketCapSchedulerExponential (only for DAMM v2)
           //   "marketCapFeeSchedulerParams": {
           //     "endingBaseFeeBps": 50, // The ending (minimum) base fee in basis points
           //     "numberOfPeriod": 100, // The total number of fee reduction periods
-          //     "sqrtPriceStepBps": 100, // The sqrt price increase (in bps) required to advance one period
+          //     "priceMultiple": 1000, // The ratio of ending market cap over starting market cap, must be greater than 1
           //     "schedulerExpirationDuration": 86400 // The maximum duration (seconds) after which the scheduler expires and defaults to minimum fee
           //   }
           // }
@@ -302,6 +303,13 @@ npm install -g pnpm
 
         "leftoverReceiver": "YOUR_LEFTOVER_RECEIVER_ADDRESS", // leftover receiver address
         "feeClaimer": "YOUR_FEE_CLAIMER_ADDRESS" // fee claimer address
+
+        /* Transfer Hook Launch (Token 2022 only)
+        * Set transferHookProgram to launch tokens whose base mint executes a transfer hook program on every transfer.
+        * Requires token.tokenType: 1 (Token 2022). The config is created with createConfigWithTransferHook and
+        * pools on it must be created with the same transferHookProgram (see dbcPool.transferHookProgram).
+        */
+        // "transferHookProgram": "YOUR_TRANSFER_HOOK_PROGRAM_ADDRESS"
       },
 
       /* dbcPool is only used in the following actions:
@@ -312,6 +320,7 @@ npm install -g pnpm
         "creator": "YOUR_CREATOR_ADDRESS", // creator address
         "name": "TOKEN_NAME", // token name
         "symbol": "TOKEN_SYMBOL", // token symbol
+        // "transferHookProgram": "YOUR_TRANSFER_HOOK_PROGRAM_ADDRESS", // required when the target config was created with a transfer hook; must match the config's hook program
         "metadata": {
           // "uri": "https://gateway.irys.xyz/123456789", // if you already have a metadata URI created, you can specify it here
 
@@ -348,11 +357,16 @@ npm install -g pnpm
     Creating a DBC token pool will automatically mint the token within the same `initialize_virtual_pool` instruction, so if you want to provide a vanity mint address, you will need to specify the `baseMintKeypairFilepath` in the `dbc_config.jsonc` file.
   </Note>
 
+  <Note>
+    To launch a Token 2022 token with a transfer hook, set `token.tokenType` to `1` and `transferHookProgram` in `dbcConfig` (plus `dbcPool.transferHookProgram` when creating a pool on an existing transfer-hook config). The `dbc-swap` and `dbc-claim-trading-fee` actions detect transfer-hook pools automatically and use the transfer-hook-aware instructions. To learn how transfer-hook launches behave onchain, head to [DBC Transfer Hook Pools](/core-products/dbc/transfer-hook-pools).
+  </Note>
+
   <Tip>
     The toolkit contains logic to make it easier for you to create the DBC token pool such as:
 
     - Configuring your bonding curve shape based on your `buildCurveMode`.
     - Launching the DBC config and token pool using the config immediately.
+    - Launching Token 2022 tokens with or without a transfer hook.
     - Configuring your Anti-Sniping settings (such as Fee Scheduler or Rate Limiter) easily.
     - Setting up liquidity vesting schedules for DAMM v2 migrations.
     - Configuring market cap-based fee schedules for graduated pools.
