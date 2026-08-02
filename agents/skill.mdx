@@ -1,0 +1,111 @@
+---
+title: "Agent Skill"
+sidebarTitle: "Agent Skill"
+description: "Install Meteora's official Agent Skill so AI agents can run launches, swaps, and liquidity actions safely."
+llmsDescription: "Meteora ships an official Agent Skill in the meteora-invent repository at skills/meteora, following the Agent Skills open format (agentskills.io). The skill teaches AI agents such as Claude Code, OpenClaw, Hermes, and Cursor how to execute all 38 Meteora Invent studio actions (token launches, migrations, pool creation, seeding, swaps, position and status reads, fee claims, vaults, locks) with devnet-first and dry-run-first safety gates, and how to write correct TypeScript against version-pinned Meteora SDKs for DBC, DAMM v1, DAMM v2, DLMM, Alpha Vault, Presale, Stake2Earn, Zap, Dynamic Vault, and Dynamic Fee Sharing. Install it by copying skills/meteora into an agent's skills directory; it is validated in CI against the studio source and SDK versions."
+---
+
+Meteora ships an official **Agent Skill** — a portable instruction pack that teaches AI agents how to do things on Meteora correctly: launch tokens, create and seed pools, swap, manage positions, claim fees, and write integration code against the real SDK APIs.
+
+It lives in the [meteora-invent repository](https://github.com/MeteoraAg/meteora-invent/tree/main/skills/meteora) and follows the open [Agent Skills format](https://agentskills.io), so the same folder works in Claude Code, OpenClaw, Hermes, Cursor, and any other Agent-Skills-compatible runtime.
+
+<Note>
+The skill and the [Documentation MCP](/agents/mcp) are complementary. The skill is the operational playbook (which command, which config, which safety gate); the MCP and [llms.txt](/agents/llms-txt) are the always-current reference layer the skill tells agents to consult for depth.
+</Note>
+
+## What the skill teaches an agent
+
+<CardGroup cols={2}>
+  <Card title="ACT: run studio actions" icon="terminal">
+    All 38 Meteora Invent studio actions with their real flags and config blocks — launches, migrations, pool creation, liquidity seeding, swaps, position and status reads, fee claims, alpha/presale vaults, locks, and Stake2Earn farms.
+  </Card>
+
+  <Card title="BUILD: write correct SDK code" icon="code">
+    Version-pinned reference packs for the DBC, DAMM v1, DAMM v2, and DLMM TypeScript SDKs — verified client setup, method maps, runnable flows, and "version fences" that call out breaking changes agents commonly get wrong.
+  </Card>
+
+  <Card title="Safety gates" icon="shield-check">
+    Devnet-first, dry-run-first, explicit owner confirmation before mainnet execution, on-chain verification after every action, and key hygiene rules (an agent following the skill never asks you to paste a private key into chat).
+  </Card>
+
+  <Card title="Intake contracts" icon="clipboard-check">
+    Per-flow checklists of exactly what the agent must collect from you before executing — amounts and units, addresses, curve parameters, funding — with documented defaults for everything else.
+  </Card>
+</CardGroup>
+
+## What's inside
+
+```text
+skills/meteora/
+├── SKILL.md                  # router: product map, intent table, intake, gates
+└── references/
+    ├── studio-actions.md     # all 38 CLI actions: flags, config blocks, outputs
+    ├── studio-setup.md       # bootstrap, wallet setup, localnet
+    ├── dbc.md                # DBC SDK pack + launch intake contract
+    ├── damm-v2.md            # DAMM v2 (CP-AMM) SDK pack
+    ├── dlmm.md               # DLMM SDK pack
+    ├── damm-v1.md            # DAMM v1 SDK pack (legacy)
+    ├── other-products.md     # Alpha Vault, Presale, Stake2Earn, Zap, Dynamic Vault, Fee Sharing
+    ├── wallets-and-txs.md    # keypairs, RPC, priority fees, sign & send patterns
+    ├── data-and-apis.md      # REST data APIs vs SDK state fetchers
+    ├── troubleshooting.md    # error → cause → retry? → fix tables
+    ├── scaffolds.md          # fun-launch launchpad template guidance
+    └── configs/              # commented JSONC config templates (identical to studio/config)
+```
+
+## Install
+
+<Tabs>
+  <Tab title="Claude Code">
+    Working inside a `meteora-invent` checkout? The skill is discovered automatically from `skills/`. To make it available in every project, copy it to your user-level skills directory:
+
+    ```bash Terminal
+    git clone https://github.com/MeteoraAg/meteora-invent.git
+    cp -R meteora-invent/skills/meteora ~/.claude/skills/meteora
+    ```
+  </Tab>
+
+  <Tab title="Cross-runtime (.agents)">
+    Most Agent-Skills-compatible runtimes (including Cursor, OpenClaw, and Hermes) read the shared convention path:
+
+    ```bash Terminal
+    git clone https://github.com/MeteoraAg/meteora-invent.git
+    cp -R meteora-invent/skills/meteora ~/.agents/skills/meteora
+    ```
+  </Tab>
+
+  <Tab title="OpenClaw / Hermes">
+    Both runtimes consume the standard Agent Skills format directly — install into their skill directories or via the `.agents` convention path above:
+
+    ```bash Terminal
+    # OpenClaw workspace skills
+    cp -R meteora-invent/skills/meteora <openclaw-workspace>/skills/meteora
+
+    # Hermes
+    cp -R meteora-invent/skills/meteora ~/.hermes/skills/defi/meteora
+    ```
+  </Tab>
+</Tabs>
+
+## What you can ask for
+
+Once installed, the agent routes plain-language requests to the right protocol, path, and commands:
+
+- "Launch my token on a bonding curve on devnet, graduating at a 600 SOL market cap"
+- "Swap 0.5 SOL into this DAMM v2 pool" or "buy 0.2 SOL of this DBC token"
+- "Show my DLMM positions on this pool and claim all my fees"
+- "What's the graduation progress of my DBC token?"
+- "Migrate my graduated DBC pool to DAMM v2"
+- "Write a TypeScript bot that rebalances my DLMM position around the active bin"
+
+The skill makes the agent gather required details first (network, wallet, amounts with units, addresses), simulate with `dryRun` before executing, ask for your explicit confirmation before any mainnet transaction, and verify the result on-chain before reporting success.
+
+## How it stays accurate
+
+- **Version-pinned**: every SDK reference pack states the exact package version it was verified against, with breaking-change "fences" for older APIs.
+- **CI-validated**: the meteora-invent CI checks the skill's frontmatter against the Agent Skills spec, fails on broken internal links, fails when SDK version pins drift from `studio/package.json`, and keeps the bundled config templates byte-identical to `studio/config`.
+- **Source-verified**: action flags and config semantics are generated from the studio source, not written from memory.
+
+<Card title="skills/meteora on GitHub" icon="github" href="https://github.com/MeteoraAg/meteora-invent/tree/main/skills/meteora" horizontal>
+  Browse the skill source, reference packs, and config templates
+</Card>
