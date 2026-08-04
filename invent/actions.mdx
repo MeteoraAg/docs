@@ -2,7 +2,7 @@
 title: "Actions"
 sidebarTitle: "Actions"
 description: "Run Meteora Invent CLI workflows for onchain actions across Meteora programs."
-llmsDescription: "Guide to Meteora Invent actions, explaining how to clone and set up the meteora-invent repository, install pnpm dependencies, configure devnet or localnet environments, airdrop SOL, start the local validator, and run supported onchain action commands for Meteora programs such as DLMM, DAMM v2, DAMM v1, DBC, Alpha Vault, and Presale Vault — including launches, migrations, liquidity seeding, swaps, position and pool status reads, fee claims, locks, and Stake2Earn farms. AI agents can install the Meteora Agent Skill from skills/meteora in the same repository for guided execution."
+llmsDescription: "Guide to Meteora Invent actions, explaining how to clone and set up the meteora-invent repository, install pnpm dependencies, configure devnet or localnet environments, airdrop SOL, start the local validator, and run supported onchain action commands for Meteora programs such as DLMM, DAMM v2, DAMM v1, DBC, Alpha Vault, Presale Vault, Met Lock, Stake2Earn, Pool Farms, Dynamic Vault, Dynamic Fee Sharing, and Zap — including launches, migrations, liquidity seeding, swaps, position and pool status reads, fee claims, token vesting, staking and reward claims, single-token zaps, and fee splitting between wallets. AI agents can install the Meteora Agent Skill from skills/meteora in the same repository for guided execution."
 ---
 
 <video autoPlay muted loop playsInline preload="none" src="/invent/assets/man-inside-spaceship.mp4" />
@@ -92,8 +92,15 @@ npm install -g pnpm
     - Configure [DBC](https://github.com/MeteoraAg/meteora-invent/blob/main/studio/config/dbc_config.jsonc)
     - Configure [Alpha Vault](https://github.com/MeteoraAg/meteora-invent/blob/main/studio/config/alpha_vault_config.jsonc)
     - Configure [Presale Vault](https://github.com/MeteoraAg/meteora-invent/blob/main/studio/config/presale_vault_config.jsonc)
+    - Configure [Met Lock](https://github.com/MeteoraAg/meteora-invent/blob/main/studio/config/lock_config.jsonc)
+    - Configure [Dynamic Vault](https://github.com/MeteoraAg/meteora-invent/blob/main/studio/config/dynamic_vault_config.jsonc)
+    - Configure [Dynamic Fee Sharing](https://github.com/MeteoraAg/meteora-invent/blob/main/studio/config/fee_sharing_config.jsonc)
+    - Configure [Pool Farms](https://github.com/MeteoraAg/meteora-invent/blob/main/studio/config/farming_config.jsonc)
+    - Configure [Zap](https://github.com/MeteoraAg/meteora-invent/blob/main/studio/config/zap_config.jsonc)
 
     <Tip>After configuring the settings in the JSON files, you can choose the action you want to perform.</Tip>
+
+    <Note>Timestamp fields in these templates ship as placeholder dates that have already passed. Replace them with future values before you run an action that uses them, such as a presale end time, an Alpha Vault deposit window, or a vesting cliff.</Note>
   </Step>
 </Steps>
 
@@ -218,6 +225,24 @@ npm install -g pnpm
   <Card title="Create an Alpha Vault " icon="box" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#create-an-alpha-vault">
     Create an Alpha Vault with an already existing DAMM v1 or DAMM v2 or DLMM pool
   </Card>
+  <Card title="Deposit" icon="arrow-down-to-arc" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#alpha-vault-deposit">
+    Deposit quote tokens into a vault, with the merkle proof fetched for you on permissioned vaults
+  </Card>
+  <Card title="Withdraw" icon="arrow-up-from-arc" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#alpha-vault-withdraw">
+    Withdraw a deposit during the deposit phase of a prorata vault
+  </Card>
+  <Card title="Claim Tokens" icon="hand-holding-dollar" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#alpha-vault-claim">
+    Claim your vested tokens once the vault has bought from the pool
+  </Card>
+  <Card title="Withdraw Remaining Quote" icon="rotate-left" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#alpha-vault-withdraw-remaining-quote">
+    Recover the unused portion of a prorata deposit after the vault has filled
+  </Card>
+  <Card title="Crank the Fill" icon="rotate" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#alpha-vault-crank-fill">
+    Run the permissionless crank that buys from the pool until the vault is filled
+  </Card>
+  <Card title="Get Vault Status" icon="gauge-high" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#alpha-vault-get-status">
+    Read the vault mode, phase, caps, and totals, plus your own escrow when a keypair is present
+  </Card>
 </CardGroup>
 
 ## Presale Vault
@@ -225,5 +250,146 @@ npm install -g pnpm
 <CardGroup>
   <Card title="Create a Presale Vault" icon="gavel" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent?tab=readme-ov-file#create-a-presale-vault">
     Create a Fixed Price or FCFS or Prorata Presale Vault
+  </Card>
+  <Card title="Deposit" icon="arrow-down-to-arc" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#presale-vault-deposit">
+    Deposit quote tokens into a presale tier, creating your escrow in the same transaction
+  </Card>
+  <Card title="Withdraw" icon="arrow-up-from-arc" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#presale-vault-withdraw">
+    Withdraw a deposit while the presale still allows it
+  </Card>
+  <Card title="Claim Allocation" icon="hand-holding-dollar" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#presale-vault-claim">
+    Claim your purchased tokens, including the vesting schedule when one is set
+  </Card>
+  <Card title="Withdraw Remaining Quote" icon="rotate-left" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#presale-vault-withdraw-remaining-quote">
+    Sweep the unused quote left over across every tier you deposited into
+  </Card>
+  <Card title="Close Escrow" icon="broom" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#presale-vault-close-escrow">
+    Reclaim escrow rent once your escrow is fully settled
+  </Card>
+  <Card title="Creator Withdraw" icon="money-bill-transfer" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#presale-vault-creator-withdraw">
+    Withdraw the raise as the creator, optionally collecting the deposit fee
+  </Card>
+  <Card title="Handle Unsold Tokens" icon="fire" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#presale-vault-handle-unsold">
+    Refund or burn the base tokens the presale did not sell
+  </Card>
+  <Card title="Get Presale Status" icon="gauge-high" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#presale-vault-get-status">
+    Read progress, totals, average price, and per-tier state, or find a presale by its base mint
+  </Card>
+</CardGroup>
+
+## Met Lock
+
+<CardGroup>
+  <Card title="Create a Vesting Escrow" icon="lock" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#lock-create-vesting-escrow">
+    Lock any SPL or Token-2022 mint for a recipient on a cliff and vesting schedule
+  </Card>
+  <Card title="Create Escrow Metadata" icon="tag" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#lock-create-escrow-metadata">
+    Attach a name and contact details to an escrow so recipients can identify it
+  </Card>
+  <Card title="Claim Vested Tokens" icon="hand-holding-dollar" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#lock-claim">
+    Claim whatever has vested so far as the escrow recipient
+  </Card>
+  <Card title="Get Escrow" icon="magnifying-glass-chart" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#lock-get-escrow">
+    Read one escrow's schedule, total locked, claimed, and claimable amounts
+  </Card>
+  <Card title="List Escrows" icon="list" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#lock-list-escrows">
+    List every escrow where a wallet is the recipient or the creator
+  </Card>
+</CardGroup>
+
+## Stake2Earn
+
+<CardGroup>
+  <Card title="Stake" icon="coins" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#stake2earn-stake">
+    Stake tokens into a DAMM v1 pool's fee farm to earn a share of trading fees
+  </Card>
+  <Card title="Claim Fees" icon="hand-holding-dollar" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#stake2earn-claim-fee">
+    Claim the fees your stake has earned in both pool tokens
+  </Card>
+  <Card title="Start an Unstake" icon="hourglass-start" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#stake2earn-unstake">
+    Begin the unstake cooldown, saving the unstake address you will need to finish it
+  </Card>
+  <Card title="Cancel or Withdraw an Unstake" icon="arrows-rotate" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#stake2earn-cancel-unstake--stake2earn-withdraw">
+    Cancel a pending unstake to restake, or withdraw once the cooldown has passed
+  </Card>
+  <Card title="Get Farm Status" icon="gauge-high" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#stake2earn-get-status">
+    Read the farm's top-list threshold and your staked amount, pending fees, and open unstakes
+  </Card>
+</CardGroup>
+
+## Pool Farms
+
+<CardGroup>
+  <Card title="Stake LP" icon="seedling" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#farm-stake">
+    Stake DAMM v1 LP tokens into a reward farm
+  </Card>
+  <Card title="Unstake LP" icon="arrow-up-from-arc" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#farm-unstake">
+    Withdraw some or all of your staked LP tokens
+  </Card>
+  <Card title="Claim Rewards" icon="gift" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#farm-claim">
+    Claim accumulated rewards from a single farm
+  </Card>
+  <Card title="Claim from Several Farms" icon="layer-group" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#farm-claim-all">
+    Batch reward claims across a list of farms
+  </Card>
+  <Card title="Get Farm Status" icon="gauge-high" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#farm-get-status">
+    Read the farm's staking mint, total staked, reward schedule, and your own position
+  </Card>
+</CardGroup>
+
+## Dynamic Vault
+
+<CardGroup>
+  <Card title="Deposit" icon="piggy-bank" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#vault-deposit">
+    Deposit a token into its dynamic vault to earn lending yield on idle balances
+  </Card>
+  <Card title="Withdraw" icon="arrow-up-from-arc" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#vault-withdraw">
+    Redeem vault LP shares back into the underlying token
+  </Card>
+  <Card title="Get Vault Status" icon="gauge-high" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#vault-get-status">
+    Read total supply, withdrawable amount, virtual price, and your redemption value
+  </Card>
+</CardGroup>
+
+## Dynamic Fee Sharing
+
+<CardGroup>
+  <Card title="Create a Fee Vault" icon="box" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#fee-sharing-create-vault">
+    Split a fee stream between up to five recipients on fixed shares
+  </Card>
+  <Card title="Fund the Vault" icon="money-bill" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#fee-sharing-fund">
+    Transfer tokens straight into a fee vault for distribution
+  </Card>
+  <Card title="Transfer a DAMM v2 Position" icon="right-left" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#fee-sharing-transfer-damm-v2-position">
+    Hand a position's NFT to the fee vault so the vault can claim its fees
+  </Card>
+  <Card title="Fund from DAMM v2 Fees" icon="money-bill-transfer" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#fee-sharing-fund-from-damm-v2">
+    Claim a vault-owned position's trading fees directly into the fee vault
+  </Card>
+  <Card title="Fund from DAMM v2 Rewards" icon="gift" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#fee-sharing-fund-from-damm-v2-reward">
+    Claim a vault-owned position's reward emissions into the fee vault
+  </Card>
+  <Card title="Fund from DBC Fees" icon="chart-simple" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#fee-sharing-fund-from-dbc">
+    Route DBC creator or partner trading fees, surplus, or migration fees into the fee vault
+  </Card>
+  <Card title="Claim Your Share" icon="hand-holding-dollar" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#fee-sharing-claim">
+    Claim whatever your share of the vault has accrued
+  </Card>
+  <Card title="Get Vault Status" icon="gauge-high" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#fee-sharing-get-status">
+    Read the recipient split, funded totals, and each share's claimed and claimable amounts
+  </Card>
+</CardGroup>
+
+## Zap
+
+<CardGroup>
+  <Card title="Zap into a DAMM v2 Pool" icon="bolt" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#zap-in-damm-v2">
+    Enter a DAMM v2 position with a single token, sourcing the other side from the pool itself
+  </Card>
+  <Card title="Zap into a DLMM Pool" icon="bolt-lightning" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#zap-in-dlmm">
+    Enter a DLMM position with a single token, pricing the rebalancing swap against Jupiter
+  </Card>
+  <Card title="Zap out of a Position" icon="arrow-right-from-bracket" iconType="solid" href="https://github.com/MeteoraAg/meteora-invent/blob/main/skills/meteora/references/studio-actions.md#zap-out">
+    Remove liquidity from a DAMM v2 or DLMM position and exit into a single token
   </Card>
 </CardGroup>
