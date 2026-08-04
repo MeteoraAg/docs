@@ -2,7 +2,7 @@
 title: "Meteora Agent Skill"
 sidebarTitle: "Agent Skill"
 description: "Install and use Meteora's Agent Skill for onchain actions and SDK development."
-llmsDescription: "Meteora's official Agent Skill is available in the meteora-invent repository at skills/meteora. It gives Agent-Skills-compatible runtimes two paths: ACT for 38 config-driven Meteora Invent studio commands, and BUILD for TypeScript development against version-pinned DBC, DAMM v1, DAMM v2, DLMM, Alpha Vault, Presale, Stake2Earn, Zap, Dynamic Vault, and Dynamic Fee Sharing SDKs. The skill includes intake checklists, devnet and dry-run safety gates, transaction verification rules, troubleshooting guidance, and config templates synchronized with the studio source."
+llmsDescription: "Meteora's official Agent Skill is available in the meteora-invent repository at skills/meteora. It gives Agent-Skills-compatible runtimes two paths: ACT for 81 config-driven Meteora Invent studio commands, and BUILD for TypeScript development against version-pinned DBC, DAMM v1, DAMM v2, DLMM, Alpha Vault, Presale, Met Lock, Stake2Earn, Zap, Dynamic Vault, Dynamic Fee Sharing, and Pool Farms SDKs. The skill includes intake checklists, devnet and dry-run safety gates, transaction verification rules, troubleshooting guidance, and config templates synchronized with the studio source."
 ---
 
 The Meteora Agent Skill is a portable set of instructions for AI coding agents. It helps an agent choose the right Meteora product, collect the required inputs, run supported studio commands, and write TypeScript against the SDK APIs the repository currently uses.
@@ -28,16 +28,23 @@ For current product concepts and API documentation, use the [Documentation MCP](
 
 ### Studio Actions
 
-The ACT path documents 38 commands from the Meteora Invent studio. Each entry records the command, accepted selector flags, config block, important units, expected output, and approximate SOL requirement.
+The ACT path documents 81 commands from the Meteora Invent studio. Each entry records the command, accepted selector flags, config block, important units, expected output, and approximate SOL requirement.
 
 | Area | Commands | Common uses |
 |:-----|:---------|:------------|
-| Setup | 3 | Convert a private key into the studio keypair file, request devnet or localnet SOL, and start a local validator |
+| Setup | 2 | Convert a private key into the studio keypair file and request devnet or localnet SOL |
 | DBC | 8 | Create configs and pools, swap, claim trading fees, inspect graduation status, transfer the pool creator, and migrate to DAMM v1 or DAMM v2 |
 | DLMM | 10 | Create and seed pools, control pool status, place or cancel limit orders, swap, read positions, and claim fees and rewards |
 | DAMM v2 | 10 | Create balanced or one-sided pools, add or remove liquidity, split or close positions, refresh vesting, swap, and read positions |
 | DAMM v1 | 5 | Create legacy pools, lock LP, create Stake2Earn farms, lock LP into those farms, and swap |
-| Vaults | 2 | Create Alpha Vault and Presale Vault configurations |
+| Alpha Vault | 7 | Create a vault, deposit, withdraw, claim, withdraw remaining quote, crank the fill, and read vault and escrow state |
+| Presale Vault | 9 | Create a presale, deposit, withdraw, claim, sweep remaining quote, withdraw the raise, handle unsold supply, close an escrow, and read status |
+| Met Lock | 5 | Create a vesting escrow, attach escrow metadata, claim vested tokens, and read one or all escrows for a wallet |
+| Stake2Earn | 6 | Stake into a fee farm, claim fees, start or cancel an unstake, withdraw after the cooldown, and read farm and staker state |
+| Pool Farms | 5 | Stake DAMM v1 LP, unstake, claim rewards from one farm or several, and read farm and user state |
+| Dynamic Vault | 3 | Deposit into a lending vault, withdraw, and read supply, withdrawable amount, and virtual price |
+| Fee Sharing | 8 | Create a fee vault, fund it directly or from DAMM v2 fees, rewards, or DBC fees, transfer a position to the vault, claim a share, and read the split |
+| Zap | 3 | Enter a DAMM v2 or DLMM position with a single token and exit a position into one token |
 
 The studio uses one fixed JSONC config file per protocol. Command-line flags select an account such as a mint, pool, or limit order; they do not select a different config file. For example:
 
@@ -53,8 +60,8 @@ Before a write, the agent edits the relevant file under `studio/config`, keeps `
 
 The BUILD path contains focused references for the four main liquidity protocols:
 
-| Product | Package and verified version | Use it for |
-|:--------|:-----------------------------|:-----------|
+| Product | Package and pinned version | Use it for |
+|:--------|:---------------------------|:-----------|
 | DBC | `@meteora-ag/dynamic-bonding-curve-sdk@1.5.11` | Token launches, curve configuration, trading, fee claims, graduation, and migration |
 | DAMM v2 | `@meteora-ag/cp-amm-sdk@1.4.5` | Constant-product pools, position NFTs, swaps, liquidity, locks, vesting, fees, and rewards |
 | DLMM | `@meteora-ag/dlmm@1.9.14` | Bin-based liquidity, strategies, swaps, positions, fee claims, limit orders, and rebalancing |
@@ -68,18 +75,20 @@ The root `SKILL.md` pins the SDK versions verified by the reference packs. It al
 - Builders return unsigned transactions. Some operations return multiple transactions or additional keypairs that must also sign.
 - Pool state should be refreshed before quoting or building a transaction.
 
-Compact SDK notes are also included for:
+Compact SDK notes are also included for the helper programs that sit on top of the liquidity protocols:
 
-| Product | Package and verified version |
-|:--------|:-----------------------------|
+| Product | Package and pinned version |
+|:--------|:---------------------------|
 | Alpha Vault | `@meteora-ag/alpha-vault@1.1.16` |
 | Presale | `@meteora-ag/presale@0.1.1` |
+| Met Lock | `@meteora-ag/met-lock-sdk@1.0.1` |
 | Stake2Earn | `@meteora-ag/m3m3@1.0.10` |
-| Zap | `@meteora-ag/zap-sdk@1.3.2` |
+| Pool Farms | `@meteora-ag/farming-sdk@1.0.18` |
 | Dynamic Vault | `@meteora-ag/vault-sdk@2.3.1` |
 | Dynamic Fee Sharing | `@meteora-ag/dynamic-fee-sharing-sdk@1.1.0` |
+| Zap | `@meteora-ag/zap-sdk@1.3.2` |
 
-These notes cover common read, verification, and user-operation surfaces that are not available as studio commands. The versions above reflect the current skill; check `SKILL.md` before installing dependencies in case the packages have moved forward.
+Each of these products also has studio commands, so the ACT path covers the ordinary lifecycle. The notes exist for the surfaces the studio does not expose — account discovery, read helpers, and the individual gotchas worth knowing before you call these SDKs directly, such as which parameter names do not match the units they take. The versions above reflect the current skill; check `SKILL.md` before installing dependencies in case the packages have moved forward.
 
 ## What's in the Skill
 
@@ -107,7 +116,12 @@ skills/
             ├── dlmm_config.jsonc
             ├── damm_v1_config.jsonc
             ├── alpha_vault_config.jsonc
-            └── presale_vault_config.jsonc
+            ├── presale_vault_config.jsonc
+            ├── lock_config.jsonc
+            ├── dynamic_vault_config.jsonc
+            ├── fee_sharing_config.jsonc
+            ├── farming_config.jsonc
+            └── zap_config.jsonc
 ```
 
 The files have distinct jobs:
@@ -118,7 +132,7 @@ The files have distinct jobs:
 | `studio-actions.md` | Documents all studio commands, their flags, config blocks, outputs, and common prerequisites |
 | `studio-setup.md` | Covers Node and pnpm requirements, installation, wallet import, RPC setup, devnet funding, and localnet |
 | `dbc.md`, `damm-v2.md`, `dlmm.md`, `damm-v1.md` | Provide protocol mental models, SDK method maps, working flows, and version fences for outdated API patterns |
-| `other-products.md` | Summarizes the smaller SDK surfaces for vaults, Stake2Earn, Zap, Dynamic Vault, and Dynamic Fee Sharing |
+| `other-products.md` | Summarizes the SDK surfaces for Alpha Vault, Presale, Met Lock, Stake2Earn, Pool Farms, Dynamic Vault, Dynamic Fee Sharing, and Zap, including how to find their accounts onchain |
 | `wallets-and-txs.md` | Covers key handling, RPC selection, priority fees, simulation, signing, multi-transaction results, and explorer verification |
 | `data-and-apis.md` | Helps the agent choose REST APIs for discovery or SDK state fetchers for transaction-time accuracy |
 | `troubleshooting.md` | Maps common studio, TypeScript, and onchain errors to likely causes and fixes |
