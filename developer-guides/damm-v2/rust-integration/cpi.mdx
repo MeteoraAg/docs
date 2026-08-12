@@ -87,7 +87,7 @@ solana_program::sysvar::instructions::ID
 
 For `swap` and `swap2`, the optimized swap path expects the fixed swap account list plus remaining accounts. If the rate limiter is active, put the instructions sysvar as the first remaining account. Normal non-rate-limiter swaps do not need remaining accounts.
 
-Token 2022 transfer-hook accounts are not a general DAMM v2 CPI surface for active transfer hooks. DAMM v2 supports Transfer Hook only when the hook program ID and authority are unset. See [Token 2022 support](/core-products/damm-v2/token-2022-support).
+Token 2022 transfer-hook accounts are not a general DAMM v2 CPI surface. DAMM v2 accepts Transfer Hook permissionlessly only when both the hook program ID and authority are unset. Mints outside that allowlist need a token badge to pass mint validation, but DAMM v2 still does not forward transfer-hook extra accounts on transfers. See [Token 2022 support](/core-products/damm-v2/token-2022-support).
 
 ## Swap CPI Shape
 
@@ -147,7 +147,7 @@ For generated Anchor CPI, the account set mirrors `SwapCtx`:
 | Plan rate-limiter swaps | Detect rate-limiter pools off-chain. Include the instructions sysvar as the first remaining account and avoid batching multiple swaps for the same pool in one transaction. |
 | Avoid deep CPI nesting for rate-limiter swaps | The rate-limiter validation rejects some deeper CPI stacks. Prefer a direct CPI from your program to `cp-amm` for those pools. |
 | Handle token programs per mint | Token A and token B can be SPL Token or Token 2022 independently. Pass the token program that owns each mint and vault. |
-| Reject active transfer hooks | DAMM v2 only supports Token 2022 Transfer Hook mints when the hook program ID and authority are unset. Do not forward active transfer-hook account sets as a DLMM-style remaining-account slice. |
+| Plan Token 2022 mint validation | Transfer Hook is permissionless only when both the hook program ID and authority are unset. Other Token 2022 extensions need a token badge for pool creation or reward init. Do not forward transfer-hook account sets as a DLMM-style remaining-account slice; DAMM v2 does not consume them. |
 | Verify position NFT ownership | Liquidity, fee, reward, lock, split, and close flows validate that the position NFT token account has amount `1`, matches `position.nft_mint`, and is owned by the signer. |
 | Refresh lock and vesting state | For remove, close, split, and merge-style flows, load current slot or timestamp and include vesting state expected by your wrapper before deciding what liquidity is unlocked. |
 | Account for Token 2022 transfer fees | Add-liquidity thresholds are maximum included-fee amounts; remove-liquidity thresholds are minimum post-fee amounts. Quote with mint and epoch data before building CPI inputs. |

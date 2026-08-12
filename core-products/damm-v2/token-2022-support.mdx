@@ -2,12 +2,21 @@
 title: "DAMM v2 Token 2022 Support"
 sidebarTitle: "Token 2022 Support"
 description: "Learn how DAMM v2 supports SPL Token and Token 2022 mints, transfer-fee tokens, metadata extensions, token badges, and reward tokens."
-llmsDescription: "Documentation for DAMM v2 Token 2022 support, covering SPL Token and Token 2022 mint detection, token program flags, permissionless extensions such as TransferFeeConfig, MetadataPointer, and TokenMetadata, inactive TransferHook handling, token badge requirements for other extensions, Token 2022 reward token support, unsupported Token 2022 native mint behavior, and transfer fee accounting."
+llmsDescription: "Documentation for DAMM v2 Token 2022 support, covering SPL Token and Token 2022 mint detection, token program flags, permissionless extensions such as TransferFeeConfig, MetadataPointer, and TokenMetadata, TransferHook only when both program ID and authority are unset, token badge allowlisting for other extensions, Token 2022 reward token support, unsupported Token 2022 native mint behavior, and transfer fee accounting."
 ---
 
 DAMM v2 supports both standard SPL Token mints and Token 2022 mints. This lets more Solana assets use DAMM v2 pools while preserving safety around extensions that can change token behavior.
 
-Token 2022 is powerful because it allows mints to add features such as transfer fees, metadata, interest-bearing behavior, non-transferability, or hooks. DAMM v2 supports common extensions directly and uses a token badge process for extensions that need additional review.
+Token 2022 support is split into two paths:
+
+<CardGroup cols={2}>
+  <Card title="Permissionless Support" icon="unlock" iconType="solid">
+    If your mint only uses supported safe extensions, you can create and use a DAMM v2 pool without a token badge.
+  </Card>
+  <Card title="Token Badge Support" icon="badge-check" iconType="solid">
+    If your mint uses extensions outside the permissionless allowlist, Meteora can review it and initialize a token badge so the mint can pass DAMM v2 validation.
+  </Card>
+</CardGroup>
 
 ## How DAMM v2 Detects Token Programs
 
@@ -15,11 +24,18 @@ When a pool is created, DAMM v2 checks whether each mint is owned by the standar
 
 The two pool mints must be different. If a Token 2022 mint is not permissionlessly supported, the initializer must provide a valid token badge account for that mint.
 
-For users, the benefit is simple: DAMM v2 can handle pools where one or both tokens are Token 2022 mints, as long as their extensions are supported.
+For users, the benefit is simple: DAMM v2 can handle pools where one or both tokens are Token 2022 mints, as long as their extensions are permissionlessly supported or the mint has a valid token badge.
 
 ## Permissionlessly Supported Extensions
 
-The following Token 2022 extensions are supported without a token badge.
+If your Token 2022 mint uses only the following supported extensions, it can be used permissionlessly in DAMM v2:
+
+- `TransferFeeConfig`
+- `MetadataPointer`
+- `TokenMetadata`
+- `TransferHook`, only when both the hook program ID and hook authority are unset
+
+SPL Token mints are always accepted. A Token 2022 mint with no extensions is also accepted permissionlessly.
 
 <CardGroup cols={2}>
   <Card title="Transfer Fee Config" icon="percent" iconType="solid">
@@ -31,46 +47,60 @@ The following Token 2022 extensions are supported without a token badge.
   <Card title="Token Metadata" icon="file-lines" iconType="solid">
     DAMM v2 supports mints that use Token 2022 token metadata for display and integration context.
   </Card>
-  <Card title="Inactive Transfer Hook" icon="link-slash" iconType="solid">
-    Transfer Hook is only supported when the hook program and authority are not active.
+  <Card title="Revoked Transfer Hook" icon="link-slash" iconType="solid">
+    Transfer Hook is permissionless only when both the hook program ID and authority are unset.
   </Card>
 </CardGroup>
 
 ## Token Badge Review
 
-Some Token 2022 extensions can materially change how a token behaves. These tokens require a token badge before they can be used in DAMM v2.
+Some Token 2022 extensions can materially change how a token behaves. These tokens require a **token badge** before they can be used in DAMM v2 pool creation or reward initialization.
 
 Examples include extensions such as:
 
-- Interest bearing configuration.
-- Permanent delegate.
-- Non-transferable tokens.
-- Memo transfer.
-- Other extensions that are not permissionlessly supported.
+- Interest bearing configuration
+- Permanent delegate
+- Non-transferable tokens
+- Default account state
+- Pausable configuration
+- Confidential transfer mint configuration
+- Scaled UI amount configuration
+- Transfer Hook when the hook program ID or authority is still set
+- Other mint extensions that are not on the permissionless allowlist
 
-The token badge process gives Meteora a way to review the mint and confirm that DAMM v2 can support it safely.
+At the program level, a valid token badge allows a Token 2022 mint to pass DAMM v2 mint validation even if it uses extensions outside the permissionless allowlist. The badge is created by a Meteora operator after review. You cannot create a badge for a mint that is already permissionlessly supported.
 
 <Note>
   To apply for a token badge, complete this [Google Form](https://forms.gle/59n3zDiGS2C6qMfd7) with details about the token and its extensions. After submitting, open a ticket in the [Meteora Discord](https://discord.gg/meteo) so the team can review it.
 </Note>
 
+<AccordionGroup>
+  <Accordion title="I use standard metadata or transfer fees">
+    Your mint may be eligible for permissionless DAMM v2 support, as long as it only uses permissionless extensions.
+  </Accordion>
+  <Accordion title="I use transfer hooks">
+    Transfer Hook is permissionless only when both the hook program ID and authority are unset. If either remains set, request token badge review before creating the pool or initializing the mint as a reward token.
+  </Accordion>
+  <Accordion title="I use advanced or authority-based extensions">
+    Request a token badge before creating the pool. This gives Meteora a review point for extensions that can affect transfers, account state, authorities, pausing, confidentiality, non-transferability, scaled UI amounts, or other behavior that can materially affect swaps, deposits, withdrawals, and integrations.
+  </Accordion>
+</AccordionGroup>
+
 ## Reward Tokens
 
-DAMM v2 liquidity mining rewards can also use Token 2022 mints, subject to the same extension support rules. If a reward mint has an unsupported extension, it needs a valid token badge before the reward slot can be initialized.
+DAMM v2 liquidity mining rewards can also use Token 2022 mints, subject to the same extension support rules. If a reward mint is not permissionlessly supported, it needs a valid token badge before the reward slot can be initialized.
 
 ## Unsupported Cases
 
-Some Token 2022 designs are not supported.
-
 <Warning>
-  The Token 2022 native mint `So11111111111111111111111111111111111111112` is not supported in DAMM v2.
+  The Token 2022 native mint `So11111111111111111111111111111111111111112` is not supported in DAMM v2. A token badge cannot override this restriction. Use the standard wrapped SOL mint for SOL liquidity.
 </Warning>
 
-**Active Transfer Hook behavior is also not supported**. DAMM v2 only treats Transfer Hook as supported when both the hook program ID and authority are unset.
+DAMM v2 does not provide a general transfer-hook remaining-account surface for swaps, liquidity, fees, or rewards. Even with a token badge, mints that still execute an active transfer-hook program can fail when tokens move, because DAMM v2 transfers do not forward transfer-hook extra accounts.
 
 ## Transfer Fee Accounting
 
-For incoming transfers, DAMM v2 calculates the transfer-fee-included amount needed for the pool to receive the expected post-fee amount. For outgoing or reward-funding flows, it calculates the post-fee amount actually received. The code also handles the Token 2022 edge case where the transfer fee is 100% by using the mint's maximum transfer fee.
+For deposits and other flows that need a target post-fee vault amount, DAMM v2 calculates the transfer-fee-included amount the user must send. For withdrawals, swaps, reward funding, and similar flows that reason about received amounts, it calculates the post-fee amount after the current epoch transfer fee. The code also handles the Token 2022 edge case where the transfer fee is 100% by using the mint's maximum transfer fee.
 
 ## Why This Matters
 
