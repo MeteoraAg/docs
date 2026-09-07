@@ -11,6 +11,125 @@ rss: true
 </Tip>
 
 <Update
+  label="dynamic-bonding-curve 0.2.1"
+  description="Support for Stock Tokens in DBC + Deprecation of Rate Limiter and DAMM v1"
+  rss="DBC dynamic-bonding-curve 0.2.1 adds Token Badge support for Stock Tokens, deprecates RateLimiter and DAMM v1 migration for new configs and pools, and rejects those options in createConfig, createPool, and buildCurve helpers. SDK 1.5.12."
+>
+  <Info>
+    Mainnet deployment for Release 0.2.1 is planned for September 9, 2026, at 11:00 AM UTC+8 (Wednesday).
+  </Info>
+
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.2.1` | [dynamic-bonding-curve #202](https://github.com/MeteoraAg/dynamic-bonding-curve/pull/202) |
+  | TypeScript SDK | `1.5.12` | [dynamic-bonding-curve-sdk #112](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/pull/112) |
+
+  ## What We Shipped 
+  - Support for Stock Tokens in DBC via Token Badges
+  - Deprecated `BaseFeeMode.RateLimiter` for new configs and new pools. Existing rate-limiter pools can still be quoted and swapped.
+  - Deprecated `MigrationOption.MET_DAMM` (DAMM v1) for new configs and new pools. Existing DAMM v1 pools can still migrate.
+
+  ## What To Do
+
+  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrators</th>
+          <th>What Changed</th>
+          <th>What To Do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Partners</strong></td>
+          <td>
+            <ul>
+              <li>Support for Stock Tokens in DBC via Token Badges</li>
+              <li>Deprecation of Rate Limiter and DAMM v1</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>As the Rate Limiter is deprecated, you need to migrate to change your BaseFeeMode to other modes.</li>
+              <li>As the DAMM v1 is deprecated, you need to migrate to change your MigrationOption to other modes.</li>
+              <li>Bump your SDK version to <code>@meteora-ag/dynamic-bonding-curve-sdk@1.5.12</code> to start testing.</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  ## Program: `dynamic-bonding-curve` `0.2.1`
+
+  Program ID (mainnet and devnet): `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`
+
+  [Program PR #202](https://github.com/MeteoraAg/dynamic-bonding-curve/pull/202)
+
+  ### Added
+
+  - Added an endpoint `claim_protocol_fee2` that requires `protocol_fee_authority` as the signer instead of an operator. Only one of the pool tokens can be claimed per instruction call.
+  - Added endpoint `create_config_with_transfer_hook` that creates a `ConfigWithTransferHook` account storing the transfer hook program alongside the pool config. Only valid for `token_type: Token2022`. The transfer hook program must be executable and cannot be the DBC program, SPL Token program, Token 2022 program, or default pubkey.
+  - Added endpoint `initialize_virtual_pool_with_token2022_transfer_hook` for creating virtual pools with token-2022 base mints that have transfer hooks. The transfer hook program is sourced from the `ConfigWithTransferHook` account and the transfer hook authority is set to the `pool_authority`. The transfer hook program and authority is revoked after the last swap when the curve completes.
+  - Added endpoints with transfer hook support: `swap2_with_transfer_hook`, `claim_trading_fee2` and `claim_creator_trading_fee2`. These accept a `transfer_hook_accounts_info: TransferHookAccountsInfo` parameter for passing transfer hook extra accounts via remaining accounts. The original endpoints are unchanged for backwards compatibility with non-transfer-hook pools.
+  - Added `WithTransferHook` event variants for events consumed by external indexers to differentiate between transfer-hook and non-transfer-hook pool operations: `EvtInitializePoolWithTransferHook`, `EvtSwap2WithTransferHook`, `EvtCurveCompleteWithTransferHook`, `EvtCreateConfigV2WithTransferHook`.
+  - Re-enabled `TokenAuthorityOption::CreatorUpdateAndMintAuthority` and `TokenAuthorityOption::PartnerUpdateAndMintAuthority` for transfer-hook configs only. The mint authority is assigned to the creator or partner at pool initialization.
+
+  ### Changed
+
+  - Update anchor to 1.0.2
+
+  ### Deprecated
+
+  - Deprecated `claim_protocol_fee` and `zap_protocol_fee` endpoints in favour of using `claim_protocol_fee2` through the `protocol_fee` wrapper program.
+  - Deprecated `TokenAuthorityOption::CreatorUpdateAndMintAuthority` and `TokenAuthorityOption::PartnerUpdateAndMintAuthority` for non-transfer-hook configs.
+
+  ### Removed
+
+  - Removed unused events: `EvtPartnerWithdrawMigrationFee` and `EvtClaimProtocolLiquidityMigrationFee`
+
+  ### Breaking Changes
+
+  - `create_config` endpoint now rejects the configs with the following `token_update_authority`: `CreatorUpdateAndMintAuthority` and `PartnerUpdateAndMintAuthority`
+  - `initialize_virtual_pool_with_spl_token` and `initialize_virtual_pool_with_token2022` endpoints now reject configs whose `token_update_authority` is `CreatorUpdateAndMintAuthority` or `PartnerUpdateAndMintAuthority`. Existing configs on-chain that used these variants can no longer initialize new pools.
+  - For non-transfer-hook pools, `base_mint` mint authority can no longer be assigned to the creator or partner. It is always revoked at pool initialization. Transfer-hook pools may still assign mint authority to creator/partner.
+
+  ## TypeScript SDK: `@meteora-ag/dynamic-bonding-curve-sdk` `1.5.12`
+
+  [SDK PR #112](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/pull/112)
+
+  <Tip>
+    Early testing: [`@meteora-ag/dynamic-bonding-curve-sdk@1.5.11-rc.0`](https://www.npmjs.com/package/@meteora-ag/dynamic-bonding-curve-sdk/v/1.5.11-rc.0).<br /> Production: [`@meteora-ag/dynamic-bonding-curve-sdk@1.5.12`](https://www.npmjs.com/package/@meteora-ag/dynamic-bonding-curve-sdk/v/1.5.12). 
+  </Tip>
+
+  ### Added
+
+  - Added optional `tokenBadge` remaining account support on config and pool creation. Required when the quote mint is not permissionless-supported.
+  - Added `deriveTokenBadgeAddress` and `getTokenBadgeRemainingAccounts` helpers.
+  - Added `TokenBadge` account type and `client.state.getTokenBadge`.
+
+  ### Changed
+
+  - Updated the DBC IDL to program version 0.2.1.
+  - `getOrCreateATAInstruction` and `prepareTokenAccountTx` now accept an optional `commitment` (defaults to `confirmed`) and pass it through to the token account fetch.
+  - Synced the DAMM v2 IDL and test-validator `cp_amm.so` fixture to cp_amm 0.2.4. DAMM v2 configs now include a `permission` bitmask. Migration tests create a private DAMM v2 config with `CreatePoolWithoutMintValidation` so Token-2022 quote mints that need a DBC token badge can still migrate. Token-2022 wrapped SOL is still rejected.
+
+  ### Deprecated
+
+  - Deprecated `BaseFeeMode.RateLimiter` for new configs and new pools. Existing rate-limiter pools can still be quoted and swapped.
+  - Deprecated `MigrationOption.MET_DAMM` (DAMM v1) for new configs and new pools. Existing DAMM v1 pools can still migrate.
+
+  ### Breaking Changes
+
+  - `createConfig`, `createPool`, and `buildCurve*` now reject `BaseFeeMode.RateLimiter` and `MigrationOption.MET_DAMM`.
+  - `getMigratedPoolFeeParams` now rejects `MigrationOption.MET_DAMM`.
+  - `getBaseFeeParams` no longer takes `tokenQuoteDecimal` or `activationType`. Those arguments were only used to encode RateLimiter params, which this helper now rejects.
+</Update>
+
+<Update
   label="dynamic-bonding-curve 0.2.0"
   description="Transfer Hook Support and Restricted Mint Authority"
   rss="DBC dynamic-bonding-curve 0.2.0 adds Token-2022 transfer-hook support and restricted mint authority, with transfer-hook config, pool, swap, fee-claim, event parsing, and nested poolState layout updates. SDK 1.5.8."
