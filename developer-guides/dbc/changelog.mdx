@@ -11,6 +11,116 @@ rss: true
 </Tip>
 
 <Update
+  label="dynamic-bonding-curve 0.2.1"
+  description="Support for Stock Tokens in DBC + Deprecation of Rate Limiter and DAMM v1"
+  rss="DBC dynamic-bonding-curve 0.2.1 adds Token Badge support for Stock Tokens, deprecates RateLimiter and DAMM v1 migration for new configs and pools, and rejects those options in createConfig, createPool, and buildCurve helpers. SDK 1.5.12."
+>
+  <Info>
+    Mainnet deployment for Release 0.2.1 is planned for September 9, 2026, at 11:00 AM UTC+8 (Wednesday).
+  </Info>
+
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.2.1` | [dynamic-bonding-curve #202](https://github.com/MeteoraAg/dynamic-bonding-curve/pull/202) |
+  | TypeScript SDK | `1.5.12` | [dynamic-bonding-curve-sdk #112](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/pull/112) |
+
+  ## What We Shipped 
+  - Support for Stock Tokens in DBC via Token Badges
+  - Deprecated `BaseFeeMode.RateLimiter` for new configs and new pools. Existing rate-limiter pools can still be quoted and swapped.
+  - Deprecated `MigrationOption.MET_DAMM` (DAMM v1) for new configs and new pools. Existing DAMM v1 pools can still migrate.
+
+  ## What To Do
+
+  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrators</th>
+          <th>What Changed</th>
+          <th>What To Do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Partners</strong></td>
+          <td>
+            <ul>
+              <li>Support for Stock Tokens in DBC via Token Badges</li>
+              <li>Deprecation of Rate Limiter and DAMM v1</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>As the Rate Limiter is deprecated, you need to migrate to change your BaseFeeMode to other modes.</li>
+              <li>As the DAMM v1 is deprecated, you need to migrate to change your MigrationOption to other modes.</li>
+              <li>Bump your SDK version to <code>@meteora-ag/dynamic-bonding-curve-sdk@1.5.11-rc.0</code> to start testing.</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  ## Program: `dynamic-bonding-curve` `0.2.1`
+
+  Program ID (mainnet and devnet): `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`
+
+  [Program PR #202](https://github.com/MeteoraAg/dynamic-bonding-curve/pull/202)
+
+  ### Added
+
+  - Added endpoints `create_token_badge` and `close_token_badge` for operators to whitelist quote mints with otherwise-unsupported token2022 extensions guarded by new `OperatorPermission::CreateTokenBadge` and `OperatorPermission::CloseTokenBadge`.
+  - Note that a token badge does not allow a non-zero transfer fee: the current and any scheduled `transfer_fee_basis_points` must be 0. Expired historical `older_transfer_fee` transfer fees are ignored. This is enforced with `QuoteMintHasNonZeroTransferFee` at token badge creation, at config/pool creation and on every endpoint that transfers quote tokens.
+  - Note that all DAMM v2 configs used by DBC have the `CreatePoolWithoutMintValidation` permission, so a pool with a quote mint that is not permissionless-supported by DAMM v2 can still migrate.
+
+  ### Changed
+
+  - The endpoints `create_config`, `create_config_with_transfer_hook`, `initialize_virtual_pool_with_spl_token`, `initialize_virtual_pool_with_token2022` and `initialize_virtual_pool_with_token2022_transfer_hook` now take the `token_badge` account as a remaining account at index 0. Required when the quote mint is not permissionless-supported.
+
+  ### Deprecated
+
+  - Deprecated `BaseFeeMode::RateLimiter`. New configs and new pools can no longer be created with `BaseFeeMode::RateLimiter`. Existing configs with `BaseFeeMode::RateLimiter` can no longer be used to create new pools. Existing pools with `BaseFeeMode::RateLimiter` are unaffected.
+  - Deprecated `MigrationOption::MeteoraDamm`. New configs and new pools can no longer be created with `MigrationOption::MeteoraDamm`. Existing configs with `MigrationOption::MeteoraDamm` can no longer be used to create new pools. Existing pools with `MigrationOption::MeteoraDamm` are unaffected and can still migrate to DAMM v1.
+
+  ### Removed
+
+  - Removed deprecated endpoints `claim_protocol_fee` and `zap_protocol_fee`.
+
+  ## TypeScript SDK: `@meteora-ag/dynamic-bonding-curve-sdk` `1.5.12`
+
+  [SDK PR #112](https://github.com/MeteoraAg/dynamic-bonding-curve-sdk/pull/112)
+
+  <Tip>
+    Early testing: [`@meteora-ag/dynamic-bonding-curve-sdk@1.5.11-rc.0`](https://www.npmjs.com/package/@meteora-ag/dynamic-bonding-curve-sdk/v/1.5.11-rc.0).<br /> Production: [`@meteora-ag/dynamic-bonding-curve-sdk@1.5.12`](https://www.npmjs.com/package/@meteora-ag/dynamic-bonding-curve-sdk/v/1.5.12). 
+  </Tip>
+
+  ### Added
+
+  - Added optional `tokenBadge` remaining account support on config and pool creation. Required when the quote mint is not permissionless-supported.
+  - Added `deriveTokenBadgeAddress` and `getTokenBadgeRemainingAccounts` helpers.
+  - Added `TokenBadge` account type and `client.state.getTokenBadge`.
+
+  ### Changed
+
+  - Updated the DBC IDL to program version 0.2.1.
+  - `getOrCreateATAInstruction` and `prepareTokenAccountTx` now accept an optional `commitment` (defaults to `confirmed`) and pass it through to the token account fetch.
+  - Synced the DAMM v2 IDL and test-validator `cp_amm.so` fixture to cp_amm 0.2.4. DAMM v2 configs now include a `permission` bitmask. Migration tests create a private DAMM v2 config with `CreatePoolWithoutMintValidation` so Token-2022 quote mints that need a DBC token badge can still migrate. Token-2022 wrapped SOL is still rejected.
+
+  ### Deprecated
+
+  - Deprecated `BaseFeeMode.RateLimiter` for new configs and new pools. Existing rate-limiter pools can still be quoted and swapped.
+  - Deprecated `MigrationOption.MET_DAMM` (DAMM v1) for new configs and new pools. Existing DAMM v1 pools can still migrate.
+
+  ### Breaking Changes
+
+  - `createConfig`, `createPool`, and `buildCurve*` now reject `BaseFeeMode.RateLimiter` and `MigrationOption.MET_DAMM`.
+  - `getMigratedPoolFeeParams` now rejects `MigrationOption.MET_DAMM`.
+  - `getBaseFeeParams` no longer takes `tokenQuoteDecimal` or `activationType`. Those arguments were only used to encode RateLimiter params, which this helper now rejects.
+</Update>
+
+<Update
   label="dynamic-bonding-curve 0.2.0"
   description="Transfer Hook Support and Restricted Mint Authority"
   rss="DBC dynamic-bonding-curve 0.2.0 adds Token-2022 transfer-hook support and restricted mint authority, with transfer-hook config, pool, swap, fee-claim, event parsing, and nested poolState layout updates. SDK 1.5.8."
