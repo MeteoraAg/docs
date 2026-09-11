@@ -2,7 +2,7 @@
 title: "DBC Program Accounts"
 sidebarTitle: "Accounts"
 description: "Understand DBC dynamic_bonding_curve accounts, including configs, transfer-hook configs, virtual pools, metadata, operators, migration state, constants, and PDA seeds."
-llmsDescription: "Explains the DBC program account model for the public Meteora dynamic_bonding_curve program. Covers PoolConfig, ConfigWithTransferHook, VirtualPool, TransferHookPool, PoolState, PartnerMetadata, VirtualPoolMetadata, Operator, ClaimFeeOperator, MeteoraDammMigrationMetadata, LockEscrow, config signer accounts, token vaults, constants, enums, PDA seeds, state interpretation, and SDK methods for fetching and deriving accounts."
+llmsDescription: "Explains the DBC program account model for the public Meteora dynamic_bonding_curve program. Covers PoolConfig, ConfigWithTransferHook, VirtualPool, TransferHookPool, TokenBadge, PoolState, PartnerMetadata, VirtualPoolMetadata, Operator, ClaimFeeOperator, MeteoraDammMigrationMetadata, LockEscrow, config signer accounts, token vaults, constants, enums including deprecated RateLimiter and MeteoraDamm, PDA seeds, state interpretation, and SDK methods for fetching and deriving accounts."
 ---
 
 <Note>
@@ -26,7 +26,8 @@ llmsDescription: "Explains the DBC program account model for the public Meteora 
 | Virtual pool metadata | PDA from `virtual_pool_metadata` and pool | Optional public metadata for a pool. |
 | DAMM v1 migration metadata | PDA from `meteora` and pool | Metadata used by DAMM v1 migration and LP lock/claim flows. |
 | DAMM v2 migration metadata | PDA from `damm_v2` and pool | Deprecated in the program; DAMM v2 migration no longer requires a separate metadata setup step. |
-| Operator | PDA from `operator` | Admin-created permission account for protocol pool creation fee claims and deprecated protocol fee or zap flows. |
+| Token badge | PDA from `token_badge` and quote mint | Operator-created allowlist for a Token 2022 quote mint that is not permissionless-supported. |
+| Operator | PDA from `operator` | Admin-created permission account for protocol pool creation fee claims and token badge management. |
 | Claim fee operator | PDA from `cf_operator` | Legacy protocol fee claim authorization account. |
 
 ## Constants
@@ -53,12 +54,12 @@ llmsDescription: "Explains the DBC program account model for the public Meteora 
 | `ActivationType` | `0` slot, `1` timestamp. |
 | `TokenType` / `PoolType` | `0` SPL Token, `1` Token-2022. |
 | `CollectFeeMode` | `0` quote token, `1` output token. |
-| `MigrationOption` | `0` DAMM v1, `1` DAMM v2. |
+| `MigrationOption` | `0` DAMM v1 (deprecated for new configs and new pools), `1` DAMM v2. |
 | `MigrationFeeOption` | `0` 25 bps, `1` 30 bps, `2` 100 bps, `3` 200 bps, `4` 400 bps, `5` 600 bps, `6` customizable. |
-| `BaseFeeMode` | `0` linear scheduler, `1` exponential scheduler, `2` rate limiter. |
+| `BaseFeeMode` | `0` linear scheduler, `1` exponential scheduler, `2` rate limiter (deprecated for new configs and new pools). |
 | `MigrationProgress` | `0` pre-bonding curve, `1` post-bonding curve, `2` locked vesting, `3` created pool. |
 | `TokenAuthorityOption` | `0` creator update authority, `1` immutable, `2` partner update authority, `3` creator update and mint authority, `4` partner update and mint authority. |
-| `OperatorPermission` | `0` claim protocol fee, `1` zap protocol fee. |
+| `OperatorPermission` | `0` claim protocol fee, `1` zap protocol fee (deprecated bit kept for ordering), `2` create token badge, `3` close token badge. |
 
 ## PoolConfig
 
@@ -74,7 +75,7 @@ llmsDescription: "Explains the DBC program account model for the public Meteora 
 | `pool_fees` | `BaseFeeConfig` and optional `DynamicFeeConfig` used before migration. |
 | `partner_liquidity_vesting_info`, `creator_liquidity_vesting_info` | DAMM v2 migrated-liquidity vesting settings. |
 | `collect_fee_mode` | Whether DBC pre-migration fees are collected in quote token or output token. |
-| `migration_option` | Destination AMM: DAMM v1 or DAMM v2. |
+| `migration_option` | Destination AMM. New configs must use DAMM v2. Existing DAMM v1 pools can still migrate. |
 | `activation_type` | Whether fee schedules and activation checks use slot or timestamp. |
 | `token_decimal`, `token_type`, `quote_token_flag` | Base token decimals, base token program, and quote token classification. |
 | `partner_*_liquidity_percentage`, `creator_*_liquidity_percentage` | Permanent locked and claimable liquidity shares after migration. |
@@ -126,7 +127,7 @@ Both accounts store the active pool fields under `pool_state` in the IDL and `po
 | Type | Fields | Use |
 | --- | --- | --- |
 | `PoolFeesConfig` | `base_fee`, `dynamic_fee` | Active pre-graduation fee configuration. |
-| `BaseFeeConfig` | `cliff_fee_numerator`, `first_factor`, `second_factor`, `third_factor`, `base_fee_mode` | Linear scheduler, exponential scheduler, or rate limiter parameters. |
+| `BaseFeeConfig` | `cliff_fee_numerator`, `first_factor`, `second_factor`, `third_factor`, `base_fee_mode` | Linear or exponential scheduler parameters. Rate limiter parameters remain readable on existing pools. |
 | `DynamicFeeConfig` | `initialized`, `max_volatility_accumulator`, `variable_fee_control`, `bin_step`, `filter_period`, `decay_period`, `reduction_factor`, `bin_step_u128` | Optional volatility-based fee configuration. |
 | `LockedVestingConfig` | `amount_per_period`, `cliff_duration_from_migration_time`, `frequency`, `number_of_period`, `cliff_unlock_amount` | Base token vesting schedule after migration. |
 | `LiquidityVestingInfo` | `vesting_percentage`, `bps_per_period`, `number_of_periods`, `frequency`, `cliff_duration_from_migration_time` | DAMM v2 migrated-liquidity vesting. |
@@ -139,7 +140,8 @@ Both accounts store the active pool fields under `pool_state` in the IDL and `po
 | --- | --- | --- |
 | `PartnerMetadata` | `fee_claimer`, `name`, `website`, `logo` | Optional partner profile keyed by fee claimer. |
 | `VirtualPoolMetadata` | `virtual_pool`, `name`, `website`, `logo` | Optional pool profile keyed by pool. |
-| `Operator` | `whitelisted_address`, `permission` | Admin-created operator permission bitmap for protocol pool creation fee claims and deprecated protocol fee or zap flows. |
+| `Operator` | `whitelisted_address`, `permission` | Admin-created operator permission bitmap for protocol pool creation fee claims and token badge management. |
+| `TokenBadge` | `token_mint`, `128` bytes of padding | Operator-approved Token 2022 quote mint. PDA seeds are `token_badge` and the mint. Account size is `160` bytes plus the 8-byte discriminator. |
 | `ClaimFeeOperator` | `operator` | Legacy protocol fee claim authorization account. |
 | `MeteoraDammMigrationMetadata` | `virtual_pool`, `partner`, `lp_mint`, partner/creator locked and claimable liquidity, claim and lock statuses | DAMM v1 migration and LP claim state. |
 | `LockEscrow` | `pool`, `owner`, `escrow_vault`, `total_locked_amount`, `lp_per_token`, fee fields | Locker escrow state used by locked vesting and DAMM v1 LP locks. |

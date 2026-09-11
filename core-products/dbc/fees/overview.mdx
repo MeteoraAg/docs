@@ -5,7 +5,7 @@ description: "Understand DBC fee layers, base fee modes, fixed-fee behavior, dyn
 llmsDescription: "Overview of DBC fees, covering total trading fee, base fee modes, fixed-fee behavior through non-decaying scheduler configuration, fee scheduler modes, rate limiter, dynamic fee, quote token and output token collect fee modes, protocol fee, referral fee, partner fee, creator fee, trading fee claim timing, migration fee withdrawal after curve completion, pool creation fee claims, protocol liquidity migration fee, and post-migration DAMM fees."
 ---
 
-DBC fees are built for launches. A pool can start with simple fixed-fee behavior, high anti-sniper fees that decay over time, buy-size-sensitive rate limiter fees, and optional dynamic fees that respond to volatility.
+DBC fees are built for launches. A pool can start with simple fixed-fee behavior, high anti-sniper fees that decay over time, and optional dynamic fees that respond to volatility.
 
 This gives launchpads and creators a way to shape early trading behavior while still allowing the token to graduate into a long-term DAMM market.
 
@@ -23,14 +23,14 @@ Fee rates are stored as numerators over `1,000,000,000`. A `0.25%` fee is `2,500
 
 ## Base Fee Modes
 
-DBC has three on-chain base fee modes: `linear scheduler`, `exponential scheduler`, and `rate limiter`. Fixed-fee behavior is also available for teams who want a simple non-decaying fee.
+DBC has three on-chain base fee modes: `linear scheduler`, `exponential scheduler`, and deprecated `rate limiter`. New configs should use a scheduler. Fixed-fee behavior is also available for teams who want a simple non-decaying fee.
 
 <CardGroup cols={2}>
   <Card title="Fee Scheduler" href="/core-products/dbc/fees/fee-scheduler" icon="chart-line">
     Use fixed, linear, or exponential scheduler behavior for predictable fee paths.
   </Card>
   <Card title="Rate Limiter" href="/core-products/dbc/fees/rate-limiter" icon="gauge-high">
-    Fee increases with buy size during the configured launch window.
+    Deprecated for new configs. Existing pools can still use buy-size-sensitive fees during the limiter window.
   </Card>
 </CardGroup>
 
@@ -126,7 +126,7 @@ For DAMM v2 migration, the config can define the migrated pool collect fee mode,
     Use a linear or exponential fee scheduler. Linear is easier to communicate. Exponential drops faster early and slows as it approaches the final fee.
   </Accordion>
   <Accordion title="I want large launch buys to pay more">
-    Use the rate limiter. It is designed for early launch windows where oversized buys are the main concern.
+    Rate limiter mode is deprecated for new configs. Use a high starting scheduler fee, or add dynamic fees, instead of creating a new rate-limiter config.
   </Accordion>
   <Accordion title="I want fees to react to volatility">
     Add dynamic fees on top of the selected base fee mode.

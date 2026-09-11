@@ -13,6 +13,7 @@ import {
   ActivationType,
   BaseFeeMode,
   CollectFeeMode,
+  ConfigPermission,
   SwapMode,
   derivePoolAddress,
   derivePositionAddress,
@@ -20,6 +21,7 @@ import {
   getDynamicFeeParams,
   getSqrtPriceFromPrice,
   getTokenProgram,
+  isConfigPermissionAllow,
 } from "@meteora-ag/cp-amm-sdk"
 ```
 
@@ -54,7 +56,7 @@ CP_AMM_PROGRAM_ID = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
 | `TxBuilder` | SDK transaction-builder return type, currently `Promise&lt;Transaction&gt;`. |
 | `cpAmmCoder` | Anchor `BorshCoder` configured with the packaged IDL. |
 | `CP_AMM_PROGRAM_ID` | Program ID constant. |
-| `PoolState`, `PositionState`, `VestingState`, `ConfigState`, `TokenBadgeState` | IDL-derived account state types. |
+| `PoolState`, `PositionState`, `VestingState`, `ConfigState`, `TokenBadgeState` | IDL-derived account state types. `ConfigState.permission` is a `BN` (IDL `u128` bitmask). |
 | `PoolFeesStruct`, `DynamicFeeStruct`, `BaseFee`, `DynamicFee`, `DecodedPoolFees` | Fee configuration and decoded fee-data types. |
 | `DepositQuote`, `WithdrawQuote`, `Quote2Result`, `SwapResult2` | Quote result types. |
 | `BaseFeeHandler`, `LiquidityHandler` | Interfaces implemented by exported fee and liquidity handler classes. |
@@ -66,8 +68,9 @@ CP_AMM_PROGRAM_ID = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
 | `Rounding` | `Up`, `Down`. |
 | `ActivationPoint` | `Timestamp`, `Slot`. |
 | `ActivationType` | `Slot`, `Timestamp`. |
-| `BaseFeeMode` | `FeeTimeSchedulerLinear`, `FeeTimeSchedulerExponential`, `RateLimiter`, `FeeMarketCapSchedulerLinear`, `FeeMarketCapSchedulerExponential`. |
+| `BaseFeeMode` | `FeeTimeSchedulerLinear`, `FeeTimeSchedulerExponential`, `RateLimiter` (deprecated for new configs and new pools), `FeeMarketCapSchedulerLinear`, `FeeMarketCapSchedulerExponential`. |
 | `CollectFeeMode` | `BothToken`, `OnlyB`, `Compounding`. |
+| `ConfigPermission` | `CreatePoolWithoutMintValidation` (`0`). |
 | `TradeDirection` | `AtoB`, `BtoA`. |
 | `LayoutVersion` | `V0`, `V1`. |
 | `PoolStatus` | `Enable`, `Disable`. |
@@ -160,9 +163,9 @@ This section lists the public functions and methods exported by the SDK. Private
 
 | Method | Use |
 | --- | --- |
-| `createPool(params)` | Build a permissionless pool creation transaction. |
-| `createCustomPool(params)` | Build a customizable pool creation transaction and return `{ tx, pool, position }`. |
-| `createCustomPoolWithDynamicConfig(params)` | Build a customizable pool creation transaction with dynamic config and return `{ tx, pool, position }`. |
+| `createPool(params)` | Build a permissionless pool creation transaction. Rejects `RateLimiter` with `DeprecatedBaseFeeModeError`. |
+| `createCustomPool(params)` | Build a customizable pool creation transaction and return `{ tx, pool, position }`. Rejects `RateLimiter` with `DeprecatedBaseFeeModeError`. |
+| `createCustomPoolWithDynamicConfig(params)` | Build a customizable pool creation transaction with dynamic config and return `{ tx, pool, position }`. Rejects `RateLimiter` with `DeprecatedBaseFeeModeError`. |
 | `createPosition(params)` | Build a transaction that creates a position NFT and position account. |
 | `addLiquidity(params)` | Build a transaction that adds liquidity to an existing position. |
 | `createPositionAndAddLiquidity(params)` | Build a combined position creation and add-liquidity transaction. |
@@ -272,7 +275,7 @@ This section lists the public functions and methods exported by the SDK. Private
 | `validateInitialSqrtPrice(collectFeeMode, initSqrtPrice, sqrtMinPrice, sqrtMaxPrice)` | Validate an initial square-root price. |
 | `validateCompoundingFee(collectFeeMode, compoundingFeeBps)` | Validate compounding-fee settings. |
 | `validateDynamicFee(dynamicFee)` | Validate dynamic-fee parameters. |
-| `validatePoolFees(poolFees, collectFeeMode, activationType, feeVersion?)` | Validate pool fee settings. |
+| `validatePoolFees(poolFees, collectFeeMode, activationType, feeVersion?)` | Validate pool fee settings. Throws `DeprecatedBaseFeeModeError` for `RateLimiter`. |
 | `validateCustomizablePoolParams(params)` | Validate customizable pool creation parameters. |
 | `validateTokenMints(tokenAMint, tokenBMint)` | Validate that token mints are distinct. |
 | `validateCreatePoolParams(params)` | Validate permissionless pool creation parameters. |
@@ -283,6 +286,7 @@ This section lists the public functions and methods exported by the SDK. Private
 | `validateLockPositionParams(params)` | Validate lock-position parameters. |
 | `validateRewardIndex(rewardIndex)` | Validate a reward index against `NUM_REWARDS`. |
 | `validateRewardDuration(rewardDuration)` | Validate reward duration bounds. |
+| `isConfigPermissionAllow(permission, flag)` | Return whether a `ConfigState.permission` bitmask (`BN`) includes a `ConfigPermission` flag. |
 
 ### Common Fee Encoding Helpers
 
@@ -301,8 +305,8 @@ This section lists the public functions and methods exported by the SDK. Private
 | `getFeeTimeSchedulerParams(startingBaseFeeBps, endingBaseFeeBps, baseFeeMode, numberOfPeriod, totalDuration)` | Build time-scheduler base-fee params. |
 | `computeSqrtPriceStepBps(priceMultiple, numberOfPeriod)` | Compute market-cap scheduler square-root price step bps. |
 | `getFeeMarketCapSchedulerParams(startingBaseFeeBps, endingBaseFeeBps, baseFeeMode, numberOfPeriod, priceMultiple, schedulerExpirationDuration)` | Build market-cap scheduler base-fee params. |
-| `getRateLimiterParams(baseFeeBps, feeIncrementBps, referenceAmount, maxLimiterDuration, maxFeeBps, tokenBDecimal, activationType)` | Build rate-limiter base-fee params. |
-| `getBaseFeeParams(baseFeeParams)` | Build base-fee params from a high-level config object. |
+| `getRateLimiterParams(baseFeeBps, feeIncrementBps, referenceAmount, maxLimiterDuration, maxFeeBps, tokenBDecimal, activationType)` | Build rate-limiter base-fee params for existing rate-limiter pools. Still requires `tokenBDecimal` and `activationType`. |
+| `getBaseFeeParams(baseFeeParams)` | Build base-fee params from a high-level config object. Throws `DeprecatedBaseFeeModeError` when `baseFeeMode` is `RateLimiter`. |
 | `getDynamicFeeParams(baseFeeBps, maxPriceChangeBps?)` | Build default dynamic-fee params from base fee and max price change. |
 | `encodeFeeTimeSchedulerParams(cliffFeeNumerator, numberOfPeriod, periodFrequency, reductionFactor, baseFeeMode)` | Borsh-encode time-scheduler fee params. |
 | `decodeFeeTimeSchedulerParams(data)` | Decode Borsh time-scheduler fee params, such as event data. |
@@ -542,7 +546,7 @@ const tx = await cpAmm.swap2({
 ```
 
 <Note>
-  Rate-limiter pools require the instructions sysvar account on low-level swap builders. The TypeScript SDK detects rate-limiter pools in `swap` and `swap2` when it has `poolState`; pass `poolState` to avoid an extra RPC read and to keep account planning explicit.
+  Rate-limiter pools require the instructions sysvar account on low-level swap builders. The TypeScript SDK detects existing rate-limiter pools in `swap` and `swap2` when it has `poolState`; pass `poolState` to avoid an extra RPC read and to keep account planning explicit.
 </Note>
 
 ### Decode Pool Fees
@@ -577,6 +581,7 @@ The SDK exports typed errors that validation, quote, and math helpers may throw:
 | `InvalidMinimumLiquidityError` | Initial liquidity is below the minimum, especially in compounding pool creation. |
 | `AmountIsZeroError` | Required amount or liquidity delta is zero. |
 | `InvalidBaseFeeModeError` | Base-fee mode is unsupported for the selected helper. |
+| `DeprecatedBaseFeeModeError` | `getBaseFeeParams`, `validatePoolFees`, `createPool`, `createCustomPool`, or `createCustomPoolWithDynamicConfig` received `BaseFeeMode.RateLimiter`. |
 | `InvalidPoolVersionError` | Pool version is unsupported by a helper. |
 | `MathOverflowError` | Integer math overflows or cannot be represented. |
 | `InsufficientLiquidityError` | Swap or withdraw math requests more liquidity than available. |
@@ -596,7 +601,7 @@ The SDK exports typed errors that validation, quote, and math helpers may throw:
 | --- | --- |
 | Token order | Pool PDAs sort mints, but transaction params still need the pool's `tokenAMint` and `tokenBMint` fields. |
 | Compounding mode | `CollectFeeMode.Compounding` uses full-range constant-product liquidity and splits swap fees into `claimingFee` and `compoundingFee`. |
-| Rate limiter | Low-level swap builders must include the instructions sysvar remaining account when the rate limiter is active. The SDK handles this when it can identify the pool mode. |
+| Rate limiter | Existing rate-limiter pools still require the instructions sysvar remaining account on low-level swap builders when the limiter is active. The SDK handles this when it can identify the pool mode. New configs and new pools cannot use `RateLimiter`. |
 | Layout version | V1 pools track `tokenAAmount` and `tokenBAmount`. Use current SDK quote paths for compounding pools. |
 | Swap events | Prefer `EvtSwap2` for swap indexing. Older swap events were deprecated and removed from newer program versions. |
 | Position NFTs | Position ownership is verified through the Token-2022 position NFT account. Pass the derived `positionNftAccount` for liquidity, fee, lock, reward, split, and close flows. |

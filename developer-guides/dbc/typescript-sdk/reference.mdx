@@ -69,8 +69,8 @@ import {
 | `MigratedCollectFeeMode` | `QuoteToken = 0`, `OutputToken = 1`, `Compounding = 2`. |
 | `DammV2DynamicFeeMode` | `Disabled = 0`, `Enabled = 1`. |
 | `DammV2BaseFeeMode` | `FeeTimeSchedulerLinear = 0`, `FeeTimeSchedulerExponential = 1`, `RateLimiter = 2`, `FeeMarketCapSchedulerLinear = 3`, `FeeMarketCapSchedulerExponential = 4`. |
-| `MigrationOption` | `MET_DAMM = 0`, `MET_DAMM_V2 = 1`. |
-| `BaseFeeMode` | `FeeSchedulerLinear = 0`, `FeeSchedulerExponential = 1`, `RateLimiter = 2`. |
+| `MigrationOption` | `MET_DAMM = 0` (deprecated for new configs and new pools), `MET_DAMM_V2 = 1`. |
+| `BaseFeeMode` | `FeeSchedulerLinear = 0`, `FeeSchedulerExponential = 1`, `RateLimiter = 2` (deprecated for new configs and new pools). |
 | `MigrationFeeOption` | `FixedBps25 = 0`, `FixedBps30 = 1`, `FixedBps100 = 2`, `FixedBps200 = 3`, `FixedBps400 = 4`, `FixedBps600 = 5`, `Customizable = 6`. |
 | `TokenDecimal` | `SIX = 6`, `SEVEN = 7`, `EIGHT = 8`, `NINE = 9`. |
 | `TradeDirection` | `BaseToQuote = 0`, `QuoteToBase = 1`. |
@@ -163,7 +163,7 @@ The client creates service instances for transactions, quotes, and account reads
 
 | Method | Returns | Use |
 | --- | --- | --- |
-| `createPool(params)` | `Promise<Transaction>` | Create a standard virtual pool from an existing config and base mint. |
+| `createPool(params)` | `Promise<Transaction>` | Create a standard virtual pool from an existing config and base mint. Pass optional `tokenBadge` on `CreatePoolParams` when the quote mint is not permissionless-supported. |
 | `createPoolWithTransferHook(params)` | `Promise<Transaction>` | Create a transfer-hook pool from an existing transfer-hook config. |
 | `createPoolWithFirstBuy(params)` | `Promise<Transaction>` | Create a standard pool and include an initial buy. |
 | `createPoolWithFirstBuyWithTransferHook(params)` | `Promise<Transaction>` | Create a transfer-hook pool and include an initial buy. |
@@ -210,7 +210,8 @@ The client creates service instances for transactions, quotes, and account reads
 | `getPoolFeeBreakdown(poolAddress)` | Fee breakdown object | Read current claimable fee breakdown for partner and creator. |
 | `getPoolsFeesByConfig(configAddress)` | Aggregated fee metrics | Aggregate fee metrics across pools for one config. |
 | `getPoolsFeesByCreator(creatorAddress)` | Aggregated fee metrics | Aggregate fee metrics across pools for one creator. |
-| `getDammV1MigrationMetadata(poolAddress)` | `Promise<MeteoraDammMigrationMetadata>` | Fetch DAMM v1 migration metadata. |
+| `getDammV1MigrationMetadata(poolAddress)` | `Promise<MeteoraDammMigrationMetadata>` | Fetch DAMM v1 migration metadata for existing DAMM v1 pools. |
+| `getTokenBadge(tokenMint)` | `Promise<TokenBadge or null>` | Fetch the DBC token badge for a quote mint. |
 
 ### Curve Builder Helpers
 
@@ -256,7 +257,7 @@ All curve builders return `ConfigParameters`.
 | `getMigrationQuoteAmount` | Calculate quote amount needed for migration. |
 | `getFeeSchedulerParams` | Convert scheduler inputs into DBC base-fee params. |
 | `calculateFeeSchedulerEndingBaseFeeBps` | Calculate ending scheduler fee bps from starting fee and reduction inputs. |
-| `getRateLimiterParams` | Convert rate-limiter inputs into DBC base-fee params. |
+| `getRateLimiterParams` | Convert rate-limiter inputs into DBC base-fee params for existing pools. This helper still takes `tokenQuoteDecimal` and `activationType`. `getBaseFeeParams`, `createConfig`, `createPool`, and `buildCurve*` reject RateLimiter. |
 | `getDynamicFeeParams` | Build dynamic-fee params from base fee and optional price-change limit. |
 | `getStartingBaseFeeBpsFromBaseFeeParams` | Recover starting base-fee bps from base-fee params. |
 | `computeSqrtPriceStepBps` | Calculate bps step between two square-root prices. |
@@ -265,7 +266,8 @@ All curve builders return `ConfigParameters`.
 | `getLiquidityVestingInfoParams` | Convert migrated-liquidity vesting inputs into program vesting params. |
 | `getTwoCurve` | Build a two-segment curve from target inputs. |
 | `checkRateLimiterApplied` | Check whether rate limiter behavior applies at a point. |
-| `getBaseFeeParams` | Normalize base-fee helper inputs into program params. |
+| `getBaseFeeParams` | Normalize scheduler base-fee helper inputs into program params. Rate limiter inputs are rejected. This helper no longer takes `tokenQuoteDecimal` or `activationType`. |
+| `getTokenBadgeRemainingAccounts` | Return the optional token badge remaining-account metas for config and pool creation. |
 | `getQuoteReserveFromNextSqrtPrice` | Calculate quote reserve from the next square-root price. |
 | `getTokenomics` | Calculate tokenomics breakdown for a configured curve. |
 | `getMigratedPoolFeeParams` | Build migrated-pool fee params from migration and fee config inputs. |
@@ -304,6 +306,7 @@ All curve builders return `ConfigParameters`.
 | `derivePositionAddress` | Derive DAMM v2 position PDA from a position NFT mint. |
 | `derivePositionNftAccount` | Derive the canonical position NFT token account. |
 | `deriveDammV1LockEscrowAddress` | Derive DAMM v1 lock escrow PDA. |
+| `deriveTokenBadgeAddress` | Derive the DBC token badge PDA from `token_badge` and the quote mint. |
 | `deriveDammV2LockEscrowAddress` | Derive DAMM v2 lock escrow PDA. |
 | `deriveEscrow` | Derive locker escrow PDA. |
 | `deriveDammV1ProtocolFeeAddress` | Derive DAMM v1 protocol fee PDA. |
@@ -472,7 +475,7 @@ All curve builders return `ConfigParameters`.
 | Type group | Types |
 | --- | --- |
 | Program and IDL | `DynamicCurveProgram`, `DynamicBondingCurveTypes`, `DynamicBondingCurveIdl`. |
-| Account states | `PoolConfig`, `ConfigWithTransferHook`, `VirtualPool`, `TransferHookPool`, `MeteoraDammMigrationMetadata`, `LockEscrow`, `PartnerMetadata`, `VirtualPoolMetadata`. |
+| Account states | `PoolConfig`, `ConfigWithTransferHook`, `VirtualPool`, `TransferHookPool`, `MeteoraDammMigrationMetadata`, `LockEscrow`, `PartnerMetadata`, `VirtualPoolMetadata`, `TokenBadge`. |
 | Config structs | `ConfigParameters`, `PoolFeeParameters`, `DynamicFeeParameters`, `LiquidityDistributionParameters`, `LockedVestingParameters`, `LiquidityVestingInfoParameters`, `MigratedPoolMarketCapFeeSchedulerParameters`, `TransferHookAccountsInfo`. |
 | Builder config inputs | `TokenConfig`, `FeeConfig`, `BaseFeeParams`, `FeeSchedulerParams`, `RateLimiterParams`, `MigrationConfig`, `MigrationFee`, `MigratedPoolFeeConfig`, `MigratedPoolMarketCapFeeSchedulerParams`, `LiquidityDistributionConfig`, `LockedVestingParams`. |
 | Curve builder params | `BuildCurveBaseParams`, `BuildCurveParams`, `BuildCurveWithMarketCapParams`, `BuildCurveWithTwoSegmentsParams`, `BuildCurveWithMidPriceParams`, `BuildCurveWithLiquidityWeightsParams`, `BuildCurveWithCustomSqrtPricesParams`. |
@@ -494,6 +497,7 @@ All curve builders return `ConfigParameters`.
 | `leftoverReceiver` | `PublicKey` | Receiver for leftover base tokens after migration. |
 | `quoteMint` | `PublicKey` | Quote token mint used by pools created from the config. |
 | `payer` | `PublicKey` | Transaction fee payer and account initializer. |
+| `tokenBadge` | optional `PublicKey` | Token badge PDA required when the quote mint is not permissionless-supported. |
 | `transferHookProgram` | `PublicKey` | Transfer-hook program for `createConfigWithTransferHook`; it must be executable and cannot be DBC, SPL Token, Token 2022, or the default pubkey. |
 
 `ConfigParameters` is usually produced by one of the curve builders. Pass the returned object directly into `createConfig`, `createConfigWithTransferHook`, `createConfigAndPool`, or `createConfigAndPoolWithFirstBuy`.
@@ -502,7 +506,7 @@ All curve builders return `ConfigParameters`.
 | --- | --- |
 | `poolFees` | Base-fee and optional dynamic-fee parameters for DBC swaps. |
 | `collectFeeMode` | Whether trading fees are collected in quote token or output token. |
-| `migrationOption` | Destination AMM family, currently DAMM v1 or DAMM v2. |
+| `migrationOption` | Destination AMM family. New configs must use `MET_DAMM_V2`. `MET_DAMM` is rejected. |
 | `activationType` | Activation point unit, either slot or timestamp. |
 | `tokenType` | SPL Token or Token-2022 base mint handling. |
 | `tokenDecimal` | Base token decimal enum encoded into the config. |
@@ -539,9 +543,9 @@ All curve builders share `BuildCurveBaseParams`, then add builder-specific targe
 
 | Nested type | Key fields | Notes |
 | --- | --- | --- |
-| `BaseFeeParams` | Fee scheduler or rate limiter params | Use `getFeeSchedulerParams` for linear or exponential fee decay, or `getRateLimiterParams` for rate-limited fees. |
+| `BaseFeeParams` | Fee scheduler params | Use `getFeeSchedulerParams` for linear or exponential fee decay. `createConfig`, `createPool`, and `buildCurve*` reject `BaseFeeMode.RateLimiter`. |
 | `FeeSchedulerParams` | `startingFeeBps`, `endingFeeBps`, `numberOfPeriod`, `totalDuration` | Used with `FeeSchedulerLinear` or `FeeSchedulerExponential`. |
-| `RateLimiterParams` | `baseFeeBps`, `feeIncrementBps`, `referenceAmount`, `maxLimiterDuration` | Uses quote-token decimals and activation type when converted into program params. |
+| `RateLimiterParams` | `baseFeeBps`, `feeIncrementBps`, `referenceAmount`, `maxLimiterDuration` | Kept for quoting existing rate-limiter pools. `getRateLimiterParams` still encodes these fields. New config and pool builders reject the mode. |
 | `MigrationFee` | `feePercentage`, `creatorFeePercentage` | Required only when `migrationFeeOption` is `Customizable`. |
 | `MigratedPoolFeeConfig` | `collectFeeMode`, `dynamicFee`, `poolFeeBps`, optional `compoundingFeeBps`, optional graduated fee fields | Applies to the migrated DAMM pool, not to the DBC virtual pool. |
 | `MigratedPoolMarketCapFeeSchedulerParams` | `endingBaseFeeBps`, `numberOfPeriod`, `priceMultiple`, `schedulerExpirationDuration` | Applies when using a DAMM v2 migrated-pool market-cap fee scheduler. |

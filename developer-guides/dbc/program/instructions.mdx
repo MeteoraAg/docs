@@ -11,8 +11,8 @@ The `dynamic-bonding-curve` IDL exposes many instructions. Integrators can choos
 
 | Instruction | Args | SDK path | Purpose |
 | --- | --- | --- | --- |
-| `create_config` | `ConfigParameters` | `client.partner.createConfig` | Create a partner config for fees, curve, token behavior, migration, pool creation fee, and graduated-pool settings. |
-| `create_config_with_transfer_hook` | `ConfigParameters` | `client.partner.createConfigWithTransferHook` | Create a Token 2022 transfer-hook config with an executable transfer-hook program. |
+| `create_config` | `ConfigParameters` | `client.partner.createConfig` | Create a partner config for fees, curve, token behavior, DAMM v2 migration, pool creation fee, and graduated-pool settings. Rejects `BaseFeeMode::RateLimiter` and `MigrationOption::MeteoraDamm`. Pass a token badge at remaining account index `0` when the quote mint is not permissionless-supported. |
+| `create_config_with_transfer_hook` | `ConfigParameters` | `client.partner.createConfigWithTransferHook` | Create a Token 2022 transfer-hook config with an executable transfer-hook program. Uses the same token-badge remaining account and deprecation rules as `create_config`. |
 | `create_partner_metadata` | `CreatePartnerMetadataParameters` | `client.partner.createPartnerMetadata` | Create optional metadata for the partner fee claimer. |
 | `claim_trading_fee` | `max_amount_a`, `max_amount_b` | `client.partner.claimPartnerTradingFee`, `claimPartnerTradingFeeToReceiver` | Claim partner trading fees from a standard virtual pool. |
 | `claim_trading_fee2` | `max_amount_a`, `max_amount_b`, `TransferHookAccountsInfo` | `client.partner.claimPartnerTradingFee2` | Claim partner trading fees from a transfer-hook pool. |
@@ -23,9 +23,9 @@ The `dynamic-bonding-curve` IDL exposes many instructions. Integrators can choos
 
 | Instruction | Args | SDK path | Purpose |
 | --- | --- | --- | --- |
-| `initialize_virtual_pool_with_spl_token` | `InitializePoolParameters` | `client.creator.createPool` | Create a DBC pool with an SPL Token base mint and Metaplex metadata. |
-| `initialize_virtual_pool_with_token2022` | `InitializePoolParameters` | `client.creator.createPool` | Create a DBC pool with a Token 2022 base mint. |
-| `initialize_virtual_pool_with_token2022_transfer_hook` | `InitializePoolParameters` | `client.creator.createPoolWithTransferHook` | Create a DBC transfer-hook pool with a Token 2022 base mint. |
+| `initialize_virtual_pool_with_spl_token` | `InitializePoolParameters` | `client.creator.createPool` | Create a DBC pool with an SPL Token base mint and Metaplex metadata. Rejects rate-limiter and DAMM v1 configs. Pass a token badge at remaining account index `0` when the quote mint is not permissionless-supported. |
+| `initialize_virtual_pool_with_token2022` | `InitializePoolParameters` | `client.creator.createPool` | Create a DBC pool with a Token 2022 base mint. Rejects rate-limiter configs and uses the same token-badge remaining account rule. |
+| `initialize_virtual_pool_with_token2022_transfer_hook` | `InitializePoolParameters` | `client.creator.createPoolWithTransferHook` | Create a DBC transfer-hook pool with a Token 2022 base mint. Uses the same token-badge remaining account rule. |
 | `create_virtual_pool_metadata` | `CreateVirtualPoolMetadataParameters` | `client.creator.createPoolMetadata` | Create optional metadata for a virtual pool. |
 | `claim_creator_trading_fee` | `max_base_amount`, `max_quote_amount` | `client.creator.claimCreatorTradingFee`, `claimCreatorTradingFeeToReceiver` | Claim creator trading fees from a standard virtual pool. |
 | `claim_creator_trading_fee2` | `max_base_amount`, `max_quote_amount`, `TransferHookAccountsInfo` | `client.creator.claimCreatorTradingFee2` | Claim creator trading fees from a transfer-hook pool. |
@@ -49,8 +49,22 @@ The `dynamic-bonding-curve` IDL exposes many instructions. Integrators can choos
 | `swap_mode` | `0` exact in, `1` partial fill, `2` exact out. |
 
 <Note>
-  If the config uses rate limiter fees, or `enable_first_swap_with_min_fee` is enabled, swap instructions require the instructions sysvar in remaining accounts. The SDK adds `SYSVAR_INSTRUCTIONS_PUBKEY` when needed.
+  Existing rate-limiter pools, or configs with `enable_first_swap_with_min_fee` enabled, require the instructions sysvar in remaining accounts on swap instructions. The SDK adds `SYSVAR_INSTRUCTIONS_PUBKEY` when needed.
 </Note>
+
+## Token Badge Remaining Accounts
+
+Config and pool creation read `token_badge` from remaining account index `0` when the quote mint is not permissionless-supported.
+
+| Instruction | Remaining account index `0` |
+| --- | --- |
+| `create_config` | Required token badge PDA when the quote mint is not permissionless-supported. |
+| `create_config_with_transfer_hook` | Same rule. |
+| `initialize_virtual_pool_with_spl_token` | Same rule. |
+| `initialize_virtual_pool_with_token2022` | Same rule. |
+| `initialize_virtual_pool_with_token2022_transfer_hook` | Same rule. |
+
+The token badge PDA is derived from `["token_badge", quote_mint]`. It is read-only and not a signer. Permissionless-supported quote mints do not need this account. A missing or mismatched badge returns `InvalidTokenBadge`. A badge does not bypass the zero transfer-fee rule.
 
 Transfer-hook swaps also pass extra remaining accounts described by `TransferHookAccountsInfo`.
 
@@ -74,3 +88,18 @@ Standard swap instructions reject `TransferHookPool` accounts, and `swap2_with_t
 | `migration_damm_v2_create_metadata` | DAMM v2 | Deprecated | Deprecated since program `0.1.7`; DAMM v2 migration no longer needs a separate metadata account. |
 | `migration_damm_v2` | DAMM v2 | `client.migration.migrateToDammV2` | Migrate a completed DBC pool to DAMM v2. |
 | `withdraw_migration_fee` | DAMM v1 or DAMM v2 | `client.partner.partnerWithdrawMigrationFee`, `client.creator.creatorWithdrawMigrationFee` | Withdraw partner or creator migration fee. Uses `flag` to select the fee side. |
+
+DAMM v1 migration instructions remain for existing pools. New configs and new pools cannot select `MigrationOption::MeteoraDamm`. DAMM v2 migration uses a DAMM v2 config with `CreatePoolWithoutMintValidation` so a DBC-badged quote mint can still graduate. DBC still requires the quote mint transfer fee to be zero at migration time.
+
+## Operator Instructions
+
+| Instruction | Args | Purpose |
+| --- | --- | --- |
+| `create_token_badge` | None | Operator with `CreateTokenBadge` creates a `TokenBadge` PDA for a quote mint that is not permissionless-supported. Rejects permissionless-supported mints and quote mints with a non-zero transfer fee. |
+| `close_token_badge` | None | Operator with `CloseTokenBadge` closes a token badge and returns rent. Existing pools that already use the mint keep working. |
+| `create_operator_account` | Permission bitmask | Admin creates an operator account with a `u128` permission bitmap. |
+| `close_operator_account` | None | Admin closes an operator account. |
+| `claim_protocol_fee2` | Selected mint and max amount | Protocol fee authority claims one pool token per call. Replaces the removed `claim_protocol_fee` instruction. |
+| `claim_protocol_pool_creation_fee` | None | Operator with `ClaimProtocolFee` claims the protocol share of pool creation fees. |
+
+`claim_protocol_fee` and `zap_protocol_fee` are removed. Use `claim_protocol_fee2` through the protocol fee wrapper program.

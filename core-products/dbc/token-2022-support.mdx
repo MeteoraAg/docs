@@ -1,8 +1,8 @@
 ---
 title: "DBC Token 2022 Support"
 sidebarTitle: "Token 2022 Support"
-description: "Learn how DBC supports Token 2022 launches, metadata handling, transfer-hook pools, supported quote tokens, authority choices, supply models, and DAMM v2 migration behavior."
-llmsDescription: "Explains DBC Token 2022 support, including SPL Token and Token 2022 base token launches, Token 2022 metadata pointer and token metadata handling, transfer-hook pool support, DAMM v2 migration, DAMM v1 restrictions, supported Token 2022 quote token extensions, unsupported native Token 2022 mint behavior, token authority options, fixed and dynamic supply, leftover handling, and product considerations."
+description: "Learn how DBC supports Token 2022 launches, metadata handling, transfer-hook pools, quote-mint token badges, transfer-fee rules, authority choices, supply models, and DAMM v2 migration behavior."
+llmsDescription: "Explains DBC Token 2022 support, including SPL Token and Token 2022 base token launches, Token 2022 metadata pointer and token metadata handling, transfer-hook pool support, DAMM v2 migration, deprecated DAMM v1 migration for new configs, permissionless Token 2022 quote mint extensions, quote-mint token badges for otherwise-unsupported extensions, zero transfer-fee enforcement, unsupported native Token 2022 mint behavior, token authority options, fixed and dynamic supply, leftover handling, and product considerations."
 ---
 
 DBC supports both SPL Token and Token 2022 base token launches.
@@ -17,8 +17,8 @@ Token 2022 support helps launch teams use newer Solana token capabilities while 
 
 | Token Type | Product Behavior |
 | --- | --- |
-| SPL Token | Standard Solana token launch path. Can migrate to DAMM v1 or DAMM v2 depending on configuration. |
-| Token 2022 | Modern token launch path with Token 2022 metadata handling. Must use DAMM v2 migration in the DBC configuration flow. |
+| SPL Token | Standard Solana token launch path. New configs must migrate to DAMM v2. Existing DAMM v1 pools can still graduate. |
+| Token 2022 | Modern token launch path with Token 2022 metadata handling. Must use DAMM v2 migration. |
 | Token 2022 with transfer hook | Dedicated launch path where the base mint has a transfer hook during bonding-curve trading. The hook is revoked when the curve completes so the token can migrate to DAMM v2. |
 
 ## Token 2022 Base Tokens
@@ -60,27 +60,52 @@ DAMM v2 is the modern migration target for Token 2022 support, advanced collect 
 For transfer-hook launches, the hook is active during bonding-curve trading only. The base mint's transfer hook program ID and authority are revoked before DAMM v2 migration so the graduated mint can use DAMM v2 without relying on transfer-hook remaining accounts.
 
 <Warning>
-  DAMM v1 migration is restricted to SPL Token launches. A Token 2022 base-token launch cannot use DAMM v1 migration in DBC config validation.
+  DAMM v1 migration is deprecated for new configs and new pools. Existing DAMM v1 pools can still graduate. New Token 2022 launches must use DAMM v2.
 </Warning>
 
 ## Supported Quote Tokens
 
-DBC can use SPL Token quote assets. It can also support Token 2022 quote assets when the quote mint uses only supported metadata-related extensions.
+DBC can use SPL Token quote assets permissionlessly. Token 2022 quote assets are permissionless only when the mint uses metadata-related extensions and has a zero transfer fee.
 
-Supported Token 2022 quote mint extensions include:
+Permissionless Token 2022 quote mint extensions:
 
-- Metadata Pointer.
-- Token Metadata.
+- Metadata Pointer
+- Token Metadata
 
-If a Token 2022 quote mint uses other extensions, it may not be supported as a quote token for DBC.
+SPL Token quote mints are always accepted. A Token 2022 quote mint with no extensions is also accepted permissionlessly, as long as it is not the Token 2022 native mint.
 
-This means Token 2022 quote mints with transfer fees or other behavioral extensions should not be assumed compatible with DBC.
-
-<Note>
-  Native Token 2022 mint behavior is not supported as a quote mint.
-</Note>
+<Warning>
+  The Token 2022 native mint `So11111111111111111111111111111111111111112` is not supported as a DBC quote mint. Use the standard wrapped SOL mint instead.
+</Warning>
 
 DBC records whether the quote mint belongs to the SPL Token program or Token 2022 program. Token transfers use `transfer_checked`, so integrations should provide the token program that matches each mint.
+
+## Quote Mint Token Badges
+
+Some Token 2022 quote mints use extensions outside the permissionless allowlist, such as Permanent Delegate. Those quote mints need a **token badge** before they can be used in a new DBC config or virtual pool.
+
+This is the path used for Stock Tokens and other Token 2022 quote assets that need extra extensions.
+
+<CardGroup cols={2}>
+  <Card title="Permissionless Quote Mints" icon="unlock" iconType="solid">
+    SPL Token quote mints and Token 2022 quote mints that only use metadata extensions do not need a badge.
+  </Card>
+  <Card title="Token Badge Quote Mints" icon="badge-check" iconType="solid">
+    Token 2022 quote mints with other extensions need a Meteora operator-created token badge before config or pool creation.
+  </Card>
+</CardGroup>
+
+A DBC token badge is scoped to DBC. It does not automatically satisfy DAMM v2 mint validation. DAMM v2 configs used by DBC migration include the `CreatePoolWithoutMintValidation` permission so a badged quote mint can still graduate.
+
+A badge does not allow a non-zero transfer fee. Current and any scheduled `transfer_fee_basis_points` must be `0`. Expired historical `older_transfer_fee` values are ignored.
+
+The program enforces that zero-fee rule when a token badge is created, when a config or pool is created, and on every instruction that transfers quote tokens. If a quote mint later has a non-zero transfer fee, quote-side swaps, surplus withdrawals, and quote fee claims fail until the fee returns to zero. Base-only fee claims can still succeed.
+
+For config and pool creation, pass the token badge as remaining account index `0` when the quote mint is not permissionless-supported. The SDK adds this account when you supply `tokenBadge`.
+
+<Note>
+  You cannot create a token badge for a quote mint that is already permissionless-supported. Closing a badge blocks new configs and pools for that quote mint. Existing pools that already use the mint keep trading.
+</Note>
 
 ## Token Authority Choices
 
@@ -121,6 +146,6 @@ For fixed-supply Token 2022 launches, leftover handling works the same product w
     Token 2022 launches should be designed around DAMM v2 graduation from the start.
   </Card>
   <Card title="Quote Token Review" icon="magnifying-glass" iconType="solid">
-    Token 2022 quote assets should be checked for supported extensions before launch.
+    Check whether a Token 2022 quote mint is permissionless or needs a token badge, and confirm its transfer fee is zero.
   </Card>
 </CardGroup>

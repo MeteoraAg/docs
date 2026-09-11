@@ -2,7 +2,7 @@
 title: "DBC Launch Configuration"
 sidebarTitle: "Launch Configuration"
 description: "Review the DBC configuration fields that sit around the curve, including token settings, transfer hooks, fees, migration, supply, liquidity locks, and claim addresses."
-llmsDescription: "Concise DBC launch configuration reference covering quote mint, activation type, token decimals, token authority, transfer-hook configs, fixed and dynamic supply, migration target, migration fee, migrated DAMM v2 pool fees, liquidity distribution, pool creation fee, first swap with minimum fee, fee claimer, leftover receiver, and links to deeper DBC pages."
+llmsDescription: "Concise DBC launch configuration reference covering quote mint, quote-mint token badges, activation type, token decimals, token authority, transfer-hook configs, fixed and dynamic supply, DAMM v2 migration target, deprecated DAMM v1 and rate limiter options, migration fee, migrated DAMM v2 pool fees, liquidity distribution, pool creation fee, first swap with minimum fee, fee claimer, leftover receiver, and links to deeper DBC pages."
 ---
 
 DBC configs are reusable launch templates. The curve defines price discovery; the surrounding config defines which token can launch, how fees behave, how migration works, and who can claim each economic bucket.
@@ -13,8 +13,8 @@ Use this page as a checklist. For implementation limits and permissions, see [DB
 
 | Field | Program Behavior |
 | --- | --- |
-| Quote mint | Must be supported. SPL Token quote mints are supported; Token 2022 quote mints are limited to metadata-related extensions. |
-| Activation type | Slot-based or timestamp-based. Fee schedules and rate limiter windows use the same activation type. |
+| Quote mint | Must be supported. SPL Token quote mints are permissionless. Token 2022 quote mints are permissionless only with metadata-related extensions and a zero transfer fee. Other Token 2022 quote extensions need a token badge at remaining account index `0`. |
+| Activation type | Slot-based or timestamp-based. Fee schedules use the same activation type. |
 | Token decimals | Must be from `6` to `9`. |
 | Token type | SPL Token or Token 2022. Token 2022 launches must use DAMM v2 migration. |
 | Token authority option | Controls whether creator, partner, or no one receives update authority, and whether creator or partner receives mint authority. |
@@ -40,7 +40,7 @@ Fixed-supply cleanup is covered in [DBC Surplus and Leftover](/core-products/dbc
 
 | Setting | Program Behavior |
 | --- | --- |
-| Migration target | DAMM v1 or DAMM v2. DAMM v1 is restricted to SPL Token base and quote mints. |
+| Migration target | DAMM v2 for new configs and new pools. DAMM v1 is deprecated and rejected for new configs and new pools. Existing DAMM v1 pools can still migrate. |
 | Migration fee option | Fixed DAMM fee options or `Customizable` for custom DAMM v2 migrated-pool fee settings. |
 | Migration fee percentage | Up to `99%`. If it is `0`, creator migration fee percentage must also be `0`. |
 | DAMM v2 migrated pool fee | Must be `0.1%` to `10%` when custom migrated-pool fees are configured. |

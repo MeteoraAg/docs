@@ -1,13 +1,13 @@
 ---
 title: "What is DBC?"
 sidebarTitle: "What is DBC?"
-description: "Learn how Meteora's Dynamic Bonding Curve helps teams launch tokens with configurable price discovery, launch fees, trader controls, DAMM migration, surplus handling, Token 2022 support, and transfer-hook pools."
-llmsDescription: "Overview of Meteora Dynamic Bonding Curve, explaining DBC as a permissionless token launch product with a virtual pool, configurable universal curve segments, quote threshold migration, DAMM v1 and DAMM v2 graduation, launch fees, trader experience, creator and partner controls, fixed and dynamic supply, migration liquidity, leftover, surplus, Token 2022 support, and Token 2022 transfer-hook pools."
+description: "Learn how Meteora's Dynamic Bonding Curve helps teams launch tokens with configurable price discovery, launch fees, trader controls, DAMM v2 migration, surplus handling, Token 2022 support, quote-mint token badges, and transfer-hook pools."
+llmsDescription: "Overview of Meteora Dynamic Bonding Curve, explaining DBC as a permissionless token launch product with a virtual pool, configurable universal curve segments, quote threshold migration, DAMM v2 graduation, deprecated DAMM v1 and rate limiter options for new configs, launch fees, trader experience, creator and partner controls, fixed and dynamic supply, migration liquidity, leftover, surplus, Token 2022 support, quote-mint token badges, and Token 2022 transfer-hook pools."
 ---
 
 DBC stands for **Dynamic Bonding Curve**. It is Meteora's permissionless token launch product for teams that want a token to discover its price on-chain before graduating into a live Meteora DAMM liquidity pool.
 
-Instead of asking a creator or launchpad to seed a traditional AMM pool on day one, DBC starts with a **virtual pool**. Traders buy and sell against a configurable bonding curve. Every buy adds quote tokens, such as SOL or USDC, into the pool and moves the token along the curve. When the configured quote threshold is reached, the launch graduates into DAMM v1 or DAMM v2 liquidity.
+Instead of asking a creator or launchpad to seed a traditional AMM pool on day one, DBC starts with a **virtual pool**. Traders buy and sell against a configurable bonding curve. Every buy adds quote tokens, such as SOL or USDC, into the pool and moves the token along the curve. When the configured quote threshold is reached, the launch graduates into DAMM v2 liquidity. Existing DAMM v1 pools can still graduate.
 
 <Info>
   DBC runs on the mainnet program `dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN`.
@@ -27,16 +27,16 @@ DBC brings those launch steps into one configurable flow. A launchpad can create
     A launch can use a single curve segment or up to 16 segments to shape how price moves as demand grows.
   </Card>
   <Card title="Automatic Graduation" icon="arrow-right" iconType="solid">
-    Once the quote reserve reaches the migration threshold, liquidity can move into a DAMM v1 or DAMM v2 pool.
+    Once the quote reserve reaches the migration threshold, liquidity can move into a DAMM v2 pool. Existing DAMM v1 pools can still graduate.
   </Card>
   <Card title="Launch-Ready Fees" icon="shield" iconType="solid">
-    Use fixed fees, time schedulers, rate limiter fees, and optional dynamic fees to shape early trading behavior.
+    Use fixed fees, time schedulers, and optional dynamic fees to shape early trading behavior. Rate limiter mode is deprecated for new configs.
   </Card>
   <Card title="Partner and Creator Economics" icon="handshake" iconType="solid">
     Trading fees, migration fees, surplus, pool creation fees, and liquidity allocations can be split between launchpad partners and creators at different lifecycle stages.
   </Card>
   <Card title="Token 2022 Support" icon="certificate" iconType="solid">
-    DBC can launch SPL tokens, Token 2022 tokens, and Token 2022 transfer-hook pools through dedicated launch paths.
+    DBC can launch SPL tokens, Token 2022 tokens, and Token 2022 transfer-hook pools, including Token 2022 quote mints that need a token badge.
   </Card>
 </CardGroup>
 
@@ -46,7 +46,7 @@ A DBC launch has two main phases.
 
 During the **bonding curve phase**, the token trades inside the DBC virtual pool. The pool tracks the current price, base reserve, quote reserve, fees, and migration progress. The curve decides how many tokens are available at each price area and how much quote liquidity is needed to move through that area.
 
-During the **graduated pool phase**, the launch becomes a DAMM pool. The quote assets accumulated during the bonding phase and the configured base token amount form the initial liquidity for the migrated pool. From that point on, traders interact with the DAMM v1 or DAMM v2 pool rather than the DBC virtual pool.
+During the **graduated pool phase**, the launch becomes a DAMM pool. The quote assets accumulated during the bonding phase and the configured base token amount form the initial liquidity for the migrated pool. From that point on, traders interact with the DAMM v2 pool rather than the DBC virtual pool. Existing DAMM v1 pools keep that older graduation path.
 
 | Stage | What Happens |
 | --- | --- |
@@ -54,7 +54,7 @@ During the **graduated pool phase**, the launch becomes a DAMM pool. The quote a
 | Create virtual pool | The creator launches the base mint and virtual pool from that config. |
 | Trade on curve | Traders buy or sell against the virtual pool until the quote reserve reaches the migration threshold. |
 | Curve complete | Normal DBC swaps stop. Surplus and configured migration-fee claims can become available. |
-| Migrate to DAMM | The accumulated quote reserve and configured base amount seed the DAMM v1 or DAMM v2 pool. |
+| Migrate to DAMM | The accumulated quote reserve and configured base amount seed the DAMM v2 pool. Existing DAMM v1 pools still use the DAMM v1 path. |
 | Finalize cleanup | Leftover, LP-token claims, DAMM v2 positions, and one-time claim flags settle according to the migration path. |
 
 ## Product Building Blocks
@@ -76,7 +76,7 @@ During the **graduated pool phase**, the launch becomes a DAMM pool. The quote a
     Learn how extra quote tokens and unused fixed-supply base tokens are handled after curve completion and migration.
   </Card>
   <Card title="DBC Token 2022 Support" href="/core-products/dbc/token-2022-support" icon="certificate">
-    Understand how DBC supports Token 2022 base tokens and supported quote tokens.
+    Understand how DBC supports Token 2022 base tokens, quote mints, and quote-mint token badges.
   </Card>
   <Card title="DBC Transfer Hook Pools" href="/core-products/dbc/transfer-hook-pools" icon="code-branch">
     Learn how Token 2022 transfer-hook pools trade during the bonding phase and graduate to DAMM v2.

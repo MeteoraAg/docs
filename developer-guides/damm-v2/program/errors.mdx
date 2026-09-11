@@ -2,7 +2,7 @@
 title: "DAMM v2 Program Errors"
 sidebarTitle: "Errors"
 description: "Understand DAMM v2 cp-amm PoolError codes, SDK validation errors, messages, and common integration causes."
-llmsDescription: "Explains the DAMM v2 program error reference based on PoolError in MeteoraAg/damm-v2. Covers Anchor custom error decoding, the PoolError code table, TypeScript SDK validation errors, messages, likely causes, and troubleshooting notes for swaps, liquidity, rewards, vesting, Token 2022, rate limiter, operator, and compounding fee integrations."
+llmsDescription: "Explains the DAMM v2 program error reference based on PoolError in MeteoraAg/damm-v2. Covers Anchor custom error decoding, the PoolError code table including 6068-6072, TypeScript SDK validation errors including DeprecatedBaseFeeModeError, messages, likely causes, and troubleshooting notes for swaps, liquidity, rewards, vesting, Token 2022, rate limiter deprecation, operator, and compounding fee integrations."
 ---
 
 This page lists the Anchor custom errors returned by the DAMM v2 `cp-amm` program.
@@ -62,7 +62,7 @@ This page lists the Anchor custom errors returned by the DAMM v2 `cp-amm` progra
 | `6044` | `InvalidSplitPositionParameters` | Invalid parameters for split position | Split numerator, target position, or liquidity state is invalid. |
 | `6045` | `UnsupportPositionHasVestingLock` | Unsupported split position has vesting lock | Split operation is not supported for the current vesting lock state. |
 | `6046` | `SamePosition` | Same position | Source and destination position are the same. |
-| `6047` | `InvalidBaseFeeMode` | Invalid base fee mode | Base fee mode is not one of the supported scheduler modes. |
+| `6047` | `InvalidBaseFeeMode` | Invalid base fee mode | Base fee mode is not one of the supported scheduler modes. New configs and new pools cannot use rate limiter; that rejection is `DeprecatedBaseFeeMode` (`6071`). |
 | `6048` | `InvalidFeeRateLimiter` | Invalid fee rate limiter | Rate limiter fee parameters failed validation. |
 | `6049` | `FailToValidateSingleSwapInstruction` | Fail to validate single swap instruction in rate limiter | Rate-limiter swap did not include the instructions sysvar or violated single-swap checks. |
 | `6050` | `InvalidFeeTimeScheduler` | Invalid fee scheduler | Time scheduler fee parameters failed validation. |
@@ -83,6 +83,11 @@ This page lists the Anchor custom errors returned by the DAMM v2 `cp-amm` progra
 | `6065` | `MissingZapOutInstruction` | Missing zap out instruction | Zap protocol-fee flow did not include the required downstream instruction. |
 | `6066` | `InvalidZapAccounts` | Invalid zap accounts | Zap accounts do not match the whitelisted route or expected account set. |
 | `6067` | `InvalidCompoundingFeeBps` | Invalid compounding fee bps | Compounding fee bps is outside allowed bounds or incompatible with collect fee mode. |
+| `6068` | `InvalidClaimProtocolFeeAccounts` | Invalid claim protocol fee accounts | `claim_protocol_fee2` receiver token account mint or token program does not match pool token A or token B. |
+| `6069` | `TransferFeeExcludedAmountIsZero` | Transfer fee excluded amount is zero | Token-2022 transfer fee would reduce the claimed protocol fee amount to zero. |
+| `6070` | `DelegatedAmountNonZero` | Delegated amount is not zero | Position NFT token account has a non-zero `delegated_amount` on a delegate path. |
+| `6071` | `DeprecatedBaseFeeMode` | Deprecated base fee mode | New config or new pool creation used `BaseFeeMode::RateLimiter`. Existing rate-limiter pools are unaffected. |
+| `6072` | `InvalidConfigPermission` | Invalid config permission | Non-zero `permission` was set on a public config (default `pool_creator_authority`), or permission bits are outside the defined `ConfigPermission` range. |
 
 ## Typescript SDK Validation Errors
 
@@ -98,6 +103,7 @@ The TypeScript SDK also raises local validation errors before a transaction is b
 | `InvalidCollectFeeModeError` | Unsupported collect fee mode or incompatible pool parameters. |
 | `InvalidCompoundingFeeBpsError` | Compounding fee bps is invalid or used with an incompatible collect fee mode. |
 | `InvalidBaseFeeModeError` | Unsupported base fee mode. |
+| `DeprecatedBaseFeeModeError` | New config or pool helpers received `BaseFeeMode.RateLimiter`. |
 | `InvalidFeeTimeSchedulerError` | Time scheduler parameters are invalid. |
 | `InvalidFeeRateLimiterError` | Rate limiter parameters are invalid. |
 | `InvalidFeeMarketCapSchedulerError` | Market-cap scheduler parameters are invalid. |

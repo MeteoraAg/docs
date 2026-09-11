@@ -2,7 +2,7 @@
 title: "DBC Accounts and Permissions"
 sidebarTitle: "Accounts and Permissions"
 description: "Review the main DBC on-chain accounts, lifecycle flags, permissions, transfer-hook accounts, limits, and claim gates."
-llmsDescription: "Implementation-grounded DBC account and permission reference covering PoolConfig, ConfigWithTransferHook, VirtualPool, TransferHookPool, partner and creator metadata, operator permissions, collect fee modes, migration progress states, config limits, token limits, fee limits, liquidity lock requirements, claim gates, transfer-hook claim gates, and Token 2022 quote mint restrictions."
+llmsDescription: "Implementation-grounded DBC account and permission reference covering PoolConfig, ConfigWithTransferHook, VirtualPool, TransferHookPool, TokenBadge, partner and creator metadata, operator permissions including CreateTokenBadge and CloseTokenBadge, collect fee modes, migration progress states, deprecated rate limiter and DAMM v1 options, config limits, token limits, fee limits, liquidity lock requirements, claim gates, transfer-hook claim gates, and Token 2022 quote mint badge rules."
 ---
 
 This page summarizes the DBC implementation details that are useful when reading pool state, building integrations, or checking whether a claim or migration action is allowed.
@@ -17,7 +17,8 @@ This page summarizes the DBC implementation details that are useful when reading
 | `TransferHookPool` | Transfer-hook pool state. It stores the same `PoolState` fields as `VirtualPool` with a separate discriminator. |
 | `PartnerMetadata` | Optional partner metadata used by launchpad partners. |
 | `VirtualPoolMetadata` | Optional metadata account for a launched virtual pool, created by the pool creator. |
-| `Operator` | Admin-created permission account used for legacy protocol fee operations and protocol pool creation fee claims. |
+| `TokenBadge` | Operator-created allowlist account for a Token 2022 quote mint that is not permissionless-supported. |
+| `Operator` | Admin-created permission account used for protocol pool creation fee claims and token badge management. |
 
 SDK state readers normalize standard and transfer-hook account variants. Raw account readers and indexers should still distinguish `PoolConfig` from `ConfigWithTransferHook`, and `VirtualPool` from `TransferHookPool`.
 
@@ -42,7 +43,7 @@ When the quote reserve reaches `migration_quote_threshold`, normal curve trading
 | Token decimals | `6` to `9`. |
 | Bonding-curve minimum base fee | `0.25%`, stored as `2_500_000` over `1_000_000_000`. |
 | Bonding-curve maximum total fee | `99%`, stored as `990_000_000` over `1_000_000_000`. |
-| Rate limiter duration | Up to `43,200` seconds for timestamp activation or `108,000` slots for slot activation. |
+| Rate limiter duration | Existing rate-limiter pools use up to `43,200` seconds for timestamp activation or `108,000` slots for slot activation. New configs cannot select this mode. |
 | Migration fee percentage | Up to `99%`. If the migration fee is `0`, the creator migration fee percentage must also be `0`. |
 | Pool creation fee | If non-zero, from `0.001 SOL` to `100 SOL`, paid in lamports. |
 | Migrated pool fee | `0.1%` to `10%` when custom DAMM v2 migrated-pool fees are configured. |
@@ -67,9 +68,9 @@ When the quote reserve reaches `migration_quote_threshold`, normal curve trading
 | Withdraw partner migration fee | Config `fee_claimer`. |
 | Withdraw creator migration fee | Current pool creator. |
 | Withdraw leftover | Permissionless instruction, but funds can only go to the config `leftover_receiver` ATA after migration. |
-| Claim protocol trading or migration fees | `claim_protocol_fee2` uses the fixed `protocol_fee_authority` signer. Deprecated `claim_protocol_fee` uses an operator with `ClaimProtocolFee` permission. |
+| Claim protocol trading or migration fees | `claim_protocol_fee2` uses the fixed `protocol_fee_authority` signer. The older `claim_protocol_fee` and `zap_protocol_fee` instructions are removed. |
 | Claim protocol pool creation fee | Operator with `ClaimProtocolFee` permission. |
-| Zap protocol fee | Deprecated; operator with `ZapProtocolFee` permission. |
+| Create or close a quote-mint token badge | Operator with `CreateTokenBadge` or `CloseTokenBadge` permission. |
 
 Several claim paths also use one-time flags on the pool state, so a valid signer cannot claim the same surplus, migration fee, pool creation fee, or leftover more than once.
 
@@ -84,20 +85,21 @@ Several claim paths also use one-time flags on the pool state, so a valid signer
 
 ## Token Support
 
-DBC can launch SPL Token or Token 2022 base mints. DAMM v1 migration is restricted to SPL Token base mints and SPL Token quote mints. DAMM v2 is the migration path for Token 2022 launches.
+DBC can launch SPL Token or Token 2022 base mints. New configs must migrate to DAMM v2. Existing DAMM v1 pools can still graduate.
 
 Transfer-hook launches are Token 2022 only. They use `ConfigWithTransferHook`, `TransferHookPool`, `swap2_with_transfer_hook`, and transfer-hook-aware trading fee claims. The base mint's transfer hook is revoked when the curve completes.
 
-Quote mints can be SPL Token mints. Token 2022 quote mints are accepted only when their extensions are limited to `MetadataPointer` and `TokenMetadata`; native Token 2022 mint behavior is rejected as a quote mint.
+Quote mints can be SPL Token mints. Token 2022 quote mints are permissionless only when their extensions are limited to `MetadataPointer` and `TokenMetadata` and the transfer fee is zero. Other Token 2022 quote extensions need a `TokenBadge`. Native Token 2022 mint behavior is rejected as a quote mint.
 
 ## Config Validation Highlights
 
 DBC validates the launch template before it can be used:
 
-- The quote mint must be supported.
+- The quote mint must be supported, or a valid token badge must be supplied at remaining account index `0`.
+- The quote mint transfer fee must be zero, including any scheduled fee.
 - The collect fee mode must be `QuoteToken` or `OutputToken`.
-- The migration target must be DAMM v1 or DAMM v2.
-- DAMM v1 configs cannot use Token 2022, custom DAMM v2 migration fees, or DAMM v2 liquidity vesting.
+- The migration target must be DAMM v2. `MeteoraDamm` is rejected for new configs and new pools.
+- `BaseFeeMode::RateLimiter` is rejected for new configs and new pools.
 - Transfer-hook configs must use Token 2022 and a valid executable transfer-hook program.
 - Mint-authority token authority options are only valid for transfer-hook configs.
 - Liquidity percentages across partner, creator, permanent locks, and vesting must add to `100%`.

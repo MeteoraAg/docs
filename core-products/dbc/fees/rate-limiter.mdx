@@ -5,9 +5,13 @@ description: "Learn how DBC rate limiter fees increase with buy size and single-
 llmsDescription: "Explains DBC rate limiter base fee mode, including reference amount, cliff fee, fee increment bps, max limiter duration, quote-token fee mode requirement, buy-side behavior, single-swap transaction validation, 12 hour duration cap, and when to choose rate limiter fees."
 ---
 
-The DBC rate limiter is a base fee mode that increases the fee as buy size increases.
+The DBC rate limiter is a deprecated base fee mode that increases the fee as buy size increases.
 
-It is designed for launches where the main risk is not only who buys first, but how much they buy. Small buys can pay the starting fee, while larger buys pay a higher average fee during the limiter window.
+<Warning>
+  Rate limiter mode is deprecated for new configs and new pools. `create_config` and pool initialization reject `BaseFeeMode::RateLimiter`. Existing rate-limiter pools can still be quoted and swapped. Use a linear or exponential scheduler, or fixed-fee behavior, for new launches.
+</Warning>
+
+It was designed for launches where the main risk is not only who buys first, but how much they buy. Small buys can pay the starting fee, while larger buys pay a higher average fee during the limiter window.
 
 ## How It Works
 

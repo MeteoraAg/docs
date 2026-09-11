@@ -5,7 +5,7 @@ description: "Learn how to build DBC integrations with the dynamic_bonding_curve
 llmsDescription: "Explains the DBC Developer Guide as the integration entry point for Meteora Dynamic Bonding Curve. Covers program accounts, instructions, events, errors, @meteora-ag/dynamic-bonding-curve-sdk, transfer-hook pool integrations, Rust quote and CPI guides, Go examples, changelog, program IDs, commands, migration flows, and public repository paths for DBC builders."
 ---
 
-Dynamic Bonding Curve (DBC) is Meteora's token launch primitive for creating a virtual reserve pool, trading through a configured bonding curve, and migrating finished pools to DAMM v1 or DAMM v2. To learn more about fee behavior, migration design, and formulas, you can read the following documentations.
+Dynamic Bonding Curve (DBC) is Meteora's token launch primitive for creating a virtual reserve pool, trading through a configured bonding curve, and migrating finished pools to DAMM v2. Existing DAMM v1 pools can still graduate. To learn more about fee behavior, migration design, and formulas, you can read the following documentations.
 
 <CardGroup cols={2}>
   <Card title="Learn more about DBC" icon="book-open" iconType="solid" href="/core-products/dbc/what-is-dbc">
@@ -20,7 +20,7 @@ Dynamic Bonding Curve (DBC) is Meteora's token launch primitive for creating a v
 
 <CardGroup cols={2}>
   <Card title="Program Accounts" icon="table-cells" iconType="solid" href="/developer-guides/dbc/program/accounts">
-    Account model for pool configs, virtual pools, vaults, metadata, operators, and migration accounts.
+    Account model for pool configs, virtual pools, vaults, metadata, token badges, operators, and migration accounts.
   </Card>
   <Card title="Program Instructions" icon="list" iconType="solid" href="/developer-guides/dbc/program/instructions">
     Instruction families for partners, creators, swaps, migration, fee claims, and operators.
@@ -81,10 +81,25 @@ The pool authority PDA used by the program is:
 
 Meteora runs migration keepers on mainnet to migrate eligible DBC pools when the bonding curve is complete and the pool has enough quote-side liquidity.
 
-| Keeper | Requirement |
-| --- | --- |
-| [`Asi5DTGEeiso6k7ya6ndDabEZ7DRCgfTpCBLPH5E3aQs`](https://solscan.io/account/Asi5DTGEeiso6k7ya6ndDabEZ7DRCgfTpCBLPH5E3aQs) | `pool_config.migration_quote_threshold` is 10 SOL, 750 USDC, or 1500 JUP. |
-| [`DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW`](https://solscan.io/account/DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW) | `pool_config.migration_quote_threshold` is at least 750 USD worth of quote token. |
+| Keeper |
+| --- |
+| [`Asi5DTGEeiso6k7ya6ndDabEZ7DRCgfTpCBLPH5E3aQs`](https://solscan.io/account/Asi5DTGEeiso6k7ya6ndDabEZ7DRCgfTpCBLPH5E3aQs) |
+| [`DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW`](https://solscan.io/account/DeQ8dPv6ReZNQ45NfiWwS5CchWpB2BVq1QMyNV8L2uSW) |
+
+Both keepers migrate when `pool_config.migration_quote_threshold` matches one of these quote mints:
+
+| Quote token | Mint | `migration_quote_threshold` |
+| --- | --- | --- |
+| Wrapped SOL (SOL) | `So11111111111111111111111111111111111111112` | 10 SOL |
+| USD Coin (USDC) | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` | 750 USDC |
+| OFFICIAL TRUMP (TRUMP) | `6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN` | 100 TRUMP |
+| Jupiter (JUP) | `JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN` | 1500 JUP |
+| World Liberty Financial USD (USD1) | `USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB` | 750 USD1 |
+| Meteora (MET) | `METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL` | 1500 MET |
+| Jupiter USD (JupUSD) | `JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD` | 750 JupUSD |
+| Virtual Protocol (VIRTUAL) | `3iQL8BFS2vE7mww4ehAqQHAsbmRNCrPxizWAT2Zfyr9y` | 42000 VIRTUAL |
+
+Both keepers also migrate Stock Token quote pairs when `pool_config.migration_quote_threshold` is at least 750 USD equivalent in the quote token.
 
 <Note>
   Migration keepers run on mainnet. The [Manual Migrator](https://migrator.meteora.ag) supports both mainnet and devnet.
@@ -93,6 +108,10 @@ Meteora runs migration keepers on mainnet to migrate eligible DBC pools when the
 ## DAMM Fee Config Keys
 
 The SDK exposes these arrays as `DAMM_V1_MIGRATION_FEE_ADDRESS` and `DAMM_V2_MIGRATION_FEE_ADDRESS`.
+
+<Warning>
+  DAMM v1 migration and rate limiter mode are deprecated for new configs and new pools. Use DAMM v2 and a scheduler or fixed-fee base fee for new launches. The DAMM v1 config keys below remain for existing pools.
+</Warning>
 
 ### DAMM v1
 

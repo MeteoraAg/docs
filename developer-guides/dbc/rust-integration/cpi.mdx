@@ -47,15 +47,18 @@ Most public DBC instructions use `#[event_cpi]`. Include these accounts when con
 
 ## Remaining Accounts
 
-Swaps may require the instructions sysvar as the first remaining account.
+Config and pool creation may require a token badge. Swaps may require the instructions sysvar.
 
 | Case | Remaining account |
 | --- | --- |
-| Rate limiter base fee is active | `SYSVAR_INSTRUCTIONS_PUBKEY` |
-| `enable_first_swap_with_min_fee` is enabled | `SYSVAR_INSTRUCTIONS_PUBKEY` |
-| No rate limiter and no first-swap minimum fee | No swap-specific remaining account is required by this rule. |
+| Quote mint is not permissionless-supported | Token badge PDA at remaining account index `0` on `create_config`, `create_config_with_transfer_hook`, and `initialize_virtual_pool_*`. |
+| Existing rate limiter base fee is active | `SYSVAR_INSTRUCTIONS_PUBKEY` on swap instructions. |
+| `enable_first_swap_with_min_fee` is enabled | `SYSVAR_INSTRUCTIONS_PUBKEY` on swap instructions. |
+| Permissionless quote mint, no rate limiter, and no first-swap minimum fee | No extra remaining account is required by these rules. |
 
-The program validates single-swap behavior for active rate limiter pools. The first-swap minimum-fee path also validates that pool initialization appears earlier in the top-level transaction; do not assume a CPI-only path is eligible for that minimum fee.
+The token badge PDA is derived from `["token_badge", quote_mint]`. A DBC badge does not satisfy DAMM v2 mint validation. DAMM v2 migration uses a config with `CreatePoolWithoutMintValidation`.
+
+The program validates single-swap behavior for existing rate limiter pools. The first-swap minimum-fee path also validates that pool initialization appears earlier in the top-level transaction; do not assume a CPI-only path is eligible for that minimum fee.
 
 ## Swap CPI Shape
 
@@ -93,7 +96,11 @@ Some DBC handlers wrap downstream CPIs with account invariant checks. If the dow
 | --- | --- |
 | `InvalidAccount` | PDA, vault, mint, owner, or token program mismatch. |
 | `IncorrectATA` | Associated token account owner or mint mismatch. |
-| `FailToValidateSingleSwapInstruction` | Missing instructions sysvar or invalid single-swap transaction context. |
+| `FailToValidateSingleSwapInstruction` | Missing instructions sysvar or invalid single-swap transaction context on an existing rate-limiter pool. |
+| `InvalidTokenBadge` | Quote mint is not permissionless-supported and the token badge remaining account is missing or mismatched. |
+| `QuoteMintHasNonZeroTransferFee` | Quote mint current or scheduled transfer fee is not zero. |
+| `DeprecatedBaseFeeMode` | CPI attempted to create a config or pool with `BaseFeeMode::RateLimiter`. |
+| `DeprecatedMigrationOption` | CPI attempted to create a config or pool with `MigrationOption::MeteoraDamm`. |
 | `FirstSwapValidationFailed` | First-swap minimum-fee transaction context does not match program requirements. |
 | `AccountInvariantViolation` | Downstream CPI changed protected account invariants. |
 | `CpiDisabled` | Downstream protocol zap CPI disabled. |
@@ -104,6 +111,6 @@ Some DBC handlers wrap downstream CPIs with account invariant checks. If the dow
 | --- | --- |
 | Prefer SDK-built transactions for frontends and bots | The SDK keeps account order, wrapped SOL, event authorities, and remaining accounts aligned with the IDL. |
 | Keep CPI account lists explicit | DBC migration and swap flows have many optional and downstream accounts. |
-| Pin IDL and program versions | The local IDL is `0.1.10`; regenerate bindings when the IDL changes. |
+| Pin IDL and program versions | The local IDL is `0.2.1`; regenerate bindings when the IDL changes. |
 | Simulate on devnet or localnet | Migration and swap CPI failures are easier to diagnose before mainnet. |
 | Store raw event and account data in indexers | `EvtSwap2` and `VirtualPool` state are both needed for reliable charting and progress tracking. |
