@@ -2,7 +2,7 @@
 title: "DAMM v2 Pool Fee Configs"
 sidebarTitle: "Pool Fee Configs"
 description: "Explore DAMM v2 pool fee configs, including static and dynamic configs, pool PDA derivation, base fee modes, collect fee modes, dynamic fee parameters, activation behavior, and published config keys."
-llmsDescription: "Explains DAMM v2 pool fee configs for the cp-amm program. Covers initialize_pool, initialize_pool_with_dynamic_config, initialize_customizable_pool, static versus dynamic configs, config account fields, base fee modes, collect fee modes, dynamic fees, protocol and referral fees, compounding fees, activation constraints, price ranges, and published static config key lists."
+llmsDescription: "Explains DAMM v2 pool fee configs for the cp-amm program. Covers initialize_pool, initialize_pool_with_dynamic_config, initialize_customizable_pool, static versus dynamic configs, config permission, CreatePoolWithoutMintValidation, config account fields, base fee modes including deprecated RateLimiter, collect fee modes, dynamic fees, protocol and referral fees, compounding fees, activation constraints, price ranges, and published static config key lists."
 ---
 
 <Note>
@@ -13,8 +13,8 @@ llmsDescription: "Explains DAMM v2 pool fee configs for the cp-amm program. Cove
 
 DAMM v2 configs define how pools are created and how pool fees are initialized. The `cp-amm` program currently supports two config account types:
 
-- Static config: stores the pool fee parameters, collect fee mode, activation type, optional alpha vault config, price range, and optional pool creator authority.
-- Dynamic config: stores only the config index and `pool_creator_authority`; the pool creator supplies the pool-specific fee, activation, alpha vault, price range, and liquidity parameters when calling `initialize_pool_with_dynamic_config`.
+- Static config: stores the pool fee parameters, collect fee mode, activation type, optional alpha vault config, price range, optional pool creator authority, and a `permission` bitmask.
+- Dynamic config: stores the config index, `pool_creator_authority`, and `permission`; the pool creator supplies the pool-specific fee, activation, alpha vault, price range, and liquidity parameters when calling `initialize_pool_with_dynamic_config`.
 
 The config account uses `config_type = 0` for static configs and `config_type = 1` for dynamic configs.
 
@@ -30,6 +30,7 @@ The config account uses `config_type = 0` for static configs and `config_type = 
 | `activation_type` | Activation point unit. `0` uses slot-based activation, and `1` uses timestamp-based activation. |
 | `collect_fee_mode` | Determines which token receives fees and whether compounding mode is enabled. |
 | `sqrt_min_price` / `sqrt_max_price` | Static-config price range. Compounding pools use the full range (`0` to `u128::MAX`) in the static config. |
+| `permission` | `u128` bitmask. Only private configs, meaning those with a non-default `pool_creator_authority`, can hold a non-zero value. The only defined bit today is `CreatePoolWithoutMintValidation` (`1 << 0`). Public configs must use `0`. |
 
 ## Fee Parameters
 
@@ -45,11 +46,15 @@ The config account uses `config_type = 0` for static configs and `config_type = 
 
 ### Base Fee Modes
 
+<Warning>
+Rate limiter mode is deprecated for new configs and new pools. `create_config`, `initialize_pool`, `initialize_pool_with_dynamic_config`, and `initialize_customizable_pool` reject `BaseFeeMode::RateLimiter`. Existing rate-limiter pools can still be quoted and swapped.
+</Warning>
+
 | Value | Mode | Summary |
 | --- | --- | --- |
 | `0` | `FeeTimeSchedulerLinear` | Starts from `cliff_fee_numerator` and decreases linearly by `reduction_factor` each period. |
 | `1` | `FeeTimeSchedulerExponential` | Starts from `cliff_fee_numerator` and decreases exponentially by `reduction_factor` each period. |
-| `2` | `RateLimiter` | Applies an amount-based fee curve for quote-to-base swaps during the limiter window. This mode is valid only with `collect_fee_mode = 1`. |
+| `2` | `RateLimiter` | Deprecated for new configs and new pools. Existing pools still apply an amount-based fee curve for quote-to-base swaps during the limiter window. This mode is valid only with `collect_fee_mode = 1`. |
 | `3` | `FeeMarketCapSchedulerLinear` | Decreases linearly as price moves upward in `sqrt_price_step_bps` periods, until the scheduler expires. |
 | `4` | `FeeMarketCapSchedulerExponential` | Decreases exponentially as price moves upward in `sqrt_price_step_bps` periods, until the scheduler expires. |
 
@@ -1093,7 +1098,7 @@ To fetch static config key addresses, use the `getAllConfigs` function in the [T
 
 ## Dynamic Configs
 
-Dynamic configs are authority-gated. The config account stores only the `index`, `config_type = 1`, and `pool_creator_authority`; the authority signer must be present when creating a pool with `initialize_pool_with_dynamic_config`.
+Dynamic configs are authority-gated. The config account stores the `index`, `config_type = 1`, `pool_creator_authority`, and `permission`; the authority signer must be present when creating a pool with `initialize_pool_with_dynamic_config`.
 
 When using a dynamic config, the pool creator supplies these values during pool creation:
 

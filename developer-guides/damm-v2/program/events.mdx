@@ -5,7 +5,7 @@ description: "Understand DAMM v2 cp-amm events emitted by pool, config, position
 llmsDescription: "Explains the DAMM v2 program event reference for the Meteora cp-amm program. Covers Anchor event-CPI delivery, event authority PDA requirements, pool and config events, position lifecycle events, liquidity and lock events, EvtSwap2 swap payloads, fee and reward events, operator events, deprecated EvtSplitPosition2 compatibility behavior, EvtSplitPosition3 split payloads, fee-parameter decoding formats, and indexing considerations for charting and analytics."
 ---
 
-The `cp-amm` program emits Anchor events through event CPI. Use this page when building indexers, analytics pipelines, charting systems, or low-level clients that need to map transactions back to DAMM v2 pool activity.
+The `cp-amm` program emits most Anchor events through event CPI. Use this page when building indexers, analytics pipelines, charting systems, or low-level clients that need to map transactions back to DAMM v2 pool activity.
 
 ## Event CPI
 
@@ -16,6 +16,7 @@ The `cp-amm` program emits Anchor events through event CPI. Use this page when b
 | Event source | Anchor event CPI inner instructions |
 | Client account planning | Event-emitting instructions include `event_authority` and the program account. SDK builders and generated clients derive these accounts. |
 | Swap hot path | The optimized swap entrypoint emits the same Anchor event-CPI payload for `EvtSwap2`. |
+| Log-event exception | `EvtClaimProtocolFee2` is emitted with `emit!`, not event CPI. |
 
 Low-level builders should pass the event authority account and the `cp-amm` program account when the IDL requires them. The program signs the self-CPI with the event authority PDA internally.
 
@@ -23,8 +24,8 @@ Low-level builders should pass the event authority account and the `cp-amm` prog
 
 | Event | Emitted by | Payload |
 | --- | --- | --- |
-| `EvtCreateConfig` | `create_config` | Static config fees, vault config, pool creator authority, activation type, sqrt price range, collect-fee mode, index, and config address. |
-| `EvtCreateDynamicConfig` | `create_dynamic_config` | Dynamic config address, pool creator authority, and index. |
+| `EvtCreateConfig` | `create_config` | Static config fees, vault config, pool creator authority, activation type, sqrt price range, collect-fee mode, index, config address, and `permission` (`u128` bitmask). |
+| `EvtCreateDynamicConfig` | `create_dynamic_config` | Dynamic config address, pool creator authority, index, and `permission` (`u128` bitmask). |
 | `EvtCloseConfig` | `close_config` | Config address and admin. |
 | `EvtCreateTokenBadge` | `create_token_badge` | Token mint that received a badge. |
 | `EvtInitializePool` | `initialize_pool`, `initialize_pool_with_dynamic_config`, `initialize_customizable_pool` | Pool address, token mints, creator, payer, alpha vault, fee parameters, sqrt price range, activation fields, token flags, initial token amounts, initial reserves, liquidity, and pool type. |
@@ -86,7 +87,8 @@ New indexers should use `EvtSplitPosition3`. The current split handler emits `Ev
 | Event | Emitted by | Payload |
 | --- | --- | --- |
 | `EvtClaimPositionFee` | `claim_position_fee` | Pool, position, owner, claimed token A fee, and claimed token B fee. |
-| `EvtClaimProtocolFee` | `claim_protocol_fee` | Pool and protocol fee amounts claimed from token A and token B. |
+| `EvtClaimProtocolFee` | Historical `claim_protocol_fee` | Pool and protocol fee amounts claimed from token A and token B. Kept for historical transactions. New claims use `claim_protocol_fee2`. |
+| `EvtClaimProtocolFee2` | `claim_protocol_fee2` | Pool, receiver token account, token mint, and claimed amount for one pool token. |
 | `EvtInitializeReward` | `initialize_reward` | Pool, reward mint, funder, creator, reward index, and reward duration. |
 | `EvtFundReward` | `fund_reward` | Pool, funder, reward mint, reward index, funded amount, transfer-fee-excluded input amount, reward duration end, previous reward rate, and new reward rate. |
 | `EvtClaimReward` | `claim_reward` | Pool, position, owner, reward mint, reward index, and claimed reward amount. |
@@ -123,6 +125,7 @@ Choose the decoder from the pool fee mode. Do not decode an event payload with a
 | Pool discovery | `EvtInitializePool` |
 | Position lifecycle | `EvtCreatePosition`, `EvtClosePosition` |
 | LP accounting | `EvtLiquidityChange`, `EvtClaimPositionFee` |
+| Protocol fees | `EvtClaimProtocolFee2`. Historical `EvtClaimProtocolFee` for older `claim_protocol_fee` transactions. |
 | Swap history and candles | `EvtSwap2` |
 | Rewards | `EvtInitializeReward`, `EvtFundReward`, `EvtClaimReward`, `EvtUpdateRewardDuration`, `EvtUpdateRewardFunder`, `EvtWithdrawIneligibleReward` |
 | Locks and vesting | `EvtLockPosition`, `EvtPermanentLockPosition`, `EvtSplitPosition3` |

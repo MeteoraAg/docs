@@ -2,7 +2,7 @@
 title: "DBC Program Errors"
 sidebarTitle: "Errors"
 description: "Understand DBC dynamic_bonding_curve error codes, messages, SDK validation checks, transfer-hook errors, and common causes for integration debugging."
-llmsDescription: "Explains the DBC program error reference based on PoolError in MeteoraAg/dynamic-bonding-curve. Covers Anchor custom error codes 6000-6077, messages, common causes, migration errors, swap errors, fee scheduler and rate limiter errors, first-swap validation errors, zap errors, compounding errors, transfer-hook remaining account errors, pool type mismatch errors, TypeScript SDK validation helpers, and debugging steps for DBC integrations."
+llmsDescription: "Explains the DBC program error reference based on PoolError in MeteoraAg/dynamic-bonding-curve. Covers Anchor custom error codes 6000-6082, messages, common causes, migration errors, swap errors, fee scheduler and rate limiter errors, deprecated base fee and migration option errors, token badge errors, quote mint transfer fee errors, first-swap validation errors, compounding errors, transfer-hook remaining account errors, pool type mismatch errors, TypeScript SDK validation helpers, and debugging steps for DBC integrations."
 ---
 
 This page lists the Anchor custom errors returned by the `dynamic-bonding-curve` program.
@@ -30,7 +30,7 @@ This page lists the Anchor custom errors returned by the `dynamic-bonding-curve`
 | `6012` | `NotEnoughLiquidity` | Not enough liquidity | Swap or migration needs more liquidity than the curve can provide. |
 | `6013` | `PoolIsCompleted` | Pool is completed | Attempted a pre-migration action after the curve completed. |
 | `6014` | `PoolIsIncompleted` | Pool is incompleted | Attempted migration or post-completion action before the threshold was reached. |
-| `6015` | `InvalidMigrationOption` | Invalid migration option | Migration option is not DAMM v1 (`0`) or DAMM v2 (`1`). |
+| `6015` | `InvalidMigrationOption` | Invalid migration option | Migration option is not DAMM v1 (`0`) or DAMM v2 (`1`). New configs must use DAMM v2. |
 | `6016` | `InvalidTokenDecimals` | Invalid token decimals | Token decimals are outside supported bounds. |
 | `6017` | `InvalidTokenType` | Invalid token type | Token type is not SPL Token or Token-2022, or is incompatible with the migration. |
 | `6018` | `InvalidFeePercentage` | Invalid fee percentage | Partner or creator migration fee split is outside allowed bounds. |
@@ -93,9 +93,14 @@ This page lists the Anchor custom errors returned by the `dynamic-bonding-curve`
 | `6075` | `InvalidPoolAccount` | Invalid pool account | Pool account owner, discriminator, or expected account variant is invalid. |
 | `6076` | `PoolTypeMismatch` | Pool type does not match instruction | A standard pool was sent to a transfer-hook-only instruction, or a transfer-hook pool was sent to a standard-only instruction. |
 | `6077` | `InvalidRemainingAccountSliceType` | Invalid remaining account slice type for this instruction | Transfer-hook remaining account metadata includes a slice type that the instruction does not accept. |
+| `6078` | `DeprecatedBaseFeeMode` | Deprecated base fee mode | New config or pool creation used `BaseFeeMode::RateLimiter`. |
+| `6079` | `CannotCreateTokenBadgeOnSupportedMint` | Cannot create token badge on supported mint | A token badge was requested for a quote mint that is already permissionless-supported. |
+| `6080` | `InvalidTokenBadge` | Invalid token badge | Token badge account is missing, closed, or does not match the quote mint. |
+| `6081` | `QuoteMintHasNonZeroTransferFee` | Quote mint has a non zero transfer fee | Current or scheduled quote-mint transfer fee is not zero. |
+| `6082` | `DeprecatedMigrationOption` | Deprecated migration option | New config or pool creation used `MigrationOption::MeteoraDamm`. |
 
 <Note>
-  The SDK `1.5.9` bundled IDL lists DBC errors through `6076`. The local program source also defines `InvalidRemainingAccountSliceType` as the next error variant. If you decode from the bundled IDL only, handle unknown custom errors defensively or regenerate the IDL from the matching program source.
+  Program `0.2.1` and SDK `1.5.12` include errors through `6082`. If you decode from an older bundled IDL, handle unknown custom errors defensively or regenerate the IDL from the matching program source.
 </Note>
 
 ## TypeScript SDK Validation Helpers
@@ -104,9 +109,9 @@ The TypeScript SDK performs many checks before building transactions. These help
 
 | Helper | Related program errors |
 | --- | --- |
-| `validateConfigParameters` | `InvalidFee`, `InvalidCollectFeeMode`, `InvalidMigrationOption`, `InvalidTokenDecimals`, `InvalidCurve`, `InvalidPoolCreationFee`. |
+| `validateConfigParameters` | `InvalidFee`, `InvalidCollectFeeMode`, `InvalidMigrationOption`, `DeprecatedMigrationOption`, `DeprecatedBaseFeeMode`, `InvalidTokenDecimals`, `InvalidCurve`, `InvalidPoolCreationFee`. |
 | `validateFeeScheduler` | `InvalidFeeScheduler`, `InvalidMinBaseFee`, `ExceedMaxFeeBps`. |
-| `validateFeeRateLimiter` | `InvalidFeeRateLimiter`, `RateLimiterNotSupported`. |
+| `validateFeeRateLimiter` | `InvalidFeeRateLimiter`, `RateLimiterNotSupported`, `DeprecatedBaseFeeMode`. |
 | `validateDynamicFee` | `InvalidInput`, `MathOverflow`. |
 | `validateMigrationFeeOption` | `InvalidMigrationFeeOption`, `InvalidMigratedPoolFee`. |
 | `validateMigratedPoolFee` | `InvalidMigratedPoolFee`, `InvalidFeeMarketCapScheduler`, `InvalidCompoundingParameters`. |

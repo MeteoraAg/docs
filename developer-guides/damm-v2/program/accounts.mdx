@@ -52,8 +52,9 @@ Pool and customizable pool PDAs sort the two mint public keys lexicographically 
 | `PoolType` | `0` Permissionless, `1` Customizable |
 | `LayoutVersion` | `0` V0, `1` V1 |
 | `ActivationType` | `0` Slot, `1` Timestamp |
-| `BaseFeeMode` | Time scheduler linear, time scheduler exponential, rate limiter, market-cap scheduler linear, market-cap scheduler exponential |
+| `BaseFeeMode` | Time scheduler linear, time scheduler exponential, rate limiter (deprecated for new configs and new pools), market-cap scheduler linear, market-cap scheduler exponential |
 | `SwapMode` | `0` ExactIn, `1` PartialFill, `2` ExactOut |
+| `ConfigPermission` | `0` `CreatePoolWithoutMintValidation` |
 | `OperatorPermission` | Config, token badge, pool status, reward, pool fee, protocol fee, zap, and layout-fix permissions |
 
 ## Config
@@ -68,8 +69,9 @@ Pool and customizable pool PDAs sort the two mint public keys lexicographically 
 | `config_type` | `0` static, `1` dynamic |
 | `index` | Config index used in PDA derivation |
 | `sqrt_min_price`, `sqrt_max_price` | Price bounds for concentrated modes |
+| `permission` | `u128` bitmask. Only private configs, meaning those with a non-default `pool_creator_authority`, can hold a non-zero value. The only defined bit today is `CreatePoolWithoutMintValidation` (`1 << 0`). Pre-existing configs decode as `0`. |
 
-Use `fetchConfigState`, `getStaticConfigs`, or `getAllConfigs` to read configs from TypeScript.
+Use `fetchConfigState`, `getStaticConfigs`, or `getAllConfigs` to read configs from TypeScript. Use `isConfigPermissionAllow` with `ConfigPermission.CreatePoolWithoutMintValidation` to detect configs that skip permissionless mint and token-badge checks.
 
 ### PoolFeesConfig
 
@@ -177,4 +179,6 @@ External `Vesting` accounts are still supported and are `176` byte zero-copy acc
 
 ## Token Badges
 
-`TokenBadge` is a `160` byte account that records an operator-approved Token 2022 mint. Pool creation and reward initialization require this account when `is_supported_mint` returns false for that mint. A badge cannot be created for a mint that is already permissionlessly supported, and it cannot override the native Token 2022 mint rejection. See [Token 2022 support](/core-products/damm-v2/token-2022-support) for the permissionless allowlist and badge review path.
+`TokenBadge` is a `160` byte account that records an operator-approved Token 2022 mint. Pool creation and reward initialization require this account when the mint is not permissionless-supported, unless the pool is created from a private config with `CreatePoolWithoutMintValidation`. A badge cannot be created for a mint that is already permissionlessly supported, and it cannot override the native Token 2022 mint rejection.
+
+A DBC token badge is not a DAMM v2 token badge. DBC-migrated Stock Tokens use private DAMM v2 configs with `CreatePoolWithoutMintValidation` instead of a per-mint DAMM v2 badge. See [Token 2022 support](/core-products/damm-v2/token-2022-support) for the permissionless allowlist, badge review path, and config permission rules.

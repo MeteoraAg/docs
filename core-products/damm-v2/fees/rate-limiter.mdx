@@ -5,7 +5,13 @@ description: "Learn how DAMM v2 rate limiter fees increase with buy size during 
 llmsDescription: "Explains the DAMM v2 RateLimiter base fee mode, covering reference amount, cliff fee numerator, fee increment bps, max fee bps, max limiter duration, OnlyB collect fee requirement, B-to-A buy-side behavior, zero limiter fixed-fee behavior, single swap per transaction validation, and anti-sniper launch use cases."
 ---
 
-The DAMM v2 rate limiter is a base fee mode that increases the effective fee as buy size increases. It is designed for launch pools where oversized early buys can distort distribution or create a poor trading experience.
+The DAMM v2 rate limiter is a deprecated base fee mode that increases the effective fee as buy size increases.
+
+<Warning>
+  Rate limiter mode is deprecated for new configs and new pools. `create_config`, `initialize_customizable_pool`, `initialize_pool_with_dynamic_config`, and `initialize_pool` reject `BaseFeeMode::RateLimiter`. Existing rate-limiter pools can still be quoted and swapped. Operators can still call `fix_pool_fee_params`, `fix_config_fee_params`, and `update_pool_fees` on those existing pools and configs.
+</Warning>
+
+It was designed for launch pools where oversized early buys can distort distribution or create a poor trading experience.
 
 Instead of charging every buy the same fee, the rate limiter behaves like a fee slope.
 

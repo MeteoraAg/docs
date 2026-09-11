@@ -2,7 +2,7 @@
 title: "DAMM v2 Instructions"
 sidebarTitle: "Instructions"
 description: "Explore DAMM v2 cp-amm instructions for pool creation, positions, liquidity, locks, swaps, fees, rewards, operators, and admins."
-llmsDescription: "Explains the DAMM v2 program instruction surface for the public Meteora cp-amm program. Covers pool creation, position creation, add and remove liquidity, lock and vesting flows, swap and swap2 modes, fee claiming, reward setup and claiming, operator and admin operations, TypeScript SDK method mappings, account planning, token vault and mint constraints, position NFT ownership checks, rate-limiter remaining accounts, and Token 2022 handling."
+llmsDescription: "Explains the DAMM v2 program instruction surface for the public Meteora cp-amm program. Covers pool creation, CreatePoolWithoutMintValidation, token-badge remaining accounts, config permission on create_config and create_dynamic_config, position creation, add and remove liquidity, lock and vesting flows, swap and swap2 modes, fee claiming, claim_protocol_fee2, reward setup and claiming, operator and admin operations, TypeScript SDK method mappings, account planning, token vault and mint constraints, position NFT ownership checks, existing rate-limiter remaining accounts, and Token 2022 handling."
 ---
 
 The `cp-amm` IDL exposes many instructions. Integrators can choose to either use the TypeScript SDK for transaction construction or build through CPI.
@@ -11,11 +11,15 @@ The `cp-amm` IDL exposes many instructions. Integrators can choose to either use
 
 | Instruction | TypeScript SDK | Use |
 | --- | --- | --- |
-| `initialize_pool` | `createPool` | Create a permissionless pool from a static config. |
-| `initialize_pool_with_dynamic_config` | `createCustomPoolWithDynamicConfig` | Create a pool from a dynamic config where the creator supplies pool-specific parameters. |
-| `initialize_customizable_pool` | `createCustomPool` | Create a customizable launch pool without a config PDA. |
+| `initialize_pool` | `createPool` | Create a permissionless pool from a static config. Honors `CreatePoolWithoutMintValidation` on private configs. Rejects `RateLimiter` configs. |
+| `initialize_pool_with_dynamic_config` | `createCustomPoolWithDynamicConfig` | Create a pool from a dynamic config where the creator supplies pool-specific parameters. Honors `CreatePoolWithoutMintValidation` on private configs. Rejects `RateLimiter`. |
+| `initialize_customizable_pool` | `createCustomPool` | Create a customizable launch pool without a config PDA. Always validates mints (`skip=false`). Rejects `RateLimiter`. |
 
 Pool creation initializes the pool, vaults, first position, and Token-2022 position NFT. Pool PDAs sort mints in the seed list, but transaction builders should use the canonical `token_a_mint` and `token_b_mint` fields from pool state after creation.
+
+<Note>
+When mint validation is not skipped, pass token badge remaining accounts at index `0` (token A) and index `1` (token B) for mints that are not permissionless-supported. `initialize_pool` and `initialize_pool_with_dynamic_config` skip those checks when the private config has `CreatePoolWithoutMintValidation`. `initialize_customizable_pool` always validates mints. Token-2022 wrapped SOL is still rejected.
+</Note>
 
 ## Positions
 
@@ -74,3 +78,23 @@ New integrations should prefer `swap2` and SDK `getQuote2` because they share ex
 | `update_reward_funder` | `updateRewardFunder` | Update the funder authority for a reward slot. |
 
 Reward index `0` and `1` are the only supported reward slots.
+
+## Config And Operator Instructions
+
+| Instruction | Use |
+| --- | --- |
+| `create_config` | Operator creates a static config. `permission` is the trailing `u128` on `StaticConfigParameters`. Non-zero permission is allowed only on private configs (non-default `pool_creator_authority`). Rejects `RateLimiter`. |
+| `create_dynamic_config` | Operator creates a dynamic config. `permission` is the trailing `u128` on `DynamicConfigParameters`. Same private-config permission rule. |
+| `create_token_badge` | Operator creates a token badge PDA for a mint that is not permissionless-supported. |
+| `close_token_badge` | Operator closes a token badge and returns rent. Existing pools that already use the mint keep working. |
+| `claim_protocol_fee2` | Protocol fee authority claims one pool token per call. Replaces the removed `claim_protocol_fee` and `zap_protocol_fee` instructions. |
+
+`permission` is set at config creation and is immutable. There is no instruction to update `Config.permission`. Public configs (default `pool_creator_authority`) must use `permission = 0`. The only defined bit today is `CreatePoolWithoutMintValidation` (`1 << 0`). `InvalidConfigPermission` (`6072`) is returned when a public config is given a non-zero permission, or when permission bits are outside the defined `ConfigPermission` range.
+
+<Warning>
+Token-2022 wrapped SOL is rejected during mint validation even when `CreatePoolWithoutMintValidation` is set. Use the standard wrapped SOL mint.
+</Warning>
+
+<Note>
+`claim_protocol_fee` and `zap_protocol_fee` are removed. Use `claim_protocol_fee2`.
+</Note>

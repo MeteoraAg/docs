@@ -58,11 +58,11 @@ For off-chain apps, bots, and launch scripts, the TypeScript SDK is usually simp
 | Flow | Required planning |
 | --- | --- |
 | Swap | Pool authority, pool, user input/output token accounts, vaults, mints, payer, token programs, optional referral token account |
-| Rate-limiter swap | Add the instructions sysvar as the first remaining account when the rate limiter is active |
+| Rate-limiter swap | For existing rate-limiter pools, add the instructions sysvar as the first remaining account when the rate limiter is active |
 | Add/remove liquidity | Pool, position, user token accounts, vaults, mints, position NFT token account, owner signer, token programs |
 | Claim fees | Position NFT ownership, destination token accounts, pool vaults, token programs |
 | Claim rewards | Reward vault and reward mint/program for the reward index |
-| Pool creation | Correct pool PDA, vault PDAs, position NFT mint/account, token programs, rent/system accounts, and config where applicable |
+| Pool creation | Correct pool PDA, vault PDAs, position NFT mint/account, token programs, rent/system accounts, and config where applicable. When mint validation is not skipped, include token badge remaining accounts at index `0` (token A) and index `1` (token B). |
 
 Read token mint and vault addresses from pool state whenever possible. Avoid reconstructing token A/B assumptions from user input alone.
 
@@ -79,15 +79,19 @@ Keep these accounts in the generated order. They are part of Anchor's account va
 
 ## Remaining Accounts
 
-Rate-limiter pools reject swaps that do not include the instructions sysvar because the program validates single-swap behavior for that pool in the transaction.
+Rate-limiter pools reject swaps that do not include the instructions sysvar because the program validates single-swap behavior for that pool in the transaction. This remaining-account requirement applies to existing rate-limiter pools. New configs and new pools cannot use `BaseFeeMode::RateLimiter`.
 
 ```rust
 solana_program::sysvar::instructions::ID
 ```
 
-For `swap` and `swap2`, the optimized swap path expects the fixed swap account list plus remaining accounts. If the rate limiter is active, put the instructions sysvar as the first remaining account. Normal non-rate-limiter swaps do not need remaining accounts.
+For `swap` and `swap2`, the optimized swap path expects the fixed swap account list plus remaining accounts. For existing rate-limiter pools, if the rate limiter is active, put the instructions sysvar as the first remaining account. Normal non-rate-limiter swaps do not need remaining accounts.
 
 Token 2022 transfer-hook accounts are not a general DAMM v2 CPI surface. DAMM v2 accepts Transfer Hook permissionlessly only when both the hook program ID and authority are unset. Mints outside that allowlist need a token badge to pass mint validation, but DAMM v2 still does not forward transfer-hook extra accounts on transfers. See [Token 2022 support](/core-products/damm-v2/token-2022-support).
+
+<Note>
+`initialize_pool` and `initialize_pool_with_dynamic_config` skip permissionless-mint and token-badge checks when the private config has `CreatePoolWithoutMintValidation`. `initialize_customizable_pool` always validates mints (`skip=false`) and still expects token badge remaining accounts at index `0` (token A) and index `1` (token B) when a mint is not permissionless-supported. Token-2022 wrapped SOL is still rejected.
+</Note>
 
 ## Swap CPI Shape
 
@@ -122,7 +126,7 @@ For generated Anchor CPI, the account set mirrors `SwapCtx`:
 | `ConstraintHasOne` | The pool, position, vault, or mint account does not match the `has_one` relationships in the account struct. Read vaults and mints from pool state instead of reconstructing them from user input. |
 | `ConstraintTokenMint` / `ConstraintTokenTokenProgram` | A vault or token program does not match the mint and token program expected by the pool. Token A and token B can use different token programs. |
 | `AccountNotSigner` | The expected `payer` or `owner` was not a signer. If your program signs with a PDA, forward the correct signer seeds. |
-| `FailToValidateSingleSwapInstruction` | A rate-limiter swap is missing the instructions sysvar, the sysvar is not the first remaining account, the transaction includes another swap for the same pool, or the CPI stack is deeper than the rate-limiter path allows. |
+| `FailToValidateSingleSwapInstruction` | An existing rate-limiter swap is missing the instructions sysvar, the sysvar is not the first remaining account, the transaction includes another swap for the same pool, or the CPI stack is deeper than the rate-limiter path allows. |
 | `UnsupportedSysvar` | The first remaining account for an active rate-limiter swap is not `solana_program::sysvar::instructions::ID`. |
 | `ExceededSlippage` | The quote is stale, bounds are too tight, or Token 2022 transfer fees were not included in the add, remove, or swap thresholds. |
 | `AmountIsZero` / `InvalidParameters` | Input amount, liquidity delta, or the rounded token amount is zero. This can happen with very small liquidity changes. |
@@ -132,7 +136,9 @@ For generated Anchor CPI, the account set mirrors `SwapCtx`:
 | `InvalidRewardIndex` / `RewardUninitialized` / `InvalidRewardVault` | The reward index is outside `NUM_REWARDS`, the reward slot has not been initialized, or the vault does not match pool reward state. |
 | `RewardVaultFrozenSkipRequired` | The reward vault is frozen and `claim_reward` was called without the skip flag. |
 | `InvalidTokenBadge` | Pool creation, reward initialization, or Token 2022 mint handling requires a token badge account that was missing or did not match the mint. |
-| `UnsupportNativeMintToken2022` | The native mint was supplied through Token 2022. Use the normal wrapped SOL mint and token program path. |
+| `UnsupportNativeMintToken2022` | The native mint was supplied through Token 2022. A token badge and `CreatePoolWithoutMintValidation` cannot override this. Use the normal wrapped SOL mint and token program path. |
+| `DeprecatedBaseFeeMode` | New config or new pool creation used `BaseFeeMode::RateLimiter`. Existing rate-limiter pools are unaffected. |
+| `InvalidConfigPermission` | Non-zero config `permission` was set on a public config, or permission bits are outside the defined `ConfigPermission` range. |
 | `IncorrectATA` | Operator or protocol-fee flows expected a canonical ATA but received a different token account or owner. |
 | `PriceRangeViolation` / `InvalidPriceRange` | Swap or pool creation parameters would move outside the pool price range, or the range is invalid for the collect-fee mode. |
 
@@ -144,10 +150,10 @@ For generated Anchor CPI, the account set mirrors `SwapCtx`:
 | Forward generated order | Use generated bindings or compare your account metas against an SDK-built instruction. The main accounts, optional accounts, and event CPI accounts must stay in the generated order. |
 | Read pool state first | Use pool state for token mints, vaults, token flags, collect-fee mode, layout version, activation type, and reward vaults. Do not infer token A/B ordering from user input. |
 | Include event CPI accounts | Most user-facing handlers use `#[event_cpi]`; keep `event_authority` and `program` after the primary accounts as generated by Anchor. |
-| Plan rate-limiter swaps | Detect rate-limiter pools off-chain. Include the instructions sysvar as the first remaining account and avoid batching multiple swaps for the same pool in one transaction. |
+| Plan rate-limiter swaps | Detect existing rate-limiter pools off-chain. Include the instructions sysvar as the first remaining account and avoid batching multiple swaps for the same pool in one transaction. New configs and new pools cannot use `RateLimiter`. |
 | Avoid deep CPI nesting for rate-limiter swaps | The rate-limiter validation rejects some deeper CPI stacks. Prefer a direct CPI from your program to `cp-amm` for those pools. |
 | Handle token programs per mint | Token A and token B can be SPL Token or Token 2022 independently. Pass the token program that owns each mint and vault. |
-| Plan Token 2022 mint validation | Transfer Hook is permissionless only when both the hook program ID and authority are unset. Other Token 2022 extensions need a token badge for pool creation or reward init. Do not forward transfer-hook account sets as a DLMM-style remaining-account slice; DAMM v2 does not consume them. |
+| Plan Token 2022 mint validation | Transfer Hook is permissionless only when both the hook program ID and authority are unset. Other Token 2022 extensions need a token badge for pool creation or reward init, unless the private config has `CreatePoolWithoutMintValidation`. `initialize_customizable_pool` always validates. Token-2022 wrapped SOL is still rejected. Do not forward transfer-hook account sets as a DLMM-style remaining-account slice; DAMM v2 does not consume them. |
 | Verify position NFT ownership | Liquidity, fee, reward, lock, split, and close flows validate that the position NFT token account has amount `1`, matches `position.nft_mint`, and is owned by the signer. |
 | Refresh lock and vesting state | For remove, close, split, and merge-style flows, load current slot or timestamp and include vesting state expected by your wrapper before deciding what liquidity is unlocked. |
 | Account for Token 2022 transfer fees | Add-liquidity thresholds are maximum included-fee amounts; remove-liquidity thresholds are minimum post-fee amounts. Quote with mint and epoch data before building CPI inputs. |

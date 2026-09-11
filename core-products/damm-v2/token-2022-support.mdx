@@ -2,7 +2,7 @@
 title: "DAMM v2 Token 2022 Support"
 sidebarTitle: "Token 2022 Support"
 description: "Learn how DAMM v2 supports SPL Token and Token 2022 mints, transfer-fee tokens, metadata extensions, token badges, and reward tokens."
-llmsDescription: "Documentation for DAMM v2 Token 2022 support, covering SPL Token and Token 2022 mint detection, token program flags, permissionless extensions such as TransferFeeConfig, MetadataPointer, and TokenMetadata, TransferHook only when both program ID and authority are unset, token badge allowlisting for other extensions, Token 2022 reward token support, unsupported Token 2022 native mint behavior, and transfer fee accounting."
+llmsDescription: "Documentation for DAMM v2 Token 2022 support, covering SPL Token and Token 2022 mint detection, token program flags, permissionless extensions such as TransferFeeConfig, MetadataPointer, and TokenMetadata, TransferHook only when both program ID and authority are unset, token badge allowlisting for other extensions, private config CreatePoolWithoutMintValidation for DBC-migrated Stock Tokens, Token 2022 reward token support, unsupported Token 2022 native mint behavior, and transfer fee accounting."
 ---
 
 DAMM v2 supports both standard SPL Token mints and Token 2022 mints. This lets more Solana assets use DAMM v2 pools while preserving safety around extensions that can change token behavior.
@@ -22,9 +22,9 @@ Token 2022 support is split into two paths:
 
 When a pool is created, DAMM v2 checks whether each mint is owned by the standard SPL Token Program or the Token 2022 Program. The pool stores that information as token flags, so future swaps, liquidity changes, fee claims, and reward flows can use the correct token program.
 
-The two pool mints must be different. If a Token 2022 mint is not permissionlessly supported, the initializer must provide a valid token badge account for that mint.
+The two pool mints must be different. If a Token 2022 mint is not permissionlessly supported, the initializer must provide a valid token badge account for that mint, unless the pool is created from a private config that has the `CreatePoolWithoutMintValidation` permission.
 
-For users, the benefit is simple: DAMM v2 can handle pools where one or both tokens are Token 2022 mints, as long as their extensions are permissionlessly supported or the mint has a valid token badge.
+For users, the benefit is simple: DAMM v2 can handle pools where one or both tokens are Token 2022 mints, as long as their extensions are permissionlessly supported, the mint has a valid token badge, or the private config is allowed to skip mint validation.
 
 ## Permissionlessly Supported Extensions
 
@@ -70,6 +70,25 @@ Examples include extensions such as:
 
 At the program level, a valid token badge allows a Token 2022 mint to pass DAMM v2 mint validation even if it uses extensions outside the permissionless allowlist. The badge is created by a Meteora operator after review. You cannot create a badge for a mint that is already permissionlessly supported.
 
+## Private Config Mint Validation Bypass
+
+Private configs, meaning those with a `pool_creator_authority`, can store a `permission` bitmask. The only permission today is `CreatePoolWithoutMintValidation`.
+
+When that bit is set, `initialize_pool` and `initialize_pool_with_dynamic_config` skip the permissionless-mint and token-badge checks for that config. This is the DAMM v2 path used by DBC-migrated Stock Tokens and other quote mints that were allowlisted in DBC but are not permissionless-supported in DAMM v2.
+
+A DBC token badge is not a DAMM v2 token badge. DBC migration uses DAMM v2 configs that already have this permission, so the graduated pool can be created without a separate DAMM v2 badge.
+
+| Path | Mint validation |
+| --- | --- |
+| Public static config | Permissionless allowlist or a DAMM v2 token badge. |
+| Private config without permission | Permissionless allowlist or a DAMM v2 token badge. |
+| Private config with `CreatePoolWithoutMintValidation` | Skips allowlist and badge checks. Token 2022 wrapped SOL is still rejected. |
+| `initialize_customizable_pool` | Always uses the permissionless allowlist or a DAMM v2 token badge. Config permissions do not apply. |
+
+<Warning>
+  The Token 2022 native mint is still rejected when `CreatePoolWithoutMintValidation` is set. Use the standard wrapped SOL mint.
+</Warning>
+
 <Note>
   To apply for a token badge, complete this [Google Form](https://forms.gle/59n3zDiGS2C6qMfd7) with details about the token and its extensions. After submitting, open a ticket in the [Meteora Discord](https://discord.gg/meteo) so the team can review it.
 </Note>
@@ -93,7 +112,7 @@ DAMM v2 liquidity mining rewards can also use Token 2022 mints, subject to the s
 ## Unsupported Cases
 
 <Warning>
-  The Token 2022 native mint `So11111111111111111111111111111111111111112` is not supported in DAMM v2. A token badge cannot override this restriction. Use the standard wrapped SOL mint for SOL liquidity.
+  The Token 2022 native mint `So11111111111111111111111111111111111111112` is not supported in DAMM v2. A token badge and `CreatePoolWithoutMintValidation` cannot override this restriction. Use the standard wrapped SOL mint for SOL liquidity.
 </Warning>
 
 DAMM v2 does not provide a general transfer-hook remaining-account surface for swaps, liquidity, fees, or rewards. Even with a token badge, mints that still execute an active transfer-hook program can fail when tokens move, because DAMM v2 transfers do not forward transfer-hook extra accounts.
