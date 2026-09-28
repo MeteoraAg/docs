@@ -91,6 +91,17 @@ Zap builders return unsigned `Transaction` objects. The caller is responsible fo
 
 For zap-in flows, preserve this order. The ledger stores intermediate token amounts that the following Zap instruction consumes.
 
+<Warning>
+Zap In is **not a single instruction**. It is a multi-step sequence (setup → **swap** → ledger → zap-in → cleanup). The swap leg is a Jupiter (or pool) quote that your integration must validate **before** signing.
+
+- `simulateTransaction` passing only means the swap will not revert. It does **not** mean the quoted `outAmount` is a reasonable market price for the input size.
+- Jupiter slippage bounds execution against **that quote / that route**, not input-vs-output fair value. See [Jupiter customer support](https://developers.jup.ag/docs/resources/support#customer-support).
+- Direct zap-in estimators currently request Jupiter with `onlyDirectRoutes=true` and `maxAccounts` around `50`. That can return a much thinner route than the Jupiter UI, which does not apply those limits.
+- The Meteora UI applies extra output-amount / USD / extreme-impact checks. The SDK does **not**. Copying an example is not a production guardrail for every pool or size.
+
+Before submitting, compare quoted output to a reference price, reject extreme price impact, and simulate **token balance deltas** (not only `err`). If Direct is far worse than a multi-hop quote, fall back to broader routing (`onlyDirectRoutes=false`) or skip the zap.
+</Warning>
+
 ## Supported SDK Workflows
 
 | Workflow | Methods |
