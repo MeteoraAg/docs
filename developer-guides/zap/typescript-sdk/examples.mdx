@@ -7,6 +7,16 @@ llmsDescription: "Explains practical examples for @meteora-ag/zap-sdk. Covers cr
 
 These examples use the SDK methods exported by `@meteora-ag/zap-sdk`. The SDK returns unsigned `Transaction` objects; sign and submit them with your wallet adapter, backend signer, or test keypair.
 
+<Warning>
+Examples are **starting points for specific pools and sizes**, not production defaults for every token.
+
+- `maxAccounts: 50` / `40` and Direct zap-in (`estimateDlmmDirectSwap`, `getZapInDlmmDirectParams`) restrict Jupiter to **single-hop** routes (`onlyDirectRoutes=true` inside the estimator). The Jupiter UI does not use those limits and can quote a safer multi-hop path for the same size.
+- Zap In includes a **swap step**. Jupiter slippage does not protect against a quote that is already a bad price. Validate `outAmount` / price impact / simulated wallet deltas before send.
+- A size that is fine on Jupiter UI (for example a ~10k USDC buy) can still be toxic on Direct + `maxAccounts` at much larger size.
+
+See [Getting Started](/developer-guides/zap/typescript-sdk/getting-started) and [Jupiter support](https://developers.jup.ag/docs/resources/support#customer-support).
+</Warning>
+
 ## Create A Client
 
 ```typescript
@@ -97,6 +107,10 @@ const result = await zap.buildZapInDammV2Transaction(params);
 ## DLMM Direct Zap In
 
 Use this path when the input token is token X or token Y of the DLMM pair.
+
+<Warning>
+`estimateDlmmDirectSwap` quotes Jupiter with `onlyDirectRoutes=true` and `maxAccounts=50`. `maxAccounts: 50` in `getZapInDlmmDirectParams` is an example value, not a universal safe setting. Confirm the Direct route can absorb **your** input size, or disable Direct / raise `maxAccounts` / compare to a multi-hop quote before sending.
+</Warning>
 
 ```typescript
 import { StrategyType } from "@meteora-ag/dlmm";

@@ -119,6 +119,10 @@ const zap = new Zap(connection, {
 | `getJupiterSwapInstruction(userPublicKey, quoteResponse, config?)` | Fetch Jupiter swap instructions for a quote. Throws when the request fails. |
 | `buildJupiterSwapTransaction(user, inputMint, outputMint, amount, maxAccounts, slippageBps, quote?, config?)` | Build a transaction containing the Jupiter swap instruction. Reuses a supplied quote when provided. |
 
+<Warning>
+`getJupiterQuote(..., maxAccounts, ..., onlyDirectRoutes, ...)` forwards those flags to Jupiter `/swap/v1/quote`. Direct zap-in estimators pass `onlyDirectRoutes=true` and `maxAccounts=50`. That is **not** equivalent to a Jupiter UI quote. Slippage on the quote does not mean the output is a fair market vs the input. Integrations must validate `outAmount` before signing. See [Jupiter customer support](https://developers.jup.ag/docs/resources/support#customer-support).
+</Warning>
+
 ## DAMM v2 Helpers
 
 | Function | Use |
