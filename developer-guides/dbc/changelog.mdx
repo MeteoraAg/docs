@@ -57,7 +57,7 @@ rss: true
           <td>
             <ul>
               <li>Bump to <code>@meteora-ag/dynamic-bonding-curve-sdk@2.0.0</code>. Early testing: <code>@meteora-ag/dynamic-bonding-curve-sdk@1.5.13-rc.0</code>.</li>
-              <li>Create configs with <code>client.partner.createConfig2</code>. Pass <code>transferFeeParameters</code> for a base-mint transfer fee, or <code>null</code> when there is none. The base mint must be Token-2022, and the fee is at most 10%.</li>
+              <li>Create configs with <code>client.partner.createConfig2</code>. Pass <code>transferFeeParameters</code> for a base-mint transfer fee, which requires a Token-2022 base mint and is at most 10%. Pass <code>null</code> when there is none.</li>
               <li>A base transfer fee, or a quote mint with a non-zero transfer fee or a live transfer fee config authority, requires a constant token supply, no locked vesting, <code>MigrationFeeOption.Customizable</code>, and <code>MigratedCollectFeeMode.Compounding</code>.</li>
               <li>Set a non-default <code>feeClaimer</code> when the config uses a partner transfer-fee authority or a Token-2022 partner token-update authority.</li>
               <li><code>withdrawLeftover</code> requires <code>leftoverReceiver</code> as a signer when the leftover charges a transfer fee.</li>
@@ -96,7 +96,7 @@ rss: true
             <ul>
               <li>Consume <code>EvtCreateConfig3</code> for configs from <code>create_config</code> and <code>create_config2</code>. <code>create_config_with_transfer_hook</code> still emits only <code>EvtCreateConfigV2WithTransferHook</code>.</li>
               <li>Read <code>included_transfer_fee_amount_in</code> and <code>excluded_transfer_fee_amount_out</code> from <code>EvtSwap3</code> and <code>EvtSwap3WithTransferHook</code>. Legacy <code>EvtSwap.params.amount_in</code> includes the transfer fee.</li>
-              <li>Treat <code>PoolConfig.version</code> 0 as a legacy config. Version 1 configs use the transfer-fee migration path.</li>
+              <li>Treat <code>PoolConfig.version</code> 0 as a legacy config. Version 1 configs can have a base mint with a transfer fee, or a quote mint with a non-zero transfer fee or a live transfer fee config authority, and those configs migrate through the transfer-fee path.</li>
             </ul>
           </td>
         </tr>
