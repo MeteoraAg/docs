@@ -13,7 +13,7 @@ rss: true
 <Update
   label="meteora-dynamic-amm 0.5.7"
   description="Tracked vault LP supply"
-  rss="DAMM v1 meteora-dynamic-amm 0.5.7 prices version 1 vault LP shares with vault.total_lp_supply, so burning vault LP outside the vault program cannot inflate the remaining shares. SDK 2.0.0 includes the 0.5.6 pool LP supply quotes as well."
+  rss="DAMM v1 meteora-dynamic-amm 0.5.7 prices version 1 vault LP shares with vault.total_lp_supply. SDK 2.0.0 includes the 0.5.6 pool LP supply quotes as well."
 >
   ## Release summary
 
@@ -31,9 +31,9 @@ rss: true
 
   Program ID (mainnet and devnet): `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`
 
-  ### Security
+  ### Fixed
 
-  - Fixed vault LP share pricing being manipulable by burning vault LP outside the vault program. Vaults migrated to version 1 price shares with `vault.total_lp_supply`, and the pool now reads the vault LP supply the same way: `vault.total_lp_supply` for version 1 vaults, `lp_mint.supply` for legacy (version 0) vaults.
+  - Version 1 vaults price LP shares with `vault.total_lp_supply`. The pool reads `vault.total_lp_supply` for version 1 vaults and `lp_mint.supply` for legacy (version 0) vaults.
 
   ### Changed
 
@@ -158,7 +158,7 @@ rss: true
           <td>
             <ul>
               <li>Program tracks and controls all LP supply through <code>pool.lp_mint_supply</code>; integrations relying on direct SPL LP supply queries must update their logic.</li>
-              <li>Withdrawals from accounts owned by the System Program or incinerator are now explicitly blocked. Only the owner of the LP token account can withdraw from it. LP held in an account owned by the System Program or the incinerator can no longer be redeemed, because no one can sign as its owner. This addresses a historical design flaw in how LP was burned and accounted for.</li>
+              <li><code>remove_balance_liquidity</code> and <code>remove_liquidity_single_side</code> require the LP token account owner to sign. LP in an account owned by the System Program or the incinerator can no longer be withdrawn.</li>
               <li>Liquidity operations on pools with <code>pool.lp_mint_supply &lt; lp_mint.supply</code> will be rejected until patched by administrator.</li>
             </ul>
           </td>
@@ -177,10 +177,10 @@ rss: true
 
   Program ID (mainnet and devnet): `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`
 
-  ### Security
+  ### Fixed
 
-  - Fixed LP share accounting being manipulable by burning LP outside the program. SPL Token allows anyone to burn the balance of a token account owned by the System Program or the incinerator, so LP "locked" in such an account could be burned to shrink `lp_mint.supply` and inflate the share of the remaining LP holders. The pool now prices LP shares with its own tracked supply, `pool.lp_mint_supply`, which only changes when the program mints or burns LP.
-  - Fixed `remove_balance_liquidity` and `remove_liquidity_single_side` letting anyone redeem LP held in a token account owned by the System Program or the incinerator. SPL Token skips the owner check when burning from such accounts, so the program now requires `user_pool_lp.owner == user` before burning LP.
+  - LP shares are priced with `pool.lp_mint_supply`, which changes only when the program mints or burns LP.
+  - `remove_balance_liquidity` and `remove_liquidity_single_side` require `user_pool_lp.owner == user` before burning LP.
 
   ### Changed
 
