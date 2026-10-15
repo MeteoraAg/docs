@@ -19,7 +19,6 @@ rss: true
 
   | Component | Version | PR |
   | --- | --- | --- |
-  | Program | `0.5.7` | [meteora-dynamic-amm #225](https://github.com/MeteoraAg/meteora-dynamic-amm/pull/225) |
   | TypeScript SDK | `2.0.0` | [damm-v1-sdk #229](https://github.com/MeteoraAg/damm-v1-sdk/pull/229) |
   | Rust quote | `0.0.6` | [damm-v1-sdk #229](https://github.com/MeteoraAg/damm-v1-sdk/pull/229) |
 
@@ -28,43 +27,9 @@ rss: true
   - Version 1 vaults price LP shares with `vault.total_lp_supply`
   - SDK 2.0.0 quotes pool LP with `pool.lpMintSupply` (program 0.5.6) and vault LP with `vault.totalLpSupply` (program 0.5.7)
 
-  ## What To Do
-
-  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
-    <table>
-      <thead>
-        <tr>
-          <th>Integrators</th>
-          <th>What Changed</th>
-          <th>What To Do</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong>Partners</strong></td>
-          <td>
-            <ul>
-              <li>Version 1 vaults price shares with <code>vault.total_lp_supply</code>. Legacy vaults still use the LP mint supply.</li>
-              <li><code>calculateSwapQuote</code> and <code>calculatePoolInfo</code> require <code>vaultALpSupply</code> and <code>vaultBLpSupply</code>.</li>
-            </ul>
-          </td>
-          <td>
-            <ul>
-              <li>Bump to <code>@meteora-ag/dynamic-amm-sdk@2.0.0</code>. This release also includes program 0.5.6.</li>
-              <li>Pass <code>getVaultLpSupply</code> into <code>calculateSwapQuote</code> and <code>calculatePoolInfo</code>.</li>
-              <li>Load the program with <code>@coral-xyz/anchor</code> 0.30 or later.</li>
-            </ul>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
   ## Program: `meteora-dynamic-amm` `0.5.7`
 
   Program ID (mainnet and devnet): `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`
-
-  [Program PR #225](https://github.com/MeteoraAg/meteora-dynamic-amm/pull/225)
 
   ### Security
 
@@ -73,7 +38,7 @@ rss: true
   ### Changed
 
   - `libs/mercurial-vault` uses the new vault layout: the last strategy slot (`MAX_STRATEGY` 30 → 29) now holds `version`, `total_lp_supply` and `_padding0`. Account size and the offsets of later fields are unchanged.
-  - `swap`, `add_balance_liquidity`, `add_imbalance_liquidity`, `remove_liquidity_single_side`, `lock`, `claim_fee`, `bootstrap_liquidity`, `get_pool_info` and permissionless pool initialization read the vault LP supply with `VaultUtils::get_vault_lp_supply` instead of `*_vault_lp_mint.supply`.
+  - `swap`, `add_balance_liquidity`, `add_imbalance_liquidity`, `remove_liquidity_single_side`, `lock`, `claim_fee`, `bootstrap_liquidity`, `get_pool_info` and permissionless pool initialization read the vault LP supply with `VaultUtils::get_vault_lp_supply` instead of `*_vault_lp_mint.supply` (program 0.5.6).
 
   ### Added
 
@@ -83,7 +48,7 @@ rss: true
 
   [SDK PR #229](https://github.com/MeteoraAg/damm-v1-sdk/pull/229)
 
-  This SDK release includes program 0.5.6 and program 0.5.7.
+  This SDK release includes program 0.5.6 and program 0.5.7 changes.
 
   <Tip>
     Production: [`@meteora-ag/dynamic-amm-sdk@2.0.0`](https://www.npmjs.com/package/@meteora-ag/dynamic-amm-sdk/v/2.0.0).
@@ -98,7 +63,7 @@ rss: true
   - Sync IDL with DAMM v1 program 0.5.7
   - Bump `@coral-xyz/anchor` and `@coral-xyz/borsh` to 0.31.1
   - Quotes price pool LP with `pool.lpMintSupply` (program 0.5.6) and vault LP with `vault.totalLpSupply` for version 1 vaults (program 0.5.7)
-  - `getLpSupply` and `poolState.lpSupply` return `pool.lpMintSupply`
+  - `getLpSupply` and `poolState.lpSupply` return `pool.lpMintSupply` (program 0.5.6)
 
   ### Removed
 
@@ -137,7 +102,7 @@ rss: true
 
   | Component | Version | PR |
   | --- | --- | --- |
-  | Program | `0.5.6` | [meteora-dynamic-amm #224](https://github.com/MeteoraAg/meteora-dynamic-amm/pull/224) |
+  | Program | `0.5.6` | meteora-dynamic-amm #224 |
   | TypeScript SDK | `2.0.0` | [damm-v1-sdk #229](https://github.com/MeteoraAg/damm-v1-sdk/pull/229) |
 
   ## What We Shipped
@@ -158,18 +123,50 @@ rss: true
       </thead>
       <tbody>
         <tr>
-          <td><strong>Partners</strong></td>
+          <td><strong>Trading Terminals</strong></td>
           <td>
             <ul>
-              <li>LP value and add or remove quotes use <code>pool.lp_mint_supply</code> instead of the LP mint supply.</li>
-              <li><code>remove_balance_liquidity</code> and <code>remove_liquidity_single_side</code> require the LP account owner to sign. A delegate is no longer accepted.</li>
+              <li>LP value, add, and remove liquidity quotes now use <code>pool.lp_mint_supply</code> (program-tracked supply), NOT the SPL Token mint supply.</li>
+              <li>Withdrawals must be initiated by the LP account owner. Delegates are not accepted; only the owner signature is valid.</li>
             </ul>
           </td>
           <td>
             <ul>
-              <li>Read <code>pool.lp_mint_supply</code> when you quote LP value or add and remove liquidity.</li>
-              <li>Have the LP account owner sign withdrawals.</li>
-              <li>Bump to <code>@meteora-ag/dynamic-amm-sdk@2.0.0</code>. The SDK changelog is in the 0.5.7 entry because that release also includes program 0.5.7.</li>
+              <li>Update all quoting and display logic to source the LP supply from <code>pool.lp_mint_supply</code>.</li>
+              <li>Require the LP token account owner to sign for any withdrawal transactions; remove any flows relying on delegate authorities for LP burn.</li>
+              <li>Upgrade to <code>@meteora-ag/dynamic-amm-sdk@2.0.0</code> (see SDK changelog under program 0.5.7 for further details).</li>
+            </ul>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Swap Routers</strong></td>
+          <td>
+            <ul>
+              <li>Must quote add/remove liquidity and pool shares using <code>pool.lp_mint_supply</code> instead of SPL Token mint supply.</li>
+              <li>Cannot use delegate for LP withdrawals—only the true owner is authorized.</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Pull LP supply from <code>pool.lp_mint_supply</code> in every calculation and quote surfaced to routing engines.</li>
+              <li>Enforce and verify that the user initiating a withdraw is the LP token account owner.</li>
+            </ul>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Partners</strong></td>
+          <td>
+            <ul>
+              <li>Program tracks and controls all LP supply through <code>pool.lp_mint_supply</code>; integrations relying on direct SPL LP supply queries must update their logic.</li>
+              <li>Withdrawals from accounts owned by the System Program or incinerator are now explicitly blocked. Only valid owner signatures can authorize LP burns or withdrawals. This closes a historic vulnerability in LP accounting/burning.</li>
+              <li>Liquidity operations on pools with <code>pool.lp_mint_supply &lt; lp_mint.supply</code> will be rejected until patched by administrator.</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Review any off-chain accounting, analytics, or bots that track LP value or liquidity quoting and ensure <code>pool.lp_mint_supply</code> is used exclusively.</li>
+              <li>Prepare for stricter signer requirements for all withdrawals and liquidity removals; update any automation or user flow dependent on delegate signatures.</li>
+              <li>Coordinate with pool administrators to ensure every deployed pool has <code>pool.lp_mint_supply</code> set, and does not fall behind actual mint supply, or operations will be blocked (error <code>LpMintSupplyAccountingNotPatched</code>).</li>
             </ul>
           </td>
         </tr>
@@ -180,8 +177,6 @@ rss: true
   ## Program: `meteora-dynamic-amm` `0.5.6`
 
   Program ID (mainnet and devnet): `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`
-
-  [Program PR #224](https://github.com/MeteoraAg/meteora-dynamic-amm/pull/224)
 
   ### Security
 
