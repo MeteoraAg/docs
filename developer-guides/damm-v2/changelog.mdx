@@ -11,6 +11,64 @@ rss: true
 </Tip>
 
 <Update
+  label="cp-amm 0.2.5"
+  description="Improved Rewards and Compounding Pools"
+  rss="DAMM v2 cp-amm 0.2.5 lets CollectFeeMode::Compounding configs and pools set compounding_fee_bps to 0. That collects the trading fee in the quote token, the same as OnlyB, and compounds nothing into the reserve. Fee, reward, checkpoint, and metrics accumulators wrap so pools no longer freeze on overflow. SDK 1.5.0."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.2.5` | [damm-v2 #229](https://github.com/MeteoraAg/damm-v2/pull/229) |
+  | TypeScript SDK | `1.5.0` | [damm-v2-sdk #115](https://github.com/MeteoraAg/damm-v2-sdk/pull/115) |
+
+  ## What We Shipped
+
+  - Enabled quote-only fees on compounding pools by accepting `compounding_fee_bps = 0`
+  - Improved reward, fee, and metrics handling so overflowing accumulators wrap instead of freezing the pool
+
+  ## Program: `cp-amm` `0.2.5`
+
+  Program ID (mainnet and devnet): `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG`
+
+  [Program PR #229](https://github.com/MeteoraAg/damm-v2/pull/229)
+
+  ### Changed
+
+  - `CollectFeeMode::Compounding` configs and pools now accept `compounding_fee_bps = 0`.
+
+  ### Fixed
+
+  - Funding a reward while pool liquidity is very small can push `RewardInfo.reward_per_token_stored` past its upper limit. The overflow caused the following endpoints to fail permanently on the pool: `add_liquidity`, `remove_liquidity`, `remove_all_liquidity`, `claim_reward`, `split_position`, `split_position2`, `fund_reward`, `withdraw_ineligible_reward` and `withdraw_dead_liquidity_reward`. The accumulator now wraps, and a pending reward larger than `u64::MAX` is clamped instead of failing.
+  - The `RewardInfo.dead_liquidity_reward_checkpoint` used in the `withdraw_dead_liquidity_reward` endpoint, and the `Pool.dead_liquidity_fee_checkpoint` used in the `claim_protocol_fee2` endpoint, previously rejected a quotient above `u128::MAX` and failed the instruction. This would have frozen the dead liquidity of the pool. The quotient is now reduced instead of rejected.
+  - `Pool.fee_a_per_liquidity` and `Pool.fee_b_per_liquidity` previously rejected growth past their upper limit and failed the swap. Every later swap would have recomputed and rejected the same step, so the pool would have been frozen. Both accumulators now wrap, matching `RewardInfo.reward_per_token_stored`, and a pending fee larger than `u64::MAX` is clamped instead of failing.
+  - `PoolMetrics` and `PositionMetrics` totals previously rejected growth past their upper limit, which would have failed every swap on the pool and every fee claim on the position. These counters now wraps like `PoolMetrics.total_position` and `UserRewardInfo.total_claimed_rewards`.
+
+  ## TypeScript SDK: `@meteora-ag/cp-amm-sdk` `1.5.0`
+
+  [SDK PR #115](https://github.com/MeteoraAg/damm-v2-sdk/pull/115)
+
+  <Tip>
+    Production: [`@meteora-ag/cp-amm-sdk@1.5.0`](https://www.npmjs.com/package/@meteora-ag/cp-amm-sdk/v/1.5.0). 
+  </Tip>
+
+  ### Changed
+
+  - Synced the IDL and bankrun program fixture to cp_amm 0.2.5.
+  - `CollectFeeMode.Compounding` accepts `compoundingFeeBps = 0`. The trading fee stays claimable and is not compounded into the reserve.
+
+  ### Added
+
+  - `getDeadLiquidityReward` quotes the compounding dead-liquidity reward.
+
+  ### Fixed
+
+  - `getUnClaimLpFee`, `getRewardInfo`, and `getUserRewardPending` wrap fee and reward accumulators the same way the program does, and clamp a pending fee or reward at `u64::MAX`.
+  - Reward quotes keep the checkpoint delta when pool liquidity is zero. `getUnClaimLpFee` includes that reward accrual, and an optional `currentTime` projects emissions up to the reward end. A reward step whose time and rate do not fit in a u128 throws `MathOverflowError`. `getRewardInfo` returns the emission in raw tokens when pool liquidity is zero.
+  - `getAvailableVestingLiquidity` subtracts liquidity already released when `periodFrequency` or `liquidityPerPeriod` is zero.
+</Update>
+
+<Update
   label="cp-amm 0.2.4"
   description="Support for Stock Tokens migrated from DBC"
   rss="DAMM v2 cp-amm 0.2.4 adds Config.permission so private configs can skip mint validation for Stock Tokens in DBC migrated tokens, with a new permission field on create_config, create_dynamic_config, and create-config events. SDK 1.4.8."
