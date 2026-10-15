@@ -158,7 +158,7 @@ rss: true
           <td>
             <ul>
               <li>Program tracks and controls all LP supply through <code>pool.lp_mint_supply</code>; integrations relying on direct SPL LP supply queries must update their logic.</li>
-              <li>Withdrawals from accounts owned by the System Program or incinerator are now explicitly blocked. Only valid owner signatures can authorize LP burns or withdrawals. This closes a historic vulnerability in LP accounting/burning.</li>
+              <li>Withdrawals from accounts owned by the System Program or incinerator are now explicitly blocked. Only the owner of the LP token account can withdraw from it. LP held in an account owned by the System Program or the incinerator can no longer be redeemed, because no one can sign as its owner. This addresses a historical design flaw in how LP was burned and accounted for.</li>
               <li>Liquidity operations on pools with <code>pool.lp_mint_supply &lt; lp_mint.supply</code> will be rejected until patched by administrator.</li>
             </ul>
           </td>
@@ -166,7 +166,6 @@ rss: true
             <ul>
               <li>Review any off-chain accounting, analytics, or bots that track LP value or liquidity quoting and ensure <code>pool.lp_mint_supply</code> is used exclusively.</li>
               <li>Prepare for stricter signer requirements for all withdrawals and liquidity removals; update any automation or user flow dependent on delegate signatures.</li>
-              <li>Coordinate with pool administrators to ensure every deployed pool has <code>pool.lp_mint_supply</code> set, and does not fall behind actual mint supply, or operations will be blocked (error <code>LpMintSupplyAccountingNotPatched</code>).</li>
             </ul>
           </td>
         </tr>
