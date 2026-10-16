@@ -2,7 +2,7 @@
 title: "DBC Migration and Liquidity"
 sidebarTitle: "Migration and Liquidity"
 description: "Learn how DBC graduates a completed bonding curve into DAMM v2 liquidity, including deprecated DAMM v1 migration, transfer-hook completion, liquidity ownership, locks, vesting, and protocol migration fees."
-llmsDescription: "Explains DBC migration and liquidity behavior, including curve completion, transfer-hook revocation on completion, migration progress states, deprecated DAMM v1 migration for new configs, DAMM v2 migration, token-badge quote mint graduation through CreatePoolWithoutMintValidation, locked vesting step, migrated liquidity ownership, DAMM v1 LP token claims for existing pools, DAMM v2 position NFT creation and ownership transfer, unlocked liquidity, permanently locked liquidity, vesting liquidity, 10 percent day-one locked liquidity requirement, two-year vesting duration cap, leftover handling, protocol liquidity migration fee, and mainnet migration keepers that graduate matching quote-mint thresholds, Stock Token quote pairs at least 750 USD equivalent, and Jupiter Verified quote tokens with Organic Score greater than 50 and notional value greater than 750 USD."
+llmsDescription: "Explains DBC migration and liquidity behavior, including curve completion, transfer-hook revocation on completion, migration progress states, deprecated DAMM v1 migration for new configs, DAMM v2 migration, token-badge quote mint graduation through CreatePoolWithoutMintValidation, version 1 transfer-fee migration that deposits transfer-fee-excluded amounts in compounding mode and keeps the migration price by scaling the smaller-fee side, protocol migration fee from the undeposited side, split_position2 so each mint pays its transfer fee once, legacy configs rejecting a non-zero quote transfer fee, locked vesting step, migrated liquidity ownership, DAMM v1 LP token claims for existing pools, DAMM v2 position NFT creation and ownership transfer, unlocked liquidity, permanently locked liquidity, vesting liquidity, 10 percent day-one locked liquidity requirement, two-year vesting duration cap, leftover handling, protocol liquidity migration fee, and mainnet migration keepers."
 ---
 
 DBC migration is the handoff from launch trading to long-term Meteora liquidity.
@@ -41,11 +41,28 @@ DAMM v2 is the path for Token 2022 launches, transfer-hook launches, and quote m
 
 Transfer-hook launches use DAMM v2. The hook is active only during the DBC bonding-curve phase and is revoked when the curve completes.
 
-A DBC token badge is valid only inside DBC. DAMM v2 configs used by DBC include the `CreatePoolWithoutMintValidation` permission so a quote mint that is not permissionless-supported by DAMM v2 can still migrate. DBC still requires the quote mint transfer fee to be zero at migration time.
+A DBC token badge is valid only inside DBC. DAMM v2 configs used by DBC include the `CreatePoolWithoutMintValidation` permission so a quote mint that is not permissionless-supported by DAMM v2 can still migrate.
 
 <Warning>
   DAMM v1 migration is deprecated for new configs and new pools. Existing DAMM v1 pools can still graduate. Token 2022 launches must use DAMM v2.
 </Warning>
+
+## Transfer Fee Migration
+
+`migration_damm_v2` uses a separate deposit path when `PoolConfig.version` is `1` and either of these is true:
+
+- The config has a base transfer fee (`transfer_fee_flag` is `1`).
+- The quote mint has a non-zero transfer fee or a live transfer fee config authority.
+
+That path always migrates in compounding mode. It deposits the transfer-fee-excluded amount of each mint. The side that loses the larger share to its transfer fee is deposited as calculated. The other side is scaled by the same ratio so the migration price stays at or below the budget ratio. Scaled base is rounded up. Scaled quote is rounded down. The initial liquidity of the migrated pool is lower by the larger of the two fees.
+
+The part of the scaled side that is not deposited stays in the DBC vault and is added to `protocol_migration_base_fee_amount` or `protocol_migration_quote_fee_amount`. Claim it with `claim_protocol_fee2`.
+
+Each mint is transferred once. The full migrated liquidity is deposited into the first DAMM v2 position. The second position is taken from the first with `split_position2`, which moves liquidity without another token transfer. Each mint therefore pays its transfer fee once.
+
+Config creation checks the initial liquidity against the base transfer fee and the quote mint's transfer fee for the current epoch. That check approximates the amounts migration will deposit. It is not repeated at migration. A quote mint whose fee is raised later can deposit less, add more of the undeposited base to the protocol migration fee, change the price, or fail the migration. A token badge does not stop the mint authority from changing that fee.
+
+A legacy config (`version` `0`) uses the original migration path, which does not account for transfer fees. `migration_damm_v2` rejects it when the quote mint's current transfer fee is non-zero (`QuoteMintHasNonZeroTransferFee`).
 
 ## What Migrates
 

@@ -2,12 +2,14 @@
 title: "DBC TS SDK Transfer Hooks"
 sidebarTitle: "Transfer Hooks"
 description: "Build Token 2022 transfer-hook DBC integrations with @meteora-ag/dynamic-bonding-curve-sdk."
-llmsDescription: "Explains TypeScript SDK integration for DBC Token 2022 transfer-hook pools. Covers SDK 1.5.9 state fetching, createConfigWithTransferHook, createPoolWithTransferHook, transfer-hook first-buy builders, swap2WithTransferHook, claimPartnerTradingFee2, claimCreatorTradingFee2, TransferHookAccountsInfo, AccountsType, poolState access, and non-transfer-hook method alternatives."
+llmsDescription: "TypeScript SDK integration for DBC Token 2022 transfer-hook pools on SDK 2.0. Covers createConfigWithTransferHook, the rejection of quote mints with a non-zero transfer fee or a live transfer fee config authority, createPoolWithTransferHook, swap2WithTransferHook, claimPartnerTradingFee2, claimCreatorTradingFee2, and TransferHookAccountsInfo. createConfig2 sets a base transfer fee and does not take a transfer hook program."
 ---
 
 The SDK supports Token 2022 transfer-hook DBC pools through dedicated config, pool, swap, and fee-claim builders.
 
 Use this page for the TypeScript integration surface. For product behavior, see [DBC Transfer Hook Pools](/core-products/dbc/transfer-hook-pools).
+
+`createConfigWithTransferHook` does not take `transferFeeParameters`. It rejects a quote mint with a non-zero transfer fee or a live transfer fee config authority. A base transfer fee and a base transfer hook are separate launches: `createConfig2` can set the fee and does not take a transfer hook program.
 
 ## Method Map
 
@@ -62,7 +64,7 @@ import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { NATIVE_MINT } from "@solana/spl-token";
 
 const connection = new Connection(process.env.RPC_URL!, "confirmed");
-const client = DynamicBondingCurveClient.create(connection, "confirmed");
+const client = new DynamicBondingCurveClient(connection, "confirmed");
 
 const payer = Keypair.generate();
 const config = Keypair.generate();

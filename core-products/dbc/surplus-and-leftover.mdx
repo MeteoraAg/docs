@@ -2,7 +2,7 @@
 title: "DBC Surplus and Leftover"
 sidebarTitle: "Surplus and Leftover"
 description: "Learn how DBC handles surplus quote tokens and leftover base tokens after a bonding curve completes or migrates."
-llmsDescription: "Explains DBC surplus and leftover handling, including quote reserve above migration threshold, surplus split between protocol, partner, and creator, creator trading fee percentage split, one-time surplus claims after curve completion, fixed-supply leftover base tokens, leftover receiver, leftover formula, and one-time leftover withdrawal after migrated pool creation."
+llmsDescription: "Explains DBC surplus and leftover handling, including quote reserve above migration threshold, surplus split between protocol, partner, and creator, creator trading fee percentage split, one-time surplus claims after curve completion, fixed-supply leftover base tokens, leftover receiver, leftover formula, one-time leftover withdrawal after migrated pool creation, and the leftover_receiver signature required when the leftover charges a Token 2022 transfer fee."
 ---
 
 DBC surplus and leftover are the two cleanup amounts that can remain in a virtual pool after a launch reaches the end of its bonding-curve flow.
@@ -72,6 +72,8 @@ Surplus can be claimed after the curve is complete. It is not a post-migration-o
   Surplus is different from trading fees and migration fees. It comes from extra quote reserve above the migration threshold.
 </Note>
 
+Surplus, trading-fee, and migration-fee claims transfer the recorded quote amount. If the quote mint charges a transfer fee, the destination token account receives less than that amount. The claim event reports the amount transferred from the vault.
+
 ## Leftover
 
 Leftover is the unused base token amount from a fixed-supply launch after the token has migrated.
@@ -109,6 +111,8 @@ Leftover can be withdrawn only after the DBC pool has migrated and the graduated
 This matters because the program must first know how many base tokens were sold, how many were needed for migration, and how many remain in the virtual pool after fee and migration accounting.
 
 Leftover can only be withdrawn once, and it is sent to the configured `leftover_receiver`.
+
+`withdraw_leftover` is permissionless when the transfer fee on the leftover is zero. When the base mint charges a non-zero transfer fee on that withdrawal, `leftover_receiver` must sign. The SDK's `withdrawLeftover` adds that signer in the same case. The receiver's token account gets the amount after the transfer fee.
 
 ## Example
 

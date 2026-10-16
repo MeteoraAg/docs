@@ -2,7 +2,7 @@
 title: "DBC Accounts and Permissions"
 sidebarTitle: "Accounts and Permissions"
 description: "Review the main DBC on-chain accounts, lifecycle flags, permissions, transfer-hook accounts, limits, and claim gates."
-llmsDescription: "Implementation-grounded DBC account and permission reference covering PoolConfig, ConfigWithTransferHook, VirtualPool, TransferHookPool, TokenBadge, partner and creator metadata, operator permissions including CreateTokenBadge and CloseTokenBadge, collect fee modes, migration progress states, deprecated rate limiter and DAMM v1 options, config limits, token limits, fee limits, liquidity lock requirements, claim gates, transfer-hook claim gates, and Token 2022 quote mint badge rules."
+llmsDescription: "DBC account and permission reference covering PoolConfig, ConfigWithTransferHook, VirtualPool, TransferHookPool, TokenBadge, partner and creator metadata, operator permissions including CreateTokenBadge and CloseTokenBadge, collect fee modes, migration progress states, deprecated rate limiter and DAMM v1 options, config limits, token limits, fee limits, liquidity lock requirements, claim gates, transfer-hook claim gates, permissionless Token 2022 quote mints, create_config2 transfer-fee restrictions, and the leftover_receiver signature when leftover charges a transfer fee."
 ---
 
 This page summarizes the DBC implementation details that are useful when reading pool state, building integrations, or checking whether a claim or migration action is allowed.
@@ -67,7 +67,7 @@ When the quote reserve reaches `migration_quote_threshold`, normal curve trading
 | Creator withdraw surplus | Current pool creator. |
 | Withdraw partner migration fee | Config `fee_claimer`. |
 | Withdraw creator migration fee | Current pool creator. |
-| Withdraw leftover | Permissionless instruction, but funds can only go to the config `leftover_receiver` ATA after migration. |
+| Withdraw leftover | Funds can only go to the config `leftover_receiver` after migration. The instruction is permissionless when the transfer fee on the leftover is zero. When that fee is non-zero, `leftover_receiver` must sign. |
 | Claim protocol trading or migration fees | `claim_protocol_fee2` uses the fixed `protocol_fee_authority` signer. The older `claim_protocol_fee` and `zap_protocol_fee` instructions are removed. |
 | Claim protocol pool creation fee | Operator with `ClaimProtocolFee` permission. |
 | Create or close a quote-mint token badge | Operator with `CreateTokenBadge` or `CloseTokenBadge` permission. |
@@ -89,14 +89,15 @@ DBC can launch SPL Token or Token 2022 base mints. New configs must migrate to D
 
 Transfer-hook launches are Token 2022 only. They use `ConfigWithTransferHook`, `TransferHookPool`, `swap2_with_transfer_hook`, and transfer-hook-aware trading fee claims. The base mint's transfer hook is revoked when the curve completes.
 
-Quote mints can be SPL Token mints. Token 2022 quote mints are permissionless only when their extensions are limited to `MetadataPointer` and `TokenMetadata` and the transfer fee is zero. Other Token 2022 quote extensions need a `TokenBadge`. Native Token 2022 mint behavior is rejected as a quote mint.
+Quote mints can be SPL Token mints. A Token 2022 quote mint is permissionless when its extensions are limited to `MetadataPointer`, `TokenMetadata`, and a `TransferFeeConfig` whose current fee is zero and whose transfer fee config authority is revoked. Other extensions, a non-zero transfer fee, or a live transfer fee config authority need a `TokenBadge`. A non-zero fee or a live authority is accepted only by `create_config2`. The Token 2022 native mint is rejected as a quote mint.
 
 ## Config Validation Highlights
 
 DBC validates the launch template before it can be used:
 
-- The quote mint must be supported, or a valid token badge must be supplied at remaining account index `0`.
-- The quote mint transfer fee must be zero, including any scheduled fee.
+- The quote mint must be permissionless, or a valid token badge must be supplied at remaining account index `0`. A missing badge returns `InvalidQuoteMint`. A badge that does not match the mint returns `InvalidTokenBadge`.
+- A quote mint with a non-zero transfer fee or a live transfer fee config authority is accepted only by `create_config2`.
+- A base transfer fee, or that quote-mint case, requires constant token supply, no locked vesting, `MigrationFeeOption::Customizable`, and `MigratedCollectFeeMode::Compounding`.
 - The collect fee mode must be `QuoteToken` or `OutputToken`.
 - The migration target must be DAMM v2. `MeteoraDamm` is rejected for new configs and new pools.
 - `BaseFeeMode::RateLimiter` is rejected for new configs and new pools.
