@@ -129,7 +129,7 @@ rss: true
           <td><strong>Trading Terminals</strong></td>
           <td>
             <ul>
-              <li>LP value, add, and remove liquidity quotes now use <code>pool.lp_mint_supply</code> (program-tracked supply), NOT the SPL Token mint supply.</li>
+              <li>LP value, add, and remove liquidity quotes use <code>pool.lp_mint_supply</code>.</li>
               <li>Withdrawals must be initiated by the LP account owner. Delegates are not accepted; only the owner signature is valid.</li>
             </ul>
           </td>
@@ -160,14 +160,14 @@ rss: true
           <td><strong>Partners</strong></td>
           <td>
             <ul>
-              <li>Program tracks and controls all LP supply through <code>pool.lp_mint_supply</code>; integrations relying on direct SPL LP supply queries must update their logic.</li>
+              <li><code>pool.lp_mint_supply</code> changes when the program mints or burns LP.</li>
               <li><code>remove_balance_liquidity</code> and <code>remove_liquidity_single_side</code> require the LP token account owner to sign. LP in an account owned by the System Program or the incinerator can no longer be withdrawn.</li>
-              <li>Liquidity operations on pools with <code>pool.lp_mint_supply &lt; lp_mint.supply</code> will be rejected until patched by administrator.</li>
+              <li>Add, remove, <code>lock</code>, <code>claim_fee</code>, and <code>get_pool_info</code> return <code>LpMintSupplyAccountingNotPatched</code> when <code>pool.lp_mint_supply</code> is below <code>lp_mint.supply</code>. The program has no instruction that raises the tracked supply to the mint supply.</li>
             </ul>
           </td>
           <td>
             <ul>
-              <li>Review any off-chain accounting, analytics, or bots that track LP value or liquidity quoting and ensure <code>pool.lp_mint_supply</code> is used exclusively.</li>
+              <li>Read <code>pool.lp_mint_supply</code> for LP value and liquidity quotes.</li>
               <li>Prepare for stricter signer requirements for all withdrawals and liquidity removals; update any automation or user flow dependent on delegate signatures.</li>
             </ul>
           </td>

@@ -59,7 +59,7 @@ Use the SDK or Rust helper derivations instead of rebuilding seeds manually.
 | `bootstrap_liquidity` | Re-seeds a pool when `pool.lp_mint_supply == 0` and both token amounts are non-zero. |
 | `get_pool_info` | Emits pool token amounts, virtual price, and timestamp for read-style integrations. |
 
-Share math uses `pool.lp_mint_supply`. Add, remove, `lock`, `claim_fee`, and `get_pool_info` read that field. Initialization, `bootstrap_liquidity`, add, remove, and `claim_fee` add or subtract the LP the instruction mints or burns. A pool whose `lp_mint_supply` is below `lp_mint.supply` returns `LpMintSupplyAccountingNotPatched` (`6063`).
+Add, remove, `lock`, `claim_fee`, and `get_pool_info` price pool LP with `pool.lp_mint_supply`. Permissionless pool creation sets that field to the LP minted during initialization. `initialize_permissioned_pool` leaves it at `0` until `bootstrap_liquidity`. `bootstrap_liquidity` requires the field to be `0`, then adds the LP it mints. Add liquidity increases it. Remove liquidity and `claim_fee` decrease it by the LP burned. If `lp_mint_supply` is below `lp_mint.supply`, those reads return `LpMintSupplyAccountingNotPatched` (`6063`).
 
 `remove_balance_liquidity` and `remove_liquidity_single_side` return `InvalidLpOwner` (`6064`) when the LP token account is not owned by `user`. An SPL delegate cannot burn that LP.
 

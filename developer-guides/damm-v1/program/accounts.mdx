@@ -152,6 +152,6 @@ A version `1` vault stores `version`, `total_lp_supply`, and `_padding0` in the 
 
 `swap`, `add_balance_liquidity`, `add_imbalance_liquidity`, `remove_liquidity_single_side`, `lock`, `claim_fee`, `bootstrap_liquidity`, `get_pool_info`, and permissionless pool initialization read vault LP supply with `VaultUtils::get_vault_lp_supply`: `vault.total_lp_supply` when `version == 1`, otherwise the vault LP mint supply. A version `1` vault whose `total_lp_supply` is below the mint supply returns `InvalidVaultLpSupplyAccounting` (`6065`).
 
-Pool share math uses `pool.lp_mint_supply`. Liquidity instructions fail with `LpMintSupplyAccountingNotPatched` (`6063`) when that field is below `lp_mint.supply`.
+Pool LP shares use `pool.lp_mint_supply`. Add, remove, `lock`, `claim_fee`, and `get_pool_info` return `LpMintSupplyAccountingNotPatched` (`6063`) when that field is below `lp_mint.supply`. The program has no instruction that raises it to the mint supply.
 
 Quote engines must read the pool, both Dynamic Vault accounts, both vault token accounts, both vault LP mints, both pool vault-LP token accounts, the clock sysvar, and any depeg/stake accounts required by the curve. Pass `pool.lp_mint_supply` as the pool LP supply. Pass `getVaultLpSupply(vault, lpMint.supply)` as each vault LP supply.
