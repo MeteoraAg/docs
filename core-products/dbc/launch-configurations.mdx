@@ -53,9 +53,9 @@ For the migration flow and liquidity ownership, see [DBC Migration and Liquidity
 
 Create new configs with `create_config2`. `create_config` does not take a base transfer fee, and it rejects a quote mint with a non-zero transfer fee or a live transfer fee config authority.
 
-`transfer_fee_parameters` is optional. Pass it to put a transfer fee on the base mint. The base mint must be Token 2022, and the fee is at most `10%`. Pass none when the base mint should not have a transfer fee. `0` basis points still creates a `TransferFeeConfig`.
+`transfer_fee_parameters` is optional. Pass it to put a transfer fee on the base mint. The base mint must be Token 2022, and the fee is at most `10%`. Omit it when the base mint has no transfer fee. `0` basis points still creates a `TransferFeeConfig`.
 
-A base transfer fee, or a quote mint with a non-zero transfer fee or a live transfer fee config authority, forces the rest of the config:
+A base transfer fee, or a quote mint with a non-zero transfer fee or a live transfer fee config authority, requires:
 
 - Fixed token supply, with `pre_migration_token_supply` equal to `post_migration_token_supply`.
 - No locked vesting.
@@ -64,7 +64,7 @@ A base transfer fee, or a quote mint with a non-zero transfer fee or a live tran
 
 A partner transfer-fee authority needs a non-default `fee_claimer`. The same rule applies to a Token 2022 partner token-update authority.
 
-Field values, withheld authority, and the post-migration authority options are in [DBC Token 2022 Support](/core-products/dbc/token-2022-support).
+Field values and the transfer-fee authority options are in [DBC Token 2022 Support](/core-products/dbc/token-2022-support).
 
 Transfer-hook launches use DAMM v2. The hook is revoked from the base mint when the DBC curve completes, before migrated DAMM v2 liquidity is created.
 

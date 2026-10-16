@@ -100,7 +100,7 @@ This page lists the Anchor custom errors returned by the `dynamic-bonding-curve`
 | `6082` | `DeprecatedMigrationOption` | Deprecated migration option | New config or pool creation used `MigrationOption::MeteoraDamm`. |
 | `6083` | `FeeInverseIsIncorrect` | Transfer fee inverse calculation is incorrect | Grossing an amount up for a transfer fee did not round back to the requested net amount. |
 | `6084` | `InvalidTransferFeeParameters` | Invalid transfer fee parameters | `transfer_fee_basis_points` is above `1000`, an authority enum is unknown, or `0` basis points is combined with `Immutable` or `RevokeZeroFee`. |
-| `6085` | `ExceededInputAmount` | Required input amount exceeds the provided amount in | A partial fill needed more input than `amount_in` after the input transfer fee was applied. |
+| `6085` | `ExceededInputAmount` | Required input amount exceeds the provided amount in | A partial fill reconstructed an input larger than `amount_in`. This comes from rate-limiter fee inverse rounding, including any input transfer fee. |
 | `6086` | `InvalidFeeClaimer` | Invalid fee claimer | `fee_claimer` is the default pubkey on a Token 2022 partner token-update authority, or on a partner transfer-fee authority. |
 
 <Note>
@@ -109,18 +109,11 @@ This page lists the Anchor custom errors returned by the `dynamic-bonding-curve`
 
 ## TypeScript SDK Validation Helpers
 
-The TypeScript SDK performs many checks before building transactions. These helpers return booleans or throw SDK-side errors before the program returns a custom error.
+Call these before `createConfig2`. They throw the same messages the program returns.
 
 | Helper | Related program errors |
 | --- | --- |
-| `validateConfigParameters` | `InvalidFee`, `InvalidCollectFeeMode`, `InvalidMigrationOption`, `DeprecatedMigrationOption`, `DeprecatedBaseFeeMode`, `InvalidTokenDecimals`, `InvalidCurve`, `InvalidPoolCreationFee`. |
-| `validateFeeScheduler` | `InvalidFeeScheduler`, `InvalidMinBaseFee`, `ExceedMaxFeeBps`. |
-| `validateFeeRateLimiter` | `InvalidFeeRateLimiter`, `RateLimiterNotSupported`, `DeprecatedBaseFeeMode`. |
-| `validateDynamicFee` | `InvalidInput`, `MathOverflow`. |
-| `validateMigrationFeeOption` | `InvalidMigrationFeeOption`, `InvalidMigratedPoolFee`. |
-| `validateMigratedPoolFee` | `InvalidMigratedPoolFee`, `InvalidFeeMarketCapScheduler`, `InvalidCompoundingParameters`. |
-| `validateTransferHookProgram`, `validateTransferHookProgramExecutable` | `InvalidTransferHookProgram`. |
-| `validateLiquidityVestingInfo` | `InvalidVestingParameters`, `InvalidMigrationLockedLiquidity`. |
-| `validateTokenSupply` | `InvalidTokenSupply`, `InvalidLeftoverAddress`, `TotalBaseTokenExceedMaxSupply`. |
+| `validateConfigParameters` | The config checks, including curve, fee, supply, vesting, migration, and transfer-fee restrictions. |
 | `validateTransferFeeParameters` | `InvalidTokenType`, `InvalidTransferFeeParameters`, `InvalidFeeClaimer`. |
-| `validateSwapAmount` | `AmountIsZero`. |
+| `validateMigratedPoolFee` | `InvalidMigratedPoolFee`, `InvalidFeeMarketCapScheduler`, `InvalidCompoundingParameters`. |
+| `validateCompoundingFeeBps` | `InvalidCompoundingParameters`. |

@@ -2,13 +2,13 @@
 title: "DBC Token 2022 Support"
 sidebarTitle: "Token 2022 Support"
 description: "See how DBC handles SPL Token and Token 2022 launches, base-mint transfer fees, quote-mint transfer fees, token badges, transfer-hook pools, and DAMM v2 migration."
-llmsDescription: "DBC Token 2022 reference for program 0.2.2. Covers SPL Token and Token 2022 base mints, MetadataPointer and TokenMetadata, base-mint transfer fees through create_config2 TransferFeeParameters (Token 2022 only, at most 10 percent, maximum fee u64::MAX), TransferFeeWithheldAuthority Partner or Creator, MigratedTransferFeeAuthorityOption Immutable, RevokeZeroFee, Creator, and Partner, permissionless quote mints, quote-mint token badges, non-zero quote transfer fees and live transfer fee config authorities accepted only by create_config2, constant supply, no locked vesting, MigrationFeeOption.Customizable, MigratedCollectFeeMode.Compounding, PoolConfig.version 1, legacy version 0 limits, swap amounts included_transfer_fee_amount_in and excluded_transfer_fee_amount_out, migration deposit of transfer-fee-excluded amounts, leftover_receiver signature, and the ban on combining a base transfer hook with a quote mint that has a non-zero fee or a live transfer fee config authority."
+llmsDescription: "DBC Token 2022 reference for program 0.2.2. Covers SPL Token and Token 2022 base mints, MetadataPointer and TokenMetadata, base-mint transfer fees through create_config2 TransferFeeParameters (Token 2022 only, at most 10 percent, maximum fee u64::MAX), withheld authority set at pool initialization, MigratedTransferFeeAuthorityOption Immutable, RevokeZeroFee, Creator, and Partner applied at migration, permissionless quote mints, quote-mint token badges, non-zero quote transfer fees and live transfer fee config authorities accepted only by create_config2, constant supply, no locked vesting, MigrationFeeOption.Customizable, MigratedCollectFeeMode.Compounding, the 1 percent migration sqrt-price check at config creation, PoolConfig.version 1, legacy version 0 limits, swap amounts included_transfer_fee_amount_in and excluded_transfer_fee_amount_out, migration deposit of transfer-fee-excluded amounts, leftover_receiver signature, and transfer-hook configs rejecting a quote mint with a non-zero fee or a live transfer fee config authority."
 ---
 
 DBC can launch an SPL Token or Token 2022 base mint. Program `0.2.2` also supports a Token 2022 transfer fee on the base mint, and a Token 2022 transfer fee on the quote mint.
 
 <Note>
-  DBC initializes Token 2022 base mints with metadata. A base-mint transfer hook uses a separate config and pool path. Do not assume other base-mint extensions work unless this page lists them.
+  On a Token 2022 base mint, DBC initializes metadata. `transfer_fee_parameters` adds `TransferFeeConfig`. The transfer-hook config path adds a transfer hook. Those are the base-mint extensions this program sets up.
 </Note>
 
 ## SPL Token vs Token 2022
@@ -39,15 +39,15 @@ Passing parameters always initializes `TransferFeeConfig` on the base mint, incl
 | Field | Rule |
 | --- | --- |
 | `transfer_fee_basis_points` | `0` to `1000` (10%). The on-chain maximum fee is `u64::MAX` and is not a config field. |
-| `withheld_authority` | `0` Partner, which is the config `fee_claimer`. `1` Creator, which is the pool creator. |
-| `migrated_transfer_fee_authority_option` | Who can change the fee after migration. See the table below. |
+| `withheld_authority` | `0` Partner, the config `fee_claimer`. `1` Creator, the pool creator. Set when the pool is initialized. That address withdraws withheld tokens through the Token 2022 program. |
+| `migrated_transfer_fee_authority_option` | Who can change the fee after `migration_damm_v2`. |
 
-| `migrated_transfer_fee_authority_option` | After migration |
-| --- | --- |
-| `0` Immutable | The mint is created with no transfer fee config authority. |
-| `1` RevokeZeroFee | The fee is scheduled to zero and the authority is revoked. The fee change takes two epochs to land. |
-| `2` Creator | Authority is the pool creator. It is revoked if that address is the default pubkey. |
-| `3` Partner | Authority is the config `fee_claimer`. |
+| `migrated_transfer_fee_authority_option` | During the curve | At `migration_damm_v2` |
+| --- | --- | --- |
+| `0` Immutable | The mint is created with no transfer fee config authority. The fee stays at `transfer_fee_basis_points`. | Unchanged. |
+| `1` RevokeZeroFee | Pool authority holds the config authority. The configured fee applies. | Schedules the fee to `0` and revokes the authority. The new fee takes two epochs. |
+| `2` Creator | Pool authority holds the config authority. | Authority moves to the pool creator. Revoked when that address is the default pubkey. |
+| `3` Partner | Pool authority holds the config authority. | Authority moves to `fee_claimer`. |
 
 `0` basis points with `Immutable` or `RevokeZeroFee` is rejected with `InvalidTransferFeeParameters`. A partner withheld authority or a partner migrated authority requires a non-default `fee_claimer`.
 
@@ -61,15 +61,14 @@ import {
   TransferFeeWithheldAuthority,
 } from "@meteora-ag/dynamic-bonding-curve-sdk";
 
-await client.partner.createConfig2({
-  // ...config accounts and buildCurve result
-  transferFeeParameters: {
-    transferFeeBasisPoints: 100,
-    withheldAuthority: TransferFeeWithheldAuthority.Creator,
-    migratedTransferFeeAuthorityOption: MigratedTransferFeeAuthorityOption.Creator,
-  },
-});
+const transferFeeParameters = {
+  transferFeeBasisPoints: 100, // 1%
+  withheldAuthority: TransferFeeWithheldAuthority.Creator,
+  migratedTransferFeeAuthorityOption: MigratedTransferFeeAuthorityOption.Creator,
+};
 ```
+
+Pass `transferFeeParameters` on `client.partner.createConfig2`. The other arguments are the config account, `feeClaimer`, `leftoverReceiver`, `quoteMint`, `payer`, and the `buildCurve*` result.
 
 Omit `transferFeeParameters`, or pass `null`, when there is no base transfer fee. `createConfigAndPool` and `createConfigAndPoolWithFirstBuy` call `createConfig2`. Omitting the field is the same as `null`.
 
@@ -103,7 +102,13 @@ Pass the badge as remaining account index `0`. The SDK adds it when you set `tok
 
 A DBC badge is not a DAMM v2 badge. DAMM v2 configs used by DBC migration have `CreatePoolWithoutMintValidation`, so a badged quote mint can still graduate.
 
-A badge does not freeze the quote mint's transfer fee. `migration_damm_v2` reads the fee of the current epoch. It does not repeat the 1% price check. Raising the fee after the config is created can reduce migrated liquidity, add the undeposited side to the protocol migration fee, move the migration price, or make migration fail.
+The badge stores the mint address. It does not store the fee. `migration_damm_v2` reads the quote mint's fee for the current epoch.
+
+At config creation, compounding mode checks that the sqrt price implied by the transfer-fee-excluded deposit amounts is within 1% of `migration_sqrt_price`. The check is `abs(migration_sqrt_price - derived_sqrt_price) * 100 <= max(migration_sqrt_price, derived_sqrt_price)`. A miss returns `InvalidCurve`. Migration does not run that check again.
+
+A higher quote fee at migration can deposit less liquidity, add the undeposited side to the protocol migration fee, and move the migration price outside that 1% band. If a scaled side rounds to zero, migration returns `AmountIsZero`.
+
+A quote mint can also gain a `TransferFeeConfig` after the config exists, including through the mint close authority. `migration_damm_v2` then takes the transfer-fee path and runs `validate_transfer_fee_restrictions`. A config that is not constant supply, has locked vesting, is not `Customizable`, or is not `Compounding` fails that check.
 
 ## Quote Mint Transfer Fee
 
@@ -137,9 +142,11 @@ The curve uses the amount the pool receives after the input mint's transfer fee.
 
 `EvtSwap3` and `EvtSwap3WithTransferHook` report `included_transfer_fee_amount_in` and `excluded_transfer_fee_amount_out`.
 
-In the TypeScript SDK, `swapQuote`, `swapQuote2`, and the `./math` quote functions return the same two amounts. For a Token 2022 quote mint, pass `quoteMint` and `currentEpoch`. `getSwapQuoteTransferFees` loads the quote mint, the base mint when you pass `baseMint`, and the current epoch.
+`client.pool.swapQuote` and `client.pool.swapQuote2` return `includedTransferFeeAmountIn` and `excludedTransferFeeAmountOut`.
 
-A quote for an existing pool reads the base transfer fee from `transferFeeFlag` unless you pass `baseMint` or `baseTransferFeeBasisPoints`.
+For a Token 2022 quote mint, pass `quoteMint` and `currentEpoch`. Without them the SDK throws `quoteMint and currentEpoch are required for a Token-2022 quote mint, use getSwapQuoteTransferFees`. That helper loads the quote mint when `quoteTokenFlag` is Token 2022, the base mint when you pass `baseMint`, and the current epoch.
+
+An existing-pool quote reads the base fee from `transferFeeFlag` and `transferFeeBasisPoints` unless you pass `baseMint` or `baseTransferFeeBasisPoints`. `baseMint` reads the mint account. The flag reads the fee stored on the config.
 
 ## Migration And Leftover
 
