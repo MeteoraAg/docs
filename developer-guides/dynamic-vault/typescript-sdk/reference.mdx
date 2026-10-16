@@ -97,9 +97,9 @@ Creates one hydrated vault client from an underlying token mint. It derives the 
 | Method | Signature | Description |
 | --- | --- | --- |
 | `getUserBalance` | `(owner: PublicKey) =&gt; Promise&lt;BN&gt;` | Reads the user's vault LP balance. With affiliate enabled, reads the affiliate user PDA's LP token account. |
-| `getVaultSupply` | `() =&gt; Promise&lt;BN&gt;` | Refetches the LP mint and returns current LP supply. |
+| `getVaultSupply` | `() =&gt; Promise&lt;BN&gt;` | Refetches the vault and LP mint, then returns the supply used for share math. Version `1` returns `totalLpSupply`. Version `0` returns the LP mint supply. |
 | `getWithdrawableAmount` | `() =&gt; Promise&lt;BN&gt;` | Reads on-chain time and computes unlocked vault amount from `vaultState`. |
-| `refreshVaultState` | `() =&gt; Promise&lt;void&gt;` | Refetches vault state and the underlying token mint. |
+| `refreshVaultState` | `() =&gt; Promise&lt;void&gt;` | Refetches vault state, the underlying token mint, and the LP mint. |
 | `deposit` | `(owner: PublicKey, baseTokenAmount: BN) =&gt; Promise&lt;Transaction&gt;` | Builds a transaction to deposit underlying tokens and receive LP tokens. |
 | `getStrategiesState` | `() =&gt; Promise&lt;StrategyState[]&gt;` | Fetches strategy accounts for non-default strategy slots. |
 | `withdraw` | `(owner: PublicKey, baseTokenAmount: BN) =&gt; Promise&lt;Transaction&gt;` | Builds a transaction to burn LP tokens and withdraw underlying tokens. |
@@ -116,6 +116,7 @@ Creates one hydrated vault client from an underlying token mint. It derives the 
 | `getAmountByShare` | `(share, withdrawableAmount, totalSupply) =&gt; BN` | Converts LP token share to underlying token amount. |
 | `getUnmintAmount` | `(amount, withdrawableAmount, totalSupply) =&gt; BN` | Converts desired underlying amount to LP tokens to burn. |
 | `calculateWithdrawableAmount` | `(onChainTime, vaultState) =&gt; BN` | Calculates unlocked amount after locked profit degradation. |
+| `getVaultLpSupply` | `(vaultState, lpMintSupply) =&gt; BN` | Returns `vaultState.totalLpSupply` when `version` is `1`, otherwise `lpMintSupply`. The program still returns `6023` when version `1` `totalLpSupply` is below the mint supply. |
 
 ## Utility Exports
 

@@ -1,34 +1,253 @@
 ---
 title: "Dynamic Vault Changelog"
 sidebarTitle: "Changelog"
-description: "Track Dynamic Vault release notes, source snapshots, SDK changes, IDL notes, and upgrade guidance."
-llmsDescription: "Explains the Dynamic Vault integration changelog for builders maintaining Meteora Dynamic Vault integrations. Covers current source snapshots, @meteora-ag/vault-sdk release notes, package rename changes, dependency removals, batch-loading improvements, refresh fixes, withdrawal logic changes, TypeScript SDK compatibility, Rust client notes, and source gaps where no program changelog was available."
+description: "Track Dynamic Vault release notes, compatibility changes, and upgrade guidance for the vault program, TypeScript SDK, and Rust helpers."
+llmsDescription: "Explains the Dynamic Vault integration changelog for builders maintaining Meteora Dynamic Vault integrations. Covers mercurial-vault program 0.9.5 tracked LP supply, migrate_vault, @meteora-ag/vault-sdk 2.4.0 getVaultLpSupply, and the program 0.9.4 through 0.9.2 and SDK 2.3.1 through 2.0.0 notes copied from the source changelogs."
 rss: true
 ---
 
 <Tip>
-  Track Dynamic Vault integration changes here. This page is initialized from the local `vault-sdk/CHANGELOG.md` and the inspected local program and Rust client sources.
+  Track Dynamic Vault releases here.
 </Tip>
 
 <Update
-  label="Source snapshot"
-  description="Program and client sources referenced for this documentation pass"
-  rss="Dynamic Vault docs source snapshot covers mercurial-vault program 0.9.4, @meteora-ag/vault-sdk 2.3.1, TypeScript SDK source, and rust-client helper."
+  label="mercurial-vault 0.9.5"
+  description="Tracked vault LP supply"
+  rss="Dynamic Vault mercurial-vault 0.9.5 prices version 1 LP shares with vault.total_lp_supply. @meteora-ag/vault-sdk 2.4.0 adds getVaultLpSupply."
 >
-  ## Components
+  <Info>
+    Program `0.9.5` is live on mainnet. Use `@meteora-ag/vault-sdk@2.4.0` or later.
+  </Info>
 
-  | Component | Local source | Notes |
+  ## Release summary
+
+  | Component | Version | PR |
   | --- | --- | --- |
-  | Program | `mercurial-vault/programs/vault` | Anchor program crate version `0.9.4`; Anchor toolchain `0.31.1`; public program ID `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi`. |
-  | TypeScript SDK | `vault-sdk/ts-client` | Package `@meteora-ag/vault-sdk` version `2.3.1`; web3.js v1 transaction model. |
-  | Rust client | `vault-sdk/rust-client` | CLI helper for show, get-unlocked-amount, deposit, and withdraw flows. |
-  | Data API | `developer-guides/dynamic-vault/api-reference/openapi.json` | OpenAPI `0.6.0` for Dynamic Vault keeper routes. |
+  | Program | `0.9.5` | [mercurial-vault #314](https://github.com/MeteoraAg/mercurial-vault/pull/314) |
+  | TypeScript SDK | `2.4.0` | [vault-sdk #141](https://github.com/MeteoraAg/vault-sdk/pull/141) |
 
-  ## Integration Notes
+  ## What We Shipped
 
-  - The current program source includes `initialize_idle_vault`, `transfer_fee_vault`, `remove_strategy2`, `InvalidPrecisionLoss`, `UndeterminedError`, and `JupLend` strategy support.
-  - The checked-in TypeScript IDL in `vault-sdk` is older than the current program source in a few areas. Decode errors by numeric code first when source and IDL names differ.
-  - The TypeScript SDK `withdraw` parameter named `baseTokenAmount` is passed to the program as LP `unmint_amount`; callers should pass LP token units.
+  - Version 1 vaults price LP shares with `vault.total_lp_supply`
+  - Permissionless `migrate_vault` moves a version 0 vault to version 1
+  - `withdraw` and `withdraw_directly_from_strategy` require the LP account owner to sign
+
+  ## What To Do
+
+  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrators</th>
+          <th>What Changed</th>
+          <th>What To Do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Deposit and withdraw apps</strong></td>
+          <td>
+            <ul>
+              <li><code>withdraw</code> and <code>withdraw_directly_from_strategy</code> require <code>user_lp.owner == user</code> before burning LP.</li>
+              <li>Version 1 vaults price LP shares with <code>vault.total_lp_supply</code>.</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Have the LP token account owner sign <code>withdraw</code> and <code>withdraw_directly_from_strategy</code>.</li>
+              <li>Upgrade to <code>@meteora-ag/vault-sdk@2.4.0</code>.</li>
+            </ul>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Quote and virtual price</strong></td>
+          <td>
+            <ul>
+              <li>Version 1 vaults use <code>total_lp_supply</code> in <code>deposit</code>, <code>withdraw</code>, <code>withdraw_directly_from_strategy</code>, and the performance fee calculation.</li>
+              <li>Version 0 vaults keep using <code>lp_mint.supply</code>.</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Use <code>getVaultLpSupply</code> or <code>getVaultSupply</code> in TypeScript, or <code>Vault::get_lp_supply</code> in Rust.</li>
+              <li>Use <code>total_lp_supply</code> when <code>version == 1</code>, and <code>lp_mint.supply</code> otherwise.</li>
+            </ul>
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Account decoders</strong></td>
+          <td>
+            <ul>
+              <li><code>Vault.strategies</code> now has 29 entries. <code>version</code>, <code>total_lp_supply</code>, and <code>_padding0</code> occupy the former 30th strategy slot.</li>
+              <li><code>migrate_vault</code> is permissionless, runs once per vault, and starts <code>total_lp_supply</code> at the current <code>lp_mint.supply</code>.</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Update the IDL to program <code>0.9.5</code> before <code>migrate_vault</code> runs. The instruction is <code>migrateVault</code> in the SDK IDL.</li>
+              <li>New vaults are created as version 1.</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  ## Program: `mercurial-vault` `0.9.5`
+
+  Program ID (mainnet and devnet): `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi`
+
+  ### Fixed
+
+  - Fixed `withdraw` and `withdraw_directly_from_strategy` letting anyone redeem vault LP held in a token account owned by the System Program or the incinerator. SPL Token skips the owner check when burning from such accounts, so the vault now requires `user_lp.owner == user` before burning LP.
+  - Fixed LP share pricing being manipulable by burning LP outside the vault. LP held by the System Program or the incinerator can be burned by anyone, which lowered `lp_mint.supply` and inflated the value of the remaining LP. Version 1 vaults price LP shares with their own tracked supply, `vault.total_lp_supply`, which only changes when the vault mints or burns LP.
+
+  ### Added
+
+  - New endpoint `migrate_vault` (permissionless) that moves a version 0 vault to version 1 and starts `total_lp_supply` at the current `lp_mint.supply`. It can only run once per vault.
+  - New `Vault` fields `version`, `total_lp_supply` and `_padding0`.
+  - New event `VaultMigrated`.
+  - New errors `InvalidLpOwner`, `InvalidLpSupplyAccounting` and `VaultAlreadyMigrated`.
+
+  ### Changed
+
+  - `MAX_STRATEGY` reduced from 30 to 29. The 32 bytes of the former 30th strategy slot, unused by every vault, now hold `version`, `total_lp_supply` and `_padding0`. The account size and the offsets of all other fields are unchanged.
+  - Version 1 vaults use `total_lp_supply` in `deposit`, `withdraw`, `withdraw_directly_from_strategy` and the performance fee calculation, and update it whenever LP is minted or burned. Version 0 vaults keep using `lp_mint.supply`.
+  - New vaults are created as version 1.
+
+  ### Breaking Changes
+
+  - `withdraw` and `withdraw_directly_from_strategy` no longer accept an LP account that `user` only controls as a delegate; the LP account owner must sign as `user`.
+  - `Vault.strategies` now has 29 entries. Clients decoding the vault with the old IDL see the former 30th slot as a non-default pubkey once the vault is migrated, and must update the IDL before `migrate_vault` runs.
+  - Integrations that compute the underlying amount of vault LP must use `total_lp_supply` when `version == 1`, and `lp_mint.supply` otherwise.
+
+  ## TypeScript SDK: `@meteora-ag/vault-sdk` `2.4.0`
+
+  <Tip>
+    Production: [`@meteora-ag/vault-sdk@2.4.0`](https://www.npmjs.com/package/@meteora-ag/vault-sdk/v/2.4.0).
+  </Tip>
+
+  ### Added
+
+  - `getVaultLpSupply` to get the LP supply a vault prices shares with
+  - `initializeIdleVault` and `migrateVault` in the IDL
+
+  ### Changed
+
+  - Sync IDL with vault program 0.9.5: `Vault` has 29 strategies followed by `version`, `totalLpSupply` and `padding0`, new `VaultMigrated` event and errors up to `VaultAlreadyMigrated` (6024)
+  - `getVaultSupply` refetches the vault and returns `totalLpSupply` for version 1 vaults
+  - Version 1 vaults price shares with `totalLpSupply`, not the LP mint supply. Reading `lpMint.supply` directly gives wrong share and amount calculations, use `getVaultLpSupply` / `getVaultSupply` in TS or `Vault::get_lp_supply` in Rust
+  - `deposit` no longer refetches the vault, it only uses the vault's LP mint and token mint
+  - `refreshVaultState` also refreshes `tokenLpMint`
+  - Rust `Vault` state uses the 0.9.5 layout and adds `get_lp_supply`, `VaultError` matches the program
+
+  ### Removed
+
+  - `collectDust` and `withdraw2` from the IDL, the program no longer has them
+
+  ### Fixed
+
+  - Strategies of type `Kamino` and `JupLend` decode, the IDL `StrategyType` was missing both and the Rust `StrategyType` was missing `JupLend`
+  - `StrategyType` type matches the strategy names Anchor decodes: adds `kamino` and `jupLend`, renames `apricotWithoutLM` to `apricotWithoutLm`, removes `cypher` and `psylend`
+</Update>
+
+<Update
+  label="mercurial-vault 0.9.4"
+  description="Anchor 0.31.1 and Jupiter Lend"
+  rss="Dynamic Vault mercurial-vault 0.9.4 upgrades to Anchor 0.31.1, adds Jupiter Lend, and removes Marginfi, Kamino, and Solend."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.9.4` | [mercurial-vault #297](https://github.com/MeteoraAg/mercurial-vault/pull/297) |
+
+  ## What We Shipped
+
+  - Anchor 0.31.1
+  - Jupiter Lend
+
+  ## Program: `mercurial-vault` `0.9.4`
+
+  Program ID (mainnet and devnet): `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi`
+
+  [Program PR #297](https://github.com/MeteoraAg/mercurial-vault/pull/297)
+
+  ### Changed
+
+  - Upgrade to anchor 0.31.1
+
+  ### Added
+
+  - Jupiter lend
+
+  ### Removed
+
+  - Removed marginfi
+  - Removed kamino
+  - Removed solend
+
+  ### Fixed
+
+  - Use of `+1` as rounding for `from_liquidity_to_collateral`
+</Update>
+
+<Update
+  label="mercurial-vault 0.9.3"
+  description="Initial deposit overflow fix"
+  rss="Dynamic Vault mercurial-vault 0.9.3 fixes an overflow when the initial deposit amount is too big."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.9.3` | [mercurial-vault #290](https://github.com/MeteoraAg/mercurial-vault/pull/290) |
+
+  ## What We Shipped
+
+  - Overflow fix for a large initial deposit
+
+  ## Program: `mercurial-vault` `0.9.3`
+
+  Program ID (mainnet and devnet): `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi`
+
+  [Program PR #290](https://github.com/MeteoraAg/mercurial-vault/pull/290)
+
+  ### Fixed
+
+  - Fix overflow issue when initial deposit amount is too big
+</Update>
+
+<Update
+  label="mercurial-vault 0.9.2"
+  description="Audit fixes and removed endpoints"
+  rss="Dynamic Vault mercurial-vault 0.9.2 fixes Offsite audit reports and removes collect_dust and withdraw2."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.9.2` | [mercurial-vault #289](https://github.com/mercurial-finance/mercurial-vault/pull/289) |
+
+  ## What We Shipped
+
+  - Offsite audit fixes
+  - Removed `collect_dust` and `withdraw2`
+
+  ## Program: `mercurial-vault` `0.9.2`
+
+  Program ID (mainnet and devnet): `24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi`
+
+  [Program PR #289](https://github.com/mercurial-finance/mercurial-vault/pull/289)
+
+  ### Fixed
+
+  - Fix some audit reports from Offsite
+
+  ### Breaking Changes
+
+  - Remove collect_dust endpoint
+  - Remove withdraw2 endpoint
 </Update>
 
 <Update
@@ -36,15 +255,23 @@ rss: true
   description="Removed token registry dependency"
   rss="@meteora-ag/vault-sdk 2.3.1 removes the @solana/spl-token-registry dependency."
 >
-  ## Changed
+  ## Release summary
 
-  | Area | Change |
-  | --- | --- |
-  | Dependencies | Removed `@solana/spl-token-registry`. |
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | TypeScript SDK | `2.3.1` | [vault-sdk #135](https://github.com/mercurial-finance/vault-sdk/pull/135) |
 
-  ## Upgrade Note
+  ## What We Shipped
 
-  Pass token mint `PublicKey` values directly to `VaultImpl.create`, `createMultiple`, and related helpers. Do not rely on token registry `TokenInfo` objects for SDK initialization.
+  - Removed `@solana/spl-token-registry`
+
+  ## TypeScript SDK: `@meteora-ag/vault-sdk` `2.3.1`
+
+  [SDK PR #135](https://github.com/mercurial-finance/vault-sdk/pull/135)
+
+  ### Changed
+
+  - remove `@solana/spl-token-registry` deps
 </Update>
 
 <Update
@@ -52,71 +279,175 @@ rss: true
   description="Moved package ownership to Meteora"
   rss="@meteora-ag/vault-sdk 2.3.0 moves package ownership to the Meteora organization."
 >
-  ## Changed
+  ## Release summary
 
-  | Area | Change |
-  | --- | --- |
-  | Package | Moved to the `meteora-ag` organization. |
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | TypeScript SDK | `2.3.0` | [vault-sdk #134](https://github.com/mercurial-finance/vault-sdk/pull/134) |
 
-  ## Upgrade Note
+  ## What We Shipped
 
-  Use the package name `@meteora-ag/vault-sdk` for new integrations.
+  - Package moved to the `meteora-ag` organization
+
+  ## TypeScript SDK: `@meteora-ag/vault-sdk` `2.3.0`
+
+  [SDK PR #134](https://github.com/mercurial-finance/vault-sdk/pull/134)
+
+  ### Changed
+
+  - move to `meteora-ag` org
 </Update>
 
 <Update
-  label="@mercurial-finance/vault-sdk 2.2.x"
-  description="Batch loading and mint parsing updates"
-  rss="@mercurial-finance/vault-sdk 2.2.x adds deserializeMint, fixes token mint and LP mint fields, removes lpMintPda, and optimizes batch create helpers."
+  label="@mercurial-finance/vault-sdk 2.2.1"
+  description="deserializeMint utility"
+  rss="@mercurial-finance/vault-sdk 2.2.1 adds the deserializeMint utility."
 >
-  ## Added
+  ## Release summary
 
-  | Version | Change |
-  | --- | --- |
-  | `2.2.1` | Added `deserializeMint` utility. |
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | TypeScript SDK | `2.2.1` | [vault-sdk #131](https://github.com/mercurial-finance/vault-sdk/pull/131) |
 
-  ## Changed
+  ## What We Shipped
 
-  | Version | Change |
-  | --- | --- |
-  | `2.2.0` | Fixed `tokenMint` and `tokenLpMint`. |
-  | `2.1.1` | Optimized `createMultiple` and `createMultiplePda` RPC usage. |
-  | `2.1.0` | Updated `createMultiple` to take fewer parameters. |
+  - `deserializeMint`
 
-  ## Removed
+  ## TypeScript SDK: `@mercurial-finance/vault-sdk` `2.2.1`
 
-  | Version | Change |
-  | --- | --- |
-  | `2.2.0` | Removed `lpMintPda` field. |
+  [SDK PR #131](https://github.com/mercurial-finance/vault-sdk/pull/131)
+
+  ### Added
+
+  - new utils `deserializeMint`
 </Update>
 
 <Update
-  label="@mercurial-finance/vault-sdk 2.0.x"
-  description="Dependency updates and withdrawal logic change"
-  rss="@mercurial-finance/vault-sdk 2.0.x updates @solana/spl-token, fixes refreshVaultState, and removes logic to withdraw directly from strategy."
+  label="@mercurial-finance/vault-sdk 2.2.0"
+  description="Mint field fixes"
+  rss="@mercurial-finance/vault-sdk 2.2.0 fixes tokenMint and tokenLpMint and removes lpMintPda."
 >
-  ## Changed
+  ## Release summary
 
-  | Version | Change |
-  | --- | --- |
-  | `2.0.0` | Updated `@solana/spl-token` to `0.4.6` and related packages. |
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | TypeScript SDK | `2.2.0` | [vault-sdk #130](https://github.com/mercurial-finance/vault-sdk/pull/130) |
 
-  ## Fixed
+  ## What We Shipped
 
-  | Version | Change |
-  | --- | --- |
-  | `2.0.1` | Fixed `refreshVaultState`. |
+  - Fixed `tokenMint` and `tokenLpMint`
+  - Removed `lpMintPda`
 
-  ## Removed
+  ## TypeScript SDK: `@mercurial-finance/vault-sdk` `2.2.0`
 
-  | Version | Change |
-  | --- | --- |
-  | `2.0.0` | Removed older direct-strategy withdrawal logic from the package. |
+  [SDK PR #130](https://github.com/mercurial-finance/vault-sdk/pull/130)
+
+  ### Fixed
+
+  - fix `tokenMint` & `tokenLpMint`
+
+  ### Removed
+
+  - remove `lpMintPda` field
 </Update>
 
-## Source Gaps
+<Update
+  label="@mercurial-finance/vault-sdk 2.1.1"
+  description="Batch vault loading"
+  rss="@mercurial-finance/vault-sdk 2.1.1 updates createMultiple and createMultiplePda to use fewer RPC calls."
+>
+  ## Release summary
 
-| Gap | Impact |
-| --- | --- |
-| No local program changelog was found in `mercurial-vault`. | Program changes are documented here as a source snapshot, not as versioned release notes. |
-| Public TS IDL is older than the current program source. | Low-level integrators should compare against current source or regenerated IDL before manual instruction construction. |
-| The provided production Swagger URL serves Dynamic AMM keeper routes. | Dynamic Vault API docs use the checked-in Dynamic Vault OpenAPI file and live `merv2-api` route checks. |
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | TypeScript SDK | `2.1.1` | [vault-sdk #129](https://github.com/mercurial-finance/vault-sdk/pull/129) |
+
+  ## What We Shipped
+
+  - Fewer RPC calls in `createMultiple` and `createMultiplePda`
+
+  ## TypeScript SDK: `@mercurial-finance/vault-sdk` `2.1.1`
+
+  [SDK PR #129](https://github.com/mercurial-finance/vault-sdk/pull/129)
+
+  ### Changed
+
+  - update `createMultiple` & `createMultiplePda` to optimize rpc call
+</Update>
+
+<Update
+  label="@mercurial-finance/vault-sdk 2.1.0"
+  description="createMultiple parameters"
+  rss="@mercurial-finance/vault-sdk 2.1.0 changes createMultiple to take fewer parameters."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | TypeScript SDK | `2.1.0` | [vault-sdk #128](https://github.com/mercurial-finance/vault-sdk/pull/128) |
+
+  ## What We Shipped
+
+  - `createMultiple` takes fewer parameters
+
+  ## TypeScript SDK: `@mercurial-finance/vault-sdk` `2.1.0`
+
+  [SDK PR #128](https://github.com/mercurial-finance/vault-sdk/pull/128)
+
+  ### Fixed
+
+  - fix `createMultiple` to take in less param
+</Update>
+
+<Update
+  label="@mercurial-finance/vault-sdk 2.0.1"
+  description="refreshVaultState fix"
+  rss="@mercurial-finance/vault-sdk 2.0.1 fixes refreshVaultState."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | TypeScript SDK | `2.0.1` | [vault-sdk #126](https://github.com/mercurial-finance/vault-sdk/pull/126) |
+
+  ## What We Shipped
+
+  - `refreshVaultState` works again
+
+  ## TypeScript SDK: `@mercurial-finance/vault-sdk` `2.0.1`
+
+  [SDK PR #126](https://github.com/mercurial-finance/vault-sdk/pull/126)
+
+  ### Fixed
+
+  - fix `refreshVaultState` not working
+</Update>
+
+<Update
+  label="@mercurial-finance/vault-sdk 2.0.0"
+  description="spl-token 0.4.6 and withdrawal change"
+  rss="@mercurial-finance/vault-sdk 2.0.0 updates @solana/spl-token to 0.4.6 and removes direct strategy withdrawal logic."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | TypeScript SDK | `2.0.0` | [vault-sdk #124](https://github.com/mercurial-finance/vault-sdk/pull/124) |
+
+  ## What We Shipped
+
+  - `@solana/spl-token` `0.4.6`
+  - Removed direct strategy withdrawal logic
+
+  ## TypeScript SDK: `@mercurial-finance/vault-sdk` `2.0.0`
+
+  [SDK PR #124](https://github.com/mercurial-finance/vault-sdk/pull/124)
+
+  ### Changed
+
+  - Pump "@solana/spl-token" to 0.4.6 and various relevant packages
+
+  ### Removed
+
+  - Remove logic to withdraw directly from strategy
+</Update>

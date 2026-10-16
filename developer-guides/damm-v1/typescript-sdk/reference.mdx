@@ -102,7 +102,7 @@ Some PDA helpers are implemented in `src/amm/utils.ts` but are not top-level exp
 | --- | --- | --- |
 | `updateState()` | `Promise<void>` | Refresh pool, vault, clock, depeg accounts, and computed pool info. |
 | `getPoolTokenMint()` | `PublicKey` | Return the pool LP mint. |
-| `getLpSupply()` | `Promise<BN>` | Fetch current LP token supply. |
+| `getLpSupply()` | `Promise<BN>` | Return `pool.lpMintSupply`, the supply the program uses for pool LP shares. |
 | `getUserBalance(owner)` | `Promise<BN>` | Fetch the owner's LP token balance. |
 | `getSwapQuote(inTokenMint, inAmountLamport, slippage, swapInitiator?)` | `SwapQuote` | Compute exact-in swap output, minimum output, fee, and price impact. |
 | `getMaxSwapInAmount(tokenMint)` | `BN` | Estimate max source amount for a swap. |
@@ -112,13 +112,12 @@ Some PDA helpers are implemented in `src/amm/utils.ts` but are not top-level exp
 | `getDepositQuote(tokenAInAmount, tokenBInAmount, balance, slippage)` | `DepositQuote` | Quote a balanced or stable imbalanced deposit. |
 | `deposit(owner, tokenAInAmount, tokenBInAmount, poolTokenAmount)` | `Promise<Transaction>` | Build a deposit transaction. |
 | `getWithdrawQuote(lpTokenAmount, slippage, tokenMint?)` | `WithdrawQuote` | Quote balanced withdrawal or stable single-sided withdrawal. |
-| `withdraw(owner, lpTokenAmount, tokenAOutAmount, tokenBOutAmount)` | `Promise<Transaction>` | Build a withdrawal transaction. |
+| `withdraw(owner, lpTokenAmount, tokenAOutAmount, tokenBOutAmount)` | `Promise<Transaction>` | Build a withdrawal transaction. The LP token account owner must sign. |
 | `getUserLockEscrow(owner)` | `Promise<LockEscrow \| null>` | Fetch a lock escrow and derive claimed/unclaimed fee data. |
 | `getLockedLpAmount()` | `Promise<BN>` | Return pool-level locked LP amount from the pool and legacy LP ATA path. |
 | `lockLiquidity(owner, amount, feePayer?, opt?)` | `Promise<Transaction>` | Lock LP tokens into a lock escrow, optionally splitting stake-for-fee liquidity. |
 | `claimLockFee(owner, maxAmount, payer, receiver?, tempWSolAcc?)` | `Promise<Transaction>` | Build the older lock-fee claim transaction. |
 | `claimLockFee2(owner, maxAmount, payer, receiver)` | `Promise<Transaction>` | Build the newer lock-fee claim transaction. |
-| `moveLockedLP(owner, newOwner, maxAmount, payer?)` | `Promise<Transaction>` | Move locked LP between two owners' lock escrows. |
 | `partnerClaimFees(partnerAddress, maxAmountA, maxAmountB)` | `Promise<Transaction>` | Claim partner fees for config-created pools. |
 
 ## Getters
@@ -155,8 +154,9 @@ These helpers exist in `src/amm/utils.ts`. Import paths can vary between CJS and
 | `deriveLockEscrowPda(pool, owner, programId)` | Derive a lock escrow PDA. |
 | `deriveMintMetadata(lpMint)` | Derive the Metaplex metadata PDA for an LP mint. |
 | `getAssociatedTokenAccount(tokenMint, owner)` | Return the canonical SPL associated token account. |
-| `calculateSwapQuote(...)` | Lower-level swap quote helper used by `pool.getSwapQuote`. |
-| `calculatePoolInfo(...)` | Compute token A/B amounts and virtual price from pool and vault data. |
+| `getVaultLpSupply(vault, lpMintSupply)` | Vault LP supply for share pricing. Returns `vault.totalLpSupply` when `vault.version` is `1`. Otherwise returns `lpMintSupply`. Does not compare the two values. |
+| `calculateSwapQuote(...)` | Lower-level swap quote. Pass `vaultALpSupply` and `vaultBLpSupply` from `getVaultLpSupply`. `AmmImpl.getSwapQuote` does this after `create`. |
+| `calculatePoolInfo(...)` | Token A/B amounts and virtual price. Pass the same vault LP supplies, and pool `lpSupply` from `pool.lpMintSupply`. |
 | `getDepegAccounts(connection, poolStates)` | Fetch remaining depeg accounts for LST/stable pools. |
 | `calculateUnclaimedLockEscrowFee(...)` | Convert lock escrow virtual-price movement into unclaimed LP fee. |
 

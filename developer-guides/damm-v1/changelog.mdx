@@ -2,7 +2,7 @@
 title: "DAMM v1 Changelog"
 sidebarTitle: "Changelog"
 description: "Track DAMM v1 release notes, compatibility changes, and upgrade guidance for the dynamic AMM program, TypeScript SDK, Rust helpers, and API integrations."
-llmsDescription: "Explains the DAMM v1 integration changelog for builders maintaining Meteora DAMM v1 integrations. Covers dynamic-amm program changes, @meteora-ag/dynamic-amm-sdk releases, lock fee helpers, moveLockedLP, configurable pool creation, partner fee sharing, Rust commons PDA helpers, dynamic-amm-quote fixes, package migration from Mercurial to Meteora, upgrade notes, and source changelog links."
+llmsDescription: "Explains the DAMM v1 integration changelog for builders maintaining Meteora DAMM v1 integrations. Covers dynamic-amm program 0.5.6 pool.lp_mint_supply, program 0.5.7 vault.total_lp_supply, @meteora-ag/dynamic-amm-sdk 2.0.0, getVaultLpSupply, lock fee helpers, configurable pool creation, partner fee sharing, Rust commons PDA helpers, dynamic-amm-quote 0.0.6, package migration from Mercurial to Meteora, upgrade notes, and source changelog links."
 rss: true
 ---
 
@@ -15,6 +15,9 @@ rss: true
   description="Tracked vault LP supply"
   rss="DAMM v1 meteora-dynamic-amm 0.5.7 prices version 1 vault LP shares with vault.total_lp_supply. SDK 2.0.0 includes the 0.5.6 pool LP supply quotes as well."
 >
+  <Info>
+    Program `0.5.7` is live on mainnet. Use `@meteora-ag/dynamic-amm-sdk@2.0.0` or later. That package also includes the program `0.5.6` pool LP supply quotes.
+  </Info>
   ## Release summary
 
   | Component | Version | PR |
@@ -38,7 +41,7 @@ rss: true
   ### Changed
 
   - `libs/mercurial-vault` uses the new vault layout: the last strategy slot (`MAX_STRATEGY` 30 → 29) now holds `version`, `total_lp_supply` and `_padding0`. Account size and the offsets of later fields are unchanged.
-  - `swap`, `add_balance_liquidity`, `add_imbalance_liquidity`, `remove_liquidity_single_side`, `lock`, `claim_fee`, `bootstrap_liquidity`, `get_pool_info` and permissionless pool initialization read the vault LP supply with `VaultUtils::get_vault_lp_supply` instead of `*_vault_lp_mint.supply` (program 0.5.6).
+  - `swap`, `add_balance_liquidity`, `add_imbalance_liquidity`, `remove_liquidity_single_side`, `lock`, `claim_fee`, `bootstrap_liquidity`, `get_pool_info` and permissionless pool initialization read the vault LP supply with `VaultUtils::get_vault_lp_supply` instead of `*_vault_lp_mint.supply`.
 
   ### Added
 
@@ -126,7 +129,7 @@ rss: true
           <td><strong>Trading Terminals</strong></td>
           <td>
             <ul>
-              <li>LP value, add, and remove liquidity quotes now use <code>pool.lp_mint_supply</code> (program-tracked supply), NOT the SPL Token mint supply.</li>
+              <li>LP value, add, and remove liquidity quotes use <code>pool.lp_mint_supply</code>.</li>
               <li>Withdrawals must be initiated by the LP account owner. Delegates are not accepted; only the owner signature is valid.</li>
             </ul>
           </td>
@@ -157,14 +160,14 @@ rss: true
           <td><strong>Partners</strong></td>
           <td>
             <ul>
-              <li>Program tracks and controls all LP supply through <code>pool.lp_mint_supply</code>; integrations relying on direct SPL LP supply queries must update their logic.</li>
+              <li><code>pool.lp_mint_supply</code> changes when the program mints or burns LP.</li>
               <li><code>remove_balance_liquidity</code> and <code>remove_liquidity_single_side</code> require the LP token account owner to sign. LP in an account owned by the System Program or the incinerator can no longer be withdrawn.</li>
-              <li>Liquidity operations on pools with <code>pool.lp_mint_supply &lt; lp_mint.supply</code> will be rejected until patched by administrator.</li>
+              <li>Add, remove, <code>lock</code>, <code>claim_fee</code>, and <code>get_pool_info</code> return <code>LpMintSupplyAccountingNotPatched</code> when <code>pool.lp_mint_supply</code> is below <code>lp_mint.supply</code>. The program has no instruction that raises the tracked supply to the mint supply.</li>
             </ul>
           </td>
           <td>
             <ul>
-              <li>Review any off-chain accounting, analytics, or bots that track LP value or liquidity quoting and ensure <code>pool.lp_mint_supply</code> is used exclusively.</li>
+              <li>Read <code>pool.lp_mint_supply</code> for LP value and liquidity quotes.</li>
               <li>Prepare for stricter signer requirements for all withdrawals and liquidity removals; update any automation or user flow dependent on delegate signatures.</li>
             </ul>
           </td>

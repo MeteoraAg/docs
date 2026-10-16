@@ -19,7 +19,7 @@ A vault tracks:
 - The total amount of that token controlled by the vault.
 - The reserve token account available for immediate liquidity.
 - Approved strategies that can receive allocations.
-- Vault LP supply, which represents shares of the vault.
+- Vault LP supply, which represents shares of the vault. Version `1` vaults store that supply in `vault.total_lp_supply`. Version `0` vaults still use the vault LP mint supply.
 - Locked profit accounting, which smooths newly reported gains over time.
 
 DAMM v1 pools use vault LP positions to represent the pool's ownership of each token-side vault.
@@ -80,10 +80,10 @@ DAMM v1 LPs typically experience vault yield through pool performance metrics, s
 A simplified virtual price view is:
 
 ```math
-\text{virtual price} = \frac{\text{total pool value}}{\text{LP token supply}}
+\text{virtual price} = \frac{\text{total pool value}}{\text{pool.lp\_mint\_supply}}
 ```
 
-If pool value rises from fees or vault yield while LP supply stays the same, virtual price increases.
+`pool.lp_mint_supply` is the pool LP supply the program uses. If pool value rises from fees or vault yield while that supply stays the same, virtual price increases.
 
 ## Eligible assets
 

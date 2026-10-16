@@ -2,7 +2,7 @@
 title: "DAMM v1 Program Accounts"
 sidebarTitle: "Accounts"
 description: "Understand DAMM v1 dynamic AMM accounts, including pools, configs, lock escrows, operators, vault relationships, constants, enums, and PDA seeds."
-llmsDescription: "Explains the DAMM v1 program account model for Meteora's dynamic AMM program. Covers Pool, Config, LockEscrow, Operator, PartnerInfo, Bootstrapping, PoolFees, CurveType, Dynamic Vault relationships, PDA seeds, constants, activation types, pool types, operator permissions, account sizes, state interpretation, and SDK methods for fetching and deriving accounts."
+llmsDescription: "Explains the DAMM v1 program account model for Meteora's dynamic AMM program. Covers Pool, pool.lp_mint_supply, Config, LockEscrow, Operator, PartnerInfo, Bootstrapping, PoolFees, CurveType, Dynamic Vault version and total_lp_supply, PDA seeds, constants, activation types, pool types, operator permissions, account sizes, state interpretation, and SDK methods for fetching and deriving accounts."
 ---
 
 <Note>
@@ -80,6 +80,7 @@ Permissioned pools use an arbitrary signer account for the pool address rather t
 | `total_locked_lp` | Total LP amount locked through DAMM v1 lock escrow logic. |
 | `bootstrapping` | Launch-pool activation point, whitelisted vault, and activation type. |
 | `partner_info` | Partner fee authority and pending partner fee balances. |
+| `lp_mint_supply` | Pool LP supply used for share math. It changes only when this program mints or burns LP. `getLpSupply()` and `poolState.lpSupply` return this field. |
 | `padding` | Reserved bytes for future layout compatibility. |
 | `curve_type` | Constant product or stable-swap curve parameters. |
 
@@ -147,4 +148,10 @@ DAMM v1 does not hold all pool token inventory directly in the `Pool` account. E
 | `a_vault_lp_mint`, `b_vault_lp_mint` | Dynamic Vault LP mints. |
 | `a_vault_lp`, `b_vault_lp` | DAMM v1 pool-owned Dynamic Vault LP token accounts. |
 
-Quote engines must read the pool, both Dynamic Vault accounts, both vault token accounts, both vault LP mints, both pool vault-LP token accounts, the clock sysvar, and any depeg/stake accounts required by the curve.
+A version `1` vault stores `version`, `total_lp_supply`, and `_padding0` in the last legacy strategy slot. `MAX_STRATEGY` is `29`. The account size and the offsets of later fields are unchanged. Version `0` still prices vault shares with the vault LP mint supply.
+
+`swap`, `add_balance_liquidity`, `add_imbalance_liquidity`, `remove_liquidity_single_side`, `lock`, `claim_fee`, `bootstrap_liquidity`, `get_pool_info`, and permissionless pool initialization read vault LP supply with `VaultUtils::get_vault_lp_supply`: `vault.total_lp_supply` when `version == 1`, otherwise the vault LP mint supply. A version `1` vault whose `total_lp_supply` is below the mint supply returns `InvalidVaultLpSupplyAccounting` (`6065`).
+
+Pool LP shares use `pool.lp_mint_supply`. Add, remove, `lock`, `claim_fee`, and `get_pool_info` return `LpMintSupplyAccountingNotPatched` (`6063`) when that field is below `lp_mint.supply`. The program has no instruction that raises it to the mint supply.
+
+Quote engines must read the pool, both Dynamic Vault accounts, both vault token accounts, both vault LP mints, both pool vault-LP token accounts, the clock sysvar, and any depeg/stake accounts required by the curve. Pass `pool.lp_mint_supply` as the pool LP supply. Pass `getVaultLpSupply(vault, lpMint.supply)` as each vault LP supply.

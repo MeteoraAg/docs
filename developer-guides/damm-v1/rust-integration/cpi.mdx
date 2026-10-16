@@ -124,13 +124,16 @@ For most CPI use cases, initialize pools off-chain first and CPI only into swap,
 | `InvalidActivationPoint` / `PreActivationSwapStarted` | Launch-pool timing constraints are not satisfied. |
 | `InvalidRemainingAccountsLen` / `InvalidRemainingAccounts` | Depeg, referral, or zap remaining accounts are missing or ordered incorrectly. |
 | `ExceededSlippage` | CPI supplied minimum output or liquidity threshold is too strict for current state. |
+| `LpMintSupplyAccountingNotPatched` | `pool.lp_mint_supply` is below `lp_mint.supply`. |
+| `InvalidLpOwner` | `remove_balance_liquidity` or `remove_liquidity_single_side` signer is not `user_pool_lp.owner`. |
+| `InvalidVaultLpSupplyAccounting` | A version `1` vault has `total_lp_supply` below its LP mint supply. |
 
 ## Checklist
 
 | Step | Action |
 | --- | --- |
 | 1 | Derive the pool, LP mint, protocol fee account, vault LP accounts, and lock escrow with helper functions. |
-| 2 | Fetch current pool and Dynamic Vault state off-chain for quoting and account validation. |
+| 2 | Fetch current pool and Dynamic Vault state off-chain. Quote pool shares with `pool.lp_mint_supply`. Quote vault shares with `vault.total_lp_supply` when `vault.version` is `1`, otherwise the vault LP mint supply. |
 | 3 | Include required depeg remaining accounts for LST stable pools. |
 | 4 | Simulate the outer transaction with realistic compute budget and fresh blockhash. |
 | 5 | Reconcile Anchor logs and token transfers after execution. |

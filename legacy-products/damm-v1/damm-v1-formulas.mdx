@@ -97,8 +97,10 @@ This lets the pool reason about an LST's value instead of treating one LST as al
 LP tokens represent a share of the pool. A simplified LP ownership formula is:
 
 ```math
-\text{LP ownership share} = \frac{\text{LP tokens held}}{\text{total LP token supply}}
+\text{LP ownership share} = \frac{\text{LP tokens held}}{\text{pool.lp\_mint\_supply}}
 ```
+
+The denominator is `pool.lp_mint_supply`. It changes when the program mints or burns pool LP. Burning LP through the token program does not reduce it.
 
 The value of that share depends on the pool's underlying token value:
 
@@ -106,14 +108,14 @@ The value of that share depends on the pool's underlying token value:
 \text{LP share value} = \text{ownership share} \times \text{total pool value}
 ```
 
-DAMM v1 pools route token balances through Dynamic Vaults. That means the pool often measures its token A and token B totals by converting vault LP balances back into underlying token amounts.
+DAMM v1 pools route token balances through Dynamic Vaults. The pool converts its vault LP balance into underlying tokens with the vault LP supply for that vault's version: `vault.total_lp_supply` when `version` is `1`, and the vault LP mint supply when `version` is `0`.
 
 ## Virtual price
 
 Virtual price is a useful way to understand whether a pool share is becoming more valuable over time.
 
 ```math
-\text{virtual price} = \frac{D}{\text{LP token supply}}
+\text{virtual price} = \frac{D}{\text{pool.lp\_mint\_supply}}
 ```
 
 `D` is the curve invariant computed from the pool's vault-backed token amounts. For constant-product pools, DAMM v1 uses `sqrt(x * y)`. For stable pools, it uses the StableSwap invariant.

@@ -23,7 +23,7 @@ This page lists Anchor custom errors returned by the current Dynamic Vault `vaul
 | `6005` | `ProtocolIsNotSupported` | Protocol is not supported | The selected strategy type does not have a supported handler. |
 | `6006` | `UnMatchReserve` | Reserve does not support token mint | The strategy reserve does not match the vault token mint. |
 | `6007` | `InvalidLockedProfitDegradation` | lockedProfitDegradation is invalid | Admin tried to set a zero or above-denominator locked-profit degradation value. |
-| `6008` | `MaxStrategyReached` | Maximum number of strategies have been reached | All 30 strategy slots are already occupied. |
+| `6008` | `MaxStrategyReached` | Maximum number of strategies have been reached | All 29 strategy slots are already occupied. |
 | `6009` | `StrategyExisted` | Strategy existed | `initialize_strategy` tried to add a strategy already registered in the vault. |
 | `6010` | `InvalidUnmintAmount` | Invalid unmint amount | Direct strategy withdrawal computed an LP burn amount greater than the requested amount. |
 | `6011` | `InvalidAccountsForStrategy` | Invalid accounts for strategy | Strategy remaining accounts or fee vault did not match vault or strategy state. |
@@ -37,15 +37,11 @@ This page lists Anchor custom errors returned by the current Dynamic Vault `vaul
 | `6019` | `HaveMoneyInLending` | Cannot remove strategy because we have some in lending | Strategy removal left more than the allowed residual liquidity in the lending protocol. |
 | `6020` | `InvalidPrecisionLoss` | Invalid precision loss | Direct strategy withdrawal precision loss was greater than one underlying unit. |
 | `6021` | `UndeterminedError` | Undetermined error | Fallback error for unexpected internal state. |
+| `6022` | `InvalidLpOwner` | User is not the owner of the LP token account | `withdraw` or `withdraw_directly_from_strategy` received a `user_lp` account whose owner is not `user`. |
+| `6023` | `InvalidLpSupplyAccounting` | Vault LP supply accounting is invalid | A version `1` vault has `total_lp_supply` below `lp_mint.supply`. |
+| `6024` | `VaultAlreadyMigrated` | Vault is already migrated | `migrate_vault` ran on a vault whose `version` is not `0`, whose `total_lp_supply` is not `0`, or whose `_padding0` is not zero. |
 
-## IDL Naming Notes
-
-| Source | Difference |
-| --- | --- |
-| Current program source | Uses `PayAmountIsExceeded` for code `6016` and includes `InvalidPrecisionLoss` plus `UndeterminedError`. |
-| Checked-in TypeScript IDL | The older IDL spells code `6016` as `PayAmountIsExeeced` and stops at `HaveMoneyInLending`. |
-
-When decoding transactions from logs, match by numeric code first. When matching SDK-generated IDL names, account for the older misspelling in the TypeScript IDL.
+`@meteora-ag/vault-sdk@2.4.0` includes these codes through `VaultAlreadyMigrated`.
 
 ## Troubleshooting
 
