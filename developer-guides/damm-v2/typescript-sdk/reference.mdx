@@ -234,9 +234,10 @@ This section lists the public functions and methods exported by the SDK. Private
 | `getPriceChange(nextSqrtPrice, currentSqrtPrice)` | Compute price-change percentage from two square-root prices. |
 | `getPriceFromSqrtPrice(sqrtPrice, tokenADecimal, tokenBDecimal)` | Convert Q64 square-root price to UI price. |
 | `getSqrtPriceFromPrice(price, tokenADecimal, tokenBDecimal)` | Convert UI price to Q64 square-root price. |
-| `getUnClaimLpFee(poolState, positionState)` | Compute unclaimed LP fee amounts. |
-| `getRewardInfo(poolState, rewardIndex, periodTime, currentTime)` | Compute current reward info for one reward index. |
-| `getUserRewardPending(poolState, positionState, rewardIndex, currentTime, periodTime)` | Compute pending user reward for one position and reward index. |
+| `getUnClaimLpFee(poolState, positionState)` | Unclaimed LP fees. Wraps the fee accumulators the way the program does, and clamps a pending fee at `u64::MAX`. |
+| `getRewardInfo(poolState, rewardIndex, periodTime, currentTime)` | Reward info for one slot. Wraps `reward_per_token_stored`. Returns the emission in raw tokens when pool liquidity is zero. A step whose time and rate do not fit in a `u128` throws `MathOverflowError`. |
+| `getUserRewardPending(poolState, positionState, rewardIndex, currentTime, periodTime)` | Pending reward for one position and slot. Clamps the pending amount at `u64::MAX`. |
+| `getDeadLiquidityReward(poolState, rewardIndex, currentTime)` | Withdrawable `DEAD_LIQUIDITY` reward on a compounding pool. Returns `0` for any other collect fee mode. |
 | `positionByPoolFilter(pool)` | Build a `getProgramAccounts` filter for positions by pool. |
 | `vestingByPositionFilter(position)` | Build a `getProgramAccounts` filter for vesting accounts by position. |
 | `offsetBasedFilter(value, offset)` | Build a memcmp filter at an arbitrary account offset. |
@@ -256,7 +257,7 @@ This section lists the public functions and methods exported by the SDK. Private
 | --- | --- |
 | `isVestingComplete(vestingData, currentPoint)` | Check whether a vesting schedule is complete. |
 | `getTotalLockedLiquidity(vestingData)` | Sum locked liquidity in a vesting account. |
-| `getAvailableVestingLiquidity(vestingData, currentPoint)` | Compute currently unlocked liquidity from vesting data. |
+| `getAvailableVestingLiquidity(vestingData, currentPoint)` | Unlocked liquidity still to release. When `periodFrequency` or `liquidityPerPeriod` is `0`, this is `cliffUnlockLiquidity` minus liquidity already released. |
 
 ### Validation Helpers
 
@@ -273,7 +274,7 @@ This section lists the public functions and methods exported by the SDK. Private
 | `validateActivationType(activationType)` | Validate an activation type value. |
 | `validatePriceRange(collectFeeMode, sqrtMinPrice, sqrtMaxPrice)` | Validate a pool price range for the chosen collect-fee mode. |
 | `validateInitialSqrtPrice(collectFeeMode, initSqrtPrice, sqrtMinPrice, sqrtMaxPrice)` | Validate an initial square-root price. |
-| `validateCompoundingFee(collectFeeMode, compoundingFeeBps)` | Validate compounding-fee settings. |
+| `validateCompoundingFee(collectFeeMode, compoundingFeeBps)` | `0` to `10_000` for `CollectFeeMode.Compounding`. `0` for every other mode. |
 | `validateDynamicFee(dynamicFee)` | Validate dynamic-fee parameters. |
 | `validatePoolFees(poolFees, collectFeeMode, activationType, feeVersion?)` | Validate pool fee settings. Throws `DeprecatedBaseFeeModeError` for `RateLimiter`. |
 | `validateCustomizablePoolParams(params)` | Validate customizable pool creation parameters. |
@@ -600,7 +601,7 @@ The SDK exports typed errors that validation, quote, and math helpers may throw:
 | Topic | What to remember |
 | --- | --- |
 | Token order | Pool PDAs sort mints, but transaction params still need the pool's `tokenAMint` and `tokenBMint` fields. |
-| Compounding mode | `CollectFeeMode.Compounding` uses full-range constant-product liquidity and splits swap fees into `claimingFee` and `compoundingFee`. |
+| Compounding mode | `CollectFeeMode.Compounding` uses full-range constant-product liquidity. `compoundingFeeBps` of `0` sets `compoundingFee` to `0` and leaves the trading fee in `claimingFee`. |
 | Rate limiter | Existing rate-limiter pools still require the instructions sysvar remaining account on low-level swap builders when the limiter is active. The SDK handles this when it can identify the pool mode. New configs and new pools cannot use `RateLimiter`. |
 | Layout version | V1 pools track `tokenAAmount` and `tokenBAmount`. Use current SDK quote paths for compounding pools. |
 | Swap events | Prefer `EvtSwap2` for swap indexing. Older swap events were deprecated and removed from newer program versions. |

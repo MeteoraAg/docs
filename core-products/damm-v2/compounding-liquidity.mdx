@@ -2,7 +2,7 @@
 title: "DAMM v2 Compounding Liquidity"
 sidebarTitle: "Compounding Liquidity"
 description: "Learn how DAMM v2 compounding liquidity reinvests a share of LP fees into full-range pool reserves."
-llmsDescription: "Explains DAMM v2 compounding liquidity, covering CollectFeeMode Compounding, full-range constant-product reserves, DEAD_LIQUIDITY, compounding_fee_bps limits, claimable versus compounded LP fees, token B fee behavior, reserve accounting, and best use cases."
+llmsDescription: "Explains DAMM v2 compounding liquidity for cp-amm 0.2.5. Covers CollectFeeMode Compounding, full-range constant-product reserves, DEAD_LIQUIDITY, compounding_fee_bps from 0 to 10000, a zero compounding fee that leaves the LP fee claimable in token B, claimable versus compounded LP fees, and token B fee behavior."
 ---
 
 DAMM v2 compounding liquidity is a pool mode where a share of LP fees is automatically reinvested back into the pool. Instead of every LP fee waiting to be claimed and manually compounded back, the pool can use part of those fees to grow reserves and deepen liquidity over time.
@@ -24,14 +24,15 @@ Compounding liquidity uses `Compounding` collect fee mode. In this mode:
 
 The compounding share is controlled by `compounding_fee_bps`, in basis points.
 
-| `compounding_fee_bps` | Product Meaning |
+| `compounding_fee_bps` | What happens to the LP fee |
 | --- | --- |
-| `2500` | 25% of LP fees compound, 75% remain claimable |
-| `5000` | 50% of LP fees compound, 50% remain claimable |
-| `10000` | 100% of LP fees compound, no LP fee remains claimable |
+| `0` | Nothing is added to reserves. The whole LP fee stays claimable in token B. |
+| `2500` | 25% compounds, 75% stays claimable |
+| `5000` | 50% compounds, 50% stays claimable |
+| `10000` | 100% compounds. No LP fee stays claimable |
 
 <Note>
-  `compounding_fee_bps` must be greater than `0` and at most `10000` for compounding pools. It must be `0` for `BothToken` and `OnlyB` pools.
+  On a compounding pool, `compounding_fee_bps` is `0` to `10000`. `0` is the same fee split as `OnlyB`: the trading fee is collected in token B and none of it is compounded. The pool is still compounding mode, so it stays full-range and still keeps `DEAD_LIQUIDITY`. `BothToken` and `OnlyB` pools must set this field to `0`. `update_pool_fees` can change a compounding pool to `0`.
 </Note>
 
 ## Full-Range by Design

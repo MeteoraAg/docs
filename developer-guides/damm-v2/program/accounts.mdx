@@ -81,7 +81,7 @@ Use `fetchConfigState`, `getStaticConfigs`, or `getAllConfigs` to read configs f
 | `dynamic_fee` | Optional volatility-responsive fee config |
 | `protocol_fee_percent` | Protocol share of trading fees |
 | `referral_fee_percent` | Referral share of protocol fee when referral is present |
-| `compounding_fee_bps` | Fee share that compounds into reserves for compounding pools |
+| `compounding_fee_bps` | `0` to `10_000` on a compounding pool. `0` adds nothing to reserves. Must be `0` on `BothToken` and `OnlyB` pools. |
 
 ## Pool
 
@@ -100,7 +100,8 @@ Use `fetchConfigState`, `getStaticConfigs`, or `getAllConfigs` to read configs f
 | `collect_fee_mode` | Liquidity and fee mode |
 | `pool_type` | Permissionless or customizable |
 | `fee_version` | `0` caps max fee at 50%; `1` caps max fee at 99% |
-| `fee_a_per_liquidity`, `fee_b_per_liquidity` | Fee growth checkpoints as little-endian `U256` bytes |
+| `fee_a_per_liquidity`, `fee_b_per_liquidity` | Fee growth as little-endian `U256` bytes. The value wraps. A pending fee above `u64::MAX` is clamped. |
+| `dead_liquidity_fee_checkpoint` | `u64` checkpoint of the claiming fee owed by `DEAD_LIQUIDITY` on a compounding pool. `claim_protocol_fee2` settles the wrapped delta into `protocol_b_fee`. |
 | `permanent_lock_liquidity` | Total permanently locked pool liquidity |
 | `creator` | Pool creator |
 | `token_a_amount`, `token_b_amount` | Tracked reserves for layout version `V1` |
@@ -113,9 +114,9 @@ Use `fetchPoolState` for state and `fetchPoolFees` when you need decoded pool fe
 
 | Field | Meaning |
 | --- | --- |
-| `total_lp_a_fee`, `total_lp_b_fee` | Lifetime LP fees accumulated by token side |
-| `total_protocol_a_fee`, `total_protocol_b_fee` | Lifetime protocol fees accumulated by token side |
-| `total_position` | Count of created positions, updated when position accounts are initialized or reduced |
+| `total_lp_a_fee`, `total_lp_b_fee` | Lifetime LP fees by token side. The counter wraps. |
+| `total_protocol_a_fee`, `total_protocol_b_fee` | Lifetime protocol fees by token side. The counter wraps. |
+| `total_position` | Count of positions, updated when position accounts are created or closed. The counter wraps. |
 
 ### RewardInfo
 
@@ -126,7 +127,8 @@ Use `fetchPoolState` for state and `fetchPoolFees` when you need decoded pool fe
 | `mint`, `vault`, `funder` | Reward mint, reward vault, and funder authority |
 | `reward_duration`, `reward_duration_end` | Campaign duration and end timestamp |
 | `reward_rate` | Emission rate in Q64-scaled reward units |
-| `reward_per_token_stored` | Cumulative reward growth checkpoint as little-endian `U256` bytes |
+| `reward_per_token_stored` | Cumulative reward growth as little-endian `U256` bytes. The value wraps. A pending reward above `u64::MAX` is clamped. |
+| `dead_liquidity_reward_checkpoint` | `u64` checkpoint of the reward share owed by `DEAD_LIQUIDITY` on a compounding pool. `withdraw_dead_liquidity_reward` pays the funder the wrapped delta. |
 | `last_update_time` | Last pool reward update timestamp |
 | `cumulative_seconds_with_empty_liquidity_reward` | Carry-forward accounting when rewards accrue while liquidity is empty |
 
@@ -150,7 +152,7 @@ The position NFT is the ownership handle. A position operation that changes liqu
 
 | Field | Meaning |
 | --- | --- |
-| `total_claimed_a_fee`, `total_claimed_b_fee` | Lifetime claimed fee counters for the position |
+| `total_claimed_a_fee`, `total_claimed_b_fee` | Lifetime claimed fees for the position. The counters wrap. |
 
 ### UserRewardInfo
 

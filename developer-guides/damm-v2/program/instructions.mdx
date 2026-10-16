@@ -74,10 +74,13 @@ New integrations should prefer `swap2` and SDK `getQuote2` because they share ex
 | `fund_reward` | `fundReward`, `initializeAndFundReward` | Fund reward emissions. |
 | `claim_reward` | `claimReward` | Claim pending liquidity mining rewards. |
 | `withdraw_ineligible_reward` | `withdrawIneligibleReward` | Withdraw undistributable rewards after campaign constraints allow it. |
+| `withdraw_dead_liquidity_reward` | `withdrawDeadLiquidityReward` | Funder withdraws the `DEAD_LIQUIDITY` reward share on a compounding pool. |
 | `update_reward_duration` | `updateRewardDuration` | Update reward campaign duration. |
 | `update_reward_funder` | `updateRewardFunder` | Update the funder authority for a reward slot. |
 
 Reward index `0` and `1` are the only supported reward slots.
+
+`reward_per_token_stored`, `fee_a_per_liquidity`, and `fee_b_per_liquidity` wrap when a growth step does not fit. A pending reward or fee above `u64::MAX` is clamped. `add_liquidity`, `remove_liquidity`, `remove_all_liquidity`, `claim_reward`, `split_position`, `split_position2`, `fund_reward`, `withdraw_ineligible_reward`, `withdraw_dead_liquidity_reward`, and `swap` stay available after that wrap. `withdraw_dead_liquidity_reward` and `claim_protocol_fee2` wrap the dead-liquidity checkpoint quotient to a `u64`.
 
 ## Config And Operator Instructions
 

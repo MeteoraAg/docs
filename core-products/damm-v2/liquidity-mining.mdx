@@ -2,7 +2,7 @@
 title: "DAMM v2 Liquidity Mining"
 sidebarTitle: "Liquidity Mining"
 description: "Learn how DAMM v2 distributes built-in liquidity mining rewards directly to LP positions."
-llmsDescription: "Documentation for DAMM v2 liquidity mining, covering built-in reward slots, up to two reward tokens per pool, reward duration limits, reward funder permissions, reward rate fixed-point accounting, reward-per-liquidity accounting, position reward accrual, claiming rewards, locked liquidity earning rewards, empty-liquidity carry-forward behavior, Token 2022 reward support, and use cases."
+llmsDescription: "DAMM v2 liquidity mining for cp-amm 0.2.5. Covers two reward slots, duration limits, funder permissions, reward_per_token_stored wrapping, pending rewards clamped at u64::MAX, withdraw_dead_liquidity_reward on compounding pools, empty-liquidity carry-forward, and Token 2022 reward mints."
 ---
 
 DAMM v2 has liquidity mining built into the pool program. Projects can fund reward campaigns directly on a pool, and LP positions earn those rewards automatically while they provide liquidity.
@@ -91,6 +91,12 @@ Liquidity mining helps projects bootstrap deeper markets. Instead of asking LPs 
 ## Empty Liquidity Periods
 
 If a reward campaign is active but the pool has no liquidity, DAMM v2 tracks the number of empty-liquidity seconds. On the next funding, the funder can carry that ineligible reward value forward into the new reward window. If they do not carry it forward, the ineligible reward must be withdrawn before funding again.
+
+## Growth Past the Field Limit
+
+`reward_per_token_stored` is a `U256`. Funding a reward while pool liquidity is very small can make one growth step larger than that field. The field wraps, and a position reads the difference with wrapping subtraction. If the position's new pending reward does not fit in a `u64`, the program stores `u64::MAX` and continues. The same wrap applies to `fee_a_per_liquidity` and `fee_b_per_liquidity`.
+
+On a compounding pool, the funder can call `withdraw_dead_liquidity_reward` for the reward share of `DEAD_LIQUIDITY` (`100 << 64`). That share is not owned by any position. The checkpoint is the quotient wrapped to a `u64`. `claim_protocol_fee2` uses the same wrap for `dead_liquidity_fee_checkpoint`. Quote the reward with `getDeadLiquidityReward`.
 
 ## Product Takeaway
 
