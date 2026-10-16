@@ -82,7 +82,7 @@ This page lists the Anchor custom errors returned by the `dynamic-bonding-curve`
 | `6064` | `CpiDisabled` | CPI disabled | Protocol zap CPI is disabled by the downstream zap program. |
 | `6065` | `MissingZapOutInstruction` | Missing zap out instruction | Required zap instruction was not found. |
 | `6066` | `InvalidZapAccounts` | Invalid zap accounts | Zap accounts do not match the expected route. |
-| `6067` | `InvalidCompoundingParameters` | Invalid compounding parameters | DAMM v2 compounding fee settings are invalid. |
+| `6067` | `InvalidCompoundingParameters` | Invalid compounding parameters | Compounding migration deposit sqrt price is outside the DAMM v2 price bounds. |
 | `6068` | `InvalidClaimProtocolFeeAccounts` | Invalid claim protocol fee accounts | Protocol fee claim account list does not match the selected mint, pool, receiver, or pool type. |
 | `6069` | `InvalidInstructionsSysvar` | Invalid instructions sysvar account | Instructions sysvar account is missing or not the canonical sysvar account. |
 | `6070` | `InvalidRemainingAccountsLength` | Invalid remaining accounts length | Transfer-hook remaining account slices require more accounts than were provided. |
@@ -109,11 +109,11 @@ This page lists the Anchor custom errors returned by the `dynamic-bonding-curve`
 
 ## TypeScript SDK Validation Helpers
 
-Call these before `createConfig2`. They throw the same messages the program returns.
+Call these before `createConfig2`. These helpers return booleans or throw SDK-side errors before the program returns a custom error.
 
 | Helper | Related program errors |
 | --- | --- |
 | `validateConfigParameters` | The config checks, including curve, fee, supply, vesting, migration, and transfer-fee restrictions. |
 | `validateTransferFeeParameters` | `InvalidTokenType`, `InvalidTransferFeeParameters`, `InvalidFeeClaimer`. |
-| `validateMigratedPoolFee` | `InvalidMigratedPoolFee`, `InvalidFeeMarketCapScheduler`, `InvalidCompoundingParameters`. |
-| `validateCompoundingFeeBps` | `InvalidCompoundingParameters`. |
+| `validateMigratedPoolFee` | `InvalidMigratedPoolFee`, `InvalidFeeMarketCapScheduler`, `InvalidCollectFeeMode`. |
+| `validateCompoundingFeeBps` | `InvalidMigratedPoolFee`. |
