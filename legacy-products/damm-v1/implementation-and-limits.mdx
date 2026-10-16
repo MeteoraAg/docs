@@ -137,7 +137,7 @@ Mainnet timing limits include:
 | Imbalanced add | Requires pool enabled; implemented by stable-swap curve math. Constant-product curves return unsupported. |
 | Balanced remove | Can run even when the pool is disabled, but activation gates can still apply. |
 | Single-sided remove | Requires pool enabled and stable-swap support; protocol trading fee is not charged on this operation. |
-| Bootstrap liquidity | Can initialize a depleted pool when LP supply is zero and both token amounts are non-zero. |
+| Bootstrap liquidity | Can initialize a pool when `pool.lp_mint_supply` is `0` and both token amounts are non-zero. A mint supply of `0` is not enough if the tracked supply is still positive. |
 
 The code deliberately rounds some share calculations against the user to account for vault-share precision loss. Integrations should use slippage bounds and quoted amounts rather than assuming exact proportional arithmetic.
 

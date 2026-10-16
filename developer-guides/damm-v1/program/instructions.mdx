@@ -54,10 +54,16 @@ Use the SDK or Rust helper derivations instead of rebuilding seeds manually.
 | --- | --- |
 | `add_balance_liquidity` | Adds balanced liquidity by minting a target amount of pool LP, bounded by max token A and B inputs. |
 | `add_imbalance_liquidity` | Adds liquidity with imbalanced token A/B inputs. Only supported by stable pools. |
-| `remove_balance_liquidity` | Burns pool LP and withdraws token A/B proportionally. This remains available when a pool is disabled. |
-| `remove_liquidity_single_side` | Burns pool LP and withdraws one token. Only supported by stable pools. |
-| `bootstrap_liquidity` | Re-seeds a depleted pool with token A and token B liquidity. |
+| `remove_balance_liquidity` | Burns pool LP and withdraws token A/B proportionally. This remains available when a pool is disabled. `user_pool_lp.owner` must equal `user`. |
+| `remove_liquidity_single_side` | Burns pool LP and withdraws one token. Only supported by stable pools. `user_pool_lp.owner` must equal `user`. |
+| `bootstrap_liquidity` | Re-seeds a pool when `pool.lp_mint_supply == 0` and both token amounts are non-zero. |
 | `get_pool_info` | Emits pool token amounts, virtual price, and timestamp for read-style integrations. |
+
+Share math uses `pool.lp_mint_supply`. Add, remove, `lock`, `claim_fee`, and `get_pool_info` read that field. Initialization, `bootstrap_liquidity`, add, remove, and `claim_fee` add or subtract the LP the instruction mints or burns. A pool whose `lp_mint_supply` is below `lp_mint.supply` returns `LpMintSupplyAccountingNotPatched` (`6063`).
+
+`remove_balance_liquidity` and `remove_liquidity_single_side` return `InvalidLpOwner` (`6064`) when the LP token account is not owned by `user`. An SPL delegate cannot burn that LP.
+
+Vault share conversion uses `vault.total_lp_supply` on a version `1` vault and the vault LP mint supply on a version `0` vault.
 
 Balanced operations are the normal constant-product path. Stable pools additionally support imbalanced deposits and single-sided withdrawals.
 

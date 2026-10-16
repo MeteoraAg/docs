@@ -67,16 +67,16 @@ Where:
 Virtual price is:
 
 ```math
-\text{virtual price} = \frac{D}{\text{LP token supply}}
+\text{virtual price} = \frac{D}{\text{pool.lp\_mint\_supply}}
 ```
 
-`D` is the curve invariant computed from the pool's token amounts after converting vault LP shares into underlying token balances. For constant-product pools, `D = sqrt(x * y)`. For stable pools, `D` comes from the stable-swap invariant.
+`D` is the curve invariant computed from the pool's token amounts after converting vault LP shares into underlying token balances. The conversion uses `vault.total_lp_supply` on a version `1` vault and the vault LP mint supply on a version `0` vault. For constant-product pools, `D = sqrt(x * y)`. For stable pools, `D` comes from the stable-swap invariant. The pool LP denominator is `pool.lp_mint_supply`.
 
 Virtual price can rise because of:
 
 - Swap fees.
 - Eligible Dynamic Vault yield.
-- Any value that increases pool assets relative to LP token supply.
+- Any value that increases pool assets relative to `pool.lp_mint_supply`.
 
 <Note>
   Base APY is backward-looking. It annualizes what happened during a measurement window. It is not a promise that the same return will continue.
