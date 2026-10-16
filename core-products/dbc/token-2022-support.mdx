@@ -1,151 +1,176 @@
 ---
 title: "DBC Token 2022 Support"
 sidebarTitle: "Token 2022 Support"
-description: "Learn how DBC supports Token 2022 launches, metadata handling, transfer-hook pools, quote-mint token badges, transfer-fee rules, authority choices, supply models, and DAMM v2 migration behavior."
-llmsDescription: "Explains DBC Token 2022 support, including SPL Token and Token 2022 base token launches, Token 2022 metadata pointer and token metadata handling, transfer-hook pool support, DAMM v2 migration, deprecated DAMM v1 migration for new configs, permissionless Token 2022 quote mint extensions, quote-mint token badges for otherwise-unsupported extensions, zero transfer-fee enforcement, unsupported native Token 2022 mint behavior, token authority options, fixed and dynamic supply, leftover handling, and product considerations."
+description: "See how DBC handles SPL Token and Token 2022 launches, base-mint transfer fees, quote-mint transfer fees, token badges, transfer-hook pools, and DAMM v2 migration."
+llmsDescription: "DBC Token 2022 reference for program 0.2.2. Covers SPL Token and Token 2022 base mints, MetadataPointer and TokenMetadata, base-mint transfer fees through create_config2 TransferFeeParameters (Token 2022 only, at most 10 percent, maximum fee u64::MAX), withheld authority set at pool initialization, MigratedTransferFeeAuthorityOption Immutable, RevokeZeroFee, Creator, and Partner applied at migration, permissionless quote mints, quote-mint token badges, non-zero quote transfer fees and live transfer fee config authorities accepted only by create_config2, constant supply, no locked vesting, MigrationFeeOption.Customizable, MigratedCollectFeeMode.Compounding, the 1 percent migration sqrt-price check at config creation, PoolConfig.version 1, legacy version 0 limits, swap amounts included_transfer_fee_amount_in and excluded_transfer_fee_amount_out, migration deposit of transfer-fee-excluded amounts, leftover_receiver signature, and transfer-hook configs rejecting a quote mint with a non-zero fee or a live transfer fee config authority."
 ---
 
-DBC supports both SPL Token and Token 2022 base token launches.
-
-Token 2022 support helps launch teams use newer Solana token capabilities while still accessing DBC's bonding curve, launch fee controls, and DAMM migration flow. 
+DBC can launch an SPL Token or Token 2022 base mint. Program `0.2.2` also supports a Token 2022 transfer fee on the base mint, and a Token 2022 transfer fee on the quote mint.
 
 <Note>
-  DBC supports the standard Token 2022 metadata path and a dedicated Token 2022 transfer-hook path. Other base-token extensions should not be assumed compatible unless they are explicitly supported by the DBC launch flow.
+  On a Token 2022 base mint, DBC initializes metadata. `transfer_fee_parameters` adds `TransferFeeConfig`. The transfer-hook config path adds a transfer hook. Those are the base-mint extensions this program sets up.
 </Note>
 
 ## SPL Token vs Token 2022
 
-| Token Type | Product Behavior |
+| Token type | What DBC does |
 | --- | --- |
-| SPL Token | Standard Solana token launch path. New configs must migrate to DAMM v2. Existing DAMM v1 pools can still graduate. |
-| Token 2022 | Modern token launch path with Token 2022 metadata handling. Must use DAMM v2 migration. |
-| Token 2022 with transfer hook | Dedicated launch path where the base mint has a transfer hook during bonding-curve trading. The hook is revoked when the curve completes so the token can migrate to DAMM v2. |
+| SPL Token | Standard base mint. New configs migrate to DAMM v2. Existing DAMM v1 pools can still graduate. |
+| Token 2022 | Base mint with metadata pointer and token metadata. New configs migrate to DAMM v2. This is the only base token type that can carry a transfer fee. |
+| Token 2022 with transfer hook | Separate config and pool. The hook is active during bonding-curve trading and is revoked when the curve completes. |
 
 ## Token 2022 Base Tokens
 
-When DBC launches a Token 2022 base token, the launch flow initializes the mint with Token 2022 metadata support.
+Pool initialization creates the Token 2022 mint and:
 
-DBC handles:
+- Sets decimals from the config.
+- Initializes the metadata pointer and token metadata with name, symbol, and URI.
+- Sets metadata update authority from `token_update_authority`.
+- Mints the initial base supply into the pool vault.
+- Sets or revokes mint authority from `token_update_authority`.
+- Initializes `TransferFeeConfig` when the config was created with `transfer_fee_parameters`.
 
-- Creating the Token 2022 mint.
-- Setting token decimals from the config.
-- Initializing metadata pointer behavior.
-- Initializing token metadata with name, symbol, and URI.
-- Initializing metadata with the creator, then setting metadata pointer and token metadata update authority according to the configured authority option.
-- Minting the initial base supply into the pool vault.
-- Setting mint authority according to the configured authority option.
+## Base Mint Transfer Fee
 
-This lets creators launch a Token 2022 token through the same product flow as a standard DBC launch.
+A base-mint transfer fee is set on the config, not on each pool. Use `create_config2` and pass `transfer_fee_parameters`. Pass none when the base mint should not have a transfer fee.
 
-## Transfer Hook Base Tokens
+Passing parameters always initializes `TransferFeeConfig` on the base mint, including when `transfer_fee_basis_points` is `0`. The base token type must be Token 2022. SPL Token configs are rejected with `InvalidTokenType`.
 
-DBC supports Token 2022 base mints with transfer hooks through separate config, pool, swap, and fee-claim paths.
-
-| Item | Behavior |
+| Field | Rule |
 | --- | --- |
-| Config account | `ConfigWithTransferHook`, which wraps the normal `PoolConfig` and stores the executable transfer-hook program. |
-| Pool account | `TransferHookPool`, which wraps the same `PoolState` layout used by standard virtual pools. |
-| Trading path | Transfer-hook pools use `swap2_with_transfer_hook`, not the standard `swap` or `swap2` instructions. |
-| Fee claims | Partner and creator trading fee claims use transfer-hook-aware `claim_trading_fee2` and `claim_creator_trading_fee2`. |
-| Completion | DBC revokes the transfer-hook program id and transfer-hook authority from the base mint when the curve completes. |
+| `transfer_fee_basis_points` | `0` to `1000` (10%). The on-chain maximum fee is `u64::MAX` and is not a config field. |
+| `withheld_authority` | `0` Partner, the config `fee_claimer`. `1` Creator, the pool creator. Set when the pool is initialized. That address withdraws withheld tokens through the Token 2022 program. |
+| `migrated_transfer_fee_authority_option` | Who can change the fee after `migration_damm_v2`. |
 
-For details, see [DBC Transfer Hook Pools](/core-products/dbc/transfer-hook-pools).
+| `migrated_transfer_fee_authority_option` | During the curve | At `migration_damm_v2` |
+| --- | --- | --- |
+| `0` Immutable | The mint is created with no transfer fee config authority. The fee stays at `transfer_fee_basis_points`. | Unchanged. |
+| `1` RevokeZeroFee | Pool authority holds the config authority. The configured fee applies. | Schedules the fee to `0` and revokes the authority. The new fee takes two epochs. |
+| `2` Creator | Pool authority holds the config authority. | Authority moves to the pool creator. Revoked when that address is the default pubkey. |
+| `3` Partner | Pool authority holds the config authority. | Authority moves to `fee_claimer`. |
 
-## Migration Target
+`0` basis points with `Immutable` or `RevokeZeroFee` is rejected with `InvalidTransferFeeParameters`. A partner withheld authority or a partner migrated authority requires a non-default `fee_claimer`.
 
-Token 2022 launches must use DAMM v2 migration in the DBC configuration flow.
+The config stores the choice in `transfer_fee_flag` (`1` when a base transfer fee was configured), `transfer_fee_basis_points`, `transfer_fee_withheld_authority`, and `migrated_transfer_fee_authority_option`.
 
-DAMM v2 is the modern migration target for Token 2022 support, advanced collect fee modes, dynamic fees, and vesting behavior.
+TypeScript:
 
-For transfer-hook launches, the hook is active during bonding-curve trading only. The base mint's transfer hook program ID and authority are revoked before DAMM v2 migration so the graduated mint can use DAMM v2 without relying on transfer-hook remaining accounts.
+```typescript
+import {
+  MigratedTransferFeeAuthorityOption,
+  TransferFeeWithheldAuthority,
+} from "@meteora-ag/dynamic-bonding-curve-sdk";
 
-<Warning>
-  DAMM v1 migration is deprecated for new configs and new pools. Existing DAMM v1 pools can still graduate. New Token 2022 launches must use DAMM v2.
-</Warning>
+const transferFeeParameters = {
+  transferFeeBasisPoints: 100, // 1%
+  withheldAuthority: TransferFeeWithheldAuthority.Creator,
+  migratedTransferFeeAuthorityOption: MigratedTransferFeeAuthorityOption.Creator,
+};
+```
+
+Pass `transferFeeParameters` on `client.partner.createConfig2`. The other arguments are the config account, `feeClaimer`, `leftoverReceiver`, `quoteMint`, `payer`, and the `buildCurve*` result.
+
+Omit `transferFeeParameters`, or pass `null`, when there is no base transfer fee. `createConfigAndPool` and `createConfigAndPoolWithFirstBuy` call `createConfig2`. Omitting the field is the same as `null`.
 
 ## Supported Quote Tokens
 
-DBC can use SPL Token quote assets permissionlessly. Token 2022 quote assets are permissionless only when the mint uses metadata-related extensions and has a zero transfer fee.
+SPL Token quote mints are permissionless.
 
-Permissionless Token 2022 quote mint extensions:
+A Token 2022 quote mint is permissionless when every extension is one of:
 
-- Metadata Pointer
-- Token Metadata
+- `MetadataPointer`
+- `TokenMetadata`
+- `TransferFeeConfig`, only when the current fee is zero and `transfer_fee_config_authority` is revoked
 
-SPL Token quote mints are always accepted. A Token 2022 quote mint with no extensions is also accepted permissionlessly, as long as it is not the Token 2022 native mint.
+A Token 2022 quote mint with no extensions is permissionless, except the Token 2022 native mint.
+
+If the newer transfer fee is scheduled and not yet active, both the older and newer fees must be zero. Once the newer fee is active, only that fee is checked. An expired `older_transfer_fee` is ignored. A transfer fee is zero when its basis points are `0` or its maximum fee is `0`.
 
 <Warning>
-  The Token 2022 native mint `So11111111111111111111111111111111111111112` is not supported as a DBC quote mint. Use the standard wrapped SOL mint instead.
+  The Token 2022 native mint `9pan9bMn5HatX4EJdBwg9VgCa7Uz5HL8N1m5D3NdXejP` is rejected as a quote mint. Use the SPL Token wrapped SOL mint `So11111111111111111111111111111111111111112`.
 </Warning>
 
-DBC records whether the quote mint belongs to the SPL Token program or Token 2022 program. Token transfers use `transfer_checked`, so integrations should provide the token program that matches each mint.
+DBC stores the quote token program in `quote_token_flag`. Transfers use `transfer_checked`. Pass the token program that owns each mint.
 
 ## Quote Mint Token Badges
 
-Some Token 2022 quote mints use extensions outside the permissionless allowlist, such as Permanent Delegate. Those quote mints need a **token badge** before they can be used in a new DBC config or virtual pool.
+A Token 2022 quote mint that is not permissionless needs a `TokenBadge` before a config or pool can use it. That includes mints with other extensions, such as Permanent Delegate, and mints whose `TransferFeeConfig` has a non-zero fee or a live transfer fee config authority.
 
-This is the path used for Stock Tokens and other Token 2022 quote assets that need extra extensions.
+Pass the badge as remaining account index `0`. The SDK adds it when you set `tokenBadge`. The PDA is `["token_badge", quote_mint]`.
 
-<CardGroup cols={2}>
-  <Card title="Permissionless Quote Mints" icon="unlock" iconType="solid">
-    SPL Token quote mints and Token 2022 quote mints that only use metadata extensions do not need a badge.
-  </Card>
-  <Card title="Token Badge Quote Mints" icon="badge-check" iconType="solid">
-    Token 2022 quote mints with other extensions need a Meteora operator-created token badge before config or pool creation.
-  </Card>
-</CardGroup>
+`create_token_badge` accepts any mint that is not already permissionless, including a mint with a non-zero transfer fee. You cannot badge a mint that is already permissionless (`CannotCreateTokenBadgeOnSupportedMint`). Closing a badge blocks new configs and pools for that mint. Pools that already use the mint keep trading.
 
-A DBC token badge is scoped to DBC. It does not automatically satisfy DAMM v2 mint validation. DAMM v2 configs used by DBC migration include the `CreatePoolWithoutMintValidation` permission so a badged quote mint can still graduate.
+A DBC badge is not a DAMM v2 badge. DAMM v2 configs used by DBC migration have `CreatePoolWithoutMintValidation`, so a badged quote mint can still graduate.
 
-A badge does not allow a non-zero transfer fee. Current and any scheduled `transfer_fee_basis_points` must be `0`. Expired historical `older_transfer_fee` values are ignored.
+The badge stores the mint address. It does not store the fee. `migration_damm_v2` reads the quote mint's fee for the current epoch.
 
-The program enforces that zero-fee rule when a token badge is created, when a config or pool is created, and on every instruction that transfers quote tokens. If a quote mint later has a non-zero transfer fee, quote-side swaps, surplus withdrawals, and quote fee claims fail until the fee returns to zero. Base-only fee claims can still succeed.
+At config creation, compounding mode checks that the sqrt price implied by the transfer-fee-excluded deposit amounts is within 1% of `migration_sqrt_price`. The check is `abs(migration_sqrt_price - derived_sqrt_price) * 100 <= max(migration_sqrt_price, derived_sqrt_price)`. A miss returns `InvalidCurve`. Migration does not run that check again.
 
-For config and pool creation, pass the token badge as remaining account index `0` when the quote mint is not permissionless-supported. The SDK adds this account when you supply `tokenBadge`.
+A higher quote fee at migration can deposit less liquidity, add the undeposited side to the protocol migration fee, and move the migration price outside that 1% band. If a scaled side rounds to zero, migration returns `AmountIsZero`.
 
-<Note>
-  You cannot create a token badge for a quote mint that is already permissionless-supported. Closing a badge blocks new configs and pools for that quote mint. Existing pools that already use the mint keep trading.
-</Note>
+A quote mint can also gain a `TransferFeeConfig` after the config exists, including through the mint close authority. `migration_damm_v2` then takes the transfer-fee path and runs `validate_transfer_fee_restrictions`. A config that is not constant supply, has locked vesting, is not `Customizable`, or is not `Compounding` fails that check.
 
-## Token Authority Choices
+## Quote Mint Transfer Fee
 
-Token 2022 launches can use the same product-level authority choices as other DBC launches.
+`create_config` and `create_config_with_transfer_hook` reject a quote mint with a non-zero transfer fee or a live transfer fee config authority, even when a badge is supplied. The error is `InvalidQuoteMint`. Use `create_config2`.
 
-Launch teams can configure whether authority is:
+A missing badge for a mint that is not permissionless is also `InvalidQuoteMint`. `InvalidTokenBadge` is returned only when the supplied badge account does not match the quote mint.
 
-- Held by the creator.
-- Held by the partner.
-- Made immutable.
-- Extended to include mint authority options for advanced configurations.
+The same quote mints are rejected on pool initialization for a legacy config (`PoolConfig.version` `0`) and on every transfer-hook pool initialization. A badged quote mint can still be used with a legacy config when the fee is zero and the transfer fee config authority is revoked.
 
-Authority choices should match the launch's trust model. Immutable settings may be easier for communities to reason about, while retained authority may be useful for managed launchpad flows.
+## Config Restrictions
 
-The mint-authority options, `CreatorUpdateAndMintAuthority` and `PartnerUpdateAndMintAuthority`, are only allowed for transfer-hook configs. Standard SPL Token and standard Token 2022 pool initialization rejects those options and revokes mint authority at launch.
+`create_config2` applies extra checks when the config has a base transfer fee, or the quote mint has a non-zero transfer fee or a live transfer fee config authority:
 
-## Fixed and Dynamic Supply
-
-Token 2022 launches can be used with DBC's supply models.
-
-| Supply Model | Product Behavior |
+| Requirement | Value |
 | --- | --- |
-| Dynamic supply | DBC mints the initial base supply needed by the launch flow. |
-| Fixed supply | DBC uses configured pre-migration and post-migration supply values, with possible leftover after migration. |
+| Token supply | Fixed supply, and `pre_migration_token_supply` equals `post_migration_token_supply` |
+| Locked vesting | None |
+| `migration_fee_option` | `Customizable` |
+| `migrated_collect_fee_mode` | `Compounding` |
+| `compounding_fee_bps` | `0` to `10_000`. `0` is valid |
 
-For fixed-supply Token 2022 launches, leftover handling works the same product way: unused base tokens can be withdrawn to the configured leftover receiver after migration.
+Configs created by program `0.2.2` have `version` `1`. `version` `0` is a legacy config. Legacy configs were not checked against these restrictions, so they stay off this path.
 
-## Product Considerations
+A Token 2022 config whose `token_update_authority` is `PartnerUpdateAuthority` or `PartnerUpdateAndMintAuthority` also needs a non-default `fee_claimer`. Token 2022 rejects the default pubkey as an authority.
 
-<CardGroup cols={2}>
-  <Card title="Modern Token Standard" icon="certificate" iconType="solid">
-    Token 2022 support gives launch teams access to newer token infrastructure.
-  </Card>
-  <Card title="Metadata Included" icon="tags" iconType="solid">
-    DBC initializes token metadata as part of the Token 2022 launch flow.
-  </Card>
-  <Card title="DAMM v2 Alignment" icon="arrow-right" iconType="solid">
-    Token 2022 launches should be designed around DAMM v2 graduation from the start.
-  </Card>
-  <Card title="Quote Token Review" icon="magnifying-glass" iconType="solid">
-    Check whether a Token 2022 quote mint is permissionless or needs a token badge, and confirm its transfer fee is zero.
-  </Card>
-</CardGroup>
+A base transfer hook cannot be combined with a quote mint that has a non-zero transfer fee or a live transfer fee config authority. See [DBC Transfer Hook Pools](/core-products/dbc/transfer-hook-pools).
+
+## Swaps
+
+The curve uses the amount the pool receives after the input mint's transfer fee. `minimum_amount_out` is checked against the amount the user receives after the output mint's transfer fee. `maximum_amount_in` is checked against the amount the user pays before the input mint's transfer fee.
+
+`EvtSwap3` and `EvtSwap3WithTransferHook` report `included_transfer_fee_amount_in` and `excluded_transfer_fee_amount_out`.
+
+`client.pool.swapQuote` and `client.pool.swapQuote2` return `includedTransferFeeAmountIn` and `excludedTransferFeeAmountOut`.
+
+For a Token 2022 quote mint, pass `quoteMint` and `currentEpoch`. Without them the SDK throws `quoteMint and currentEpoch are required for a Token-2022 quote mint, use getSwapQuoteTransferFees`. That helper loads the quote mint when `quoteTokenFlag` is Token 2022, the base mint when you pass `baseMint`, and the current epoch.
+
+An existing-pool quote reads the base fee from `transferFeeFlag` and `transferFeeBasisPoints` unless you pass `baseMint` or `baseTransferFeeBasisPoints`. `baseMint` reads the mint account. The flag reads the fee stored on the config.
+
+## Migration And Leftover
+
+Version `1` configs that have a base transfer fee, or a quote mint with a non-zero transfer fee or a live transfer fee config authority, migrate on the transfer-fee path. The details are in [DBC Migration and Liquidity](/core-products/dbc/migration-and-liquidity).
+
+`migration_damm_v2` still rejects a non-zero quote transfer fee for a legacy config (`QuoteMintHasNonZeroTransferFee`).
+
+`withdraw_leftover` is permissionless when the transfer fee on the leftover is zero. When that fee is non-zero, `leftover_receiver` must sign. See [DBC Surplus and Leftover](/core-products/dbc/surplus-and-leftover).
+
+## Token Authority
+
+`token_update_authority` chooses who can update metadata, and, for transfer-hook configs only, who receives mint authority.
+
+| Option | Standard pool | Transfer-hook pool |
+| --- | --- | --- |
+| Creator or partner update authority | Allowed. Mint authority is revoked at initialization. | Allowed. |
+| Immutable | Allowed. Mint authority is revoked at initialization. | Allowed. |
+| Creator or partner update and mint authority | Rejected. | Allowed. Mint authority is assigned to that party. |
+
+## Fixed And Dynamic Supply
+
+| Supply | Behavior |
+| --- | --- |
+| Dynamic | DBC mints the base supply required by the curve, the migration allocation, and locked vesting. |
+| Fixed | The config sets `pre_migration_token_supply` and `post_migration_token_supply`. Unused base can be withdrawn to `leftover_receiver` after migration. |
+
+A transfer-fee config cannot use dynamic supply. It must be fixed supply with equal pre-migration and post-migration amounts, and it cannot use locked vesting.

@@ -5,7 +5,7 @@ description: "Learn how to install @meteora-ag/dynamic-bonding-curve-sdk, initia
 llmsDescription: "Explains the first steps for building with the DBC TypeScript SDK. Covers installing @meteora-ag/dynamic-bonding-curve-sdk, initializing DynamicBondingCurveClient, using the public dynamic_bonding_curve program ID, fetching PoolConfig and VirtualPool state including transfer-hook account variants, quoting swaps with swapQuote and swapQuote2, choosing service areas, running SDK checks, local validator fixtures, and devnet faucet resources."
 ---
 
-This guide shows how to install and initialize the official DBC TypeScript SDK, `@meteora-ag/dynamic-bonding-curve-sdk`.
+This guide shows how to install and initialize `@meteora-ag/dynamic-bonding-curve-sdk` `2.0.0` or later. That package matches program `0.2.2`, including Token 2022 transfer fees on the base and quote mints.
 
 Before you begin, here are the main resources:
 
@@ -54,13 +54,13 @@ import { Connection } from "@solana/web3.js";
 import { DynamicBondingCurveClient } from "@meteora-ag/dynamic-bonding-curve-sdk";
 
 const connection = new Connection(process.env.RPC_URL!, "confirmed");
-const client = DynamicBondingCurveClient.create(connection, "confirmed");
+const client = new DynamicBondingCurveClient(connection, "confirmed");
 ```
 
-The constructor is also public:
+`commitment` defaults to `confirmed` when you omit it. Curve, fee, and transfer-fee math is a separate import:
 
 ```typescript
-const client = new DynamicBondingCurveClient(connection, "confirmed");
+import { getSwapResult } from "@meteora-ag/dynamic-bonding-curve-sdk/math";
 ```
 
 ## Program ID

@@ -2,7 +2,7 @@
 title: "DBC TS SDK Examples"
 sidebarTitle: "Examples"
 description: "Explore TypeScript examples for DBC config creation, pool creation, swap quotes, swaps, fee claims, migration, and state reads."
-llmsDescription: "Explains practical DBC TypeScript SDK examples using @meteora-ag/dynamic-bonding-curve-sdk. Covers setup, building curve configs, createConfig, createPool, deriveDbcPoolAddress, swapQuote2, swap2 exact-in and partial-fill modes, reading pool progress, claiming partner and creator fees, migrating to DAMM v1 or DAMM v2, and when to use the SDK Reference for the complete API surface."
+llmsDescription: "DBC TypeScript SDK examples for @meteora-ag/dynamic-bonding-curve-sdk 2.0.0. Covers client construction, buildCurveWithCustomSqrtPrices, createConfig2, createPool, deriveDbcPoolAddress, getSwapQuoteTransferFees, swapQuote2 includedTransferFeeAmountIn and excludedTransferFeeAmountOut, swap2, fee claims, and DAMM v2 migration."
 ---
 
 These examples are based on the local `dynamic-bonding-curve-sdk` examples and tests. They focus on transaction construction patterns. For the full method catalog, see the [SDK Reference](/developer-guides/dbc/typescript-sdk/reference).
@@ -23,6 +23,7 @@ import {
   DammV2DynamicFeeMode,
   deriveDbcPoolAddress,
   DynamicBondingCurveClient,
+  getSwapQuoteTransferFees,
   MigratedCollectFeeMode,
   MigrationFeeOption,
   MigrationOption,
@@ -33,7 +34,7 @@ import {
 } from "@meteora-ag/dynamic-bonding-curve-sdk";
 
 const connection = new Connection(process.env.RPC_URL!, "confirmed");
-const client = DynamicBondingCurveClient.create(connection, "confirmed");
+const client = new DynamicBondingCurveClient(connection, "confirmed");
 ```
 
 ## Build A Curve Config
@@ -111,7 +112,7 @@ const curveConfig = buildCurveWithCustomSqrtPrices({
 const partner = Keypair.generate();
 const config = Keypair.generate();
 
-const createConfigTx = await client.partner.createConfig({
+const createConfigTx = await client.partner.createConfig2({
   config: config.publicKey,
   feeClaimer: partner.publicKey,
   leftoverReceiver: partner.publicKey,
@@ -161,6 +162,10 @@ const currentPoint =
     ? new BN(await connection.getSlot())
     : new BN(Math.floor(Date.now() / 1000));
 
+const transferFees = await getSwapQuoteTransferFees(connection, configState, {
+  baseMint: poolState.poolState.baseMint,
+});
+
 const quote = client.pool.swapQuote2({
   virtualPool: poolState,
   config: configState,
@@ -171,7 +176,11 @@ const quote = client.pool.swapQuote2({
   hasReferral: false,
   eligibleForFirstSwapWithMinFee: false,
   currentPoint,
+  ...transferFees,
 });
+
+// quote.includedTransferFeeAmountIn is what the user pays.
+// quote.excludedTransferFeeAmountOut is what the user receives after a Token 2022 transfer fee.
 
 const swapTx = await client.pool.swap2({
   owner: new PublicKey("USER_WALLET"),

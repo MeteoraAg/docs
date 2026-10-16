@@ -2,7 +2,7 @@
 title: "DBC Token Launch Pool"
 sidebarTitle: "DBC Token Launch Pool"
 description: "Learn how to create a Meteora DBC token launch pool with configurable bonding curves, launch fees, token metadata, transfer hooks, DAMM migration, and liquidity distribution."
-llmsDescription: "Guide to creating a DBC token launch pool with Meteora Invent Studio, covering setup, local validator, environment variables, keypair generation, dbc_config.jsonc, quote mint, curve build modes, token supply and authority settings, token authority option, fee scheduler, rate limiter, dynamic fee, pool creation fee, creator trading fee split, migration to DAMM v1 or DAMM v2, migration fees, migrated DAMM v2 pool fees, market cap fee scheduler price multiple, compounding fee, Token 2022 transfer hook launches, liquidity distribution, locked vesting, leftover receiver, fee claimer, dbcPool metadata, swaps, pool creator transfer, and dbc-create-pool commands."
+llmsDescription: "Guide to creating a DBC token launch pool with Meteora Invent Studio. The invent dbc_config.jsonc example does not set Token 2022 transfer fees. Base-mint transfer fees and quote mints with a non-zero transfer fee or a live transfer fee config authority use create_config2, documented on the DBC Token 2022 page. Transfer-hook configs cannot use those quote mints. The page also covers curve build modes, fees, DAMM migration, liquidity distribution, locked vesting, leftover receiver, and dbc-create-pool commands."
 ---
 
 This guide walks you through the steps to create a DBC token launch pool on Meteora. Whether you’re a seasoned developer or just starting out, this guide has got you covered to deploy liquidity and launch your project on Meteora.
@@ -308,8 +308,15 @@ npm install -g pnpm
         * Set transferHookProgram to launch tokens whose base mint executes a transfer hook program on every transfer.
         * Requires token.tokenType: 1 (Token 2022). The config is created with createConfigWithTransferHook and
         * pools on it must be created with the same transferHookProgram (see dbcPool.transferHookProgram).
+        * A transfer-hook config cannot use a quote mint with a non-zero transfer fee or a live transfer fee config authority.
         */
         // "transferHookProgram": "YOUR_TRANSFER_HOOK_PROGRAM_ADDRESS"
+
+        /* Token 2022 transfer fees are not fields in this invent config.
+        * A base-mint transfer fee uses create_config2 and transfer_fee_parameters.
+        * A quote mint with a non-zero transfer fee or a live transfer fee config authority also uses create_config2.
+        * See /core-products/dbc/token-2022-support.
+        */
       },
 
       /* dbcPool is only used in the following actions:

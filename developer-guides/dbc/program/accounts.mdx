@@ -13,7 +13,7 @@ llmsDescription: "Explains the DBC program account model for the public Meteora 
 
 | Address | How it is chosen | Use |
 | --- | --- | --- |
-| `PoolConfig` | New signer account passed to `create_config` | Partner config for quote mint, fee claimer, leftover receiver, fees, curve, token behavior, migration settings, and graduated-pool settings. |
+| `PoolConfig` | New signer account passed to `create_config2` or `create_config` | Partner config for quote mint, fee claimer, leftover receiver, fees, curve, token behavior, migration settings, base transfer fee, and graduated-pool settings. |
 | `ConfigWithTransferHook` | New signer account passed to `create_config_with_transfer_hook` | Transfer-hook config. It stores an embedded `PoolConfig` plus the executable transfer-hook program. |
 | `VirtualPool` | PDA from quote mint, base mint, and config | Standard active DBC pool for one base mint and config. Stores `pool_state`. |
 | `TransferHookPool` | Same pool PDA derivation, initialized by `initialize_virtual_pool_with_token2022_transfer_hook` | Transfer-hook active DBC pool. Stores the same `pool_state` layout as `VirtualPool`, with a separate discriminator. |
@@ -46,6 +46,8 @@ llmsDescription: "Explains the DBC program account model for the public Meteora 
 | `MAX_POOL_CREATION_FEE` | `100_000_000_000` lamports | Maximum pool creation fee. |
 | `MIN_LOCKED_LIQUIDITY_BPS` | `1000` | Minimum locked-liquidity requirement, equal to 10%. |
 | `MAX_LOCK_DURATION_IN_SECONDS` | `63_072_000` | Maximum lock duration for migrated DAMM v2 liquidity, equal to two years. |
+| `MAX_BASE_TRANSFER_FEE_BPS` | `1000` | Maximum base-mint transfer fee, equal to 10%. |
+| `CONFIG_VERSION` | `1` | `PoolConfig.version` written by current config creation. `0` is a legacy config. |
 
 ## Enums
 
@@ -60,6 +62,8 @@ llmsDescription: "Explains the DBC program account model for the public Meteora 
 | `MigrationProgress` | `0` pre-bonding curve, `1` post-bonding curve, `2` locked vesting, `3` created pool. |
 | `TokenAuthorityOption` | `0` creator update authority, `1` immutable, `2` partner update authority, `3` creator update and mint authority, `4` partner update and mint authority. |
 | `OperatorPermission` | `0` claim protocol fee, `1` zap protocol fee (deprecated bit kept for ordering), `2` create token badge, `3` close token badge. |
+| `TransferFeeWithheldAuthority` | `0` partner (`fee_claimer`), `1` creator. |
+| `MigratedTransferFeeAuthorityOption` | `0` immutable, `1` revoke after scheduling a zero fee, `2` creator, `3` partner. |
 
 ## PoolConfig
 
@@ -90,6 +94,11 @@ llmsDescription: "Explains the DBC program account model for the public Meteora 
 | `enable_first_swap_with_min_fee` | Enables the bundled creator first-swap validation path. |
 | `pool_creation_fee` | Lamport fee charged on pool creation. |
 | `sqrt_start_price`, `curve` | Q64.64 start price and fixed array of liquidity distribution points. |
+| `version` | `1` for configs created by program `0.2.2`. `0` is a legacy config and cannot enter the transfer-fee migration path. |
+| `transfer_fee_flag` | `1` when `create_config2` was given `transfer_fee_parameters`. `0` when it was not. |
+| `transfer_fee_basis_points` | Base-mint transfer fee in basis points. Meaningful when `transfer_fee_flag` is `1`. |
+| `transfer_fee_withheld_authority` | `TransferFeeWithheldAuthority`. The withheld-fee authority is the fee claimer or the pool creator. |
+| `migrated_transfer_fee_authority_option` | `MigratedTransferFeeAuthorityOption` applied to the base mint at migration. |
 
 ## VirtualPool And TransferHookPool
 

@@ -31,6 +31,7 @@ The TypeScript SDK's state service fetches both account families. `client.state.
 | Pool instruction | Use `initialize_virtual_pool_with_token2022_transfer_hook`, or the SDK's `client.creator.createPoolWithTransferHook`. |
 | Transfer hook authority | DBC initializes the base mint with the pool authority as transfer-hook authority. |
 | Mint authority options | `CreatorUpdateAndMintAuthority` and `PartnerUpdateAndMintAuthority` are only valid for transfer-hook configs. Standard configs reject those options. |
+| Quote mint transfer fee | A transfer-hook config cannot use a quote mint with a non-zero transfer fee or a live transfer fee config authority. `create_config_with_transfer_hook` rejects that mint. `create_config2` can accept it, and that instruction does not take a transfer hook program. Pool initialization on the transfer-hook path rejects the mint at any config version. |
 
 ## Trading
 
@@ -83,6 +84,7 @@ Indexers should handle the transfer-hook-specific event variants.
 | `EvtCreateConfigV2WithTransferHook` | Index transfer-hook configs and their `transfer_hook_program`. |
 | `EvtInitializePoolWithTransferHook` | Index transfer-hook pool creation. |
 | `EvtSwap2WithTransferHook` | Track transfer-hook swaps, quote progress, fees, and partial fills. |
+| `EvtSwap3WithTransferHook` | Read `included_transfer_fee_amount_in` and `excluded_transfer_fee_amount_out` for the same swap. |
 | `EvtCurveCompleteWithTransferHook` | Mark transfer-hook pool completion and hook revocation. |
 
 See [DBC Program Events](/developer-guides/dbc/program/events) for the full event table.

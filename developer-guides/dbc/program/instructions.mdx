@@ -11,8 +11,9 @@ The `dynamic-bonding-curve` IDL exposes many instructions. Integrators can choos
 
 | Instruction | Args | SDK path | Purpose |
 | --- | --- | --- | --- |
-| `create_config` | `ConfigParameters` | `client.partner.createConfig` | Create a partner config for fees, curve, token behavior, DAMM v2 migration, pool creation fee, and graduated-pool settings. Rejects `BaseFeeMode::RateLimiter` and `MigrationOption::MeteoraDamm`. Pass a token badge at remaining account index `0` when the quote mint is not permissionless-supported. |
-| `create_config_with_transfer_hook` | `ConfigParameters` | `client.partner.createConfigWithTransferHook` | Create a Token 2022 transfer-hook config with an executable transfer-hook program. Uses the same token-badge remaining account and deprecation rules as `create_config`. |
+| `create_config2` | `ConfigParameters`, optional `TransferFeeParameters` | `client.partner.createConfig2` | Current config instruction. Pass `transfer_fee_parameters` for a base-mint transfer fee, or none when there is no base fee. Accepts a quote mint with a non-zero transfer fee or a live transfer fee config authority. Rejects `BaseFeeMode::RateLimiter` and `MigrationOption::MeteoraDamm`. Pass a token badge at remaining account index `0` when the quote mint is not permissionless-supported. |
+| `create_config` | `ConfigParameters` | `client.partner.createConfig` | Deprecated. Same config body as `create_config2`, with no `transfer_fee_parameters`. Rejects a quote mint with a non-zero transfer fee or a live transfer fee config authority, even with a token badge. |
+| `create_config_with_transfer_hook` | `ConfigParameters` | `client.partner.createConfigWithTransferHook` | Create a Token 2022 transfer-hook config with an executable transfer-hook program. Uses the same token-badge remaining account as `create_config`, and rejects the same quote mints. It does not take `transfer_fee_parameters`. |
 | `create_partner_metadata` | `CreatePartnerMetadataParameters` | `client.partner.createPartnerMetadata` | Create optional metadata for the partner fee claimer. |
 | `claim_trading_fee` | `max_amount_a`, `max_amount_b` | `client.partner.claimPartnerTradingFee`, `claimPartnerTradingFeeToReceiver` | Claim partner trading fees from a standard virtual pool. |
 | `claim_trading_fee2` | `max_amount_a`, `max_amount_b`, `TransferHookAccountsInfo` | `client.partner.claimPartnerTradingFee2` | Claim partner trading fees from a transfer-hook pool. |
@@ -23,9 +24,9 @@ The `dynamic-bonding-curve` IDL exposes many instructions. Integrators can choos
 
 | Instruction | Args | SDK path | Purpose |
 | --- | --- | --- | --- |
-| `initialize_virtual_pool_with_spl_token` | `InitializePoolParameters` | `client.creator.createPool` | Create a DBC pool with an SPL Token base mint and Metaplex metadata. Rejects rate-limiter and DAMM v1 configs. Pass a token badge at remaining account index `0` when the quote mint is not permissionless-supported. |
-| `initialize_virtual_pool_with_token2022` | `InitializePoolParameters` | `client.creator.createPool` | Create a DBC pool with a Token 2022 base mint. Rejects rate-limiter configs and uses the same token-badge remaining account rule. |
-| `initialize_virtual_pool_with_token2022_transfer_hook` | `InitializePoolParameters` | `client.creator.createPoolWithTransferHook` | Create a DBC transfer-hook pool with a Token 2022 base mint. Uses the same token-badge remaining account rule. |
+| `initialize_virtual_pool_with_spl_token` | `InitializePoolParameters` | `client.creator.createPool` | Create a DBC pool with an SPL Token base mint and Metaplex metadata. Rejects rate-limiter and DAMM v1 configs. Pass a token badge at remaining account index `0` when the quote mint is not permissionless-supported. Rejects a legacy config whose quote mint has a non-zero transfer fee or a live transfer fee config authority. |
+| `initialize_virtual_pool_with_token2022` | `InitializePoolParameters` | `client.creator.createPool` | Create a DBC pool with a Token 2022 base mint, including a base mint with `TransferFeeConfig` when the config has `transfer_fee_parameters`. Uses the same token-badge and legacy-config rules as the SPL Token initializer. |
+| `initialize_virtual_pool_with_token2022_transfer_hook` | `InitializePoolParameters` | `client.creator.createPoolWithTransferHook` | Create a DBC transfer-hook pool with a Token 2022 base mint. Rejects a quote mint with a non-zero transfer fee or a live transfer fee config authority. |
 | `create_virtual_pool_metadata` | `CreateVirtualPoolMetadataParameters` | `client.creator.createPoolMetadata` | Create optional metadata for a virtual pool. |
 | `claim_creator_trading_fee` | `max_base_amount`, `max_quote_amount` | `client.creator.claimCreatorTradingFee`, `claimCreatorTradingFeeToReceiver` | Claim creator trading fees from a standard virtual pool. |
 | `claim_creator_trading_fee2` | `max_base_amount`, `max_quote_amount`, `TransferHookAccountsInfo` | `client.creator.claimCreatorTradingFee2` | Claim creator trading fees from a transfer-hook pool. |
@@ -39,6 +40,8 @@ The `dynamic-bonding-curve` IDL exposes many instructions. Integrators can choos
 | `swap` | `SwapParameters` | Exact in | Legacy exact-in swap path for standard pools. It emits both `EvtSwap` and `EvtSwap2`. |
 | `swap2` | `SwapParameters2` | Exact in, partial fill, exact out | Preferred for standard-pool trading integrations because the args map directly to `SwapMode`. |
 | `swap2_with_transfer_hook` | `SwapParameters2`, `TransferHookAccountsInfo` | Exact in, partial fill, exact out | Transfer-hook pool swap path. SDK: `client.pool.swap2WithTransferHook`. |
+
+Swaps account for a Token 2022 transfer fee on either mint. The curve uses the amount received after the input fee. `minimum_amount_out` is checked against the amount the user receives after the output fee. `maximum_amount_in` is checked against the amount the user pays before the input fee. `amount_0` on exact-in and partial-fill is the amount the user pays, including the input transfer fee. `amount_0` on exact-out is the amount the user wants to receive after the output transfer fee.
 
 `SwapParameters2` uses these fields:
 
@@ -58,13 +61,16 @@ Config and pool creation read `token_badge` from remaining account index `0` whe
 
 | Instruction | Remaining account index `0` |
 | --- | --- |
-| `create_config` | Required token badge PDA when the quote mint is not permissionless-supported. |
+| `create_config2` | Required token badge PDA when the quote mint is not permissionless-supported. |
+| `create_config` | Same rule. |
 | `create_config_with_transfer_hook` | Same rule. |
 | `initialize_virtual_pool_with_spl_token` | Same rule. |
 | `initialize_virtual_pool_with_token2022` | Same rule. |
 | `initialize_virtual_pool_with_token2022_transfer_hook` | Same rule. |
 
-The token badge PDA is derived from `["token_badge", quote_mint]`. It is read-only and not a signer. Permissionless-supported quote mints do not need this account. A missing or mismatched badge returns `InvalidTokenBadge`. A badge does not bypass the zero transfer-fee rule.
+The token badge PDA is derived from `["token_badge", quote_mint]`. It is read-only and not a signer. Permissionless quote mints do not need this account. A missing badge returns `InvalidQuoteMint`. A badge that does not match the quote mint returns `InvalidTokenBadge`.
+
+A badge allows a quote mint with a non-zero transfer fee or a live transfer fee config authority on `create_config2` only. `create_config` and `create_config_with_transfer_hook` still reject those mints. A badge does not freeze later fee changes.
 
 Transfer-hook swaps also pass extra remaining accounts described by `TransferHookAccountsInfo`.
 
@@ -80,7 +86,7 @@ Standard swap instructions reject `TransferHookPool` accounts, and `swap2_with_t
 | Instruction | Destination | SDK path | Purpose |
 | --- | --- | --- | --- |
 | `create_locker` | DAMM v1 or DAMM v2 support flow | `client.migration.createLocker` | Create the locker escrow when locked vesting is configured. |
-| `withdraw_leftover` | DAMM v1 or DAMM v2 | `client.migration.withdrawLeftover` | Withdraw leftover base tokens after migration. |
+| `withdraw_leftover` | DAMM v1 or DAMM v2 | `client.migration.withdrawLeftover` | Withdraw leftover base tokens after migration. `leftover_receiver` must sign when the leftover charges a transfer fee. |
 | `migration_meteora_damm_create_metadata` | DAMM v1 | `client.migration.createDammV1MigrationMetadata` | Create metadata before DAMM v1 migration. |
 | `migrate_meteora_damm` | DAMM v1 | `client.migration.migrateToDammV1` | Migrate a completed DBC pool to DAMM v1. |
 | `migrate_meteora_damm_lock_lp_token` | DAMM v1 | `client.migration.lockDammV1LpToken` | Lock permanent LP allocation for partner or creator. |
@@ -89,13 +95,15 @@ Standard swap instructions reject `TransferHookPool` accounts, and `swap2_with_t
 | `migration_damm_v2` | DAMM v2 | `client.migration.migrateToDammV2` | Migrate a completed DBC pool to DAMM v2. |
 | `withdraw_migration_fee` | DAMM v1 or DAMM v2 | `client.partner.partnerWithdrawMigrationFee`, `client.creator.creatorWithdrawMigrationFee` | Withdraw partner or creator migration fee. Uses `flag` to select the fee side. |
 
-DAMM v1 migration instructions remain for existing pools. New configs and new pools cannot select `MigrationOption::MeteoraDamm`. DAMM v2 migration uses a DAMM v2 config with `CreatePoolWithoutMintValidation` so a DBC-badged quote mint can still graduate. DBC still requires the quote mint transfer fee to be zero at migration time.
+DAMM v1 migration instructions remain for existing pools. New configs and new pools cannot select `MigrationOption::MeteoraDamm`. DAMM v2 migration uses a DAMM v2 config with `CreatePoolWithoutMintValidation` so a DBC-badged quote mint can still graduate.
+
+On a version `1` config with a base transfer fee, or a quote mint with a non-zero transfer fee or a live transfer fee config authority, `migration_damm_v2` deposits transfer-fee-excluded amounts and scales the smaller-fee side to hold the migration price. A legacy config (`version` `0`) still fails `migration_damm_v2` when the quote mint's current transfer fee is non-zero.
 
 ## Operator Instructions
 
 | Instruction | Args | Purpose |
 | --- | --- | --- |
-| `create_token_badge` | None | Operator with `CreateTokenBadge` creates a `TokenBadge` PDA for a quote mint that is not permissionless-supported. Rejects permissionless-supported mints and quote mints with a non-zero transfer fee. |
+| `create_token_badge` | None | Operator with `CreateTokenBadge` creates a `TokenBadge` PDA for a quote mint that is not permissionless-supported, including a mint with a non-zero transfer fee. Rejects a mint that is already permissionless. |
 | `close_token_badge` | None | Operator with `CloseTokenBadge` closes a token badge and returns rent. Existing pools that already use the mint keep working. |
 | `create_operator_account` | Permission bitmask | Admin creates an operator account with a `u128` permission bitmap. |
 | `close_operator_account` | None | Admin closes an operator account. |

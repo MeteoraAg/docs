@@ -2,7 +2,7 @@
 title: "DBC Formulas"
 sidebarTitle: "Formulas"
 description: "Understand the product math behind DBC price movement, universal curve segments, migration thresholds, trading fees, surplus, protocol migration fees, and leftover tokens."
-llmsDescription: "Explains DBC formulas, including constant-product curve segments, virtual liquidity, base token sold, quote token collected, migration quote threshold, migration price, total trading fee, fee scheduler behavior, rate limiter fees, dynamic fee, protocol and referral fees, partner and creator fee split, migration fee, protocol liquidity migration fee, surplus split, and fixed-supply leftover."
+llmsDescription: "Explains DBC formulas, including constant-product curve segments, virtual liquidity, base token sold, quote token collected, migration quote threshold, migration price, total trading fee, fee scheduler behavior, rate limiter fees, dynamic fee, protocol and referral fees, partner and creator fee split, migration fee, protocol liquidity migration fee, surplus split, fixed-supply leftover, and Token 2022 transfer fees on curve input and output and at migration."
 ---
 
 DBC uses concentrated-liquidity style math to create a customizable bonding curve. You do not need to understand every implementation detail to use the product, but the formulas below explain the main economic levers behind a launch.
@@ -217,3 +217,21 @@ Leftover applies to fixed-supply launches.
 ```
 
 In product terms, leftover is the unused base token supply that remains after the migrated pool is created and claimable base-token fee balances are excluded.
+
+## Transfer Fees
+
+A Token 2022 transfer fee is charged by the token program on the transfer. The curve and the DBC trading-fee numerator use the post-fee amount.
+
+On an exact-in swap, the curve input is the amount left after the input mint's transfer fee. The amount the user receives is the curve output after the output mint's transfer fee. On an exact-out swap, the curve output is grossed up so the user still receives the requested amount after the output mint's fee, and the input is grossed up by the input mint's fee.
+
+```math
+\text{Curve Input} = \text{Amount In} - \text{Input Transfer Fee}
+```
+
+```math
+\text{Amount Received} = \text{Curve Output} - \text{Output Transfer Fee}
+```
+
+A fee is zero when its basis points are `0` or its maximum fee is `0`. The base mint fee is the config's `transfer_fee_basis_points` with a maximum fee of `u64::MAX`. The quote mint fee is the `TransferFeeConfig` epoch fee.
+
+At migration, version `1` configs on the transfer-fee path deposit the transfer-fee-excluded amount of each mint. The side whose fee takes the larger fraction of its budget is deposited at that post-fee amount. The other side is scaled by the same ratio. Scaled base rounds up. Scaled quote rounds down. The liquidity that reaches DAMM v2 is lower by the larger of the two fees. The part of the scaled side that is not deposited is added to the protocol migration fee.
