@@ -2,7 +2,7 @@
 title: "Dynamic Vault Program Accounts"
 sidebarTitle: "Accounts"
 description: "Understand Dynamic Vault program accounts, including vaults, strategies, locked profit, PDA seeds, constants, and strategy enums."
-llmsDescription: "Explains the Dynamic Vault program account model for Meteora's vault program. Covers vault and idle-vault PDA seeds, token vault and LP mint PDAs, strategy and collateral vault PDAs, Vault fields, Strategy fields, LockedProfitTracker, VaultBumps, StrategyBumps, constants, StrategyType variants, supported source-backed strategy handlers, account interpretation, and SDK helpers for deriving and fetching accounts."
+llmsDescription: "Explains the Dynamic Vault program account model for Meteora's vault program. Covers vault and idle-vault PDA seeds, token vault and LP mint PDAs, strategy and collateral vault PDAs, Vault fields including version and total_lp_supply, Strategy fields, LockedProfitTracker, VaultBumps, StrategyBumps, MAX_STRATEGY 29, StrategyType variants, supported source-backed strategy handlers, account interpretation, and SDK helpers for deriving and fetching accounts."
 ---
 
 <Note>
@@ -32,7 +32,7 @@ The vault signs token transfers and LP minting with the rebalance or idle vault 
 | `AFFILIATE_PROGRAM_ID` | `GacY9YuN16HNRTy7ZWwULPccwvfFSBeNLuAQP7y38Du3` | Public affiliate wrapper program used by the SDK when `affiliateId` is configured. |
 | `VAULT_BASE_KEY` | `HWzXGcGHy4tcpYfaRDCyLNzXqBTv3E6BttpCH2vJxArv` | Base key for rebalance vault PDA derivation. |
 | Treasury | `9kZeN47U2dubGbbzMrzzoRAUvpuxVLRcjW9XiFpYjUo4` | Required owner for `fee_vault` and reward token destination accounts. |
-| `MAX_STRATEGY` | `30` | Number of strategy pubkeys stored in each vault. |
+| `MAX_STRATEGY` | `29` | Number of strategy pubkeys stored in each vault. |
 | `MAX_BUMPS` | `10` | Number of stored bump bytes in each strategy. |
 | `LOCKED_PROFIT_DEGRADATION_DENOMINATOR` | `1_000_000_000_000` | Denominator for locked-profit release math. |
 
@@ -49,7 +49,10 @@ The vault signs token transfers and LP minting with the rebalance or idle vault 
 | `fee_vault` | `Pubkey` | LP token account owned by treasury that receives performance fee LP. |
 | `token_mint` | `Pubkey` | Underlying token mint accepted by the vault. |
 | `lp_mint` | `Pubkey` | Vault LP mint. Deposits mint LP; withdrawals burn LP. |
-| `strategies` | `[Pubkey; 30]` | Strategy accounts active for the vault. Empty slots are the default pubkey. |
+| `strategies` | `[Pubkey; 29]` | Strategy accounts active for the vault. Empty slots are the default pubkey. |
+| `version` | `u8` | `0` prices shares with `lp_mint.supply`. `1` prices shares with `total_lp_supply`. New vaults are created as `1`. |
+| `total_lp_supply` | `u64` | LP minted and burned by the vault. Used when `version` is `1`. |
+| `_padding0` | `[u8; 23]` | Padding that fills the rest of the former 30th strategy slot. |
 | `base` | `Pubkey` | Base seed key. Matches rebalance or idle vault base. |
 | `admin` | `Pubkey` | Admin authority for vault configuration and strategy management. |
 | `operator` | `Pubkey` | Operator authority allowed to rebalance and claim strategy rewards. |
@@ -117,7 +120,7 @@ The current program source supports `StrategyType::Vault` and `StrategyType::Jup
 | --- | --- | --- |
 | Vault state from token mint | `VaultImpl.create(connection, tokenMint)` | Derive `vault` PDA, then fetch `mercurial_vault::state::Vault`. |
 | Vault state from vault PDA | `VaultImpl.createMultipleWithPda(connection, [vault])` | Fetch `Vault` directly by pubkey. |
-| Vault LP supply | `vault.getVaultSupply()` or `getLpSupply(connection, lpMint)` | Fetch `anchor_spl::token::Mint` for `vault.lp_mint`. |
+| Vault LP supply | `vault.getVaultSupply()` or `getVaultLpSupply(vaultState, lpMintSupply)` | `Vault::get_lp_supply(lp_mint.supply)`. Version `1` returns `total_lp_supply`. Version `0` returns the mint supply. |
 | User LP balance | `vault.getUserBalance(owner)` or `VaultImpl.fetchMultipleUserBalance(...)` | Read the owner's ATA for `vault.lp_mint`. |
 | Strategies | `vault.getStrategiesState()` | Iterate non-default `vault.strategies` and fetch `Strategy`. |
 
@@ -128,5 +131,5 @@ The current program source supports `StrategyType::Vault` and `StrategyType::Jup
 | Rebalance vs idle vault | Admin, operator, strategy, fee vault, and rebalance instructions require `vault.get_vault_type() == RebalanceVault`. Idle vaults cannot be rebalanced. |
 | Fee vault | `initialize_strategy` fails with `FeeVaultIsNotSet` unless `fee_vault` was set to a treasury-owned LP token account. |
 | Locked profit | `total_amount` can be higher than the amount available for withdrawal until locked profit has degraded. |
-| Strategy slots | A vault can hold up to 30 strategy pubkeys. Removed strategies clear their slot unless removed through the advance-payment path, which also disables the strategy. |
-| Source and IDL drift | The public TS IDL in `vault-sdk` is older than the current `mercurial-vault` program source. Prefer source-backed docs for low-level program behavior and SDK docs for public client behavior. |
+| Strategy slots | A vault can hold up to 29 strategy pubkeys. `version`, `total_lp_supply`, and `_padding0` occupy the former 30th slot. Account size and later field offsets are unchanged. |
+| LP supply | Version `1` share math uses `total_lp_supply`. `get_lp_supply` returns `InvalidLpSupplyAccounting` (`6023`) when that field is below `lp_mint.supply`. `migrate_vault` is permissionless and can run once, when `version` is `0`, `total_lp_supply` is `0`, and `_padding0` is zero. It sets `total_lp_supply` to the current mint supply. |

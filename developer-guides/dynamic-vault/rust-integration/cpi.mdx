@@ -106,7 +106,7 @@ If your program signs for a PDA-owned user token account in the outer CPI, pass 
 | Check | Detail |
 | --- | --- |
 | Derive from state | Read `vault.token_vault` and `vault.lp_mint` from vault state instead of recomputing them from user input alone. |
-| Use fresh LP supply | Withdrawal math depends on current LP supply and unlocked amount. |
+| Use fresh LP supply | Quote with `Vault::get_lp_supply(lp_mint.supply)`. Version `1` uses `total_lp_supply`. Version `0` uses the mint supply. |
 | Validate ATAs | User token and LP accounts must match the expected mint and authority for your integration. |
 | Pass slippage thresholds | Do not pass zero thresholds in production CPI unless the outer program has its own protection. |
 | Detect disabled deposits | Deposits fail when `vault.enabled == 0`; withdrawals remain available. |

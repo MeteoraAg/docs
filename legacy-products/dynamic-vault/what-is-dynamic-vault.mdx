@@ -23,7 +23,7 @@ For rebalance vaults, liquidity can also be deployed from the vault reserve into
     Deposits mint LP tokens, withdrawals burn LP tokens, and share calculations use the vault's unlocked amount.
   </Card>
   <Card title="Approved Strategies" icon="list-check" iconType="solid">
-    Rebalance vaults can hold up to 30 strategy accounts. Strategy deposits and withdrawals must use a strategy already recorded on the vault.
+    Rebalance vaults can hold up to 29 strategy accounts. Strategy deposits and withdrawals must use a strategy already recorded on the vault.
   </Card>
   <Card title="Profit Locking" icon="lock" iconType="solid">
     Profit reported during strategy actions is added to locked profit and released over time before it becomes part of the unlocked amount.
@@ -66,6 +66,10 @@ Most Dynamic Vault product documentation refers to **rebalance vaults**, because
     Withdrawals calculate the user's share of unlocked value. A direct withdrawal uses the token vault; a separate withdrawal path can pull from a strategy first when reserve liquidity is short.
   </Step>
 </Steps>
+
+## LP Supply
+
+Version `1` vaults price LP shares with `vault.total_lp_supply`. That field changes when the vault mints or burns LP. New vaults are created as version `1`. A version `0` vault still prices shares with `lp_mint.supply` until someone calls `migrate_vault`. That instruction is permissionless, runs once, and starts `total_lp_supply` at the current mint supply.
 
 ## Current Strategy Support
 

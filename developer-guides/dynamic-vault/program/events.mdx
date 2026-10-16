@@ -24,6 +24,7 @@ Unlike newer event-CPI programs, Dynamic Vault events are emitted as Anchor logs
 | --- | --- | --- | --- |
 | `AddLiquidity` | `deposit` | `lp_mint_amount: u64`, `token_amount: u64` | Track user deposits and LP minted from the vault's unlocked accounting. |
 | `RemoveLiquidity` | `withdraw`, `withdraw_directly_from_strategy` | `lp_unmint_amount: u64`, `token_amount: u64` | Track user LP burns and underlying tokens returned. |
+| `VaultMigrated` | `migrate_vault` | `vault: Pubkey`, `version: u8`, `total_lp_supply: u64` | A version `0` vault moved to version `1`. `total_lp_supply` is the mint supply at migration. |
 
 `RemoveLiquidity.lp_unmint_amount` is the amount of LP burned. In a direct strategy withdrawal, the handler may refine the burn amount when the strategy cannot return the full desired amount.
 

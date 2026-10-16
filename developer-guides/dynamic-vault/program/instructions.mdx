@@ -8,7 +8,7 @@ llmsDescription: "Explains the Dynamic Vault program instruction surface from th
 The `vault` program exposes user liquidity instructions, strategy rebalance instructions, and admin/operator instructions. Apps should normally use the TypeScript SDK for transaction construction. Programs using CPI should generate bindings from the IDL and cross-check account order against the current source.
 
 <Note>
-  The current `mercurial-vault/programs/vault` source includes `initialize_idle_vault` and `JupLend` strategy support. The checked-in TypeScript IDL in `vault-sdk` is older in a few places, so this page follows the current program handlers.
+  Program `0.9.5` is live. `@meteora-ag/vault-sdk@2.4.0` matches that program.
 </Note>
 
 ## User Liquidity
@@ -27,7 +27,7 @@ The `vault` program exposes user liquidity instructions, strategy rebalance inst
 | --- | --- |
 | Check amount | `token_amount` must be greater than zero. |
 | Check vault status | Deposits fail with `VaultIsDisabled` when `enabled == 0`. |
-| Calculate LP | Uses unlocked vault amount and current LP supply. Empty vaults mint based on unlocked amount after adding the deposit. |
+| Calculate LP | Uses unlocked vault amount and the same `lp_supply` as withdrawals. Empty vaults mint based on unlocked amount after adding the deposit. |
 | Slippage check | Fails with `ExceededSlippage` if minted LP is below `minimum_lp_token_amount`. |
 | Emit event | Emits `AddLiquidity`. |
 | Token movement | Transfers underlying tokens from `user_token` to `token_vault`, then mints LP to `user_lp`. |
@@ -36,10 +36,10 @@ The `vault` program exposes user liquidity instructions, strategy rebalance inst
 
 | Step | Behavior |
 | --- | --- |
-| Calculate output | Uses `unmint_amount / lp_supply` over the current unlocked amount. |
+| Calculate output | Uses `unmint_amount / lp_supply` over the current unlocked amount. `lp_supply` is `vault.total_lp_supply` when `version` is `1`, and `lp_mint.supply` when `version` is `0`. |
 | Slippage check | Fails with `ExceededSlippage` if output is below `min_out_amount`. |
 | Reserve withdrawal | Transfers underlying tokens from `token_vault` to `user_token`. |
-| LP burn | Burns `unmint_amount` from `user_lp`. |
+| LP burn | Burns `unmint_amount` from `user_lp`. `user_lp.owner` must equal `user`, or the instruction returns `InvalidLpOwner` (`6022`). |
 | Strategy withdrawal | `withdraw_directly_from_strategy` can pull from a strategy first, then refines the burned LP amount if available liquidity is lower than requested. |
 
 ## Vault Initialization
@@ -48,6 +48,9 @@ The `vault` program exposes user liquidity instructions, strategy rebalance inst
 | --- | --- | --- | --- |
 | `initialize` | `vault`, `payer`, `token_vault`, `token_mint`, `lp_mint`, `rent`, `token_program`, `system_program` | none | Create a rebalance vault PDA for a token mint using `get_base_address()`. |
 | `initialize_idle_vault` | Same as `initialize` | none | Create an idle vault PDA for a token mint using the default pubkey as base. |
+| `migrate_vault` | `vault`, `lp_mint` | none | Permissionless. Moves a version `0` vault to version `1` and sets `total_lp_supply` to the current `lp_mint.supply`. Runs once. |
+
+`initialize` and `initialize_idle_vault` create version `1` vaults with `total_lp_supply` at `0`. Deposit and withdraw on a version `1` vault add or subtract the LP they mint or burn. A version `0` vault keeps using `lp_mint.supply` until `migrate_vault`.
 
 Initialization sets `admin` and `operator` from the configured program admin, initializes the token vault and LP mint PDAs, clears all strategy slots, initializes locked profit, and enables the vault.
 
