@@ -40,6 +40,7 @@ Low-level builders should pass the event authority account and the `cp-amm` prog
 | `EvtClosePosition` | `close_position` | Pool, owner, position account, and position NFT mint. |
 | `EvtSplitPosition2` | `split_position`, `split_position2` | Deprecated compatibility event with split amounts and position snapshots without vested-liquidity fields. |
 | `EvtSplitPosition3` | `split_position`, `split_position2` | Current split event with owners, source and destination positions, current sqrt price, split amounts, position snapshots, and split parameters. |
+| `EvtUpdateDelegatePermission` | `update_delegate_permission` | Position, owner, new `permission` bitmask, and the SPL `delegate` on the position NFT account (`None` when no delegate is set). |
 
 New indexers should use `EvtSplitPosition3`. The current split handler emits `EvtSplitPosition2` for backward compatibility, but `EvtSplitPosition3` carries the current payload shape.
 
@@ -95,6 +96,7 @@ New indexers should use `EvtSplitPosition3`. The current split handler emits `Ev
 | `EvtUpdateRewardDuration` | `update_reward_duration` | Pool, reward index, old duration, and new duration. |
 | `EvtUpdateRewardFunder` | `update_reward_funder` | Pool, reward index, old funder, and new funder. |
 | `EvtWithdrawIneligibleReward` | `withdraw_ineligible_reward` | Pool, reward mint, and withdrawn amount. |
+| `EvtWithdrawDeadLiquidityReward` | `withdraw_dead_liquidity_reward` | Pool, reward mint, and amount paid to the funder for the `DEAD_LIQUIDITY` reward share. |
 
 Reward indexes are limited to the two DAMM v2 reward slots, `0` and `1`.
 
@@ -127,7 +129,8 @@ Choose the decoder from the pool fee mode. Do not decode an event payload with a
 | LP accounting | `EvtLiquidityChange`, `EvtClaimPositionFee` |
 | Protocol fees | `EvtClaimProtocolFee2`. Historical `EvtClaimProtocolFee` for older `claim_protocol_fee` transactions. |
 | Swap history and candles | `EvtSwap2` |
-| Rewards | `EvtInitializeReward`, `EvtFundReward`, `EvtClaimReward`, `EvtUpdateRewardDuration`, `EvtUpdateRewardFunder`, `EvtWithdrawIneligibleReward` |
+| Rewards | `EvtInitializeReward`, `EvtFundReward`, `EvtClaimReward`, `EvtUpdateRewardDuration`, `EvtUpdateRewardFunder`, `EvtWithdrawIneligibleReward`, `EvtWithdrawDeadLiquidityReward` |
+| Position delegates | `EvtUpdateDelegatePermission` |
 | Locks and vesting | `EvtLockPosition`, `EvtPermanentLockPosition`, `EvtSplitPosition3` |
 | Operator changes | `EvtSetPoolStatus`, `EvtUpdatePoolFees`, config events |
 

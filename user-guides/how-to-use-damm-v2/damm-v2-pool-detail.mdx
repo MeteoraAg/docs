@@ -23,7 +23,7 @@ DAMM v2, or Dynamic Automated Market Maker v2, builds upon the original DAMM, to
     Dynamic fees boost the fees you earn during periods of high market volatility, helping LPs maximize returns when trading activity increases.
   </Card>
   <Card title="Anti-Sniper Tools" icon="shield-check" iconType="solid">
-    Advanced anti-sniper tools, such as Time Scheduler, Market Cap Scheduler, and Rate Limiter, can adjust fees around launch conditions to make opportunistic trading more expensive.
+    Time Scheduler and Market Cap Scheduler adjust fees around launch. Rate Limiter still runs on existing pools and cannot be selected for a new pool.
   </Card>
 </CardGroup>
 
@@ -181,17 +181,17 @@ Amount of fees charged on each trade which goes to the protocol or integrations.
 - Pool creators can choose how LP fees are collected: **Base + Quote**, **Quote**, or **Quote + Compounding**.
 - In **Base + Quote** mode, fees are collected from the output token of each swap.
 - In **Quote** mode, fees are always collected in Token B, which is commonly the quote token. For example, in a URANUS-SOL pool, pool creators can set it so LP fees are collected only in SOL.
-- In **Quote + Compounding** mode, fees are collected in Token B. A configured portion is compounded back into pool liquidity, while the remaining portion is claimable.
+- In **Quote + Compounding** mode, fees are collected in Token B. A configured portion is compounded back into pool liquidity, while the remaining portion is claimable. A compounding fee of `0` leaves the whole LP fee claimable.
 - Once the pool is created, the selected Fee Collection Mode cannot be changed.
 - As an LP, you can choose the specific DAMM v2 pool that has the Fee Collection Mode that fits your requirements.
 
 #### Base Fee Mode
 
-- DAMM v2 supports multiple Base Fee modes: Fixed, Time Scheduler, Market Cap Scheduler, and Rate Limiter.
+- DAMM v2 supports Fixed, Time Scheduler, and Market Cap Scheduler for new pools. Rate Limiter remains on existing pools and cannot be selected for a new pool.
 - **Fixed** mode keeps the base fee constant.
 - **Time Scheduler** starts from a configurable fee and reduces it over a configured number of periods after the pool activation point. The schedule can be Linear or Exponential.
 - **Market Cap Scheduler** reduces fees as the pool price moves upward from the initial price toward configured price steps. The schedule can be Linear or Exponential, and can also expire after a configured duration.
-- **Rate Limiter** increases fees based on trade size during a configured launch window. It applies to quote-token fee collection and is designed to make larger quote-to-base buys more expensive during the protected period.
+- **Rate Limiter** increases fees based on trade size during a configured launch window. It applies to quote-token fee collection on existing pools. New configs and new pools cannot use it.
 - As an LP, you can choose the specific DAMM v2 pool that has the Base Fee mode and parameters that fit your requirements.
 
 **Exponential Fee Time Scheduler**

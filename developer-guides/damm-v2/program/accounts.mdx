@@ -115,7 +115,7 @@ Use `fetchPoolState` for state and `fetchPoolFees` when you need decoded pool fe
 | Field | Meaning |
 | --- | --- |
 | `total_lp_a_fee`, `total_lp_b_fee` | Lifetime LP fees by token side. The counter wraps. |
-| `total_protocol_a_fee`, `total_protocol_b_fee` | Lifetime protocol fees by token side. The counter wraps. |
+| `total_protocol_a_fee`, `total_protocol_b_fee` | Lifetime protocol fees taken at swap time. The counter wraps. On a compounding pool, protocol token B receipts are this counter plus the dead-liquidity fee settled by `claim_protocol_fee2`. |
 | `total_position` | Count of positions, updated when position accounts are created or closed. The counter wraps. |
 
 ### RewardInfo
@@ -145,8 +145,9 @@ Use `fetchPoolState` for state and `fetchPoolFees` when you need decoded pool fe
 | `permanent_locked_liquidity` | Liquidity that cannot be withdrawn |
 | `reward_infos` | User reward checkpoints and pending rewards for two reward slots |
 | `inner_vesting` | Embedded vesting schedule used by newer lock flows |
+| `delegate_permission` | `u32` bitmask. Bit `0` `AddLiquidity`, `1` `RemoveLiquidity`, `2` `RemoveLiquidityToOwner`, `3` `ClaimPositionFee`, `4` `ClaimPositionFeeToOwner`, `5` `ClaimReward`, `6` `ClaimRewardToOwner`, `7` `LockPosition`. `0` clears every bit. |
 
-The position NFT is the ownership handle. A position operation that changes liquidity or claims fees verifies the owner through the NFT token account.
+The position NFT is the ownership handle. The NFT holder can sign position instructions. A Token-2022 delegate can sign the instructions allowed by `delegate_permission`. `close_position`, `split_position`, and `split_position2` stay with the NFT holder.
 
 ### PositionMetrics
 

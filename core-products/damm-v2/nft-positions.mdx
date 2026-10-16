@@ -2,7 +2,7 @@
 title: "DAMM v2 NFT Positions"
 sidebarTitle: "NFT Positions"
 description: "Learn how DAMM v2 uses NFT-backed positions to represent LP liquidity, pending fees, rewards, vesting locks, and permanent locks."
-llmsDescription: "Documentation for DAMM v2 NFT positions, covering position NFT ownership, Token 2022 mint metadata, position account state, unlocked liquidity, vesting liquidity, permanently locked liquidity, pending trading fees, liquidity mining rewards, split denominator and rounding, claiming fees, closing positions, and product use cases."
+llmsDescription: "Documentation for DAMM v2 NFT positions, covering position NFT ownership, Token 2022 mint metadata, position account state, unlocked liquidity, vesting liquidity, permanently locked liquidity, pending trading fees, liquidity mining rewards, split denominator and rounding, claiming fees, closing positions, and NFT delegates with Position.delegate_permission."
 ---
 
 Every DAMM v2 LP position is represented by a unique position NFT. The NFT is the ownership handle for the liquidity position: whoever holds the position NFT controls the position.
@@ -91,6 +91,20 @@ This gives token teams a way to show long-term alignment while keeping fee and r
 <Note>
   Inner vesting stores the vesting schedule inside the position itself. A position must not already have active inner vesting when a new inner vesting lock is applied.
 </Note>
+
+## Delegates
+
+The NFT holder can approve one Token-2022 delegate on the position NFT account. `Approve` must use amount `0`. A non-zero `delegated_amount` fails with `DelegatedAmountNonZero` (`6070`), because that amount would let the delegate transfer or burn the NFT.
+
+`update_delegate_permission` writes `Position.delegate_permission`. The NFT holder signs it. `permission = 0` clears the bitmask. The SPL delegate stays until you revoke it with the Token-2022 program.
+
+A delegate can call `add_liquidity`, `remove_liquidity`, `remove_all_liquidity`, `claim_position_fee`, `claim_reward`, `lock_position`, `lock_inner_position`, and `permanent_lock_position` when the matching bit is set. `close_position`, `split_position`, and `split_position2` stay with the NFT holder.
+
+The `ToOwner` bits only allow the token destination to be the NFT holder's account. If both an unrestricted bit and its `ToOwner` bit are set, the unrestricted bit applies.
+
+Transferring the NFT does not clear `delegate_permission`. The new holder sets a new SPL delegate, and that delegate receives the bitmask already stored on the position.
+
+The instruction account is `signer`. `@meteora-ag/cp-amm-sdk` still names that parameter `owner`. `updateDelegatePermission` approves the delegate with amount `0` and writes the bitmask in one transaction. Pass the token account that currently holds the NFT.
 
 ## Closing a Position
 

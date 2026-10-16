@@ -235,7 +235,7 @@ Anyone can create a DAMM v2 Standard pool here: https://meteora.ag/create/dammv2
 
     - **Initial Price**: The pool's starting price, shown as Quote token per Base token. If a Jupiter market price is available, you can use it as a reference, but you should still verify the price before continuing.
     - **Base Token Amount** and **Quote Token Amount**: Enter the liquidity amounts to deposit. When you edit one side, Meteora can calculate the other side from the Initial Price.
-    - **Fee Collection Mode**: Choose whether fees are collected in **Base + Quote**, **Quote**, or **Quote + Compounding**. If you choose Quote + Compounding, select the percentage of trading fees to automatically reinvest into pool liquidity.
+    - **Fee Collection Mode**: Choose whether fees are collected in **Base + Quote**, **Quote**, or **Quote + Compounding**. If you choose Quote + Compounding, select the percentage of trading fees to reinvest into pool liquidity. `0` leaves the LP fee claimable in the quote token.
     - **Price Range Chart**: After you enter a valid initial price and both token amounts, use the chart to preview the pool's price range.
     - **Base Fee Mode**: Choose **Fixed**, **Time Scheduler**, or **Market Cap Scheduler**.
     - **Scheduler Type**: For scheduled fee modes, choose **Linear** or **Exponential**.
@@ -318,13 +318,13 @@ Anyone can create a DAMM v2 Launch pool here: https://meteora.ag/create/dammv2/l
     - **Liquidity Distribution**: Choose **Dual-sided** to deposit both Base and Quote tokens, or **Single-sided** to deposit only the Base token.
     - **Base Token Amount** and **Quote Token Amount**: Enter the liquidity amounts to deposit. Single-sided pools do not require a Quote token deposit.
     - **Fee Collection Mode**: Choose **Base + Quote**, **Quote**, or **Quote + Compounding**. Single-sided liquidity is not compatible with Quote + Compounding.
-    - **Compounding Fee %**: If Quote + Compounding is selected, set the percentage of trading fees automatically reinvested into pool liquidity.
+    - **Compounding Fee %**: If Quote + Compounding is selected, set the percentage of trading fees reinvested into pool liquidity. `0` leaves the LP fee claimable in the quote token. The pool stays in compounding mode.
     - **Min Price** and **Max Price**: Configure the price range. For single-sided pools, the lower bound is fixed to the Initial Price and you only set the Max Price.
-    - **Base Fee Mode**: Choose **Fixed**, **Time Scheduler**, **Rate Limiter**, or **Market Cap Scheduler**.
+    - **Base Fee Mode**: Choose **Fixed**, **Time Scheduler**, or **Market Cap Scheduler**. New pools cannot use **Rate Limiter**.
     - **Scheduler Type**: For Time Scheduler or Market Cap Scheduler, choose **Linear** or **Exponential**.
     - **Fixed Base Fee**: For Fixed mode, set the constant swap fee charged on every trade.
     - **Time Scheduler**: Set the Starting Fee, Ending Fee, Total Duration, and Number of Periods.
-    - **Rate Limiter**: Set the Base Fee, Fee Increment, Reference Amount, and Max Duration. Rate Limiter requires Quote-only fee collection.
+    - **Rate Limiter**: Not available for a new pool. `create_config`, `initialize_pool`, `initialize_pool_with_dynamic_config`, and `initialize_customizable_pool` reject it. Existing rate-limiter pools can still be traded.
     - **Market Cap Scheduler**: Set the Starting Fee, Ending Fee, Price Multiple, Number of Periods, and Expiration Duration.
     - **Dynamic Fee**: Enable or disable the volatility-based fee component.
     - **Trading Start Time**: Choose **Now** to start trading immediately after creation, or **Custom** to schedule a future start time.
