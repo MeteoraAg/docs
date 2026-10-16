@@ -68,8 +68,8 @@ This page lists the Anchor custom errors returned by the DAMM v2 `cp-amm` progra
 | `6050` | `InvalidFeeTimeScheduler` | Invalid fee scheduler | Time scheduler fee parameters failed validation. |
 | `6051` | `UndeterminedError` | Undetermined error | Fallback error for unexpected internal state. |
 | `6052` | `InvalidPoolVersion` | Invalid pool version | Pool layout or fee version is unsupported by the requested path. |
-| `6053` | `InvalidAuthority` | Invalid authority to do that action | Signer does not own or control the position, pool, config, or operator action. |
-| `6054` | `InvalidPermission` | Invalid permission | Operator permission bits do not allow the requested action. |
+| `6053` | `InvalidAuthority` | Invalid authority to do that action | Signer is not the position NFT holder, and is not the SPL delegate on that token account. Also used when a pool, config, or operator signer is not authorized. |
+| `6054` | `InvalidPermission` | Invalid permission | Operator permission bits do not allow the action, the delegate bitmask does not include the instruction, or `update_delegate_permission` set a bit above the eight `PositionDelegatePermission` values. |
 | `6055` | `InvalidFeeMarketCapScheduler` | Invalid fee market cap scheduler | Market-cap scheduler parameters failed validation. |
 | `6056` | `CannotUpdateBaseFee` | Cannot update base fee | Base fee update is not allowed for the current pool or mode. |
 | `6057` | `InvalidDynamicFeeParameters` | Invalid dynamic fee parameters | Dynamic fee configuration failed bounds checks. |
@@ -82,7 +82,7 @@ This page lists the Anchor custom errors returned by the DAMM v2 `cp-amm` progra
 | `6064` | `CpiDisabled` | CPI disabled | A disallowed CPI path was attempted. |
 | `6065` | `MissingZapOutInstruction` | Missing zap out instruction | Zap protocol-fee flow did not include the required downstream instruction. |
 | `6066` | `InvalidZapAccounts` | Invalid zap accounts | Zap accounts do not match the whitelisted route or expected account set. |
-| `6067` | `InvalidCompoundingFeeBps` | Invalid compounding fee bps | Compounding fee bps is outside allowed bounds or incompatible with collect fee mode. |
+| `6067` | `InvalidCompoundingFeeBps` | Invalid compounding fee bps | `compounding_fee_bps` is above `10_000` on a compounding pool, or it is not `0` on a `BothToken` or `OnlyB` pool. |
 | `6068` | `InvalidClaimProtocolFeeAccounts` | Invalid claim protocol fee accounts | `claim_protocol_fee2` receiver token account mint or token program does not match pool token A or token B. |
 | `6069` | `TransferFeeExcludedAmountIsZero` | Transfer fee excluded amount is zero | Token-2022 transfer fee would reduce the claimed protocol fee amount to zero. |
 | `6070` | `DelegatedAmountNonZero` | Delegated amount is not zero | Position NFT token account has a non-zero `delegated_amount` on a delegate path. |
@@ -101,7 +101,7 @@ The TypeScript SDK also raises local validation errors before a transaction is b
 | `ExceedMaxFeeBpsError` | Fee bps exceeds the pool version's maximum. |
 | `InvalidPriceRangeError` | Initial, minimum, or maximum price is outside DAMM v2 bounds. |
 | `InvalidCollectFeeModeError` | Unsupported collect fee mode or incompatible pool parameters. |
-| `InvalidCompoundingFeeBpsError` | Compounding fee bps is invalid or used with an incompatible collect fee mode. |
+| `InvalidCompoundingFeeBpsError` | `compoundingFeeBps` is outside `0` to `10_000` for `CollectFeeMode.Compounding`, or it is not `0` for another collect fee mode. |
 | `InvalidBaseFeeModeError` | Unsupported base fee mode. |
 | `DeprecatedBaseFeeModeError` | New config or pool helpers received `BaseFeeMode.RateLimiter`. |
 | `InvalidFeeTimeSchedulerError` | Time scheduler parameters are invalid. |
@@ -115,3 +115,4 @@ The TypeScript SDK also raises local validation errors before a transaction is b
 | `InvalidVestingInfoError` | Vesting parameters are inconsistent or outside duration limits. |
 | `InvalidRewardIndexError` | Reward index is not one of the two supported reward slots. |
 | `InvalidRewardDurationError` | Reward duration is outside program bounds. |
+| `InvalidScaledUiAmountMultiplierError` | A Token-2022 Scaled UI Amount multiplier is `0`, negative, or not finite. |

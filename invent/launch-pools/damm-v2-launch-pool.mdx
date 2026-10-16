@@ -175,20 +175,20 @@ npm install -g pnpm
         "maxPrice": null, // max price (in terms of quote/base price) - NOTE: null would use the MAX_SQRT_PRICE for the DAMM v2 balanced pool
         "poolFees": {
           "baseFee": {
-            "baseFeeMode": 2, // 0 - Fee Scheduler: Linear | 1 - Fee Scheduler: Exponential | 2 - Rate Limiter | 3 - Fee Market Cap Scheduler: Linear | 4 - Fee Market Cap Scheduler: Exponential
-            // "feeTimeSchedulerParam": {
-            //   "startingFeeBps": 120, // starting base fee (in basis points) (if you want a flat fee, set startingFeeBps and endingFeeBps to the same value)
-            //   "endingFeeBps": 120, // ending base fee (in basis points) (if you want a flat fee, set startingFeeBps and endingFeeBps to the same value)
-            //   "numberOfPeriod": 0, // number of periods
-            //   "totalDuration": 0 // total duration (If activationType is 0 (slots), totalDuration = duration / 0.4 | If activationType is 1 (timestamp), totalDuration = duration)
-            // }
-            "rateLimiterParam": {
-              "baseFeeBps": 120, // base fee (max 50% base fee === 5000 bps)
-              "feeIncrementBps": 100, // fee increment (max fee increment = 5000 bps - baseFeeBps)
-              "referenceAmount": 1, // reference amount (not in lamports)
-              "maxLimiterDuration": 3600, // if activationType is 0 (slots), maxLimiterDuration = duration / 0.4, if activationType is 1 (timestamp), maxLimiterDuration = duration)
-              "maxFeeBps": 5000 // max 50% base fee can go to === 5000 bps
+            "baseFeeMode": 0, // 0 - Fee Scheduler: Linear | 1 - Fee Scheduler: Exponential | 2 - Rate Limiter (rejected for new configs and new pools) | 3 - Fee Market Cap Scheduler: Linear | 4 - Fee Market Cap Scheduler: Exponential
+            "feeTimeSchedulerParam": {
+              "startingFeeBps": 120, // starting base fee (in basis points) (if you want a flat fee, set startingFeeBps and endingFeeBps to the same value)
+              "endingFeeBps": 120, // ending base fee (in basis points) (if you want a flat fee, set startingFeeBps and endingFeeBps to the same value)
+              "numberOfPeriod": 0, // number of periods
+              "totalDuration": 0 // total duration (If activationType is 0 (slots), totalDuration = duration / 0.4 | If activationType is 1 (timestamp), totalDuration = duration)
             }
+            // "rateLimiterParam": {
+            //   "baseFeeBps": 120, // existing rate-limiter pools only
+            //   "feeIncrementBps": 100,
+            //   "referenceAmount": 1, // reference amount (not in lamports)
+            //   "maxLimiterDuration": 3600, // if activationType is 0 (slots), maxLimiterDuration = duration / 0.4, if activationType is 1 (timestamp), maxLimiterDuration = duration)
+            //   "maxFeeBps": 5000
+            // }
             // "feeMarketCapSchedulerParam": {
             //   "startingFeeBps": 500, // starting base fee (in basis points)
             //   "endingFeeBps": 50, // ending base fee (in basis points)
@@ -198,7 +198,7 @@ npm install -g pnpm
             // }
           },
           "dynamicFeeEnabled": true // if dynamicFeeEnabled is true and dynamicFeeConfig is null, the default dynamic fee configuration will be 20% of the base fee
-          // "compoundingFeeBps": 5000 // Only used when collectFeeMode is 2 (Compounding). Percentage of trading fees compounded back into pool liquidity (0 to 10000 bps, e.g. 5000 = 50%). Required for compounding mode.
+          // "compoundingFeeBps": 5000 // collectFeeMode 2 (Compounding) only. 0 to 10000 bps. 0 leaves the LP fee claimable in token B. Other collect fee modes must use 0.
 
           /* Optional Configuration.
           * Only used if you want to configure dynamic fee and not use the default dynamic fee configuration

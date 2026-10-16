@@ -117,6 +117,8 @@ If the pool uses compounding mode, the LP fee can be split again:
 \text{Claimable Fee} = \text{LP Fee Before Compounding} - \text{Compounding Fee}
 ```
 
+`compounding_fee_bps` of `0` makes the compounding fee `0`, so the claimable fee is the whole LP fee. The pool is still in compounding mode.
+
 If a referral is present, the referral fee is taken from the protocol fee:
 
 ```math
@@ -152,4 +154,4 @@ DAMM v2 liquidity mining distributes reward tokens by position liquidity:
 
 This means LPs earn rewards in proportion to their share of pool liquidity. Unlocked, vesting, and permanently locked liquidity can all count toward rewards because the position's total liquidity is used for reward accounting.
 
-The reward rate is stored as a fixed-point value scaled by `2^64`, while reward-per-liquidity accounting is accumulated with a `2^128` liquidity scale. Integer division truncates fractional rewards.
+The reward rate is stored as a fixed-point value scaled by `2^64`. Reward-per-liquidity growth is a `U256` in `reward_per_token_stored`, scaled by `2^128`. That field wraps when a step does not fit. A position takes the wrapped difference and clamps a pending reward above `u64::MAX`. `fee_a_per_liquidity` and `fee_b_per_liquidity` wrap the same way, and a pending fee above `u64::MAX` is clamped. Integer division truncates the remainder.

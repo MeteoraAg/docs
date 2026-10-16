@@ -75,6 +75,7 @@ CP_AMM_PROGRAM_ID = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
 | `LayoutVersion` | `V0`, `V1`. |
 | `PoolStatus` | `Enable`, `Disable`. |
 | `SwapMode` | `ExactIn`, `PartialFill`, `ExactOut`. |
+| `PositionDelegatePermission` | `AddLiquidity` (`0`), `RemoveLiquidity` (`1`), `RemoveLiquidityToOwner` (`2`), `ClaimPositionFee` (`3`), `ClaimPositionFeeToOwner` (`4`), `ClaimReward` (`5`), `ClaimRewardToOwner` (`6`), `LockPosition` (`7`). |
 
 ## Important Constants
 
@@ -95,6 +96,7 @@ CP_AMM_PROGRAM_ID = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
 | `SPLIT_POSITION_DENOMINATOR` | Denominator for position split ratios. |
 | `CURRENT_POOL_VERSION` | Current pool layout version. |
 | `DEAD_LIQUIDITY` | Compounding-pool dead liquidity constant. |
+| `POOL_TOKEN_A_MINT_OFFSET`, `POOL_TOKEN_B_MINT_OFFSET` | Byte offsets `168` and `200` for Pool memcmp filters on `tokenAMint` and `tokenBMint`. |
 | `NUM_REWARDS`, `MIN_REWARD_DURATION`, `MAX_REWARD_DURATION` | Reward count and duration bounds. |
 | `MAX_EXPONENTIAL`, `MAX` | Internal upper bounds used by math helpers. |
 
@@ -124,6 +126,8 @@ This section lists the public functions and methods exported by the SDK. Private
 | `fetchConfigState(config)` | Fetch one config account. |
 | `fetchPoolState(pool)` | Fetch one pool account. |
 | `fetchPoolStatesByTokenAMint(tokenAMint)` | Scan pools by `tokenAMint`. |
+| `fetchPoolStatesByTokenBMint(tokenBMint)` | Scan pools by `tokenBMint`. |
+| `fetchPoolStatesByTokenMint(tokenMint)` | Scan pools where the mint is token A or token B. Deduplicates the two scans. |
 | `fetchPoolFees(pool)` | Decode the pod-aligned base-fee data stored in one pool account. |
 | `fetchPositionState(position)` | Fetch one position account. |
 | `getMultipleConfigs(configs)` | Batch fetch config accounts. |
@@ -136,6 +140,10 @@ This section lists the public functions and methods exported by the SDK. Private
 | `getAllPositionsByPool(pool)` | Scan all position accounts for one pool. |
 | `getUserPositionByPool(pool, user)` | Resolve a user's position NFTs and filter them to one pool. |
 | `getPositionsByUser(user)` | Resolve all Token-2022 position NFTs owned by a wallet and fetch their positions. |
+| `getPositionsByUserAndTokenMint(user, tokenMint)` | Filter that wallet's positions to pools that contain the mint on either side. Does not scan every pool account. |
+| `getPositionsByDelegate(delegate)` | Positions where the wallet is the position NFT delegate. Omits a position whose `delegatePermission` is `0`. |
+| `getDelegatePositionByPool(pool, delegate)` | Same delegate lookup, filtered to one pool. |
+| `getPositionsByDelegateAndTokenMint(delegate, tokenMint)` | Delegated positions in pools that contain the mint on either side. |
 | `getAllVestingsByPosition(position)` | Fetch vesting accounts attached to one position. |
 | `isPoolExist(pool)` | Return whether a pool account exists. |
 
@@ -151,11 +159,11 @@ This section lists the public functions and methods exported by the SDK. Private
 
 | Method | Use |
 | --- | --- |
-| `getLiquidityDelta(params)` | Compute Q64 liquidity from token amount caps, price range, and collect-fee mode. |
+| `getLiquidityDelta(params)` | Compute Q64 liquidity from token amount caps, price range, and collect-fee mode. When `tokenAInfo` or `tokenBInfo` is set, the input cap is reduced by that mint's transfer fee. |
 | `getQuote(params)` | Legacy exact-in swap quote. |
 | `getQuote2(params)` | Preferred swap quote for exact-in, partial-fill, and exact-out modes. |
-| `getDepositQuote(params)` | Convert a token input amount into liquidity and counterpart amount. |
-| `getWithdrawQuote(params)` | Convert liquidity into expected token A and token B outputs. |
+| `getDepositQuote(params)` | Convert a token input amount into liquidity and counterpart amount. Pass mint info to net a Token-2022 transfer fee. |
+| `getWithdrawQuote(params)` | Convert liquidity into expected token A and token B outputs. Pass mint info to return the post-transfer-fee amounts. |
 | `preparePoolCreationSingleSide(params)` | Prepare one-sided concentrated pool creation where the initial price is the min price. |
 | `preparePoolCreationParams(params)` | Compute initial square-root price, liquidity, and token amounts for pool creation. |
 
@@ -177,8 +185,8 @@ This section lists the public functions and methods exported by the SDK. Private
 | `permanentLockPosition(params)` | Build a transaction that permanently locks liquidity. |
 | `refreshVesting(params)` | Build a transaction that refreshes vesting state for a position. |
 | `closePosition(params)` | Build a transaction that closes an empty position. |
-| `removeAllLiquidityAndClosePosition(params)` | Build a combined claim-fee, remove-all-liquidity, and close-position transaction. |
-| `mergePosition(params)` | Build a transaction that claims fees, removes source liquidity, adds it to a target position, and closes the source position. |
+| `removeAllLiquidityAndClosePosition(params)` | Build a combined claim-fee, remove-all-liquidity, and close-position transaction. Claims initialized rewards before close. `isSkipReward` skips a frozen reward vault and forfeits that reward. |
+| `mergePosition(params)` | Build a transaction that claims fees, removes source liquidity, adds it to a target position, and closes the source position. Claims initialized rewards before close. `isSkipReward` skips a frozen reward vault and forfeits that reward. Pass `tokenAInfo` and `tokenBInfo` so a transfer-fee mint is netted on the withdraw and the redeposit. |
 | `initializeReward(params)` | Build a transaction that initializes a reward slot. |
 | `initializeAndFundReward(params)` | Build a transaction that initializes and funds a reward slot. |
 | `updateRewardDuration(params)` | Build a transaction that updates reward duration. |
@@ -190,6 +198,8 @@ This section lists the public functions and methods exported by the SDK. Private
 | `claimReward(params)` | Build a transaction that claims one reward index for a position. |
 | `splitPosition(params)` | Build a transaction that splits a position into a new position with explicit token amounts. |
 | `splitPosition2(params)` | Build the newer split transaction using a numerator over `SPLIT_POSITION_DENOMINATOR`. |
+| `updateDelegatePermission(params)` | SPL-approve `delegate` on `positionNftAccount` with amount `0`, then set `permission`. Pass the token account that currently holds the position NFT. `permission: 0` clears the bitmask and leaves the SPL delegate in place. |
+| `withdrawDeadLiquidityReward(params)` | Funder withdraws the `DEAD_LIQUIDITY` reward share on a compounding pool. |
 
 ### PDA Helpers
 
@@ -234,9 +244,10 @@ This section lists the public functions and methods exported by the SDK. Private
 | `getPriceChange(nextSqrtPrice, currentSqrtPrice)` | Compute price-change percentage from two square-root prices. |
 | `getPriceFromSqrtPrice(sqrtPrice, tokenADecimal, tokenBDecimal)` | Convert Q64 square-root price to UI price. |
 | `getSqrtPriceFromPrice(price, tokenADecimal, tokenBDecimal)` | Convert UI price to Q64 square-root price. |
-| `getUnClaimLpFee(poolState, positionState)` | Compute unclaimed LP fee amounts. |
-| `getRewardInfo(poolState, rewardIndex, periodTime, currentTime)` | Compute current reward info for one reward index. |
-| `getUserRewardPending(poolState, positionState, rewardIndex, currentTime, periodTime)` | Compute pending user reward for one position and reward index. |
+| `getUnClaimLpFee(poolState, positionState)` | Unclaimed LP fees. Wraps the fee accumulators the way the program does, and clamps a pending fee at `u64::MAX`. |
+| `getRewardInfo(poolState, rewardIndex, periodTime, currentTime)` | Reward info for one slot. Wraps `reward_per_token_stored`. Returns the emission in raw tokens when pool liquidity is zero. A step whose time and rate do not fit in a `u128` throws `MathOverflowError`. |
+| `getUserRewardPending(poolState, positionState, rewardIndex, currentTime, periodTime)` | Pending reward for one position and slot. Clamps the pending amount at `u64::MAX`. |
+| `getDeadLiquidityReward(poolState, rewardIndex, currentTime)` | Withdrawable `DEAD_LIQUIDITY` reward on a compounding pool. Returns `0` for any other collect fee mode. |
 | `positionByPoolFilter(pool)` | Build a `getProgramAccounts` filter for positions by pool. |
 | `vestingByPositionFilter(position)` | Build a `getProgramAccounts` filter for vesting accounts by position. |
 | `offsetBasedFilter(value, offset)` | Build a memcmp filter at an arbitrary account offset. |
@@ -250,13 +261,26 @@ This section lists the public functions and methods exported by the SDK. Private
 | `hasTransferHookExtension(connection, mint)` | Detect whether a mint uses a transfer-hook extension. |
 | `validateNoTransferHook(connection, tokenAMint, tokenBMint)` | Throw when either token mint has a Transfer Hook extension that is not permissionlessly accepted (hook program ID or authority still set). |
 
+### Scaled UI Amount Helpers
+
+These convert displayed amounts and prices. Create, swap, deposit, and withdraw math stay on raw amounts. An invalid multiplier throws `InvalidScaledUiAmountMultiplierError`.
+
+| Function | Use |
+| --- | --- |
+| `getScaledUiAmountMultiplier(mint, unixTimestamp)` | Effective Scaled UI Amount multiplier, or `1` when the mint has no extension. |
+| `TokenScale.default()` | Both multipliers are `1`. |
+| `TokenScale.fromMints(baseMint, quoteMint, unixTimestamp)` | Read both mints. Pass the same unix timestamp for one read. |
+| `TokenScale.fromMultipliers(baseMultiplier, quoteMultiplier)` | Build from multipliers you already resolved. |
+| `scalePrice` / `unscalePrice` | Convert a raw quote-per-base price by `quoteMultiplier / baseMultiplier`. |
+| `scaleAmount` / `unscaleAmount` | Convert one side's raw amount by that mint's multiplier. |
+
 ### Vesting Helpers
 
 | Function | Use |
 | --- | --- |
 | `isVestingComplete(vestingData, currentPoint)` | Check whether a vesting schedule is complete. |
 | `getTotalLockedLiquidity(vestingData)` | Sum locked liquidity in a vesting account. |
-| `getAvailableVestingLiquidity(vestingData, currentPoint)` | Compute currently unlocked liquidity from vesting data. |
+| `getAvailableVestingLiquidity(vestingData, currentPoint)` | Unlocked liquidity still to release. When `periodFrequency` or `liquidityPerPeriod` is `0`, this is `cliffUnlockLiquidity` minus liquidity already released. |
 
 ### Validation Helpers
 
@@ -273,7 +297,7 @@ This section lists the public functions and methods exported by the SDK. Private
 | `validateActivationType(activationType)` | Validate an activation type value. |
 | `validatePriceRange(collectFeeMode, sqrtMinPrice, sqrtMaxPrice)` | Validate a pool price range for the chosen collect-fee mode. |
 | `validateInitialSqrtPrice(collectFeeMode, initSqrtPrice, sqrtMinPrice, sqrtMaxPrice)` | Validate an initial square-root price. |
-| `validateCompoundingFee(collectFeeMode, compoundingFeeBps)` | Validate compounding-fee settings. |
+| `validateCompoundingFee(collectFeeMode, compoundingFeeBps)` | `0` to `10_000` for `CollectFeeMode.Compounding`. `0` for every other mode. |
 | `validateDynamicFee(dynamicFee)` | Validate dynamic-fee parameters. |
 | `validatePoolFees(poolFees, collectFeeMode, activationType, feeVersion?)` | Validate pool fee settings. Throws `DeprecatedBaseFeeModeError` for `RateLimiter`. |
 | `validateCustomizablePoolParams(params)` | Validate customizable pool creation parameters. |
@@ -287,6 +311,7 @@ This section lists the public functions and methods exported by the SDK. Private
 | `validateRewardIndex(rewardIndex)` | Validate a reward index against `NUM_REWARDS`. |
 | `validateRewardDuration(rewardDuration)` | Validate reward duration bounds. |
 | `isConfigPermissionAllow(permission, flag)` | Return whether a `ConfigState.permission` bitmask (`BN`) includes a `ConfigPermission` flag. |
+| `encodeDelegatePermissions(permissions)` | OR `PositionDelegatePermission` values into the `u32` bitmask passed to `updateDelegatePermission`. |
 
 ### Common Fee Encoding Helpers
 
@@ -573,7 +598,8 @@ The SDK exports typed errors that validation, quote, and math helpers may throw:
 | `InvalidActivationTypeError` | Activation type is not a supported enum value. |
 | `InvalidPriceRangeError` | Square-root price bounds are invalid for the collect-fee mode. |
 | `InvalidCollectFeeModeError` | Collect-fee mode is not supported by the requested flow. |
-| `InvalidCompoundingFeeBpsError` | Compounding fee bps is invalid. |
+| `InvalidCompoundingFeeBpsError` | `compoundingFeeBps` is outside `0` to `10_000` for compounding, or it is not `0` for another collect fee mode. |
+| `InvalidScaledUiAmountMultiplierError` | A Scaled UI Amount multiplier is `0`, negative, or not finite. |
 | `InvalidFeeTimeSchedulerError` | Time-scheduler fee params are invalid. |
 | `InvalidFeeMarketCapSchedulerError` | Market-cap scheduler fee params are invalid. |
 | `InvalidFeeRateLimiterError` | Rate-limiter params are invalid. |
@@ -600,10 +626,10 @@ The SDK exports typed errors that validation, quote, and math helpers may throw:
 | Topic | What to remember |
 | --- | --- |
 | Token order | Pool PDAs sort mints, but transaction params still need the pool's `tokenAMint` and `tokenBMint` fields. |
-| Compounding mode | `CollectFeeMode.Compounding` uses full-range constant-product liquidity and splits swap fees into `claimingFee` and `compoundingFee`. |
+| Compounding mode | `CollectFeeMode.Compounding` uses full-range constant-product liquidity. `compoundingFeeBps` of `0` sets `compoundingFee` to `0` and leaves the trading fee in `claimingFee`. |
 | Rate limiter | Existing rate-limiter pools still require the instructions sysvar remaining account on low-level swap builders when the limiter is active. The SDK handles this when it can identify the pool mode. New configs and new pools cannot use `RateLimiter`. |
 | Layout version | V1 pools track `tokenAAmount` and `tokenBAmount`. Use current SDK quote paths for compounding pools. |
 | Swap events | Prefer `EvtSwap2` for swap indexing. Older swap events were deprecated and removed from newer program versions. |
-| Position NFTs | Position ownership is verified through the Token-2022 position NFT account. Pass the derived `positionNftAccount` for liquidity, fee, lock, reward, split, and close flows. |
+| Position NFTs | Pass the token account that currently holds the position NFT. A delegate signs with the same `owner` SDK field. `getPositionsByDelegate` skips `delegatePermission = 0`. |
 | Wrapped SOL | Transaction builders add wrap and unwrap instructions for native SOL paths, but your signing flow still needs enough SOL for rent, transaction fees, and wrapped input amounts. |
 | Token-2022 fees | Pass mint and epoch data into quote helpers when a Token-2022 transfer-fee mint is involved so quoted amounts include transfer fees. |

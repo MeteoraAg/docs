@@ -42,7 +42,7 @@ The config account uses `config_type = 0` for static configs and `config_type = 
 | `dynamic_fee` | Optional volatility-based fee. If present, the program validates `bin_step = 1`, `bin_step_u128 = 1844674407370955`, `filter_period < decay_period`, `reduction_factor <= 10_000`, and 24-bit limits for `variable_fee_control` and `max_volatility_accumulator`. |
 | `protocol_fee_percent` | Fixed at `20%` when fee parameters are converted into pool fee config. |
 | `referral_fee_percent` | Fixed at `20%` of the protocol fee. |
-| `compounding_fee_bps` | Must be greater than `0` and no more than `10_000` only when `collect_fee_mode = 2`; otherwise it must be `0`. |
+| `compounding_fee_bps` | `0` to `10_000` when `collect_fee_mode = 2`. `0` compounds nothing and leaves the LP fee claimable in token B. Any other collect fee mode requires `0`. |
 
 ### Base Fee Modes
 
@@ -66,7 +66,7 @@ For the current pool version, base fees are bounded from `1` bps (`0.01%`) up to
 | --- | --- | --- |
 | `0` | `BothToken` | Fees are collected in the output token. |
 | `1` | `OnlyB` | Fees are collected only in token B. |
-| `2` | `Compounding` | A configured percentage of fees is compounded into liquidity, and remaining fees are claimable in token B. Compounding pools use constant-product liquidity without a custom price range. |
+| `2` | `Compounding` | `compounding_fee_bps` of the LP fee is added to token B reserves. `0` adds nothing. The rest is claimable in token B. Compounding pools use constant-product liquidity without a custom price range. |
 
 ## Static Configs
 
