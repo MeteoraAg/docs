@@ -11,6 +11,45 @@ rss: true
 </Tip>
 
 <Update
+ label="zap 0.2.3"
+  description="Jupiter route_v2 for zap-out, and amount_in offset derived from the AMM"
+  rss="Zap 0.2.3 whitelists Jupiter route_v2 and shared_account_route_v2 for zap_out, derives the amount_in offset from the AMM program and instruction discriminator, and updates Anchor to 1.0.2. Jupiter route and offset_amount_in remain for backward compatibility."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.2.3` | [zap-program #53](https://github.com/MeteoraAg/zap-program/pull/53) |
+
+  ## What We Shipped
+  - Whitelisted Jupiter `route_v2` and `shared_account_route_v2` for `zap_out`
+  - `zap_out` now derives the `amount_in` offset from the AMM program and its instruction discriminator
+  - Updated Anchor to `1.0.2`
+  - Deprecated Jupiter `route` and `shared_account_route` in favor of the v2 routes. Both stay whitelisted for `zap_out`
+  - `offset_amount_in` in `ZapOutParameters` is ignored. The field stays in the instruction layout
+
+  ## Program: `zap` `0.2.3`
+
+  Program ID (mainnet and devnet): `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz`
+
+  [Program PR #53](https://github.com/MeteoraAg/zap-program/pull/53)
+
+  ### Changed
+
+  - Update anchor to `1.0.2`
+  - Endpoint `zap_out` now derives the offset of `amount_in` in the swap payload from the amm program and its instruction discriminator, instead of reading it from `ZapOutParameters`.
+
+  ### Added
+
+  - Add Jupiter's `route_v2` and `shared_account_route_v2` as whitelisted instructions for `zap_out`
+
+  ### Deprecated
+
+  - Jupiter's `route` and `shared_account_route` are deprecated in favor of `route_v2` and `shared_account_route_v2`. They remain whitelisted for `zap_out` for backward compatibility.
+  - `offset_amount_in` in `ZapOutParameters` is ignored. It remains in the instruction layout for backward compatibility.
+</Update>
+
+<Update
  label="zap 0.2.2"
   description="Support Zap-In to damm-V2 Compounding Pool Fee Mode and single-sided damm-v2 pool"
   rss="Zap 0.2.2 adds zap-in support for DAMM v2 Compounding fee mode, fixes zap-in for single-sided DAMM v2 pools, and updates the SDK with matching zap-in support plus a DLMM one-bin rebalance fix. SDK 1.3.0."
