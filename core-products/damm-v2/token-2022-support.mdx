@@ -2,7 +2,7 @@
 title: "DAMM v2 Token 2022 Support"
 sidebarTitle: "Token 2022 Support"
 description: "Learn how DAMM v2 supports SPL Token and Token 2022 mints, transfer-fee tokens, metadata extensions, token badges, and reward tokens."
-llmsDescription: "Documentation for DAMM v2 Token 2022 support, covering SPL Token and Token 2022 mint detection, token program flags, permissionless extensions such as TransferFeeConfig, MetadataPointer, and TokenMetadata, TransferHook only when both program ID and authority are unset, token badge allowlisting for other extensions, private config CreatePoolWithoutMintValidation for DBC-migrated Stock Tokens, Token 2022 reward token support, unsupported Token 2022 native mint behavior, and transfer fee accounting."
+llmsDescription: "Documentation for DAMM v2 Token 2022 support, covering SPL Token and Token 2022 mint detection, token program flags, permissionless extensions such as TransferFeeConfig, MetadataPointer, and TokenMetadata, TransferHook only when both program ID and authority are unset, token badge allowlisting for other extensions, the public Token 2022 Whitelist Request Form, the rule that launch date and time are not part of review and must not be shared, private config CreatePoolWithoutMintValidation for DBC-migrated Stock Tokens, Token 2022 reward token support, unsupported Token 2022 native mint behavior, and transfer fee accounting."
 ---
 
 DAMM v2 supports both standard SPL Token mints and Token 2022 mints. This lets more Solana assets use DAMM v2 pools while preserving safety around extensions that can change token behavior.
@@ -14,7 +14,7 @@ Token 2022 support is split into two paths:
     If your mint only uses supported safe extensions, you can create and use a DAMM v2 pool without a token badge.
   </Card>
   <Card title="Token Badge Support" icon="badge-check" iconType="solid">
-    If your mint uses extensions outside the permissionless allowlist, Meteora can review it and initialize a token badge so the mint can pass DAMM v2 validation.
+    If your mint uses extensions outside the permissionless allowlist, your team must apply for a token badge. Meteora reviews the request and initializes the badge so the mint can pass DAMM v2 validation.
   </Card>
 </CardGroup>
 
@@ -70,6 +70,14 @@ Examples include extensions such as:
 
 At the program level, a valid token badge allows a Token 2022 mint to pass DAMM v2 mint validation even if it uses extensions outside the permissionless allowlist. The badge is created by a Meteora operator after review. You cannot create a badge for a mint that is already permissionlessly supported.
 
+Token teams must apply for that badge. This application is a public requirement, and every team follows the same process. The request identifies the mint and extensions for review. It does not announce a launch.
+
+Complete the [Token 2022 Whitelist Request Form](https://forms.gle/59n3zDiGS2C6qMfd7) with the token mint address, the extensions you need, a short project description, and contact details. After you submit the form, open a ticket in the [Meteora Discord](https://discord.gg/meteora) so the team can review the request.
+
+<Warning>
+  Do not include the token launch date or time in the form or in the Discord ticket. The form does not ask for launch timing. Launch timing is not used in the review, and it is not shared. Including it can give someone outside your team advance notice of a confidential launch.
+</Warning>
+
 ## Private Config Mint Validation Bypass
 
 Private configs, meaning those with a `pool_creator_authority`, can store a `permission` bitmask. The only permission today is `CreatePoolWithoutMintValidation`.
@@ -88,10 +96,6 @@ A DBC token badge is not a DAMM v2 token badge. DBC migration uses DAMM v2 confi
 <Warning>
   The Token 2022 native mint is still rejected when `CreatePoolWithoutMintValidation` is set. Use the standard wrapped SOL mint.
 </Warning>
-
-<Note>
-  To apply for a token badge, complete this [Google Form](https://forms.gle/59n3zDiGS2C6qMfd7) with details about the token and its extensions. After submitting, open a ticket in the [Meteora Discord](https://discord.gg/meteo) so the team can review it.
-</Note>
 
 <AccordionGroup>
   <Accordion title="I use standard metadata or transfer fees">
