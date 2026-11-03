@@ -2,7 +2,7 @@
 title: "DBC Token 2022 Support"
 sidebarTitle: "Token 2022 Support"
 description: "See how DBC handles SPL Token and Token 2022 launches, base-mint transfer fees, quote-mint transfer fees, token badges, transfer-hook pools, and DAMM v2 migration."
-llmsDescription: "DBC Token 2022 reference for program 0.2.2. Covers SPL Token and Token 2022 base mints, MetadataPointer and TokenMetadata, base-mint transfer fees through create_config2 TransferFeeParameters (Token 2022 only, at most 10 percent, maximum fee u64::MAX), withheld authority set at pool initialization, MigratedTransferFeeAuthorityOption Immutable, RevokeZeroFee, Creator, and Partner applied at migration, permissionless quote mints, quote-mint token badges, non-zero quote transfer fees and live transfer fee config authorities accepted only by create_config2, constant supply, no locked vesting, MigrationFeeOption.Customizable, MigratedCollectFeeMode.Compounding, the 1 percent migration sqrt-price check at config creation, PoolConfig.version 1, legacy version 0 limits, swap amounts included_transfer_fee_amount_in and excluded_transfer_fee_amount_out, migration deposit of transfer-fee-excluded amounts, leftover_receiver signature, and transfer-hook configs rejecting a quote mint with a non-zero fee or a live transfer fee config authority."
+llmsDescription: "DBC Token 2022 reference for program 0.2.2. Covers SPL Token and Token 2022 base mints, MetadataPointer and TokenMetadata, base-mint transfer fees through create_config2 TransferFeeParameters (Token 2022 only, at most 10 percent, maximum fee u64::MAX), withheld authority set at pool initialization, MigratedTransferFeeAuthorityOption Immutable, RevokeZeroFee, Creator, and Partner applied at migration, permissionless quote mints, quote-mint token badges requested through the public Token 2022 Whitelist Request Form without sharing launch date or time, non-zero quote transfer fees and live transfer fee config authorities accepted only by create_config2, constant supply, no locked vesting, MigrationFeeOption.Customizable, MigratedCollectFeeMode.Compounding, the 1 percent migration sqrt-price check at config creation, PoolConfig.version 1, legacy version 0 limits, swap amounts included_transfer_fee_amount_in and excluded_transfer_fee_amount_out, migration deposit of transfer-fee-excluded amounts, leftover_receiver signature, and transfer-hook configs rejecting a quote mint with a non-zero fee or a live transfer fee config authority."
 ---
 
 DBC can launch an SPL Token or Token 2022 base mint. Program `0.2.2` also supports a Token 2022 transfer fee on the base mint, and a Token 2022 transfer fee on the quote mint.
@@ -94,11 +94,19 @@ DBC stores the quote token program in `quote_token_flag`. Transfers use `transfe
 
 ## Quote Mint Token Badges
 
-A Token 2022 quote mint that is not permissionless needs a `TokenBadge` before a config or pool can use it. That includes mints with other extensions, such as Permanent Delegate, and mints whose `TransferFeeConfig` has a non-zero fee or a live transfer fee config authority.
+A Token 2022 quote mint that is not permissionless needs a `TokenBadge` before a config or pool can use it. That includes mints with other extensions, such as Permanent Delegate, and mints whose `TransferFeeConfig` has a non-zero fee or a live transfer fee config authority. The badge is for the quote mint. DBC still creates the base mint.
 
-Pass the badge as remaining account index `0`. The SDK adds it when you set `tokenBadge`. The PDA is `["token_badge", quote_mint]`.
+Token teams must apply for that badge. This application is a public requirement, and every team follows the same process. The request identifies the quote mint and its extensions. It does not announce a launch. A Meteora operator with `CreateTokenBadge` permission creates the badge after review by calling `create_token_badge`. That instruction accepts a mint that is not already permissionless, including a non-zero transfer fee. A permissionless mint returns `CannotCreateTokenBadgeOnSupportedMint`.
 
-`create_token_badge` accepts any mint that is not already permissionless, including a mint with a non-zero transfer fee. You cannot badge a mint that is already permissionless (`CannotCreateTokenBadgeOnSupportedMint`). Closing a badge blocks new configs and pools for that mint. Pools that already use the mint keep trading.
+Complete the [Token 2022 Whitelist Request Form](https://forms.gle/59n3zDiGS2C6qMfd7) with the quote mint address, the extensions on that mint, a short project description, and contact details. On DBC, a non-zero transfer fee or a live transfer fee config authority still needs a badge. DLMM and DAMM v2 can accept `TransferFeeConfig` permissionlessly, so include that fee or authority in the form when the quote mint uses it. After you submit, open a ticket in the [Meteora Discord](https://discord.gg/meteora) so the team can review the request.
+
+<Warning>
+  Do not include the token launch date or time in the form or in the Discord ticket. The form does not ask for launch timing. Launch timing is not used in the review, and it is not shared. Including it can give someone outside your team advance notice of a confidential launch.
+</Warning>
+
+After the badge exists, pass it as remaining account index `0` on config and pool creation. Set `tokenBadge` and the SDK adds that account. `deriveTokenBadgeAddress(quoteMint)` returns the PDA `["token_badge", quote_mint]`. `client.state.getTokenBadge(quoteMint)` reads the account.
+
+Closing a badge blocks new configs and pools for that mint. Pools that already use the mint keep trading.
 
 A DBC badge is not a DAMM v2 badge. DAMM v2 configs used by DBC migration have `CreatePoolWithoutMintValidation`, so a badged quote mint can still graduate.
 

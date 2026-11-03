@@ -2,7 +2,7 @@
 title: "DBC Accounts and Permissions"
 sidebarTitle: "Accounts and Permissions"
 description: "Review the main DBC on-chain accounts, lifecycle flags, permissions, transfer-hook accounts, limits, and claim gates."
-llmsDescription: "DBC account and permission reference covering PoolConfig, ConfigWithTransferHook, VirtualPool, TransferHookPool, TokenBadge, partner and creator metadata, operator permissions including CreateTokenBadge and CloseTokenBadge, collect fee modes, migration progress states, deprecated rate limiter and DAMM v1 options, config limits, token limits, fee limits, liquidity lock requirements, claim gates, transfer-hook claim gates, permissionless Token 2022 quote mints, create_config2 transfer-fee restrictions, and the leftover_receiver signature when leftover charges a transfer fee."
+llmsDescription: "DBC account and permission reference covering PoolConfig, ConfigWithTransferHook, VirtualPool, TransferHookPool, TokenBadge, partner and creator metadata, operator permissions including CreateTokenBadge and CloseTokenBadge, the public Token 2022 Whitelist Request Form for quote-mint badges, collect fee modes, migration progress states, deprecated rate limiter and DAMM v1 options, config limits, token limits, fee limits, liquidity lock requirements, claim gates, transfer-hook claim gates, permissionless Token 2022 quote mints, create_config2 transfer-fee restrictions, and the leftover_receiver signature when leftover charges a transfer fee."
 ---
 
 This page summarizes the DBC implementation details that are useful when reading pool state, building integrations, or checking whether a claim or migration action is allowed.
@@ -90,6 +90,8 @@ DBC can launch SPL Token or Token 2022 base mints. New configs must migrate to D
 Transfer-hook launches are Token 2022 only. They use `ConfigWithTransferHook`, `TransferHookPool`, `swap2_with_transfer_hook`, and transfer-hook-aware trading fee claims. The base mint's transfer hook is revoked when the curve completes.
 
 Quote mints can be SPL Token mints. A Token 2022 quote mint is permissionless when its extensions are limited to `MetadataPointer`, `TokenMetadata`, and a `TransferFeeConfig` whose current fee is zero and whose transfer fee config authority is revoked. Other extensions, a non-zero transfer fee, or a live transfer fee config authority need a `TokenBadge`. A non-zero fee or a live authority is accepted only by `create_config2`. The Token 2022 native mint is rejected as a quote mint.
+
+Token teams apply for that badge with the [Token 2022 Whitelist Request Form](https://forms.gle/59n3zDiGS2C6qMfd7). Do not include the token launch date or time. An operator with `CreateTokenBadge` calls `create_token_badge` after review. See [Quote mint token badges](/core-products/dbc/token-2022-support#quote-mint-token-badges).
 
 ## Config Validation Highlights
 
