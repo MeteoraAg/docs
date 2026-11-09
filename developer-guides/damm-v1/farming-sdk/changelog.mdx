@@ -1,0 +1,120 @@
+---
+title: "DAMM v1 Farming Changelog"
+sidebarTitle: "Farming Changelog"
+description: "Track DAMM v1 farming release notes, breaking changes, and upgrade guidance for the farming program and TypeScript SDK."
+llmsDescription: "Explains the DAMM v1 farming integration changelog. Covers farming program 0.2.2 deprecation of pool creation, deposits, and reward funding, the remaining withdraw, claim, close_user, pause, withdraw_extra_token, and close_pool instructions, @mercurial-finance/farming-sdk 1.1.0 closeUser, and upgrade steps for trading terminals, swap routers, and partners."
+rss: true
+---
+
+<Tip>
+  Track DAMM v1 farming releases here.
+</Tip>
+
+<Update
+  label="farming 0.2.2"
+  description="Program deprecation"
+  rss="DAMM v1 farming 0.2.2 deprecates new farms, new stakes, and reward funding. Stakers exit with withdraw, claim, and close_user. TypeScript SDK 1.1.0."
+>
+  <Info>
+    The farming crate stays at `0.2.2`. The deprecation is in [reward-pool-internal #3](https://github.com/MeteoraAg/reward-pool-internal/pull/3), which is open. `@mercurial-finance/farming-sdk@1.1.0` is the version in that pull request. npm still publishes [`@meteora-ag/farming-sdk@1.0.18`](https://www.npmjs.com/package/@meteora-ag/farming-sdk) and [`@mercurial-finance/farming-sdk@1.0.18`](https://www.npmjs.com/package/@mercurial-finance/farming-sdk).
+  </Info>
+
+  <Warning>
+    **Breaking release.** `initialize_pool`, `create_user`, `deposit`, `fund`, `authorize_funder`, `deauthorize_funder`, `toggle_permission`, `unpause`, and `migrate_farming_rate` fail with `Deprecated` (6012). Stakers exit with `withdraw`, `claim`, and `close_user`.
+  </Warning>
+
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.2.2` | [reward-pool-internal #3](https://github.com/MeteoraAg/reward-pool-internal/pull/3) |
+  | TypeScript SDK | `1.1.0` | [reward-pool-internal #3](https://github.com/MeteoraAg/reward-pool-internal/pull/3) |
+
+  The SDK package name in this pull request is `@mercurial-finance/farming-sdk`. The farming guides install `@meteora-ag/farming-sdk`.
+
+  ## What We Shipped
+
+  - Deprecated new farms, new user accounts, new stakes, and reward funding
+  - Left `withdraw`, `claim`, and `close_user` as the staker exit
+  - Left `pause`, `withdraw_extra_token`, and `close_pool` for the pool authority after the reward period
+  - Added `closeUser` to the TypeScript SDK
+
+  ## What To Do
+
+  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrators</th>
+          <th>What Changed</th>
+          <th>What To Do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Partners</strong></td>
+          <td>
+            <ul>
+              <li><code>initialize_pool</code>, <code>fund</code>, <code>authorize_funder</code>, <code>deauthorize_funder</code>, <code>toggle_permission</code>, <code>unpause</code>, and <code>migrate_farming_rate</code> fail with <code>Deprecated</code> (6012).</li>
+              <li><code>pause</code> still runs after <code>reward_duration_end</code>. <code>unpause</code> fails, so a pause stays in place.</li>
+              <li><code>close_pool</code> requires the pool to be paused, the reward period to have ended, <code>user_stake_count == 0</code>, and <code>staking_vault.amount == 0</code>.</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Stop creating farms and stop funding rewards.</li>
+              <li>Leave funded rewards in place until <code>reward_duration_end</code>. Stakers claim through that time.</li>
+              <li>After the reward period, <code>pause</code> the pool, <code>withdraw_extra_token</code> for any stake tokens above <code>total_staked</code>, wait until every user account is closed, then <code>close_pool</code>.</li>
+              <li>Skip <code>migrate_farming_rate</code>. <code>get_reward_a_rate</code> and <code>get_reward_b_rate</code> read the u128 rate, and read the legacy u64 rate when the u128 rate is zero.</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  ## Program: `farming` `0.2.2`
+
+  Program ID (mainnet and devnet): `FarmuwXPWXvefWUeqFAa5w6rifLkq5X6E8bimYvrhCB1`
+
+  [Program PR #3](https://github.com/MeteoraAg/reward-pool-internal/pull/3)
+
+  ### Changed
+
+  - Upgrade to Anchor 1.2.1. The program is built for SBPF v3. Single-reward pools still pass one token account for reward A and reward B. Those accounts are marked `dup` so Anchor 1.2 accepts the duplicate mutable account.
+  - Funded pools keep distributing rewards until `reward_duration_end`. `fund` no longer extends that time.
+  - `withdraw`, `claim`, `close_user`, `pause`, `withdraw_extra_token`, and `close_pool` keep working. `pause` still requires `reward_duration_end > 0` and a current time after `reward_duration_end`.
+  - `close_user` still requires `balance_staked == 0`, `reward_a_per_token_pending == 0`, and `reward_b_per_token_pending == 0`. It decreases `user_stake_count` by 1 and returns the rent to the owner.
+  - `close_pool` still requires `paused`, `reward_duration_end > 0`, a current time after `reward_duration_end`, `user_stake_count == 0`, and an empty staking vault. The authority signs. Remaining reward vault balances go to the refundee token accounts, and the vaults and pool account are closed.
+
+  ### Deprecated
+
+  - `initialize_pool`, `create_user`, `deposit`, `fund`, `authorize_funder`, `deauthorize_funder`, `toggle_permission`, `unpause`, and `migrate_farming_rate` always fail with `Deprecated` (6012). Their accounts and instruction data are unchanged.
+  - `migrate_farming_rate` is unused. `Pool::get_reward_a_rate` and `Pool::get_reward_b_rate` return `reward_*_rate_u128`, or `_reward_*_rate` when the u128 rate is zero.
+
+  <Warning>
+    Stop creating farms. Do not fund a farming pool, and do not stake LP into one.
+  </Warning>
+
+  ## TypeScript SDK: `@mercurial-finance/farming-sdk` `1.1.0`
+
+  [SDK PR #3](https://github.com/MeteoraAg/reward-pool-internal/pull/3)
+
+  <Tip>
+    `@mercurial-finance/farming-sdk@1.1.0` is the version in PR #3. It is not on npm yet. The published packages are [`@meteora-ag/farming-sdk@1.0.18`](https://www.npmjs.com/package/@meteora-ag/farming-sdk) and [`@mercurial-finance/farming-sdk@1.0.18`](https://www.npmjs.com/package/@mercurial-finance/farming-sdk).
+  </Tip>
+
+  ### Added
+
+  - `closeUser`. Closes the user account and returns its rent to the owner. The program allows it once nothing is staked and no reward is pending.
+  - Re-exports the farming IDL and constants from the package entrypoint.
+
+  ### Deprecated
+
+  - `deposit`. The method still builds a transaction. The program rejects `deposit`, and `create_user` when the user account is missing, with `Deprecated` (6012). Exit with `withdraw`, `claim`, and `closeUser`.
+
+  ### Changed
+
+  - The exit is one transaction: `withdraw` the full balance when it is above zero, then `claim` when there is a reward or a stake was withdrawn, then `closeUser`. When the staking mint is also a reward mint, `withdraw` and `claim` can both create that token account. Keep one of those create instructions.
+  - `getUserBalance` throws when the wallet has no user account in the farm.
+</Update>
