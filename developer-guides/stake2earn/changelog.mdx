@@ -1,54 +1,237 @@
 ---
 title: "Stake2Earn Changelog"
 sidebarTitle: "Changelog"
-description: "Track Stake2Earn program, SDK, Rust interface, API, and documentation changes that affect integrations."
-llmsDescription: "Explains the Stake2Earn developer changelog. Covers source-noted stake_for_fee program changes, @meteora-ag/m3m3 TypeScript SDK package changes, Rust interface and common PDA helper changes, claim fee behavior changes, dependency updates, API documentation notes, and current source gaps for release tracking."
+description: "Track Stake2Earn release notes, breaking changes, and upgrade guidance for the stake-for-fee program, TypeScript SDK, and Rust interface."
+llmsDescription: "Explains the Stake2Earn integration changelog for builders maintaining Meteora Stake2Earn integrations. Covers stake-for-fee program 0.1.2 deprecation of vault creation, staking, partial claims, and unstake requests, claim_fee_and_withdraw_full, immediate withdraw, one-time lock escrow claim, immediate fee release, close instructions, @meteora-ag/m3m3 2.0.0, stake_for_fee_interface 0.2.0, common 0.0.2, and upgrade steps for partners."
+rss: true
 ---
 
-This changelog summarizes integration-relevant changes from the inspected local `stake-for-fee` and `stake-for-fee-sdk` source repos.
+<Tip>
+  Track Stake2Earn releases here.
+</Tip>
 
-<Note>
-  The checked-in SDK changelog uses both `@meteora-ag/stake-for-fee` and `@meteora-ag/m3m3` naming. The published TypeScript package inspected in `ts-client/package.json` is `@meteora-ag/m3m3` version `1.0.10`.
-</Note>
+<Update
+  label="stake-for-fee 0.1.2"
+  description="Program deprecation"
+  rss="Stake2Earn stake-for-fee 0.1.2 deprecates new vaults, staking, partial claims, and unstake requests. Stakers exit with withdraw and claim_fee_and_withdraw_full. TypeScript SDK 2.0.0."
+>
+  <Info>
+    Program `0.1.2` is in [stake-for-fee #41](https://github.com/MeteoraAg/stake-for-fee/pull/41). `@meteora-ag/m3m3@2.0.0`, `stake_for_fee_interface@0.2.0`, and `common@0.0.2` are in [stake-for-fee-sdk #36](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/36). Both pull requests are open. npm still publishes [`@meteora-ag/m3m3@1.0.10`](https://www.npmjs.com/package/@meteora-ag/m3m3).
+  </Info>
 
-## Current Snapshot
+  <Warning>
+    **Breaking release.** `initialize_vault`, `initialize_stake_escrow`, `stake`, `claim_fee`, `request_unstake`, `cancel_unstake`, `update_seconds_to_full_unlock`, and `update_unstake_lock_duration` fail with `Deprecated`. Existing stakers exit with `withdraw` and `claim_fee_and_withdraw_full`.
+  </Warning>
 
-| Area | Version or source |
-| --- | --- |
-| Program crate | `stake-for-fee` `0.1.1` |
-| Public program ID | `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP` |
-| TypeScript package | `@meteora-ag/m3m3` `1.0.10` |
-| Rust interface crate | `stake_for_fee_interface` `0.1.0` |
-| Common Rust helper crate | `common` `0.0.1` |
-| Anchor version in program source | `0.28.0` |
-| Solana version in program source | `1.16.12` |
+  ## Release summary
 
-## Integration-Relevant Changes
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.1.2` | [stake-for-fee #41](https://github.com/MeteoraAg/stake-for-fee/pull/41) |
+  | TypeScript SDK | `2.0.0` | [stake-for-fee-sdk #36](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/36) |
+  | Rust interface | `0.2.0` | [stake-for-fee-sdk #36](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/36) |
+  | Rust helpers | `0.0.2` | [stake-for-fee-sdk #36](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/36) |
 
-| Version or source note | Area | Change |
-| --- | --- | --- |
-| `stake-for-fee` `0.1.1` | Program | `claim_fee` behavior changed so users can partially claim only the quote token side; the base/stake token side is automatically restaked. |
-| SDK changelog `1.0.10` | TypeScript SDK | Removed `@solana-developers/helpers` dependency and replaced `@mercurial-finance/dynamic-amm-sdk` with `@meteora-ag/dynamic-amm-sdk`. |
-| SDK changelog `1.0.9` | TypeScript SDK | Moved `@mercurial-finance/dynamic-amm-sdk` from dev dependency to dependency in the historical package lineage. |
-| SDK changelog `common` `0.0.1` | Rust helpers | Added PDA helper functions to derive Stake2Earn vault, top staker list, full balance list, and event authority keys. |
-| SDK changelog `1.0.1` | TypeScript SDK | Refactored `findLargestStakerNotInTopListFromFullBalanceList` and `findReplaceableTopStaker`. |
-| Program source | Admin flows | `update_seconds_to_full_unlock` requires the immediately preceding instruction to be `claim_fee_crank` for the same vault and program. |
-| Program source | Events | User and admin flows emit Anchor events through Event CPI. |
-| Live production API | API | Production exposes `/analytics/all`, `/vault/all`, `/vault/filter`, and `/vault/{vault_address}`. |
+  The published TypeScript package is `@meteora-ag/m3m3`. The SDK changelog heading records this release as `@meteora-ag/stake-for-fee` `2.0.0`.
 
-## Documentation Notes
+  ## What We Shipped
 
-| Date | Change |
-| --- | --- |
-| 2026-05-22 | Rebuilt the Stake2Earn developer guide around program accounts, instructions, events, errors, TypeScript SDK, Rust integration, API overview, and changelog pages. |
-| 2026-05-22 | Replaced legacy long-form TypeScript script page with focused SDK getting-started, examples, and reference pages. |
-| 2026-05-22 | Replaced legacy CPI examples page with Rust library and CPI integration pages based on the local Rust interface source. |
-| 2026-05-22 | Updated the checked-in API spec to resolve the production vault-detail schema reference with observed production response fields. |
+  - Deprecated new Stake2Earn vaults, new stakes, partial claims, and unstake requests
+  - Added a full exit: claim both token fees, then withdraw the whole stake with no unstake request and no lock
+  - Release locked fees to top stakers immediately, and claim the lock escrow fee only once
+  - Added permissionless closes for an empty stake escrow, a zero-amount unstake request, and an empty vault
 
-## Gaps To Watch
+  ## What To Do
 
-| Gap | Impact |
-| --- | --- |
-| No high-level Rust SDK in inspected source | Rust integrations should use `stake_for_fee_interface`, `common` PDA helpers, and custom account fetching/parsing. |
-| No TypeScript high-level admin builders | `claim_fee_crank` and admin update flows require low-level Anchor program usage or custom builders. |
-| Production OpenAPI omits `VaultDetailWithLeaderboard` from live components | The docs include a local resolved schema, but integrators should still test API responses against the live host. |
+  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrators</th>
+          <th>What Changed</th>
+          <th>What To Do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Partners</strong></td>
+          <td>
+            <ul>
+              <li><code>initialize_vault</code>, <code>initialize_stake_escrow</code>, <code>update_seconds_to_full_unlock</code>, and <code>update_unstake_lock_duration</code> fail with <code>Deprecated</code>.</li>
+              <li>The lock escrow fee is claimed once, by the first <code>claim_fee_crank</code> or <code>claim_fee_and_withdraw_full</code> after the upgrade. Later calls skip that CPI. <code>close_vault</code> does not close the token vaults, so fees still in those accounts stay locked.</li>
+              <li><code>stake_for_fee_interface</code> 0.2.0 replaces the previous generated crate. It requires <code>anchor-lang</code> 1.2.1 and Rust 1.89 or newer. <code>padding0</code> is renamed <code>padding_0</code>. <code>Unstake</code> includes <code>owner</code> and <code>vault</code> from program 0.1.1.</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Stop creating Stake2Earn vaults.</li>
+              <li>Do not create a DAMM v1 lock escrow owned by a Stake2Earn vault PDA, and do not lock LP into one.</li>
+              <li>Upgrade CPI callers to <code>stake_for_fee_interface</code> 0.2.0 and <code>common</code> 0.0.2. Forward the <code>idl-build</code> feature when your program generates its IDL. PDA helpers take and return <code>anchor_lang::prelude::Pubkey</code>.</li>
+              <li>Keep <code>claim_fee_crank</code> for the one final lock-escrow claim and for releasing fees already recorded on the vault.</li>
+              <li>After every stake escrow is closed and the vault has no stake amount, ongoing unstake amount, or effective stake amount, anyone can call <code>close_vault</code>. The rent goes to the vault creator.</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  ## Program: `stake-for-fee` `0.1.2`
+
+  Program ID (mainnet and devnet): `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP`
+
+  [Program PR #41](https://github.com/MeteoraAg/stake-for-fee/pull/41)
+
+  ### Added
+
+  - New instruction `claim_fee_and_withdraw_full`. Stakers claim all pending fees of both tokens, then withdraw their whole stake amount directly from the stake escrow, without an unstake request and lock duration. The stake token fee is transferred to the user instead of being restaked. A stake escrow without stake amount can still claim its pending fees. The top list and full balance list are synced the same way as `request_unstake`. Emits `ClaimFeeSucceed`, and `WithdrawStakeSucceed` only when a stake amount is withdrawn.
+  - New event `WithdrawStakeSucceed`.
+  - New errors `Deprecated` (6023) and `NothingToExit` (6024). `claim_fee_and_withdraw_full` fails with `NothingToExit` when the stake escrow has no stake amount and no pending fees.
+  - Legacy IDL instructions with `#[program(legacy_idl)]`. The existing on-chain IDL account can still be updated with the legacy IDL instructions instead of the Program Metadata Program.
+  - New field `final_fee_claimed` in `FeeVault`, taken from `padding_0`. It is set to 1 by the first claim, even when nothing is locked in the lock escrow.
+  - New instruction `close_zero_unstake`. The owner closes an unstake request with zero `unstake_amount` and gets the rent back, even after the stake escrow is closed. Requests created before 0.1.1 have no `owner` and cannot be closed this way.
+  - New event `CloseZeroUnstake`.
+  - New error `UnstakeAmountNotZero` (6025).
+  - New permissionless instruction `close_stake_escrow`. Closes a stake escrow without stake amount, pending fees, and ongoing unstake amount, and returns the rent to the owner.
+  - New permissionless instruction `close_vault`. Once all stake escrows are closed and the vault has no stake amount, ongoing unstake amount, or effective stake amount, closes the vault, the top staker list, and the full balance list, and returns the rent to the creator. The token vaults are not closed, so the locked fees stay permanently locked.
+  - New events `StakeEscrowClosed` and `VaultClosed`. New errors `StakeEscrowNotEmpty` (6026) and `VaultNotEmpty` (6027).
+
+  ### Changed
+
+  - Upgrade to Anchor 1.2.1. The dynamic AMM and dynamic vault programs are declared with `declare_program!` from the IDLs in `idls/`. The program is built for SBPF v3 (Anchor 1.2.1 default).
+  - Sync `idls/dynamic_amm.json` and `idls/dynamic_vault.json` with upstream dynamic AMM 0.5.7 and dynamic vault 0.9.5. The only local change is `metadata.name`, renamed from `amm` and `vault` to `dynamic_amm` and `dynamic_vault`. The account layouts and the `claim_fee` interface used by stake-for-fee are unchanged.
+  - `withdraw` no longer waits for the unstake lock duration. Existing unstake requests can be withdrawn immediately.
+  - Lock escrow fee is claimed only once, by the first `claim_fee_crank` or `claim_fee_and_withdraw_full` after the upgrade, even when the pending fee is zero. When nothing is locked in the lock escrow, the claim fee CPI is skipped but the final claim is still marked as done. Later calls skip the claim fee CPI. The minimum claim interval (`MIN_LOCK_ESCROW_CLAIM_FEE_DURATION`) is removed.
+  - Claimed fees are no longer locked. All locked fees are distributed to the top stakers immediately, instead of dripping over `seconds_to_full_unlock`, which is no longer used. Fees stay locked only before `start_fee_distribute_timestamp` or while the top stakers have no stake amount.
+  - `metrics.total_stake_escrow_count` is decreased by `close_stake_escrow`, so it is the number of open stake escrows.
+
+  ### Deprecated
+
+  - `initialize_vault`, `initialize_stake_escrow`, `stake`, `claim_fee`, `request_unstake`, `cancel_unstake`, `update_seconds_to_full_unlock`, and `update_unstake_lock_duration` always fail with `Deprecated`. Their accounts and instruction data are unchanged. Pending fees are claimed with `claim_fee_and_withdraw_full`. `withdraw`, `claim_fee_and_withdraw_full`, and `claim_fee_crank` keep working.
+
+  <Warning>
+    Stop creating Stake2Earn vaults. Do not create a DAMM v1 lock escrow owned by a Stake2Earn vault PDA, and do not lock LP into one.
+  </Warning>
+
+  ## TypeScript SDK: `@meteora-ag/m3m3` `2.0.0`
+
+  [SDK PR #36](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/36)
+
+  Sync with stake-for-fee program `0.1.2`.
+
+  <Tip>
+    `@meteora-ag/m3m3@2.0.0` is the version in SDK PR #36. It is not on npm yet. The published package is [`@meteora-ag/m3m3@1.0.10`](https://www.npmjs.com/package/@meteora-ag/m3m3).
+  </Tip>
+
+  ### Added
+
+  - `claimFeeAndWithdrawFull`. Claims all pending fees of both tokens, then withdraws the whole stake amount directly from the stake escrow, without an unstake request. The stake token fee is transferred to the owner stake token ATA (created when missing) instead of being restaked, and the quote token fee to the owner quote token ATA (created when missing, unwrapped when it is SOL). A stake escrow without stake amount can still claim its pending fees. Existing unstake requests are not affected. Complete them with `withdraw`.
+  - `closeStakeEscrow`. Permissionless. Closes a stake escrow without stake amount, pending fees, and ongoing unstake amount, and returns the rent to the owner. Unstake requests with zero amount do not block the close.
+  - `closeVault`. Permissionless. Once all stake escrows are closed and the vault has no stake amount, ongoing unstake amount, or effective stake amount, closes the fee vault, the top staker list, and the full balance list, and returns the rent to the vault creator. The token vaults are not closed, so the locked fees stay permanently locked.
+  - `StakeForFee.closeZeroUnstake`. The owner closes an unstake request with zero amount and gets the rent back, also after the stake escrow and the fee vault are closed. Requests created before program 0.1.1 have no owner and cannot be closed this way.
+  - `getPoolLpSupply` helper. LP supply tracked by the dynamic AMM pool (`pool.lpMintSupply`). Throws when it is smaller than the LP mint supply.
+  - IDL: event `WithdrawStakeSucceed`, errors `Deprecated` (6023) and `NothingToExit` (6024).
+  - IDL: instructions `closeZeroUnstake`, `closeStakeEscrow`, and `closeVault`, events `CloseZeroUnstake`, `StakeEscrowClosed`, and `VaultClosed`, errors `UnstakeAmountNotZero` (6025), `StakeEscrowNotEmpty` (6026), and `VaultNotEmpty` (6027).
+  - IDL: field `finalFeeClaimed` in `FeeVault`, taken from `padding0` (now 6 bytes). It is set to 1 by the first `claim_fee_crank` or `claimFeeAndWithdrawFull`, even when no lock escrow fee is claimed.
+
+  ### Changed
+
+  - The unstake lock duration is no longer enforced. Ongoing unstake requests can be withdrawn immediately with `withdraw`, without waiting for their release time.
+  - The program claims the lock escrow fee only once, by the first `claim_fee_crank` or `claimFeeAndWithdrawFull`, even when the pending fee is zero. A lock escrow without locked amount is not claimed, but the final claim is still marked as done. `getLockedEscrowPendingFee` returns zero once `feeVault.finalFeeClaimed` is set or when the lock escrow has no locked amount, and no longer applies the minimum claim interval.
+  - The program distributes all locked fees to the top stakers immediately instead of over `secondsToFullUnlock`. `StakeForFee.getFarmReleasedFees` returns the locked fees plus the pending lock escrow fee, or zero until `feeVault.configuration.startFeeDistributeTimestamp` has passed or while the top stakers have no effective stake amount. This changes the pending fees returned by `getUserStakeAndClaimBalance`, `getStakeEscrowPendingFees`, and `StakeForFee.getAllStakedVaultByUser`.
+  - `getTokenBalances` and `getLockedEscrowPendingFee` use the LP supply tracked by the dynamic vault (`vault.totalLpSupply`) for version 1 vaults, instead of the LP mint supply. `getLockedEscrowPendingFee` also uses the LP supply tracked by the dynamic AMM pool (`pool.lpMintSupply`). They throw when the tracked supply is smaller than the LP mint supply.
+  - `feeVault.metrics.totalStakeEscrowCount` is decreased by `closeStakeEscrow`, so it is the number of open stake escrows. This changes `rawContext.totalStakers` returned by `parseFeeVaultInfo`.
+
+  ### Breaking Changes
+
+  - `getLockedEscrowPendingFee` takes the dynamic AMM pool state as the last parameter. `StakeForFee.getFarmPendingClaimFees` and `StakeForFee.getFarmReleasedFees` take `ammPool`.
+
+  ### Deprecated
+
+  - `createFeeVault`, `createFeeVaultWithParams`, `createFeeVaultInstructions`, `initializeStakeEscrow`, `getOrCreateStakeEscrowInstruction`, `stake`, `claimFee`, `unstake`, and `cancelUnstake`. The program instructions are deprecated, so the transactions fail with `Deprecated` once they land on-chain. Their parameters are unchanged. Pending fees are claimed with `claimFeeAndWithdrawFull`.
+  - `MIN_LOCK_ESCROW_CLAIM_FEE_DURATION`. The program removed the minimum lock escrow claim fee interval.
+  - `feeVault.configuration.unstakeLockDuration` and `feeVault.configuration.secondsToFullUnlock` are no longer used by the program. IDL instructions `updateUnstakeLockDuration` and `updateSecondsToFullUnlock` fail with `Deprecated`.
+
+  ### Fixed
+
+  - `getLockedEscrowPendingFee` includes `lockEscrow.unclaimedFeePending`, which the dynamic AMM claims together with the new fee.
+  - `StakeForFee.getUnstakeByUser` no longer throws when the stake escrow does not exist. It derives the stake escrow address instead of fetching the account, so it also returns the unstake requests with zero amount left after the stake escrow is closed.
+  - `getStakeEscrowPendingFees` and `StakeForFee.getAllStakedVaultByUser` return only the pending fees stored in the stake escrow when it is not in the top list, like `getUserStakeAndClaimBalance`. Fees accrue only while the stake escrow is in the top list.
+
+  ## Rust interface: `stake_for_fee_interface` `0.2.0`
+
+  [SDK PR #36](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/36)
+
+  Sync with stake-for-fee program `0.1.2`. This crate is not published to crates.io. Take it from the SDK repository.
+
+  ### Added
+
+  - Instruction `claim_fee_and_withdraw_full`. It emits `ClaimFeeSucceed`, and `WithdrawStakeSucceed` only when a stake amount is withdrawn.
+  - Event `WithdrawStakeSucceed` and errors `Deprecated` (6023) and `NothingToExit` (6024).
+  - Field `final_fee_claimed` in `FeeVault`, taken from `padding_0` (now `[u8; 6]`). It is set to 1 by the first `claim_fee_crank` or `claim_fee_and_withdraw_full`, even when no lock escrow fee is claimed.
+  - Instruction `close_zero_unstake`. The owner closes an unstake request with zero `unstake_amount` and gets the rent back, also after the stake escrow is closed.
+  - Permissionless instruction `close_stake_escrow`. Closes a stake escrow without stake amount, pending fees, and ongoing unstake amount, and returns the rent to the owner.
+  - Permissionless instruction `close_vault`. Once all stake escrows are closed and the vault has no stake amount, ongoing unstake amount, or effective stake amount, closes the vault, the top staker list, and the full balance list, and returns the rent to the creator. The token vaults are not closed.
+  - Events `CloseZeroUnstake`, `StakeEscrowClosed`, and `VaultClosed`.
+
+  ### Changed
+
+  - **Breaking**: The crate is generated by Anchor `declare_program!` from `idls/stake_for_fee.json`, replacing the previous generated code. It requires `anchor-lang` 1.2.1 and Rust 1.89 or newer. Forward the `idl-build` feature when your program generates its IDL.
+  - Field `padding0` of `FeeVault`, `StakeEscrow`, `Configuration`, `Metrics`, and `TopStakerInfo` is renamed `padding_0`. `Unstake` gets the fields `owner` and `vault` added in program 0.1.1, and `padding` is renamed `_padding` (now `[u64; 22]`).
+  - `Metrics.total_stake_escrow_count` is decreased by `close_stake_escrow`, so it is the number of open stake escrows.
+
+  ### Deprecated
+
+  - `initialize_vault`, `initialize_stake_escrow`, `stake`, `claim_fee`, `request_unstake`, `cancel_unstake`, `update_seconds_to_full_unlock`, and `update_unstake_lock_duration` always fail with `Deprecated` on-chain. Their accounts and instruction data are unchanged.
+
+  ## Rust helpers: `common` `0.0.2`
+
+  [SDK PR #36](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/36)
+
+  ### Changed
+
+  - **Breaking**: Depends on `anchor-lang` 1.2.1 instead of `solana-sdk` 1.16. The PDA helpers take and return `anchor_lang::prelude::Pubkey`.
+</Update>
+
+<Update
+  label="stake-for-fee 0.1.1"
+  description="Partial quote-token claim"
+  rss="Stake2Earn stake-for-fee 0.1.1 lets claim_fee pay only the quote token. The stake token fee is restaked. Unstake accounts store owner and vault."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.1.1` | [stake-for-fee #32](https://github.com/MeteoraAg/stake-for-fee/pull/32) |
+  | TypeScript SDK | `1.0.10` | [stake-for-fee-sdk #35](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/35) |
+
+  Program `0.1.2` deprecates `claim_fee`. Use the 0.1.2 exit path for new integrations.
+
+  ## Program: `stake-for-fee` `0.1.1`
+
+  Program ID (mainnet and devnet): `FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP`
+
+  [Program PR #32](https://github.com/MeteoraAg/stake-for-fee/pull/32)
+
+  ### Added
+
+  - `owner` and `vault` on the unstake account.
+
+  ### Changed
+
+  - `claim_fee` pays only the quote token. The stake token fee is restaked.
+
+  ## TypeScript SDK: `@meteora-ag/m3m3` `1.0.10`
+
+  [SDK PR #35](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/35)
+
+  ### Changed
+
+  - Removed the `@solana-developers/helpers` dependency and replaced `@mercurial-finance/dynamic-amm-sdk` with `@meteora-ag/dynamic-amm-sdk`.
+
+  ### Earlier SDK notes
+
+  - `1.0.9` ([stake-for-fee-sdk #33](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/33)): moved `@mercurial-finance/dynamic-amm-sdk` from a dev dependency to a dependency.
+  - `1.0.1` ([stake-for-fee-sdk #24](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/24)): refactored `findLargestStakerNotInTopListFromFullBalanceList` and `findReplaceableTopStaker`.
+  - `common` `0.0.1` ([stake-for-fee-sdk #28](https://github.com/MeteoraAg/stake-for-fee-sdk/pull/28)): PDA helpers for the Stake2Earn vault, top staker list, full balance list, and event authority.
+</Update>
