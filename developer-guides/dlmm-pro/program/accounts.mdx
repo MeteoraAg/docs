@@ -139,9 +139,9 @@ Fee numerators use `FEE_DENOMINATOR` as the denominator. Share constants are bas
 | --- | --- | --- |
 | `max_volatility_accumulator` | `u32` | Cap on the volatility accumulator. |
 | `variable_fee_control` | `u32` | Scale factor of the variable fee. |
-| `filter_period` | `u16` | Seconds after a reference update during which the volatility reference holds. |
-| `decay_period` | `u16` | Seconds after which the volatility reference decays. |
-| `reduction_factor` | `u16` | Decay applied to the volatility reference, in basis points. |
+| `filter_period` | `u16` | Seconds after the last reference update or significant swap during which the volatility reference holds. |
+| `decay_period` | `u16` | Seconds after which the volatility reference resets to 0. |
+| `reduction_factor` | `u16` | Share of the volatility accumulator kept as the reference between the filter and decay periods, in basis points. |
 | `min_delta_tick_for_significant_swap` | `u16` | Minimum tick movement of a swap that counts as significant. |
 | `initialized` | `u8` | Non-zero when the pool has a dynamic fee. |
 
@@ -149,7 +149,7 @@ Fee numerators use `FEE_DENOMINATOR` as the denominator. Share constants are bas
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `sqrt_price_reference` | `u128` | Square root price of the last swap. |
+| `sqrt_price_reference` | `u128` | Square root price at the last reference update. |
 | `last_significant_swap_timestamp` | `u64` | Time of the last significant swap. |
 | `last_reference_timestamp` | `u64` | Time of the last reference update. |
 | `volatility_accumulator` | `u32` | Current volatility accumulator. |
@@ -159,7 +159,7 @@ Fee numerators use `FEE_DENOMINATOR` as the denominator. Share constants are bas
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `partner` | `Pubkey` | Partner address, copied from the config `pool_creator_authority` at pool creation. |
+| `partner` | `Pubkey` | The `DynamicConfig` `pool_creator_authority` on dynamic-config pools. The default key (no partner) on static-config and launch pools. |
 | `pending_fee_x` | `u64` | Accrued partner fee in token X. |
 | `pending_fee_y` | `u64` | Accrued partner fee in token Y. |
 
@@ -182,7 +182,7 @@ Fee numerators use `FEE_DENOMINATOR` as the denominator. Share constants are bas
 | `pool_type` | `0` Static, `1` Dynamic, `2` LaunchPool |
 | `base_fee_mode` | `0` Fixed, `1` TimeSchedulerLinear, `2` TimeSchedulerExponential, `3` MarketCapSchedulerLinear, `4` MarketCapSchedulerExponential |
 | `extensions` | Bit 0 LiquidityMining, bit 1 ActivationAccess |
-| `pool_status` | Bit 0 disables swaps, bit 1 disables add liquidity. Removing liquidity cannot be disabled. |
+| `pool_status` | Bit 0 disables swaps. Bit 1 disables adding liquidity, which also blocks `open_position`, `expand_position` and `open_limit_order`. Removing liquidity cannot be disabled. |
 | `activation_type` | `0` Slot, `1` Timestamp |
 | `collect_fee_mode` | `0` OutputToken (fee taken from the output token), `1` OnlyY (fee always in token Y) |
 | `token_x_flag`, `token_y_flag` | `0` Token, `1` Token 2022 |
@@ -273,8 +273,8 @@ The tail holds the initialized ticks sorted by `tick_id`. A new tick array has n
 | `open_order_amount` | `u64` | Limit order amount not yet reached by the price. |
 | `total_processing_order_amount` | `u64` | Limit order amount currently being filled. |
 | `processed_order_remaining_amount` | `u64` | Unfilled part of the amount being processed. |
-| `order_age` | `u64` | Counter that increments when the orders at the tick are fully filled. Orders store the age they were placed at. |
-| `fulfilled_order_amount_x`, `fulfilled_order_amount_y` | `u64` | Filled limit order proceeds held at the tick. |
+| `order_age` | `u64` | Batch counter. It increments when a swap starts filling the open orders, and resets to 0 when the tick has no orders left. An order placed at age `a` is partly filled when `order_age = a + 1` and fully filled when `order_age >= a + 2`. |
+| `fulfilled_order_amount_x`, `fulfilled_order_amount_y` | `u64` | Filled amount of the resting orders in their deposit token (X for asks, Y for bids), used to share the limit order fee. Proceeds are computed at cancel. |
 | `limit_order_fee_ask_side`, `limit_order_fee_bid_side` | `u64` | Limit order fees accrued on each side. |
 
 ### TickWithReward
@@ -294,7 +294,7 @@ The extension tracks initialized tick arrays beyond the 1024-bit inline bitmap o
 | `positive_bitmap` | `[[u64; 8]; 6]` | Six 512-bit bitmaps for tick array indexes 512 to 3583. |
 | `negative_bitmap` | `[[u64; 8]; 6]` | Six 512-bit bitmaps for tick array indexes -513 to -3584. |
 
-Liquidity or limit orders in a tick array outside indexes -512 to 511 need this account in the instruction, or the program returns `TickArrayBitmapExtensionAccountIsNotProvided`. Create it with `initialize_tick_bitmap_extension`, or pass it when creating the pool.
+Liquidity or limit orders in a tick array outside indexes -512 to 511 need this account in the instruction, or the program returns `TickArrayBitmapExtensionAccountIsNotProvided`. A swap that searches past the inline bitmap without it fails with `BitmapExtensionAccountIsNotProvided`. Create it with `initialize_tick_bitmap_extension`, or pass it when creating the pool.
 
 ## PositionArray
 
@@ -355,7 +355,7 @@ A [limit order](/core-products/dlmm-pro/limit-orders) is one NFT plus one `Limit
 | `referral` | `Pubkey` | Wallet that receives the referral share of the order fee. |
 | `delegate_permission` | `u32` | Bitmask of `LimitOrderDelegatePermission`: bit 0 is CancelLimitOrder. |
 
-The tail holds one `LimitOrderData` (24 bytes) per tick. Canceling a tick zeroes its entry.
+The tail holds one `LimitOrderData` (24 bytes) per tick. Canceling a tick zeroes its `amount`, `age` and `is_ask` but keeps `tick_id`, because `close_limit_order` needs the tick arrays of every entry.
 
 ### LimitOrderData
 

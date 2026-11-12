@@ -11,7 +11,7 @@ The program emits 31 events, defined in the IDL (`DlmmProIDL`). Use this page to
 
 Most events use Anchor event CPI. The program calls itself with an inner instruction whose data is an 8-byte event tag (`e445a52e51cb9a1d` in hex), the 8-byte event discriminator and the Borsh-encoded fields. Instructions that emit this way include the `event_authority` account (the standard Anchor PDA, seed `__event_authority`) and the `program` account. Inner instructions are not truncated by the log size limit.
 
-Two events, `EvtClaimProtocolFee` and `EvtInitializeBitmapExtension`, are written to the transaction log as `Program data:` lines instead. The runtime can truncate logs, so an `EvtInitializeBitmapExtension` line can be missing from a transaction that created the extension.
+Two events, `EvtClaimProtocolFee` and `EvtInitializeBitmapExtension`, are written to the transaction log as `Program data:` lines instead. The runtime can truncate logs, so either line can be missing from the transaction that produced it.
 
 Anchor's `EventParser` reads only log lines, so it does not see event CPI events. See [Reading Events](#reading-events).
 
@@ -21,7 +21,7 @@ Anchor's `EventParser` reads only log lines, so it does not see event CPI events
 | `EvtCancelLimitOrder` | `cancel_limit_order` | Inner instruction |
 | `EvtClaimFee` | `claim_fee` | Inner instruction |
 | `EvtClaimPartnerFee` | `claim_partner_fee` | Inner instruction |
-| `EvtClaimProtocolFee` | `claim_protocol_fee2` | Program log |
+| `EvtClaimProtocolFee` | `claim_protocol_fee2` (only when the amount is non-zero) | Program log |
 | `EvtClaimReward` | `claim_reward` (only when the amount is non-zero) | Inner instruction |
 | `EvtCloseConfig` | `close_config` | Inner instruction |
 | `EvtCloseLimitOrder` | `close_limit_order` | Inner instruction |
@@ -30,7 +30,7 @@ Anchor's `EventParser` reads only log lines, so it does not see event CPI events
 | `EvtCreateStaticConfig` | `create_static_config` | Inner instruction |
 | `EvtExpandPosition` | `expand_position` | Inner instruction |
 | `EvtIncreaseOracleLength` | `increase_oracle_length` | Inner instruction |
-| `EvtInitializeBitmapExtension` | `initialize_tick_bitmap_extension`, and pool creation when a bitmap extension is passed | Program log |
+| `EvtInitializeBitmapExtension` | `initialize_tick_bitmap_extension` (only when it creates the account), and pool creation when a bitmap extension is passed | Program log |
 | `EvtInitializePool` | `initialize_pool_with_static_config`, `initialize_pool_with_dynamic_config`, `initialize_launch_pool` | Inner instruction |
 | `EvtInitializeReward` | `initialize_reward` | Inner instruction |
 | `EvtInitializeTickArray` | `initialize_tick_array` (only when it creates the account) | Inner instruction |
@@ -47,7 +47,7 @@ Anchor's `EventParser` reads only log lines, so it does not see event CPI events
 | `EvtUpdatePartnerFee` | `update_partner_fee` | Inner instruction |
 | `EvtUpdatePositionDelegatePermission` | `update_position_delegate_permission` | Inner instruction |
 | `EvtUpdateRewardAuthority` | `update_reward_authority` | Inner instruction |
-| `EvtWithdrawIneligibleReward` | `withdraw_ineligible_rewards` | Inner instruction |
+| `EvtWithdrawIneligibleReward` | `withdraw_ineligible_rewards` (only when the amount is non-zero) | Inner instruction |
 
 ## Reading Events
 
@@ -96,7 +96,7 @@ async function readEvents(signature: string) {
 }
 ```
 
-Each decoded event has `name` and `data`. Field names in `data` are camel case in the TypeScript coder (`currentSqrtPrice`) and snake case in the tables below.
+Each decoded event has `name` and `data`. Event and field names are camel case in the TypeScript coder (`evtSwap`, `currentSqrtPrice`) and as in the IDL in the tables below.
 
 ## Pool and Config Events
 
@@ -494,4 +494,4 @@ Types used inside the events above.
 | `TickLimitOrderAmount` | `id` | `i32` |
 | `TickLimitOrderAmount` | `amount` | `u64` |
 
-`create_operator_account` and `close_operator_account` emit no event. Read account state to track operators.
+`create_operator_account`, `close_operator_account` and `refresh_fees_and_rewards` emit no event. Read the operator and position accounts to track them.

@@ -2,10 +2,10 @@
 title: "DLMM Pro Program Instructions"
 sidebarTitle: "Instructions"
 description: "All DLMM Pro instructions grouped by area, with signers, purpose and the matching TypeScript SDK builder."
-llmsDescription: "Reference for the 39 instructions of the DLMM Pro program (release 0.1.0). Groups instructions into pool creation, swap, tick arrays and oracle, positions, liquidity, fees and locks, limit orders, rewards, partner and protocol fees, and operator and admin. Lists signers derived from the IDL and access control, the SDK builder for each user instruction, exact-in swaps and NotConsumingFullAmountIn, position range slot bitmaps and layout versions, remaining accounts for Token 2022 transfer hooks and tick arrays, and NFT delegate permissions."
+llmsDescription: "Reference for the 39 callable instructions of the DLMM Pro program (release 0.1.0). Groups instructions into pool creation, swap, tick arrays and oracle, positions, liquidity, fees and locks, limit orders, rewards, partner and protocol fees, and operator and admin. Lists signers derived from the IDL and access control, the SDK builder for each user instruction, exact-in swaps and NotConsumingFullAmountIn, position range slot bitmaps and layout versions, remaining accounts for Token 2022 transfer hooks and tick arrays, and NFT delegate permissions."
 ---
 
-The DLMM Pro IDL (`DlmmProIDL` in `@meteora-ag/dlmm-pro-sdk`) defines 39 instructions. Build user transactions with the [TypeScript SDK](/developer-guides/dlmm-pro/typescript-sdk/getting-started), or call the program by CPI using the account lists in the IDL. The SDK builder for each user instruction is named in the Use column.
+The DLMM Pro IDL (`DlmmProIDL` in `@meteora-ag/dlmm-pro-sdk`) defines 39 callable instructions. It also lists `for_idl_type_generation_do_not_call`, which exists only for IDL type generation and is not in the deployed program. Build user transactions with the [TypeScript SDK](/developer-guides/dlmm-pro/typescript-sdk/getting-started), or call the program by CPI using the account lists in the IDL. The SDK builder for each user instruction is named in the Use column.
 
 Instructions that emit events through event CPI include the `event_authority` and `program` accounts. See [Events](/developer-guides/dlmm-pro/program/events).
 
@@ -51,7 +51,7 @@ A mint that needs a token badge is checked against the access registry during cr
 | `close_position` | Position owner | Closes an empty position. Burns the NFT, closes its token account and mint, collects tick array rent and sends rent to `rent_receiver`. `client.position.closePosition`. |
 | `update_position_delegate_permission` | Position owner | Sets the permission bitmask for the NFT delegate. `client.position.updatePositionDelegatePermission`. |
 
-Instructions that act on range slots take a `u64` bitmap in which bit `i` selects slot `i`. Those that depend on the slot layout also take `expected_layout_version` (`Option<u16>`) and fail with `InvalidLayoutVersion` when it differs from the position array. Pass `None` (`null` in the SDK) to skip the check. See [Positions](/core-products/dlmm-pro/positions).
+Instructions that act on range slots take a `u64` bitmap in which bit `i` selects slot `i`. `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance`, `remove_liquidity`, `remove_liquidity_by_bps`, `remove_position`, `lock_permanent_position` and `lock_vesting_position` also take `expected_layout_version` (`Option<u16>`) and fail with `InvalidLayoutVersion` when it differs from the position array. Pass `None` (`null` in the SDK) to skip the check. See [Positions](/core-products/dlmm-pro/positions).
 
 ## Liquidity
 
@@ -60,10 +60,10 @@ Each instruction needs the position NFT token account (`nft_account`) and the ti
 | Instruction | Signer(s) | Use |
 | --- | --- | --- |
 | `add_liquidity` | Position owner, or a delegate with AddLiquidity | Deposits `liquidities[k]` into each selected slot, capped by `max_amount_x` and `max_amount_y`. `client.position.addLiquidity`. |
-| `add_liquidity_by_weight` | Position owner, or a delegate with AddLiquidity | Splits a deposit across the selected slots by weight (`multiplier`, with one weight byte per slot in `liquidities`). `client.position.addLiquidityByWeight`. |
+| `add_liquidity_by_weight` | Position owner, or a delegate with AddLiquidity | Like `add_liquidity`, with each selected slot's liquidity given as `multiplier × weight` (one `u8` weight per slot in `liquidities`). `client.position.addLiquidityByWeight`. |
 | `add_liquidity_imbalance` | Position owner, or a delegate with AddLiquidity | Deposits one slot with optional per-token caps and a price or minimum liquidity slippage check. `client.position.addLiquidityImbalance`. |
 | `remove_liquidity` | Position owner, or a delegate with RemoveLiquidity | Withdraws `liquidities[k]` from each selected slot, with `min_amount_x` and `min_amount_y` as slippage bounds. `client.position.removeLiquidity`. |
-| `remove_liquidity_by_bps` | Position owner, or a delegate with RemoveLiquidity | Withdraws `bps` of each selected slot (all slots when `bitmap` is `None`). `client.position.removeLiquidityByBps`. |
+| `remove_liquidity_by_bps` | Position owner, or a delegate with RemoveLiquidity | Withdraws `bps` of each selected slot's unlocked liquidity, after releasing vested liquidity (all slots when `bitmap` is `None`). `client.position.removeLiquidityByBps`. |
 
 A delegate that withdraws tokens can only pay into the owner associated token accounts, or the program fails with `IncorrectATA`.
 
@@ -73,7 +73,7 @@ A delegate that withdraws tokens can only pay into the owner associated token ac
 | --- | --- | --- |
 | `refresh_fees_and_rewards` | Position owner, or any delegate | Accrues fees and rewards into the selected slots without moving tokens. `client.position.refreshFeesAndRewards`. |
 | `claim_fee` | Position owner, or a delegate with ClaimFee | Pays out the pending fees of the position, with `min_amount_x` and `min_amount_y` as slippage bounds. `client.position.claimFee`. |
-| `lock_permanent_position` | Position owner | Locks `bps` of the position liquidity for good. The locked liquidity cannot be removed. `client.position.lockPermanentPosition`. |
+| `lock_permanent_position` | Position owner | Locks `bps` of each slot's unlocked liquidity for good. The locked liquidity cannot be removed. `client.position.lockPermanentPosition`. |
 | `lock_vesting_position` | Position owner | Moves liquidity into a vesting schedule (cliff, then periodic releases). One schedule per position. `client.position.lockVestingPosition`. |
 
 Fees and rewards accrue to a slot when it is refreshed. Claim after refreshing every slot that holds liquidity.
@@ -98,7 +98,7 @@ Rewards apply to pools with the LiquidityMining extension. A pool has 2 reward s
 | `initialize_reward` | Payer, plus an operator with InitializeReward or the pool creator (slot 0 only) | Creates the reward vault and sets the reward mint and authority of a slot. `client.reward.initializeReward`. |
 | `update_reward_authority` | Pool creator (slot 0), or an operator with UpdateRewardAuthority | Changes the authority of a reward slot. `client.reward.updateRewardAuthority`. |
 | `set_reward_emission` | Funder, reward authority | Funds the reward vault and sets the emission window and rate. `client.reward.setRewardEmission`. |
-| `claim_reward` | Position owner, or a delegate with ClaimReward | Pays out the pending reward of one slot of the position. `client.reward.claimReward`. |
+| `claim_reward` | Position owner, or a delegate with ClaimReward | Pays out the pending amount of one reward index, summed over every range slot of the position. `client.reward.claimReward`. |
 | `withdraw_ineligible_rewards` | Reward authority | Withdraws rewards emitted while the pool had no liquidity, once the emission has ended. `client.reward.withdrawIneligibleRewards`. |
 
 ## Partner and Protocol Fees
@@ -110,7 +110,7 @@ Rewards apply to pools with the LiquidityMining extension. A pool has 2 reward s
 
 ## Operator and Admin
 
-The SDK does not wrap these. Build them with `client.program.methods.<instruction>(...)`.
+The SDK does not wrap these. Build them with `client.program.methods`, where Anchor exposes each instruction in camel case (for example `client.program.methods.createStaticConfig(...)`).
 
 | Instruction | Signer(s) | Use |
 | --- | --- | --- |
@@ -119,8 +119,8 @@ The SDK does not wrap these. Build them with `client.program.methods.<instructio
 | `create_static_config` | Operator with CreateConfigKey, payer | Creates a `StaticConfig`. |
 | `create_dynamic_config` | Operator with CreateConfigKey, payer | Creates a `DynamicConfig`. |
 | `close_config` | Operator with RemoveConfigKey | Closes a static or dynamic config. |
-| `set_pool_status` | Operator with SetPoolStatus | Disables or enables swaps and add liquidity on a pool. |
-| `update_partner_fee` | Operator with UpdatePartnerFee | Sets `partner_fee_bps` on a pool. |
+| `set_pool_status` | Operator with SetPoolStatus | Disables or enables swaps and adding liquidity on a pool. Disabling adding liquidity also blocks opening positions, expanding positions and opening limit orders. |
+| `update_partner_fee` | Operator with UpdatePartnerFee | Sets `partner_fee_bps` on a pool. Only pools with a partner (dynamic-config pools). |
 
 ## Remaining Accounts
 
@@ -131,8 +131,8 @@ Tick arrays follow the transfer hook accounts:
 | Instruction | Tick array order |
 | --- | --- |
 | `swap` | Swap direction: descending index for `swap_for_y`, ascending otherwise. |
-| `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance`, `remove_liquidity`, `remove_liquidity_by_bps`, `cancel_limit_order` | Any order. |
-| `open_position`, `expand_position`, `remove_position`, `close_position`, `refresh_fees_and_rewards`, `close_limit_order` | Ascending index. |
+| `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance`, `remove_liquidity`, `remove_liquidity_by_bps`, `refresh_fees_and_rewards`, `cancel_limit_order` | Any order. |
+| `open_position`, `expand_position`, `remove_position`, `close_position`, `close_limit_order` | Ascending index. |
 | `open_limit_order` | Ascending index. With `relative_tick`, any order, including the tick arrays of the slippage range. |
 
 The SDK builders resolve transfer hook accounts, and `quoteExactIn` returns swap tick arrays in traversal order. See the [TypeScript SDK reference](/developer-guides/dlmm-pro/typescript-sdk/reference) for each builder and [Rust library](/developer-guides/dlmm-pro/rust-integration/library) for account helpers.

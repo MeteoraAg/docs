@@ -72,17 +72,17 @@ A failed transaction log shows `custom program error: 0x1784`. Convert the hex v
 | Error | Cause | Fix |
 | --- | --- | --- |
 | `NotConsumingFullAmountIn` | The swap did not consume all of `input_amount`, because the tick arrays passed ran out of liquidity (the quote has `amountLeft` above zero). | Raise `maxTickArrays` in the quote or lower `inputAmount`, then pass the quote tick arrays. |
-| `ExceededSlippage` | A swap output, withdrawal or claim is below its minimum, a deposit plus transfer fee is above its maximum, an imbalanced deposit moved past its price or liquidity bound, or a `relative_tick` limit order opened outside its tick range. | Re-quote and widen the bound. |
+| `ExceededSlippage` | A swap output, withdrawal or claim is below its minimum, a deposit plus transfer fee is above its maximum, an imbalanced deposit moved past its price or liquidity bound, or the current tick moved outside a `relative_tick` order's min and max before it landed. | Re-quote and widen the bound. |
 | `LiquidityIsZero` | A swap found no initialized tick array with liquidity in its direction, or a liquidity amount in an add, remove or lock instruction is zero. | Check pool liquidity in the swap direction and pass non-zero amounts. |
-| `InvalidActivationAccess` | Swaps or add liquidity are disabled by `pool_status`, or the pool is not active yet for the signer under its activation schedule. | Wait for the activation point, or sign with a whitelisted address. |
-| `TickArrayBitmapExtensionAccountIsNotProvided` | Liquidity or limit orders touch a tick array outside indexes -512 to 511 and the bitmap extension account is missing. | Pass `deriveTickArrayBitmapExtension(pool)`, creating it first if needed. |
+| `InvalidActivationAccess` | Swaps or adding liquidity are disabled by `pool_status`, or the pool's activation rules do not yet allow the swap, deposit or withdrawal for that wallet (the signer for swaps, the NFT owner for liquidity). | Wait for the activation point, or use the whitelisted wallet. |
+| `TickArrayBitmapExtensionAccountIsNotProvided` | Liquidity or limit orders touch a tick array outside indexes -512 to 511, or a pool is created with its initial tick outside that window, and the bitmap extension account is missing. A swap in the same situation fails with `BitmapExtensionAccountIsNotProvided` (6044). | Pass `deriveTickArrayBitmapExtension(pool)`, creating it first if needed. |
 | `InvalidLayoutVersion` | `expected_layout_version` differs from the position `layout_version`, which changes on `expand_position` and `remove_position`. | Read the position again and pass the current version, or `null`. |
 | `PositionIsNotEmpty` | A slot to remove or close still has liquidity, pending fees or pending rewards. | Remove liquidity and claim fees and rewards first. |
 | `LimitOrderIsNotEmpty` | Closing a limit order that still has ticks that are not canceled. | Cancel every tick, then close. |
-| `UnsupportedMint` | A Token 2022 mint has an extension other than transfer fee, metadata or a transfer hook without program or authority, or a reward mint has a freeze authority, and no token badge was passed. | Pass a token badge from the access registry. |
+| `UnsupportedMint` | A Token 2022 mint has an extension other than transfer fee, metadata or a transfer hook without program or authority, or a reward mint set up by the pool creator has a freeze authority, and no token badge was passed. | Pass a token badge from the access registry. |
 | `InvalidTokenBadge` | A token badge does not match the mint, or a `CollectFeeMode.OnlyY` pool has a token Y that needs a badge and none was passed. | Pass `deriveTokenBadge(mint)` for the right mint. |
 | `IncorrectATA` | A delegate signed an instruction that pays tokens to an account other than the owner associated token account. | Pay into the owner associated token account, or sign as the owner. |
-| `InvalidParameters` | An argument is out of range, such as identical mints, a price outside the sqrt price bounds, no ranges or more than 45, `bps` outside 1 to 10000, or an oracle above 500 observations. | Check the argument against the constants in the Accounts page. |
+| `InvalidParameters` | An argument is out of range, such as a price outside the sqrt price bounds, no ranges or more than 45, `bps` outside 1 to 10000, or an oracle above 500 observations. | Check the argument against the constants in the Accounts page. |
 
 ## SDK Error Codes
 
