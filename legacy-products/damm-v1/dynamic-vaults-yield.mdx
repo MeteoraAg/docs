@@ -5,11 +5,11 @@ description: "Learn how DAMM v1 pools can earn additional yield by routing eligi
 llmsDescription: "Documentation for DAMM v1 Dynamic Vault yield, explaining vault-backed pool liquidity, idle liquidity allocation, strategies, reserve liquidity, LP share value, virtual price, locked profit, vault risk, and why vault yield complements swap fees and farming rewards."
 ---
 
-DAMM v1 pool liquidity can sit on top of Dynamic Vaults. Instead of leaving every token idle inside a standard pool account, eligible DAMM v1 assets can be connected to vaults that allocate unused liquidity into supported external strategies.
+One of DAMM v1's defining features is that pool liquidity can sit on top of Dynamic Vaults. Instead of leaving every token idle inside a standard pool account, eligible DAMM v1 assets can be connected to vaults that allocate unused liquidity into supported external strategies.
 
-For LPs, this adds a return layer. A DAMM v1 pool can earn swap fees from trading activity while eligible idle assets may also earn lending yield through the Dynamic Vault layer.
+For LPs, this creates an additional return layer. A DAMM v1 pool can earn swap fees from trading activity while eligible idle assets may also earn lending yield through the Dynamic Vault layer.
 
-## What Dynamic Vaults Do
+## What Dynamic Vaults do
 
 Dynamic Vaults are Meteora's capital allocation layer. A vault holds a supported token, keeps part of the liquidity available in reserve, and can allocate part of the liquidity into approved strategies.
 
@@ -24,7 +24,7 @@ A vault tracks:
 
 DAMM v1 pools use vault LP positions to represent the pool's ownership of each token-side vault.
 
-## How This Connects to DAMM v1
+## How this connects to DAMM v1
 
 A DAMM v1 pool has two token sides. Each side points to a Dynamic Vault. When the pool needs to understand its balances, it converts its vault LP holdings back into the current underlying token amounts.
 
@@ -34,9 +34,9 @@ That means the AMM can continue to price swaps, deposits, withdrawals, and LP sh
   In DAMM v1 source, the pool stores vault accounts and vault LP token accounts for both token sides. This is the core reason DAMM v1 is described as an AMM built on Dynamic Vault infrastructure.
 </Info>
 
-## Why This Creates Additional Yield
+## Why this creates additional yield
 
-In a normal AMM, unused liquidity waits for the next trade. In a DAMM v1 pool with supported vault assets, a portion of idle liquidity can be allocated to external yield sources.
+In a normal AMM, unused liquidity simply waits for the next trade. In a DAMM v1 pool with supported vault assets, a portion of idle liquidity can be allocated to external yield sources.
 
 The return stack becomes:
 
@@ -48,7 +48,7 @@ The return stack becomes:
 
 This helps reduce reliance on constant liquidity mining emissions. A pool can be more attractive to LPs even when trading volume is uneven or reward campaigns are not active.
 
-## Reserve Liquidity and Withdrawals
+## Reserve liquidity and withdrawals
 
 Dynamic Vaults do not send every token into a strategy. A portion of liquidity can remain in the vault reserve to support normal pool operations.
 
@@ -65,7 +65,7 @@ If a very large withdrawal exceeds immediately available reserve liquidity for a
   Vault-backed yield improves capital productivity, but it is not the same as instant idle cash. Strategy allocations can affect how much liquidity is immediately available in the reserve at a given moment.
 </Warning>
 
-## Locked Profit and Smoother Share Value
+## Locked profit and smoother share value
 
 Dynamic Vaults use locked profit accounting. When a vault reports gains, those gains are not necessarily made fully available to new deposits immediately. Instead, profit can unlock over time.
 
@@ -73,7 +73,7 @@ The product reason is fairness. Without smoothing, someone could deposit immedia
 
 For LPs, this means vault yield may show up as gradual share value improvement rather than an instant jump.
 
-## Where LPs See the Impact
+## Where LPs see the impact
 
 DAMM v1 LPs typically experience vault yield through pool performance metrics, such as virtual price growth or displayed yield metrics. The exact UI label can vary, but the product idea is consistent: vault yield increases the underlying value backing pool shares when strategies perform positively.
 
@@ -85,13 +85,13 @@ A simplified virtual price view is:
 
 `pool.lp_mint_supply` is the pool LP supply the program uses. If pool value rises from fees or vault yield while that supply stays the same, virtual price increases.
 
-## Eligible Assets
+## Eligible assets
 
 Dynamic Vault yield depends on vault support. Historically, DAMM v1 vault yield has been most relevant for major liquid assets such as USDC, USDT, and SOL, where external lending or liquidity strategies exist.
 
 Not every token pair can earn vault yield. A long-tail token may still use DAMM v1's AMM design, but the additional vault yield layer depends on whether the token side has a supported Dynamic Vault strategy.
 
-## Risk Considerations
+## Risk considerations
 
 Dynamic Vault yield introduces additional risk considerations beyond basic AMM liquidity:
 
@@ -104,11 +104,11 @@ Dynamic Vault yield introduces additional risk considerations beyond basic AMM l
 
 Meteora's vault design includes controls such as approved strategy lists, reserve management, operators, and rebalancing, but LPs should still treat vault yield as a DeFi strategy exposure.
 
-## How to Think About Vault Yield
+## How to think about vault yield
 
-Dynamic Vault yield is a baseline return on idle assets. It does not replace trading volume or farms.
+Dynamic Vault yield is best understood as a baseline capital productivity layer. It does not replace trading volume, and it does not replace farms. Instead, it makes DAMM v1 pools more durable by giving eligible idle assets something productive to do between trades.
 
-A DAMM v1 pool's return mix can include:
+For a strong DAMM v1 pool, the ideal return mix is:
 
 - **Organic fees** from useful trading volume.
 - **Vault yield** from eligible idle assets.

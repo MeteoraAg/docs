@@ -33,7 +33,7 @@ use commons::{derive_bin_array_pda, quote_exact_in, BinArrayExtension, LbPairExt
 | `quote` | `quote_exact_in`, `quote_exact_out`, `get_bin_array_pubkeys_for_swap`. | Quote swaps in Rust before building a transaction. |
 | `pda` | `derive_lb_pair_with_preset_parameter_key`, `derive_bin_array_pda`, `derive_position_pda`, `derive_reserve_pda`, and related helpers. | Derive DLMM PDAs without duplicating seed logic. |
 | `extensions` | `LbPairExtension`, `BinArrayExtension`, `BinExtension`, `PositionExtension`, `DynamicPosition`, `LimitOrderExtension`. | Work with decoded account data using higher-level methods. |
-| `token_2022` | Transfer-fee math and transfer-hook account helpers. | Build Token 2022-aware quotes and remaining account lists. |
+| `token_2022` | Transfer-fee math and transfer-hook account helpers. | Build Token-2022-aware quotes and remaining account lists. |
 | `account_filters` | `position_filter_by_wallet_and_pair`, `limit_order_filter_by_owner_and_pair`. | Query user positions and limit orders with memcmp filters. |
 | `rpc_client_extension` | `RpcClientExtension`. | Fetch and deserialize accounts with one async helper. |
 
@@ -111,7 +111,7 @@ Common derivation helpers:
 | `derive_bin_array_bitmap_extension` | Bitmap extension PDA for out-of-default-range bin arrays. |
 | `derive_reserve_pda` | Pool reserve PDA for a token mint. |
 | `derive_reward_vault_pda` | Reward vault PDA for a reward index. |
-| `derive_token_badge_pda` | Token badge PDA for Token 2022 pool creation. |
+| `derive_token_badge_pda` | Token badge PDA for Token-2022 pool creation. |
 
 ## Bin Arrays
 
@@ -158,7 +158,7 @@ They support:
 - Base and variable fee updates.
 - Bin traversal and bitmap extension lookup.
 - Limit-order liquidity when the pool supports it.
-- Token 2022 transfer fees on input and output mints.
+- Token-2022 transfer fees on input and output mints.
 
 ### Exact-In
 
@@ -263,10 +263,10 @@ let ix = Instruction {
 };
 ```
 
-For Token 2022 transfer hooks, populate `remaining_accounts_info` and append the
+For Token-2022 transfer hooks, populate `remaining_accounts_info` and append the
 extra account metas described in the next section.
 
-## Token 2022
+## Token-2022
 
 `commons::token_2022` handles two separate concerns:
 
@@ -278,7 +278,7 @@ extra account metas described in the next section.
 | `get_extra_account_metas_for_transfer_hook` | Fetch transfer-hook extra account metas for one mint. |
 | `get_potential_token_2022_related_ix_data_and_accounts` | Build `RemainingAccountsSlice` data and account metas for liquidity or reward actions. |
 
-For v2 instructions that may transfer Token 2022 mints, pass the extra account
+For v2 instructions that may transfer Token-2022 mints, pass the extra account
 metas after the main accounts and encode the matching `RemainingAccountsInfo`:
 
 ```rust
@@ -349,7 +349,7 @@ and serialized account data into `solana-program-test`:
 | Test | What it covers |
 | --- | --- |
 | `tests/integration/test_swap.rs` | Exact-in and exact-out swap quotes and generated `Swap2` / `SwapExactOut2` instructions. |
-| `tests/integration/test_swap_token2022.rs` | Token 2022 swap behavior. |
+| `tests/integration/test_swap_token2022.rs` | Token-2022 swap behavior. |
 | `tests/integration/test_swap_quote_with_limit_order.rs` | Quote behavior when limit order liquidity is part of the pool. |
 
 Run the commons tests from the SDK repository:
@@ -366,5 +366,5 @@ cargo test -p commons --test integration
 | Fetch enough bin arrays | `get_bin_array_pubkeys_for_swap` takes a count. Larger swaps may need more arrays, but every extra array increases account and compute pressure. |
 | Include bitmap extension when needed | Pass `Some(&bitmap_extension)` when route discovery can leave the default bitmap range. |
 | Keep slippage explicit | Use `quote.amount_out` or `quote.amount_in` to derive user-facing `min_amount_out` or `max_in_amount`; do not send unbounded swaps. |
-| Treat Token 2022 separately | Transfer fees change quoted amounts, and transfer hooks require extra account metas and matching `RemainingAccountsInfo`. |
+| Treat Token-2022 separately | Transfer fees change quoted amounts, and transfer hooks require extra account metas and matching `RemainingAccountsInfo`. |
 | Compare with TypeScript SDK output | When in doubt, build the same transaction with `@meteora-ag/dlmm` and compare account order, remaining accounts, and instruction data. |

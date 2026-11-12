@@ -28,7 +28,7 @@ Important runtime dependencies:
 | --- | --- |
 | `@coral-xyz/anchor` | Program client, BN, IDL-derived types. |
 | `@solana/web3.js` | Connections, transactions, instructions, public keys. |
-| `@solana/spl-token` | ATA creation, Token and Token 2022 account handling, transfer fee and transfer hook data. |
+| `@solana/spl-token` | ATA creation, Token and Token-2022 account handling, transfer fee and transfer hook data. |
 | `decimal.js` | Price, fee, and UI conversion arithmetic. |
 
 ## Program IDs
@@ -53,7 +53,7 @@ type Opt = {
 }
 ```
 
-Set `skipSolWrappingOperation` when another integration, such as a zap flow, manages wrapped SOL accounts itself.
+`skipSolWrappingOperation` is useful when another integration, such as a zap flow, manages wrapped SOL accounts itself.
 
 ## Core Types
 
@@ -134,7 +134,7 @@ Creates one hydrated `DLMM` pool client. It fetches:
 - reserve token accounts
 - token X/Y mint accounts
 - reward vaults and reward mint accounts
-- Token 2022 transfer-hook extra account metas for pool and reward mints
+- Token-2022 transfer-hook extra account metas for pool and reward mints
 
 ```typescript
 const pool = await DLMM.create(connection, poolAddress, {
@@ -186,9 +186,9 @@ Creation helpers return unsigned `Transaction` objects. The caller still signs a
 | Method | Underlying instruction | Token support | Notes |
 | --- | --- | --- | --- |
 | `createLbPair` | `initialize_lb_pair` | SPL Token only | Legacy permissionless creation. Requires `binStep`, `baseFactor`, and legacy `presetParameter`. |
-| `createLbPair2` | `initialize_lb_pair2` | SPL Token and Token 2022 | Current permissionless path. Reads `PresetParameter2`, token badges, token program IDs, and derives pool PDA from preset parameter. |
+| `createLbPair2` | `initialize_lb_pair2` | SPL Token and Token-2022 | Current permissionless path. Reads `PresetParameter2`, token badges, token program IDs, and derives pool PDA from preset parameter. |
 | `createCustomizablePermissionlessLbPair` | `initialize_customizable_permissionless_lb_pair` | SPL Token only | Creator-configurable pool. Throws if computed base fee power factor overflows legacy path. |
-| `createCustomizablePermissionlessLbPair2` | `initialize_customizable_permissionless_lb_pair2` | SPL Token and Token 2022 | Current customizable path. Supports `ConcreteFunctionType` and `CollectFeeMode`. |
+| `createCustomizablePermissionlessLbPair2` | `initialize_customizable_permissionless_lb_pair2` | SPL Token and Token-2022 | Current customizable path. Supports `ConcreteFunctionType` and `CollectFeeMode`. |
 
 ### `createLbPair2`
 
@@ -442,7 +442,7 @@ const tx = await pool.swap({
 })
 ```
 
-The swap builders create missing ATAs, handle wrapped SOL unless disabled, add Token 2022 transfer-hook remaining accounts, and pass bin arrays as remaining writable accounts.
+The swap builders create missing ATAs, handle wrapped SOL unless disabled, add Token-2022 transfer-hook remaining accounts, and pass bin arrays as remaining writable accounts.
 
 ## Fees And Rewards
 
@@ -455,7 +455,7 @@ The swap builders create missing ATAs, handle wrapped SOL unless disabled, add T
 | `claimAllRewardsByPosition({ owner, position })` | `Promise&lt;Transaction[]&gt;` | Claims fees and rewards for a single position. |
 | `claimAllRewards({ owner, positions })` | `Promise&lt;Transaction[]&gt;` | Claims fees and rewards across multiple positions. |
 
-The claim builders create token accounts as needed and use Token 2022 transfer-hook remaining accounts for pool tokens and reward tokens.
+The claim builders create token accounts as needed and use Token-2022 transfer-hook remaining accounts for pool tokens and reward tokens.
 
 ## Limit Orders
 
@@ -548,7 +548,7 @@ Seed liquidity helpers are for launch/operator workflows and return instruction 
 | `canSyncWithMarketPrice(marketPrice, activeBinId)` | Checks whether active bin can be moved to market price without crossing liquidity. |
 | `syncWithMarketPrice(marketPrice, owner)` | Builds `go_to_a_bin` transaction and initializes bitmap extension when needed. |
 
-## Token 2022 Support
+## Token-2022 Support
 
 The SDK automatically detects token program ownership when `DLMM.create` or `createMultiple` loads a pool. It also fetches transfer-hook extra account metas for token X, token Y, and reward mints.
 
@@ -558,11 +558,11 @@ Internally, transaction builders use:
 getPotentialToken2022IxDataAndAccounts(actionType, rewardIndex?)
 ```
 
-This returns `RemainingAccountsInfoSlice[]` and account metas for Token 2022 transfer hooks. Public Token 2022 helper exports include:
+This returns `RemainingAccountsInfoSlice[]` and account metas for Token-2022 transfer hooks. Public Token-2022 helper exports include:
 
 | Helper | Description |
 | --- | --- |
-| `getPotentialToken2022IxDataAndAccounts(actionType, rewardIndex?)` | Instance helper that returns remaining-account slices and metas for Token 2022 transfer hooks used by liquidity, swap, fee, and reward flows. |
+| `getPotentialToken2022IxDataAndAccounts(actionType, rewardIndex?)` | Instance helper that returns remaining-account slices and metas for Token-2022 transfer hooks used by liquidity, swap, fee, and reward flows. |
 | `calculateTransferFeeIncludedAmount(amount, mint, epoch)` | Grosses up an amount so the receiver gets the intended net amount after transfer fee. |
 | `calculateTransferFeeExcludedAmount(amount, mint, epoch)` | Calculates net amount after transfer fee. |
 | `getExtraAccountMetasForTransferHook(connection, mint, mintAccount)` | Reads transfer-hook extra account metas for one mint. |
@@ -757,7 +757,7 @@ Transaction builders may also throw standard `Error` objects for invalid ranges,
 - All token amounts are raw integer token amounts, usually `BN`, not UI decimals.
 - Slippage values in quote methods are bps. A 0.5% slippage is `new BN(50)`.
 - `swapForY = true` means swapping token X into token Y.
-- Most current transaction builders use the v2 program instructions and support Token 2022.
+- Most current transaction builders use the v2 program instructions and support Token-2022.
 - Legacy methods remain exported for older flows, but new integrations should prefer v2 creation, v2 liquidity, and v2 swap paths.
 - Methods that return `TransactionInstruction[][]` or grouped instruction objects are intended for callers that need custom transaction assembly, ALT usage, or parallel execution.
 - After sending a transaction, call `refetchStates()` before quoting or reading from the same `DLMM` instance again.

@@ -1,5 +1,5 @@
 ---
-title: "How to Become a Liquidity Provider"
+title: "How to become a Liquidity Provider"
 sidebarTitle: "Becoming a Liquidity Provider"
 description: "Learn what liquidity providers do, how AMMs work, how LPs earn fees and incentives, and how Meteora's DLMM, DAMM v1, and DAMM v2 pools differ."
 llmsDescription: "User guide for becoming a liquidity provider on Meteora. Explains that liquidity providers deposit token pairs into liquidity pools so traders can swap against them, and that LPs may earn swap fees, bonus incentives, yield farming rewards, or protocol incentives based on their share of liquidity. Introduces key LP risks, including receiving a different token balance than originally deposited due to price changes. Covers Automated Market Maker (AMM) basics, including how decentralized liquidity pools replace centralized orderbooks, how the constant product formula x * y = k works, how traders swap against pool liquidity, and how LP fees are distributed. Compares Meteora's main pool types for LPs: DLMM, which uses concentrated liquidity, discrete price bins, zero-slippage bins, volatility strategies, dynamic fees, single-sided deposits, and active range management; DAMM v1, a simpler full-range constant product Dynamic AMM with fixed fees, yield-layer vault allocation, permissionless pool creation, LP tokens, and liquidity burn options; and DAMM v2, a configurable constant product Dynamic AMM with SPL and Token 2022 support, dynamic fees, Anti-Sniper mechanisms such as Fee Scheduler and Rate Limiter, fee token selection, position NFTs, built-in farming, lower pool creation costs, liquidity locking options, single-sided liquidity, and configurable price ranges."
@@ -7,15 +7,17 @@ llmsDescription: "User guide for becoming a liquidity provider on Meteora. Expla
 
 ## What is a Liquidity Provider?
 
-As a liquidity provider (LP), you deposit tokens into a liquidity pool, and traders swap against them.
+As a liquidity provider (LP), you deposit tokens into a liquidity pool and these tokens can then be used by traders for swapping.
 
-## Why Become a Liquidity Provider?
+## Why become a Liquidity Provider?
 
-You earn fees or rewards whenever a trade uses the liquidity you deposited, typically in proportion to your share of the pool:
+You can earn fees or rewards whenever a trade occurs using the liquidity you deposited into the pool. The fees or rewards are typically proportional to your share of the pool.
+
+You get to earn:
 - Swap fees (also known as LP fees)
 - Bonus incentives (e.g. yield farming rewards, protocol incentives)
 
-<Note>You may not get the same amount of tokens back as you deposited. Because traders swap against your tokens in exchange for an LP fee, price changes on one or both tokens can leave you with less of one token and more of the other.</Note>
+<Note>you may not get the same amount of tokens back as you initially deposited into the liquidity pool. You may get less of one token and more of the other depending on price changes (on one or both of the tokens) because you are allowing traders to swap your tokens in exchange for an LP fee.</Note>
 
 <iframe
   className="w-full aspect-video rounded-xl"
@@ -30,38 +32,38 @@ You earn fees or rewards whenever a trade uses the liquidity you deposited, typi
 
 An Automated Market Maker (AMM) is a type of decentralized exchange (DEX) protocol.
 
-Traditional exchanges match individual buyers and sellers through a centralized orderbook, usually with an intermediary. AMMs use smart contracts on Solana, and traders trade against the tokens deposited in a liquidity pool.
+In traditional exchanges, a centralized orderbook matches the specific orders placed by individual buyers and sellers, and this is usually facilitated by an intermediary. Unlike traditional exchanges, AMMs use smart contracts on the Solana blockchain to enable traders to trade against the tokens deposited in a liquidity pool.
 
-An AMM sets prices algorithmically with a pricing formula. The most common is the “constant product” formula, `x * y = k`, where:
+The price of token assets in an AMM is determined algorithmically, based on a pricing formula. The most common formula is the “constant product” formula, `x * y = k`, where:
 - `x` = amount of Token A in the pool
 - `y` = amount of Token B in the pool
 - `k` = a constant value that never changes
 
-When someone trades, the AMM adjusts the token balances so the product `x * y` stays constant. The more users buy one token, the more expensive it becomes in the pool. The more users sell it, the cheaper it becomes.
+When someone makes a trade, the AMM adjusts the token balances in the pool such that the product x * y remains constant. In other words, the more users buy one token, the more expensive it becomes in the pool. Conversely, the more users sell one token, the cheaper it becomes in the pool.
 
-- For **liquidity providers (LPs)**: LPs deposit token pairs into liquidity pools so traders can trade against those tokens. In a constant product AMM, the two tokens are usually deposited at equal USD value (50:50). For example, LPs can deposit an equal value of SOL and USDC into a SOL-USDC pool.
+- For **liquidity providers (LPs)**: In an AMM, LPs deposit different token asset pairs into liquidity pools so traders can trade against those tokens. In the most common constant product-based AMM, each token in the pair being deposited is usually of equivalent $USD value (50:50). For example, LPs can deposit an equivalent value of SOL and USDC into a SOL-USDC liquidity pool.
 
-- For **traders**: A trader or another smart contract interacts directly with the pool's smart contract to swap one token for the other, for example SOL for USDC in a SOL-USDC pool. The exchange rate comes from the pool's formula and the tokens available in the pool, so trades are non-custodial and need no intermediary.
+- For **traders**: A trader or another smart contract can then interact directly with the AMM pool smart contract to swap one token for the other. For example, using SOL to swap for USDC in a SOL-USDC pool. This process can be done automatically on the blockchain with the exchange rate calculated based on a pre-defined mathematical formula and accounting for the available tokens in the pool. Hence the AMM can facilitate trades in a non-custodial, decentralized manner without an intermediary.
 
-**LP Fees**: When trades use the tokens in a liquidity pool, that pool's LPs earn a portion of the fees based on their share of the total liquidity.
+**LP Fees**: When trades are completed by utilizing the tokens in the liquidity pool, liquidity providers of that pool earn a portion of the fees based on their share of the total liquidity in the pool.
 
-Meteora's DAMM v1 and DAMM v2 are examples of such AMMs.
+An example of such an AMM in operation is Meteora's DAMM v1 or DAMM v2.
 
-## Differences Between DLMM and DAMM v1/v2
+## Differences between DLMM and DAMM v1/v2
 
 ### DLMM
 
-Meteora’s DLMM (Dynamic Liquidity Market Maker) pools concentrate liquidity in 0-slippage bins, with flexible volatility strategies and dynamic fees.
+Meteora’s DLMM (Dynamic Liquidity Market Maker) pools enable LPs to earn much more fees with their capital due to precise liquidity concentration with 0-slippage bins, flexible volatility strategies, and dynamic fees.
 
-The liquidity of an asset pair is organized into discrete price bins. Tokens in a bin swap at that bin's price, so swaps within a bin have 0 slippage and 0 price impact. The market for the pair is the aggregate of all its bins.
+The liquidity of an asset pair is organized into discrete price bins. Tokens deposited in a liquidity bin can be swapped at the specific price for that particular bin, ensuring 0-slippage or price impact swaps for that bin. The asset pair market is established by aggregating all the different liquidity bins.
 
-LPs select a volatility strategy and make the price range narrower or wider to concentrate liquidity. The higher capital efficiency lets a DLMM position support more volume, and earn more fees, than the same liquidity on a typical DEX.
+LPs have the flexibility to select their volatility strategy and adjust the price range (make it narrower or wider) to concentrate liquidity based on their preferences - helping them achieve higher capital efficiency. With the higher capital efficiency, DLMM LPs can support more volume (and earn more fees) with their liquidity position, compared to adding the same liquidity on a typical DEX.
 
-DLMM also allows single-sided deposits, so LPs can deposit one token to DCA (dollar cost average) into the other token in the pair. Single-sided deposits also suit token launches: the project deposits only its base token first, and users buy it with USDC or SOL when the pool starts trading.
+In addition, DLMM allows for single-sided asset deposits, so LPs can deposit only one token in the pool to DCA (dollar cost average) to the other token in the pair. Single-sided asset deposits are also suited for token launches, where the project only deposits their base token in the pool first so users can purchase their token with USDC or SOL when the pool starts trading.
 
-LPs earn dynamic fees, which rise with market volatility.
+In addition, LPs earn dynamic fees that are designed to capture more value from market volatility.
 
-A DLMM pool can become "inactive" and stop earning fees whenever the active price moves out of the range set by the LP. DLMM pools therefore need more active management than Dynamic AMM pools.
+Although DLMM LPs can potentially generate a lot more volume and fees, a DLMM pool can become "inactive" and stop earning fees whenever the active price goes out of the range set by the LP. As such, DLMM pools require more active management compared to Dynamic AMM pools.
 
 DLMM pools also don't provide LP tokens upon adding liquidity, so once the pool is created, liquidity deposited cannot be locked permanently (unlike dynamic AMM pools).
 
@@ -69,13 +71,13 @@ Read an overview of DLMM [here](https://meteoraag.medium.com/dlmm-new-dynamic-li
 
 ### DAMM v1
 
-DAMM v1 (Dynamic AMM v1) pools use a constant product AMM model and are simpler for LPs to use.
+DAMM v1 (Dynamic AMM v1) pools are pools with a constant product AMM (automated market maker) model that are relatively more straightforward to use for LPs. 
 
-Unlike DLMM, DAMM v1 pools have a fixed fee %, do not let LPs concentrate liquidity, and operate across the full price range, so they never become inactive. LPs do not need to manage or rebalance them.
+Unlike DLMM, DAMM v1 pools have a fixed fee %, do not allow LPs to concentrate liquidity, and operate across the full price range so they won't become inactive. Therefore, dynamic pools do not require active management and rebalancing from LPs.
 
-Assets in dynamic pools are deposited into the vaults in the yield layer, so SOL/USDC/USDT assets are dynamically allocated to external lending protocols to generate yield and rewards for LPs. LPs earn from the AMM trading fees, the SOL/USDC/USDT lending interest, and any liquidity mining rewards collected from the platforms.
+Assets in dynamic pools are also deposited directly into the vaults in the yield layer, so SOL/USDC/USDT assets will be dynamically allocated to external lending protocols to generate yield and rewards for LPs. LPs can receive yield from a few places — the AMM trading fees, the SOL/USDC/USDT lending interest, and any liquidity mining rewards collected from the platforms.
 
-Creating a dynamic pool is permissionless: any user or developer can create one without approval from the Meteora team.
+Creating a new dynamic pool is permissionless, meaning any user or developer can create a new pool without approval from the Meteora team.
 
 In addition, with DAMM v1 pools, [memecoin creators have the option to "burn" their liquidity](https://x.com/MeteoraAG/status/1786045723953557507) by permanently locking the Meteora LP tokens (which represent the liquidity in a dynamic pool). Memecoin creators can compound and claim fees on permanently locked liquidity forever, even though they no longer have access to that liquidity. Memecoin creators can consider launching their memecoin with a Memecoin Pool, which is a subset of dynamic pools and has features specially catered to memecoin launches (e.g. a dynamic fee % schedule).
 
@@ -83,14 +85,16 @@ Read an overview of DAMM v1 [here](/legacy-products/damm-v1/what-is-damm-v1). An
 
 ### DAMM v2
 
-DAMM v2 (Dynamic AMM v2) is also a constant-product AMM that needs little upkeep from LPs. It adds configurability and features over DAMM v1 for LPs, token launches, and launchpads.
+DAMM v2 (Dynamic AMM v2) is also a constant-product AMM pool that requires little upkeep from LPs and is relatively more straightforward to use. 
+
+However, it improves upon DAMM v1 by providing extensive configurability and features. This is to better support LPs, token launches, and launchpads, and help them win!
 
 Key features include:
-- SPL and Token 2022 support
-- Dynamic Fee, which raises fees during high volatility
+- SPL & Token 2022 support to enable a broad asset range
+- Dynamic Fee to help maximize returns during high volatility
 - Anti-Sniper mechanisms such as the Fee Scheduler (fees start higher at launch and drop over time). Rate Limiter still runs on existing pools and is not available for a new pool.
 - Fee collection in Base + Quote, Quote only, or Quote + Compounding. In compounding mode, a configured share of the LP fee is added back to reserves. `0` leaves that fee claimable in the quote token.
-- Transferable liquidity position NFT, so you can give ownership of your position to someone else
+- Transferrable liquidity position NFT to easily give ownership of your position to someone else
 - Farming mechanism that is built directly into the program, not as a separate farm program
 - Greater cost efficiency; creating a single DAMM v2 pool with a liquidity position costs ~0.022 SOL, compared to ~0.25 SOL for a DLMM Launch Pool
 - Different options to lock liquidity; option to lock liquidity with vesting (non-permanent) or permanently, while still allowing fee claims.

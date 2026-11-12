@@ -7,9 +7,11 @@ llmsDescription: "Explains how to get started with the Meteora Zap TypeScript SD
 
 This guide shows how to install and initialize the official Zap TypeScript SDK, `@meteora-ag/zap-sdk`.
 
+Before you begin, here are the main resources:
+
 <CardGroup cols={2}>
   <Card title="TypeScript SDK" icon="node-js" iconType="solid" href="https://github.com/MeteoraAg/zap-sdk">
-    Source code, issues and releases.
+    Zap TypeScript SDK repository.
   </Card>
   <Card title="Zap NPM Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/zap-sdk">
     Published package for transaction builders, state reads, PDA helpers, and examples.
@@ -18,7 +20,7 @@ This guide shows how to install and initialize the official Zap TypeScript SDK, 
 
 ## Install
 
-Install the SDK with npm, pnpm or yarn:
+To use the SDK in your project, install it with your preferred package manager:
 
 <Tabs>
   <Tab title="npm">
@@ -90,7 +92,7 @@ Zap builders return unsigned `Transaction` objects. The caller is responsible fo
 For zap-in flows, preserve this order. The ledger stores intermediate token amounts that the following Zap instruction consumes.
 
 <Warning>
-Zap In is **not a single instruction**. It is a multi-step sequence (setup, **swap**, ledger, zap-in, cleanup). The swap leg is a Jupiter (or pool) quote that your integration must validate **before** signing.
+Zap In is **not a single instruction**. It is a multi-step sequence (setup → **swap** → ledger → zap-in → cleanup). The swap leg is a Jupiter (or pool) quote that your integration must validate **before** signing.
 
 - `simulateTransaction` passing only means the swap will not revert. It does **not** mean the quoted `outAmount` is a reasonable market price for the input size.
 - Jupiter slippage bounds execution against **that quote / that route**, not input-vs-output fair value. See [Jupiter customer support](https://developers.jup.ag/docs/resources/support#customer-support).

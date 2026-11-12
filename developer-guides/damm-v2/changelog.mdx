@@ -123,7 +123,7 @@ rss: true
 
   ### Added
 
-  - Added `Config.permission`. Only private configs, meaning those with a `pool_creator_authority`, can hold permissions. The only permission so far is `CreatePoolWithoutMintValidation`, which lets `initialize_pool` and `initialize_pool_with_dynamic_config` skip the standard mint validation for trusted configs. The Token 2022 wrapped SOL is still rejected under this permission, use the SPL wrapped SOL instead.
+  - Added `Config.permission`. Only private configs, meaning those with a `pool_creator_authority`, can hold permissions. The only permission so far is `CreatePoolWithoutMintValidation`, which lets `initialize_pool` and `initialize_pool_with_dynamic_config` skip the standard mint validation for trusted configs. The Token-2022 wrapped SOL is still rejected under this permission, use the SPL wrapped SOL instead.
 
   ### Changed
 
@@ -144,12 +144,12 @@ rss: true
   ### Changed
 
   - Synced the IDL and bankrun program fixture to cp_amm 0.2.4.
-  - `ConfigState.permission` is a u128 bitmask. Use `isConfigPermissionAllow` with `ConfigPermission.CreatePoolWithoutMintValidation` (bit 0) to detect configs that skip permissionless mint and token-badge checks. Token 2022 wrapped SOL is still rejected.
+  - `ConfigState.permission` is a u128 bitmask. Use `isConfigPermissionAllow` with `ConfigPermission.CreatePoolWithoutMintValidation` (bit 0) to detect configs that skip permissionless mint and token-badge checks. Token-2022 wrapped SOL is still rejected.
 
   ### Added
 
   - Added `ConfigPermission` enum and `isConfigPermissionAllow` helper to read the config permission bitmask.
-  - `createPool`, `createCustomPool`, `createCustomPoolWithDynamicConfig`, and `initializeReward` reject Token 2022 wrapped SOL (`NATIVE_MINT_2022`) before sending a transaction.
+  - `createPool`, `createCustomPool`, `createCustomPoolWithDynamicConfig`, and `initializeReward` reject Token-2022 wrapped SOL (`NATIVE_MINT_2022`) before sending a transaction.
 </Update>
 
 <Update
@@ -447,7 +447,7 @@ rss: true
 
   ### Added
 
-  - Added new `CollectFeeMode.Compounding` mode, a constant-product (x \* y = k) liquidity mode where a configurable percentage of trading fees are compounded back into pool liquidity (as token B), with the remaining fees available for claiming. Pools with compounding mode do not use price ranges.
+  - Added new `CollectFeeMode.Compounding` mode — a constant-product (x \* y = k) liquidity mode where a configurable percentage of trading fees are compounded back into pool liquidity (as token B), with the remaining fees available for claiming. Pools with compounding mode do not use price ranges.
   - Added `LiquidityHandler` interface and two implementations: `CompoundingLiquidityHandler` and `ConcentratedLiquidityHandler`, with a `getLiquidityHandler` factory function that dispatches based on `collectFeeMode`.
   - Added `compoundingFeeBps` field to `PoolFeesParams` for configuring the compounding fee split.
   - Added `collectFeeMode` parameter to `getLiquidityDelta`, `getDepositQuote`, `getWithdrawQuote`, and `preparePoolCreationParams`.

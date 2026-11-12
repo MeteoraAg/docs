@@ -1061,7 +1061,7 @@ If you want to create an Alpha Vault along with your DAMM v1 pool, you will need
 
 <Note>If there is no existing config in the list that fits your project's requirement, you can reach out to the team on [discord](https://discord.gg/meteora) to create a new config.</Note>
 
-## Adding A Fee Scheduler To A Config
+# Adding a Fee Scheduler to a Config
 
 For DAMM v1, the anti-snipe Fee Scheduler is applied offchain. Our team at Meteora can assist in applying a custom fee scheduler for your pools where we will create a dedicated config key for your team with `pool_creator_authority` linked to your signer wallet for pool creation. 
 
@@ -1075,7 +1075,7 @@ You can use the following API endpoint to check the associated fee scheduler con
   </Card>
 </CardGroup>
 
-## Understanding Pool Config Fields
+# Understanding Pool Config Fields
 
 | Field | Description |
 |-------|-------------|
@@ -1087,12 +1087,11 @@ You can use the following API endpoint to check the associated fee scheduler con
 | `pool_creator_authority` | Address which can use the pool config key to create a pool. If it is `11111111111111111111111111111111`, it's public and available for everyone to use |
 | `activation_type` | Pool activation type. `0` = slot, `1` = time |
 
-Pool activation time depends on `activation_type`:
-
+**Pool Activation Time Calculation (depending on the `activation_type`)**
 - `current_time + activation_duration`
 - `current_slot + activation_duration`
 
-## Pool Config Example
+# Pool Config Example
 
 ```json
 {
@@ -1106,29 +1105,29 @@ Pool activation time depends on `activation_type`:
 }
 ```
 
-## User Flow Example
+# User Flow Example
 
-A pool config may or may not have an associated vault config. No vault config is associated when `vault_config_key` is `11111111111111111111111111111111`.
+A pool config may or may not have an associated vault config. There's no vault config associated when the `vault_config_key` is `11111111111111111111111111111111`.
 
-When the pool config has a vault config, you can create the pool and an Alpha Vault bound to it (auto-whitelisted). The Alpha Vault inherits its parameters (Pro Rata / FCFS, `buying_cap`, vesting duration and so on) from the vault config.
+When the pool config has a vault config, user can create the pool + Alpha Vault that is binded (auto-whitelisted) by the pool. The Alpha Vault created will inherit the parameters (Pro Rata / FCFS + buying_cap, vesting duration, etc.) from the vault config.
 
-### Creating Pool ABC/SOL With An Alpha Vault
+## Creating Pool ABC/SOL with an Alpha Vault
 
-To create the pool ABC/SOL with an Alpha Vault:
+Let's say a user wants to create the pool ABC/SOL with an Alpha Vault, the user will need to:
 
-1. Find pool configs where `vault_config_key` is not `1111...` and `pool_creator_authority` is you or `1111...` (public).
+1. **Check for pool config** that have `vault_config_key` not = `1111...`, and `pool_creator_authority` is the user or `1111...` (accessible by the public)
 
-2. Pick the vault requirement you want:
-   - a) Check all the pool configs from step 1, each mapped to a `vault_config_key`.
-   - b) Check the vault configs and look for one that fits the requirement.
+2. **Based on the vault requirement** the user wants, the user will need to:
+   - a) Check all the pool configs from step 1, which are each mapped to a `vault_config_key`, as well as
+   - b) Check for vault config and look for one that fits the requirement
 
-3. Use the matching `pool_config_key` to create the pool, then use the config-mapped `vault_config_key` to create the vault. As long as `vault_config_key` is used, the vault is automatically whitelisted on pool creation.
+3. **If the user finds a requirement** that suits their needs, they can use that `pool_config_key` to create the pool, then use the pool config-mapped `vault_config_key` to create the vault. As long as `vault_config_key` is used, the vault is automatically whitelisted upon pool creation.
 
 All the settings are already predefined by `pool_config` + its mapped `vault_config_key`.
 
 <Note>The permutations for pool config + Alpha Vault are created by Meteora. Please reach out to us on [discord](https://discord.gg/meteora) if you need a specific configuration.</Note>
 
-#### Pool Config Example
+### Pool Config Example
 
 ```json
 {
@@ -1142,7 +1141,7 @@ All the settings are already predefined by `pool_config` + its mapped `vault_con
 }
 ```
 
-#### Alpha Vault Config Example
+### Alpha Vault Config Example
 
 ```json
 {
@@ -1157,16 +1156,16 @@ All the settings are already predefined by `pool_config` + its mapped `vault_con
 }
 ```
 
-In this example, only the `pool_creator_authority` `5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi` can use the pool config `8aPHoLN8ke6PhWeYA7ELi19fppptVYUCQvqKWR5yP1sn` to create a pool with these settings:
+In this example above, only the `pool_creator_authority` => `5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi` can use the pool config `8aPHoLN8ke6PhWeYA7ELi19fppptVYUCQvqKWR5yP1sn` to create a pool with the below settings:
 
-- 1.5% fee
-- 20% protocol fee and 80% LP fee (fixed Meteora fee for constant product pools)
-- Pool starts trading 1512000 slots after creation
-- Slot-based activation
+- **1.5% fee**
+- **20% protocol fee** and **80%** LP fee (fixed Meteora fee for constant product pools)
+- Pool starts trading after **1512000 slot** upon creation
+- **Slot based activation**
 
-You can also create a bound Alpha Vault with an FCFS config:
+You can also create a binded Alpha Vault with **FCFS config** as shown below:
 
-- Max deposit cap: 10 token
-- Vested over 24106 slots after pool activation
-- Deposit opens at 24107 slots before vault crank
-- Each escrow can deposit at most 1 token
+- Max deposit cap = **10 token**
+- Vested over **24106 slot** after pool activate
+- Deposit opens at **24107 slot** before vault crank
+- Every escrow maximum can only deposit **1 token**

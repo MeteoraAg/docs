@@ -7,7 +7,9 @@ llmsDescription: "Explains how DAMM v1 fee and APY calculation works, covering s
 
 DAMM v1 LP returns can come from several sources, so APY needs to be read carefully. A pool may show fee performance, base APY, Dynamic Vault yield, and farming incentives. These are related, but they are not the same thing.
 
-## Total Trading Fee
+This page explains how to think about the metrics at a product level.
+
+## Total trading fee
 
 Every swap can charge a trading fee. The trading fee is calculated from the input amount:
 
@@ -17,7 +19,7 @@ Every swap can charge a trading fee. The trading fee is calculated from the inpu
 
 The LP-relevant portion of the fee remains with the pool and increases the value backing LP tokens. In practice, LPs do not need to manually collect this fee from a DAMM v1 LP-token pool. The fee is reflected in pool share value.
 
-## Protocol Fee
+## Protocol fee
 
 DAMM v1 can also charge a protocol fee:
 
@@ -27,12 +29,12 @@ DAMM v1 can also charge a protocol fee:
 
 The protocol fee is separate from the LP value. Depending on pool configuration, protocol, host, and partner fee settings can determine how swap fees are split.
 
-### Constant Product Pools
+### Constant Product pools
 
 - **Standard Pools:** **20%** Protocol Fee, **80%** LP Fee (0.25% trade fee)
 - **Launch Pools:** **20%** Protocol Fee, **80%** LP Fee (customizable trade fee)
 
-### Stable Swap Pools
+### Stable Swap pools
 
 - **0%** Protocol Fee, **100%** LP Fee (0.01% trade fee)
 
@@ -42,7 +44,7 @@ Swap hosts can include a host fee account in the swap transaction to receive **2
 
 For LPs, the key question is: what portion of the trading fee remains in the pool and increases LP token value?
 
-## Host and Partner Fee Routing
+## Host and partner fee routing
 
 DAMM v1 also has fee routing logic for partner fee arrangements. A configured partner can accrue up to **50%** of protocol-side fees after any host fee routing.
 
@@ -80,7 +82,7 @@ Virtual price can rise because of:
   Base APY is backward-looking. It annualizes what happened during a measurement window. It is not a promise that the same return will continue.
 </Note>
 
-## 365-day Fee Over TVL
+## 365-day fee over TVL
 
 This metric annualizes recent swap fee generation against pool liquidity:
 
@@ -93,9 +95,9 @@ Where:
 - `24h fees` is the fee value generated over the last 24 hours.
 - `pool TVL` is the current value of liquidity in the pool.
 
-Use it to compare how efficiently pools generate trading fees. A smaller pool with heavy volume may show a high fee-over-TVL number. A large pool with quiet volume may show a lower number.
+This is useful for comparing how efficiently different pools are generating trading fees. A smaller pool with heavy volume may show a high fee-over-TVL number. A large pool with quiet volume may show a lower number.
 
-## Dynamic Vault Yield
+## Dynamic Vault yield
 
 Some DAMM v1 pools can earn additional yield through Dynamic Vaults. This yield comes from eligible idle assets being allocated to supported external strategies.
 
@@ -107,7 +109,7 @@ Vault yield can contribute to base APY because it can increase the value backing
 
 These can all appear in the LP return profile, but each has different drivers and risks.
 
-## External Farm APR
+## External farm APR
 
 External liquidity mining APR estimates the annualized value of farm rewards relative to farm TVL:
 
@@ -122,31 +124,31 @@ Where:
 
 Farm APR is only relevant if LPs stake LP tokens in the separate farm program. LP tokens sitting unstaked in a wallet still own pool liquidity, but they do not earn farm rewards from that farm.
 
-## Reading a DAMM v1 Pool Return Stack
+## Reading a DAMM v1 pool return stack
 
 When comparing DAMM v1 pools, break the displayed return into layers:
 
-### 1. Organic Trading Demand
+### 1. Organic trading demand
 
 Does the pair have real swap volume? High trading volume can generate sustainable fees.
 
-### 2. Pool Depth
+### 2. Pool depth
 
 How much TVL is competing for those fees? More TVL can reduce slippage, but it also spreads fee revenue across more LP capital.
 
-### 3. Vault Yield Eligibility
+### 3. Vault yield eligibility
 
 Does one side or both sides of the pool connect to Dynamic Vault yield? If yes, what are the supported assets and risk assumptions?
 
-### 4. Farm Incentives
+### 4. Farm incentives
 
 Is there an active farm? What reward token is emitted? How long does it last? How much LP liquidity is staked?
 
-### 5. Asset Risk
+### 5. Asset risk
 
 A high displayed APY does not offset all asset risk. LPs still face price movement, depeg risk, smart contract risk, and incentive changes.
 
-## Practical Example
+## Practical example
 
 A DAMM v1 stablecoin pool might have:
 
@@ -155,3 +157,5 @@ A DAMM v1 stablecoin pool might have:
 - A temporary partner farm.
 
 The combined displayed return may look attractive, but each component behaves differently. Trading fees depend on volume. Vault yield depends on external strategy rates and risk. Farm APR depends on reward funding and how many LP tokens are staked.
+
+A healthy LP decision looks at all three instead of chasing the largest number on the screen.

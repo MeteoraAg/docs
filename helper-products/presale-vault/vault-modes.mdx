@@ -7,7 +7,7 @@ llmsDescription: "Explains Presale Vault sale modes as implemented by the presal
 
 Presale Vault supports three sale modes. The mode controls deposit capacity, withdrawal support, token-allocation math, and when the sale can end.
 
-## Comparison
+# Comparison
 
 | Mode | Price behavior | Deposit capacity | During-sale withdrawal | Token allocation |
 | --- | --- | --- | --- | --- |
@@ -15,7 +15,7 @@ Presale Vault supports three sale modes. The mode controls deposit capacity, wit
 | FCFS | Final implied price depends on deposits and supply | Cannot exceed the global maximum cap | Disabled | Registry supply is split by deposit share |
 | Pro Rata | Final implied price depends on deposits and supply | Can exceed the global maximum cap, subject to buyer caps | Enabled | Registry supply is split by deposit share; overflow quote is refundable |
 
-## Fixed Price
+# Fixed Price
 
 Fixed Price mode is for sales where buyers should know the quote-per-base price before participating.
 
@@ -26,7 +26,7 @@ The creator creates a fixed-price extra-params account before initializing the v
 
 The program verifies that the configured price can buy at least one base-token unit for the relevant buyer caps, that the maximum cap can be fulfilled by the deposited base supply, and that the minimum and maximum caps buy different base-token amounts.
 
-### Deposit Behavior
+## Deposit behavior
 
 Fixed Price deposits are capped by:
 
@@ -36,7 +36,7 @@ Fixed Price deposits are capped by:
 
 The program may reduce a requested deposit to the largest amount that maps cleanly to purchasable base-token units. Fixed-price token amounts are rounded down in base-token units, and quote needed for those units is rounded up.
 
-### Claim Behavior
+## Claim behavior
 
 The sold amount for a registry is:
 
@@ -46,7 +46,7 @@ The sold amount for a registry is:
 
 Each buyer's claimable amount is their share of that sold amount, subject to the unlock schedule.
 
-## FCFS
+# FCFS
 
 FCFS mode is for capped sales where deposits should stop once the sale reaches the maximum cap.
 
@@ -57,7 +57,7 @@ Deposits are capped by:
 
 FCFS does not support during-sale withdrawals. If early completion is not disabled, the program updates the presale end time to the current timestamp once total deposits reach the maximum cap.
 
-### Claim Behavior
+## Claim behavior
 
 For each registry that received deposits, the full registry supply is sold and split by deposit share:
 
@@ -71,13 +71,13 @@ For each registry that received deposits, the full registry supply is sold and s
 
 A registry with no deposits is not treated as sold, so its supply is unsold base token.
 
-## Pro Rata
+# Pro Rata
 
 Pro Rata mode is for sales where buyers should be able to participate throughout the sale window even if demand exceeds the maximum cap.
 
 Deposits are not capped by the global maximum cap. They are still capped by the buyer's remaining deposit quota. Pro Rata supports during-sale withdrawals.
 
-### Claim and Refund Behavior
+## Claim and refund behavior
 
 Token allocation uses the same registry-level share formula as FCFS:
 
@@ -97,7 +97,7 @@ Deposit fees on the refunded portion are also refundable. The creator's collecti
   All three modes can be used with any whitelist mode. Registry and personal-cap constraints are covered in the [Configuration Guide](/helper-products/presale-vault/configuration-guide).
 </Note>
 
-## Choosing a Mode
+# Choosing a mode
 
 <CardGroup cols={3}>
   <Card title="Fixed Price" icon="tag" iconType="solid">

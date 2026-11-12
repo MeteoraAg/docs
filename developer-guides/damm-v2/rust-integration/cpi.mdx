@@ -90,7 +90,7 @@ For `swap` and `swap2`, the optimized swap path expects the fixed swap account l
 Token 2022 transfer-hook accounts are not a general DAMM v2 CPI surface. DAMM v2 accepts Transfer Hook permissionlessly only when both the hook program ID and authority are unset. Mints outside that allowlist need a token badge to pass mint validation, but DAMM v2 still does not forward transfer-hook extra accounts on transfers. See [Token 2022 support](/core-products/damm-v2/token-2022-support).
 
 <Note>
-`initialize_pool` and `initialize_pool_with_dynamic_config` skip permissionless-mint and token-badge checks when the private config has `CreatePoolWithoutMintValidation`. `initialize_customizable_pool` always validates mints (`skip=false`) and still expects token badge remaining accounts at index `0` (token A) and index `1` (token B) when a mint is not permissionless-supported. Token 2022 wrapped SOL is still rejected.
+`initialize_pool` and `initialize_pool_with_dynamic_config` skip permissionless-mint and token-badge checks when the private config has `CreatePoolWithoutMintValidation`. `initialize_customizable_pool` always validates mints (`skip=false`) and still expects token badge remaining accounts at index `0` (token A) and index `1` (token B) when a mint is not permissionless-supported. Token-2022 wrapped SOL is still rejected.
 </Note>
 
 ## Swap CPI Shape
@@ -105,7 +105,7 @@ For generated Anchor CPI, the account set mirrors `SwapCtx`:
 | `token_a_vault`, `token_b_vault` | Mutable pool vaults |
 | `token_a_mint`, `token_b_mint` | Pool mints |
 | `payer` | Signer whose token account is debited |
-| `token_a_program`, `token_b_program` | SPL Token or Token 2022 programs matching the mints |
+| `token_a_program`, `token_b_program` | SPL Token or Token-2022 programs matching the mints |
 | `referral_token_account` | Optional referral account; use the generated optional-account representation |
 | `event_authority`, `program` | Event CPI accounts |
 
@@ -153,7 +153,7 @@ For generated Anchor CPI, the account set mirrors `SwapCtx`:
 | Plan rate-limiter swaps | Detect existing rate-limiter pools off-chain. Include the instructions sysvar as the first remaining account and avoid batching multiple swaps for the same pool in one transaction. New configs and new pools cannot use `RateLimiter`. |
 | Avoid deep CPI nesting for rate-limiter swaps | The rate-limiter validation rejects some deeper CPI stacks. Prefer a direct CPI from your program to `cp-amm` for those pools. |
 | Handle token programs per mint | Token A and token B can be SPL Token or Token 2022 independently. Pass the token program that owns each mint and vault. |
-| Plan Token 2022 mint validation | Transfer Hook is permissionless only when both the hook program ID and authority are unset. Other Token 2022 extensions need a token badge for pool creation or reward init, unless the private config has `CreatePoolWithoutMintValidation`. `initialize_customizable_pool` always validates. Token 2022 wrapped SOL is still rejected. Do not forward transfer-hook account sets as a DLMM-style remaining-account slice; DAMM v2 does not consume them. |
+| Plan Token 2022 mint validation | Transfer Hook is permissionless only when both the hook program ID and authority are unset. Other Token 2022 extensions need a token badge for pool creation or reward init, unless the private config has `CreatePoolWithoutMintValidation`. `initialize_customizable_pool` always validates. Token-2022 wrapped SOL is still rejected. Do not forward transfer-hook account sets as a DLMM-style remaining-account slice; DAMM v2 does not consume them. |
 | Verify position NFT authority | The position NFT token account must have amount `1` and match `position.nft_mint`. The NFT holder can sign. A delegate can sign `add_liquidity`, `remove_liquidity`, `remove_all_liquidity`, `claim_position_fee`, `claim_reward`, `lock_position`, `lock_inner_position`, and `permanent_lock_position` when `delegate_permission` allows it and `delegated_amount` is `0`. `close_position`, `split_position`, and `split_position2` require the NFT holder. The signer account on the delegated instructions is `signer`. |
 | Refresh lock and vesting state | For remove, close, split, and merge-style flows, load current slot or timestamp and include vesting state expected by your wrapper before deciding what liquidity is unlocked. |
 | Account for Token 2022 transfer fees | Add-liquidity thresholds are maximum included-fee amounts; remove-liquidity thresholds are minimum post-fee amounts. Quote with mint and epoch data before building CPI inputs. |

@@ -11,7 +11,7 @@ This page summarizes the DAMM v1 behavior that is enforced by the on-chain AMM p
   DAMM v1 mainnet program: `Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB`.
 </Info>
 
-## Pool Account Model
+## Pool account model
 
 A DAMM v1 pool is a two-token SPL Token pool. The pool account stores:
 
@@ -31,7 +31,7 @@ A DAMM v1 pool is a two-token SPL Token pool. The pool account stores:
 
 The AMM does not price from raw token account balances alone. It converts the pool's vault LP holdings back into underlying token amounts, then uses those amounts for swaps, LP minting, withdrawals, and virtual price.
 
-## Supported Curves
+## Supported curves
 
 DAMM v1 supports two curve families:
 
@@ -42,7 +42,7 @@ DAMM v1 supports two curve families:
 
 Constant-product pools do not support imbalanced deposits or single-sided withdrawals in the curve implementation. Stable pools support imbalanced deposits and single-sided withdrawals because those operations are implemented through the stable-swap math.
 
-## Permissionless Constraints
+## Permissionless constraints
 
 Permissionless pool creation is intentionally constrained:
 
@@ -58,7 +58,7 @@ Permissionless pool creation is intentionally constrained:
 
 Specialized stable pools, including depeg-aware LST pools, require permissioned pool setup.
 
-## Fee Settings
+## Fee settings
 
 DAMM v1 fee fractions use a denominator of `100000`.
 
@@ -71,7 +71,7 @@ The protocol fee is calculated from the total trade fee, not directly from the f
 
 For non-zero fee settings, the fee helper returns a minimum fee of one token unit when integer division would otherwise round the fee to zero.
 
-## Fee Tiers and Updates
+## Fee tiers and updates
 
 Permissionless fee-tier creation only allows specific trade fee basis points:
 
@@ -90,13 +90,13 @@ Customizable permissionless constant-product pools use a different launch-orient
 
 Pool fees can also be updated after creation. The configured fee-update authority can only decrease the trade fee, cannot change the protocol fee, and cannot reduce below `0.25%`. The admin path can set fees and partner fee settings after validating fee fractions and partner limits.
 
-## Host and Partner Fees
+## Host and partner fees
 
 If a swap includes a host fee account in the expected remaining-account position, the program routes `20%` of the protocol fee to that host account and leaves the rest as protocol fee.
 
 Partner fees are tracked separately in pool state. When a partner is configured, the partner can accrue up to `50%` of protocol-side fees. Partner accounting only applies to protocol fees that remain after host fee routing.
 
-## Depeg-Aware LST Support
+## Depeg-aware LST support
 
 Depeg mode exists only on stable pools. The program supports:
 
@@ -110,7 +110,7 @@ For a depeg pool, token A must be native SOL and token B is the staking or inter
 
 The cached base virtual price is refreshed only when more than `10 minutes` have passed since the previous cache update. SPL stake-pool depeg pools store the stake account in pool state and validate the same account on later updates.
 
-## Activation Rules
+## Activation rules
 
 Some permissionless constant-product pools can be created with an activation point. Activation can be based on either:
 
@@ -129,7 +129,7 @@ Mainnet timing limits include:
 | Max activation duration | `6,696,000` slots | `2,678,400` seconds |
 | Last-join buffer | About `5` minutes | `5` minutes |
 
-## Liquidity Operations
+## Liquidity operations
 
 | Operation | Source-backed behavior |
 | --- | --- |
@@ -141,7 +141,7 @@ Mainnet timing limits include:
 
 The code deliberately rounds some share calculations against the user to account for vault-share precision loss. Integrations should use slippage bounds and quoted amounts rather than assuming exact proportional arithmetic.
 
-## Liquidity Locks
+## Liquidity locks
 
 Liquidity locks escrow DAMM v1 LP tokens and increase `total_locked_lp` on the pool. The underlying assets remain in the AMM and its connected vaults.
 

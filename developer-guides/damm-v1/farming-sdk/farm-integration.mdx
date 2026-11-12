@@ -5,16 +5,18 @@ description: "Integrate DAMM v1 farm staking, claiming, unstaking, and balance c
 llmsDescription: "Code examples for integrating DAMM v1 pools with Meteora farms using @meteora-ag/dynamic-amm-sdk and @meteora-ag/farming-sdk. Covers permissioned DAMM v1 farm context, creating AMM and farm clients, reading LP balances, staking LP tokens, claiming rewards, unstaking, and checking a user's staked balance with Solana web3.js."
 ---
 
-<Warning>DAMM v1 Pools with Farms are permissioned. See [Pools With Farms](/legacy-products/damm-v1/pools-with-farms) to get a farming pool created.</Warning>
+<Warning>DAMM v1 Pools with Farms are permissioned. Refer to the guide [here](/legacy-products/damm-v1/pools-with-farms) on how to get a farming pool created.</Warning>
 
-Stake, claim, unstake and check balances on DAMM v1 farms with the Farming TypeScript SDK. In each example, `wallet` is the user's `Keypair`; the returned transactions still need to be signed and sent.
+# Code Examples
+
+The following code provides detailed examples on how to integrate DAMM v1 pools with farms using the Farming TypeScript SDK.
 
 ## Stake
 
 ```typescript
 import AmmImpl, { MAINNET_POOL } from "@meteora-ag/dynamic-amm-sdk";
 import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection } from "@solana/web3.js";
 
 const connection = new Connection("https://api.mainnet-beta.solana.com");
 
@@ -22,8 +24,8 @@ const pool = await AmmImpl.create(connection, MAINNET_POOL.USDC_USDT);
 const lpBalance = await pool.getUserBalance(wallet.publicKey);
 
 const farm = await PoolFarmImpl.create(
-  connection,
-  new PublicKey("YOUR_FARM_ADDRESS"),
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
 );
 
 const stakeTx = await farm.deposit(wallet.publicKey, lpBalance);
@@ -33,13 +35,13 @@ const stakeTx = await farm.deposit(wallet.publicKey, lpBalance);
 
 ```typescript
 import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection } from "@solana/web3.js";
 
 const connection = new Connection("https://api.mainnet-beta.solana.com");
 
 const farm = await PoolFarmImpl.create(
-  connection,
-  new PublicKey("YOUR_FARM_ADDRESS"),
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
 );
 
 const claimTx = await farm.claim(wallet.publicKey);
@@ -49,13 +51,13 @@ const claimTx = await farm.claim(wallet.publicKey);
 
 ```typescript
 import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection } from "@solana/web3.js";
 
 const connection = new Connection("https://api.mainnet-beta.solana.com");
 
 const farm = await PoolFarmImpl.create(
-  connection,
-  new PublicKey("YOUR_FARM_ADDRESS"),
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
 );
 
 const farmBalance = await farm.getUserBalance(wallet.publicKey);
@@ -63,17 +65,18 @@ const farmBalance = await farm.getUserBalance(wallet.publicKey);
 const unStakeTx = await farm.withdraw(wallet.publicKey, farmBalance);
 ```
 
+
 ## Check Stake Balance
 
 ```typescript
 import { PoolFarmImpl } from "@meteora-ag/farming-sdk";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection } from "@solana/web3.js";
 
 const connection = new Connection("https://api.mainnet-beta.solana.com");
 
 const farm = await PoolFarmImpl.create(
-  connection,
-  new PublicKey("YOUR_FARM_ADDRESS"),
+connection,
+new PublicKey("YOUR_FARM_ADDRESS")
 );
 
 const farmBalance = await farm.getUserBalance(wallet.publicKey);

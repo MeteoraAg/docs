@@ -5,37 +5,44 @@ description: "Learn how to create a Meteora DBC token launch pool with configura
 llmsDescription: "Guide to creating a DBC token launch pool with Meteora Invent Studio. The invent dbc_config.jsonc example does not set Token 2022 transfer fees. Base-mint transfer fees and quote mints with a non-zero transfer fee or a live transfer fee config authority use create_config2, documented on the DBC Token 2022 page. Transfer-hook configs cannot use those quote mints. The page also covers curve build modes, fees, DAMM migration, liquidity distribution, locked vesting, leftover receiver, and dbc-create-pool commands."
 ---
 
-Create a DBC token launch pool on Meteora with Meteora Invent Studio.
+This guide walks you through the steps to create a DBC token launch pool on Meteora. Whether you’re a seasoned developer or just starting out, this guide has got you covered to deploy liquidity and launch your project on Meteora.
 
-## What You'll Do
+# What You'll Achieve
 
-- Configure your bonding curve pool and graduated DAMM v1/v2 pool settings
-- Create the pool through the Dynamic Bonding Curve program
-- Trade your token on terminals such as Jupiter Pro, Axiom, and Photon
+By the end of this quicklaunch, you’ll have built a liquidity pool on Meteora by:
+- Configuring your bonding curve pool and graduated DAMM v1/v2 pool settings
+- Interacting with our Dynamic Bonding Curve program
+- Seeing your token tradable across trading terminals such as Jupiter Pro, Axiom, and Photon.
 
-## Prerequisites
+<Tip>
+**Why Meteora?**
+
+Meteora is a hyper optimized liquidity layer that ensures that your project's provided liquidity is secure, sustainable and composable for anyone to trade on. By following this guide, you'll be able to launch a bonding curve config and a token pool using the bonding curve config on Meteora in just a few quick and easy steps.
+</Tip>
+
+# Prerequisites
 
 - Node.js >= 22.12.0
 - pnpm >= 10.0.0
 
-If you don't have pnpm installed, install it with:
+*If you don't have pnpm installed, you can install it by running the following command.*
 
 ```bash Terminal
 npm install -g pnpm
 ```
 
 
-## Steps
+# Steps
 
 <Steps>
   <Step title="Clone and Setup Meteora Invent">
-  Meteora Invent is a toolkit for creating token launches on Meteora. Clone the repository:
+  Meteora Invent is a toolkit consisting of everything you need to invent innovative token launches on Meteora. Run the following command in your terminal to get started.
 
   ```bash Terminal
   git clone https://github.com/MeteoraAg/meteora-invent.git
   ```
 
-  Then install the project dependencies:
+  Once you've cloned the repository, you'll have a new project directory with a meteora-invent folder. Run the following to install pnpm and the project dependencies. 
 
   ```bash Terminal
   cd meteora-invent
@@ -43,36 +50,36 @@ npm install -g pnpm
   ```
 
   <Frame>
-   <img src="/invent/assets/pnpm-install.webp" alt="Terminal output of pnpm install in the meteora-invent directory" />
+   <img src="/invent/assets/pnpm-install.webp" />
   </Frame>
 
   </Step>
    <Step title="Optional: Start a Local Test Validator">
-    Run a local validator to test your pool before deploying to devnet or mainnet:
+    In Meteora Invent we provide an optional command for you to run a local validator to test your pool before deploying it to devnet or mainnet. Run the following command in your code editor terminal to get started.
 
     ```bash Terminal
     pnpm studio start-test-validator
     ```
 
-    This starts a local validator on `http://localhost:8899`.
-
+    This will start a local validator on your machine which will be hosted on `http://localhost:8899`. <br /> <br />
+    
     <Frame>
-    <img src="/invent/assets/start-test-validator.webp" alt="Terminal output of the local test validator starting" />
+    <img src="/invent/assets/start-test-validator.webp" />
     </Frame>
 
     </Step>
   <Step title="Setup Environment Variables">
-  Copy the example environment variables file to `.env`:
+  We provide an easy way to setup environment variables when getting started. Run the following command in your code editor terminal to get started.
 
   ```bash Terminal
   cp studio/.env.example studio/.env
   ```
 
-  Configure the following variables:
+  This will copy the example environment variables file to your `.env` file. Configure the following variables:
 
   - `PRIVATE_KEY` - Your private key for the wallet you will be using to deploy the pool.
 
-  Then generate a keypair from your wallet private key.
+  Thereafter, you will need to run this command to generate a keypair from your wallet private key.
 
   ```bash Terminal
   pnpm studio generate-keypair
@@ -85,18 +92,20 @@ npm install -g pnpm
   pnpm studio generate-keypair --network localnet --airdrop
   ```
 
-  This generates a `keypair.json` file in the `studio` directory, which is used for all actions in this guide.
+  This will generate a `keypair.json` file in the `studio` directory which will be used for all actions in this guide. <br /> <br />
 
   <Frame>
-   <img src="/invent/assets/keypair.webp" alt="Terminal output of the generate-keypair command" />
+   <img src="/invent/assets/keypair.webp" />
   </Frame>
 
   </Step>
   <Step title="Configure your DBC Token Pool">
-  Configure your DBC token pool settings in `studio/config/dbc_config.jsonc`.
+  Navigate to the `studio/config/dbc_config.jsonc` file and configure your DBC token pool settings. <br /> <br />
 
   <Accordion title="Set your DBC configuration">
-  <Note>Read the comments in the file while configuring your pool. They explain each setting.</Note>
+  You can configure everything DBC token pool related in this file.
+
+  <Note> The comments in the file are to help you understand the different settings you can configure. Please ensure that you read through the comments while configuring your pool.</Note>
 
    ```jsonc dbc_config.jsonc
     {
@@ -356,44 +365,46 @@ npm install -g pnpm
   </Note>
 
   <Note>
-    To launch a Token 2022 token with a transfer hook, set `token.tokenType` to `1` and `transferHookProgram` in `dbcConfig` (plus `dbcPool.transferHookProgram` when creating a pool on an existing transfer-hook config). The `dbc-swap` and `dbc-claim-trading-fee` actions detect transfer-hook pools automatically and use the transfer-hook-aware instructions. See [DBC Transfer Hook Pools](/core-products/dbc/transfer-hook-pools).
+    To launch a Token 2022 token with a transfer hook, set `token.tokenType` to `1` and `transferHookProgram` in `dbcConfig` (plus `dbcPool.transferHookProgram` when creating a pool on an existing transfer-hook config). The `dbc-swap` and `dbc-claim-trading-fee` actions detect transfer-hook pools automatically and use the transfer-hook-aware instructions. To learn how transfer-hook launches behave onchain, head to [DBC Transfer Hook Pools](/core-products/dbc/transfer-hook-pools).
   </Note>
 
   <Tip>
-    The toolkit handles:
+    The toolkit contains logic to make it easier for you to create the DBC token pool such as:
 
-    - Bonding curve shape from your `buildCurveMode`.
-    - Creating the DBC config and the token pool in one run.
-    - Token 2022 tokens with or without a transfer hook.
-    - Anti-Sniping settings such as Fee Scheduler or Rate Limiter.
-    - Liquidity vesting schedules for DAMM v2 migrations.
-    - Market cap-based fee schedules for graduated pools.
-    - First swap with minimum fee for pool creators.
-    - The math behind building the bonding curve.
+    - Configuring your bonding curve shape based on your `buildCurveMode`.
+    - Launching the DBC config and token pool using the config immediately.
+    - Launching Token 2022 tokens with or without a transfer hook.
+    - Configuring your Anti-Sniping settings (such as Fee Scheduler or Rate Limiter) easily.
+    - Setting up liquidity vesting schedules for DAMM v2 migrations.
+    - Configuring market cap-based fee schedules for graduated pools.
+    - Enabling first swap with minimum fee for pool creators.
+    - Abstracting the math behind crafting the bonding curve.
   </Tip>
   </Accordion>
   </Step>
   <Step title="Create your DBC Token Pool">
-  After configuring `dbc_config.jsonc`, create your token pool.
+  After configuring your DBC token pool settings in `dbc_config.jsonc`, you can now create your token pool by running the following command.
 
-  Without a DBC config key, this creates the config key and the pool together:
+  _If you don't have a DBC config key, you can run the following command and the config key + pool
+  will be created together._
 
-  ```bash Terminal
+  ```bash
   pnpm studio dbc-create-pool
   ```
 
-  With an existing DBC config key, pass it with the `--config` flag:
+  _If you already have an existing DBC config key, you can provide it via the CLI with a `--config`
+  flag and run the following command._
 
-  ```bash Terminal
+  ```bash
   pnpm studio dbc-create-pool --config <YOUR_DBC_CONFIG_KEY>
   ```
 
-  The console prints the token address and other relevant information.
+  This will create your DBC curve config (if there is no config key) and token pool. You will also be able to see the token address and other relevant information in the console. <br /> <br />
 
   <Frame>
-   <img src="/invent/assets/dbc-create-pool.webp" alt="Console output after creating a DBC token pool, showing the token address" />
+   <img src="/invent/assets/dbc-create-pool.webp" />
   </Frame>
   </Step>
 </Steps>
 
-Once the pool is created, you can view your token on [Jupiter Pro](https://jup.ag/pro), [Axiom](https://axiom.trade/discover) or [Photon](https://photon-sol.tinyastro.io/en/discover).
+Voilà! You've successfully created your DBC token pool on Meteora. You can now see your token in action on [Jupiter Pro](https://jup.ag/pro), [Axiom](https://axiom.trade/discover) or [Photon](https://photon-sol.tinyastro.io/en/discover).

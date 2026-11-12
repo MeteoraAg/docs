@@ -33,7 +33,7 @@ on many v2 instructions.
 <Warning>
   Do not hand-type account order from memory. Generate bindings or compare
   against SDK-built instructions. Most CPI failures come from one misplaced
-  optional account, event authority account, bin array, or Token 2022 remaining
+  optional account, event authority account, bin array, or Token-2022 remaining
   account.
 </Warning>
 
@@ -68,7 +68,7 @@ integrations call: `swap2`, `swap_exact_out2`, `add_liquidity2`,
 `remove_liquidity2`, `claim_fee2`, `claim_reward2`, and `rebalance_liquidity`.
 
 New CPI integrations should prefer v2 instructions because they support SPL
-Token, Token 2022, dynamic positions, and explicit remaining account metadata.
+Token, Token-2022, dynamic positions, and explicit remaining account metadata.
 
 ## Event CPI Accounts
 
@@ -89,7 +89,7 @@ deserialization can fail before the DLMM handler reaches your intended logic.
 
 `lb_clmm` v2 handlers parse remaining accounts in two phases.
 
-1. They consume Token 2022 transfer-hook account groups according to
+1. They consume Token-2022 transfer-hook account groups according to
    `RemainingAccountsInfo.slices`.
 2. They consume the leftover accounts as instruction-specific accounts, usually
    bin arrays.
@@ -234,9 +234,9 @@ If your program signs for the DLMM `user` account with a PDA, use
 `CpiContext::new_with_signer` and pass your signer seeds. The token account owner
 must still match the authority DLMM expects for the transfer.
 
-## Token 2022 Transfer Hooks
+## Token-2022 Transfer Hooks
 
-For Token 2022 mints with transfer hooks, include the extra account metas in
+For Token-2022 mints with transfer hooks, include the extra account metas in
 `ctx.remaining_accounts` and describe them with `RemainingAccountsInfo.slices`.
 
 Example ordering for `swap2` with token X and token Y transfer hooks:
@@ -281,7 +281,7 @@ SDK or `commons` generated client output for the exact placeholder behavior.
 
 ## Off-Chain Account Planning
 
-Use the TypeScript SDK or `commons` crate to plan accounts before calling your CPI program.
+Use the Typescript SDK or `commons` crate to plan accounts before calling your CPI program.
 
 ```typescript
 const swapYtoX = true
@@ -318,7 +318,7 @@ Mirror this account order in the accounts your program forwards to DLMM.
 | `InvalidRemainingAccountSlice` | A `RemainingAccountsInfo` slice type is not valid for that instruction. |
 | `InsufficientRemainingAccounts` | Slice lengths require more accounts than were forwarded. |
 | `DuplicatedRemainingAccountTypes` | The same transfer-hook slice type was listed twice. |
-| `MissingRemainingAccountForTransferHook` | A Token 2022 transfer hook exists but the hook accounts were not provided. |
+| `MissingRemainingAccountForTransferHook` | A Token-2022 transfer hook exists but the hook accounts were not provided. |
 | `NoTransferHookProgram` | Transfer-hook accounts were supplied for a mint without a transfer hook. |
 | `InvalidBinArray` / `NonContinuousBinArrays` | Bin arrays are missing, out of order, or not the arrays expected for the target bin range. |
 | `BitmapExtensionAccountIsNotProvided` | A route needs the bitmap extension account but the optional account was omitted. |
@@ -333,7 +333,7 @@ Mirror this account order in the accounts your program forwards to DLMM.
 | Forward generated order | Use generated bindings or compare against an SDK instruction. Main account order is not negotiable. |
 | Put transfer hooks before bin arrays | `parse_remaining_accounts` consumes hook slices first, then handlers consume leftover bin arrays. |
 | Include event CPI accounts | v2 handlers with `#[event_cpi]` expect generated event accounts. |
-| Handle Token 2022 per mint | Token X and token Y can use different token programs and different hook requirements. |
-| Budget compute | Swaps across many bin arrays, wide positions, claims across many bins, and Token 2022 hooks can be compute-heavy. |
+| Handle Token-2022 per mint | Token X and token Y can use different token programs and different hook requirements. |
+| Budget compute | Swaps across many bin arrays, wide positions, claims across many bins, and Token-2022 hooks can be compute-heavy. |
 | Avoid stale state | Re-fetch pool, bitmap extension, bin arrays, mints, and clock before quoting. |
 | Test with real pools | Simulate on devnet and compare logs against a direct SDK-built transaction. |

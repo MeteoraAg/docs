@@ -33,7 +33,7 @@ Important runtime dependencies:
 | --- | --- |
 | `@coral-xyz/anchor` | Program client, IDL types, and `BN`. |
 | `@solana/web3.js` | Connections, transactions, instructions, lookup tables, and public keys. |
-| `@solana/spl-token` | SPL Token, Token 2022, ATA, mint, transfer-fee, transfer-hook, and wrapped SOL helpers. |
+| `@solana/spl-token` | SPL Token, Token-2022, ATA, mint, transfer-fee, transfer-hook, and wrapped SOL helpers. |
 | `bn.js` | Integer math inputs and SDK return values. |
 | `decimal.js` | Price, price impact, and UI conversion arithmetic. |
 | `chain` | Transaction composition helpers used by SDK builders. |
@@ -139,7 +139,7 @@ This section lists the public functions and methods exported by the SDK. Private
 | `getAllPositions()` | Scan all position accounts. |
 | `getAllPositionsByPool(pool)` | Scan all position accounts for one pool. |
 | `getUserPositionByPool(pool, user)` | Resolve a user's position NFTs and filter them to one pool. |
-| `getPositionsByUser(user)` | Resolve all Token 2022 position NFTs owned by a wallet and fetch their positions. |
+| `getPositionsByUser(user)` | Resolve all Token-2022 position NFTs owned by a wallet and fetch their positions. |
 | `getPositionsByUserAndTokenMint(user, tokenMint)` | Filter that wallet's positions to pools that contain the mint on either side. Does not scan every pool account. |
 | `getPositionsByDelegate(delegate)` | Positions where the wallet is the position NFT delegate. Omits a position whose `delegatePermission` is `0`. |
 | `getDelegatePositionByPool(pool, delegate)` | Same delegate lookup, filtered to one pool. |
@@ -162,7 +162,7 @@ This section lists the public functions and methods exported by the SDK. Private
 | `getLiquidityDelta(params)` | Compute Q64 liquidity from token amount caps, price range, and collect-fee mode. When `tokenAInfo` or `tokenBInfo` is set, the input cap is reduced by that mint's transfer fee. |
 | `getQuote(params)` | Legacy exact-in swap quote. |
 | `getQuote2(params)` | Preferred swap quote for exact-in, partial-fill, and exact-out modes. |
-| `getDepositQuote(params)` | Convert a token input amount into liquidity and counterpart amount. Pass mint info to net a Token 2022 transfer fee. |
+| `getDepositQuote(params)` | Convert a token input amount into liquidity and counterpart amount. Pass mint info to net a Token-2022 transfer fee. |
 | `getWithdrawQuote(params)` | Convert liquidity into expected token A and token B outputs. Pass mint info to return the post-transfer-fee amounts. |
 | `preparePoolCreationSingleSide(params)` | Prepare one-sided concentrated pool creation where the initial price is the min price. |
 | `preparePoolCreationParams(params)` | Compute initial square-root price, liquidity, and token amounts for pool creation. |
@@ -223,13 +223,13 @@ This section lists the public functions and methods exported by the SDK. Private
 
 | Function | Use |
 | --- | --- |
-| `getTokenProgram(flag)` | Convert a pool token flag into the SPL Token or Token 2022 program ID. |
+| `getTokenProgram(flag)` | Convert a pool token flag into the SPL Token or Token-2022 program ID. |
 | `getTokenDecimals(connection, mint, tokenProgram)` | Fetch mint decimals. |
 | `getOrCreateATAInstruction(tokenMint, owner, payer, allowOwnerOffCurve, tokenProgram)` | Resolve an ATA and return creation instructions when needed. |
 | `wrapSOLInstruction(from, to, amount)` | Build native SOL wrapping instructions. |
 | `unwrapSOLInstruction(owner, receiver?, allowOwnerOffCurve?)` | Build a wrapped SOL close-account instruction. |
 | `getAllUserPositionNftAccount(connection, user)` | Fetch the user's position NFT accounts. |
-| `getAllPositionNftAccountByOwner(connection, user)` | Fetch Token 2022 position NFT accounts by owner. |
+| `getAllPositionNftAccountByOwner(connection, user)` | Fetch Token-2022 position NFT accounts by owner. |
 | `getSimulationComputeUnits(connection, instructions, payer, lookupTables, commitment?)` | Simulate instructions and return consumed compute units. |
 | `getEstimatedComputeUnitUsageWithBuffer(connection, instructions, feePayer, buffer?)` | Estimate compute units with a bounded buffer. |
 | `getEstimatedComputeUnitIxWithBuffer(connection, instructions, feePayer, buffer?)` | Build a compute-budget instruction from estimated units. |
@@ -252,12 +252,12 @@ This section lists the public functions and methods exported by the SDK. Private
 | `vestingByPositionFilter(position)` | Build a `getProgramAccounts` filter for vesting accounts by position. |
 | `offsetBasedFilter(value, offset)` | Build a memcmp filter at an arbitrary account offset. |
 
-### Token 2022 Helpers
+### Token-2022 Helpers
 
 | Function | Use |
 | --- | --- |
-| `calculateTransferFeeIncludedAmount(transferFeeExcludedAmount, mint, currentEpoch)` | Compute an amount that includes Token 2022 transfer fees. |
-| `calculateTransferFeeExcludedAmount(transferFeeIncludedAmount, mint, currentEpoch)` | Compute the post-fee amount for a Token 2022 transfer. |
+| `calculateTransferFeeIncludedAmount(transferFeeExcludedAmount, mint, currentEpoch)` | Compute an amount that includes Token-2022 transfer fees. |
+| `calculateTransferFeeExcludedAmount(transferFeeIncludedAmount, mint, currentEpoch)` | Compute the post-fee amount for a Token-2022 transfer. |
 | `hasTransferHookExtension(connection, mint)` | Detect whether a mint uses a transfer-hook extension. |
 | `validateNoTransferHook(connection, tokenAMint, tokenBMint)` | Throw when either token mint has a Transfer Hook extension that is not permissionlessly accepted (hook program ID or authority still set). |
 
@@ -520,7 +520,7 @@ The SDK exports many parameter and result aliases so app code can keep transacti
 | `SplitPositionParams`, `SplitPosition2Params` | Position split inputs. |
 | `PoolFeesParams`, `DynamicFeeParams`, `FeeMode`, `FeeOnAmountResult`, `SplitFees` | Fee construction and fee-calculation types. |
 | `InitialPoolInformation`, `SwapAmountFromInput`, `SwapAmountFromOutput` | Liquidity and swap math result types. |
-| `TransferHookState`, `TransferFeeIncludedAmount`, `TransferFeeExcludedAmount` | Token 2022 helper result types. |
+| `TransferHookState`, `TransferFeeIncludedAmount`, `TransferFeeExcludedAmount` | Token-2022 helper result types. |
 
 ## Common Workflows
 
@@ -632,4 +632,4 @@ The SDK exports typed errors that validation, quote, and math helpers may throw:
 | Swap events | Prefer `EvtSwap2` for swap indexing. Older swap events were deprecated and removed from newer program versions. |
 | Position NFTs | Pass the token account that currently holds the position NFT. A delegate signs with the same `owner` SDK field. `getPositionsByDelegate` skips `delegatePermission = 0`. |
 | Wrapped SOL | Transaction builders add wrap and unwrap instructions for native SOL paths, but your signing flow still needs enough SOL for rent, transaction fees, and wrapped input amounts. |
-| Token 2022 fees | Pass mint and epoch data into quote helpers when a Token 2022 transfer-fee mint is involved so quoted amounts include transfer fees. |
+| Token-2022 fees | Pass mint and epoch data into quote helpers when a Token-2022 transfer-fee mint is involved so quoted amounts include transfer fees. |
