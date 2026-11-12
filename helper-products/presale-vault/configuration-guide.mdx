@@ -7,9 +7,9 @@ llmsDescription: "Configuration guide for creating a Presale Vault against the p
 
 Use this guide before creating a vault. It focuses on configuration choices that are enforced by the program, plus the product decisions that should be communicated to buyers.
 
-# 1. Choose the sale mode
+## 1. Choose the Sale Mode
 
-## Fixed Price
+### Fixed Price
 
 Use Fixed Price when buyers need a known price before depositing.
 
@@ -20,23 +20,23 @@ You must also create fixed-price extra params with:
 
 Fixed Price is sensitive to integer rounding. Make sure the chosen price, cap, and supply can produce the intended sale outcome in smallest token units.
 
-## FCFS
+### FCFS
 
 Use FCFS when deposits should stop at the maximum cap and buyers should be committed once they deposit.
 
 If early completion is enabled, reaching the maximum cap moves the sale end time to the current timestamp. This also recalculates vesting times from the new end time.
 
-## Pro Rata
+### Pro Rata
 
 Use Pro Rata when the sale may be oversubscribed and buyers should receive proportional allocation with proportional overflow refunds.
 
 Pro Rata deposits can exceed the maximum cap, so buyer caps and allowlist design matter more.
 
-# 2. Pick supported tokens
+## 2. Pick Supported Tokens
 
-The base and quote mints can be standard SPL Token mints or supported Token-2022 mints. If either mint uses Token-2022 extensions, review [Token 2022 Support](/helper-products/presale-vault/token-2022-support) before launch so the UI and transaction builder handle transfer fees, transfer hooks, and memo requirements correctly.
+The base and quote mints can be standard SPL Token mints or supported Token 2022 mints. If either mint uses Token 2022 extensions, review [Token 2022 Support](/helper-products/presale-vault/token-2022-support) before launch so the UI and transaction builder handle transfer fees, transfer hooks, and memo requirements correctly.
 
-# 3. Set sale timing
+## 3. Set Sale Timing
 
 | Timing setting | Requirement |
 | --- | --- |
@@ -46,7 +46,7 @@ The base and quote mints can be standard SPL Token mints or supported Token-2022
 
 The effective start time is the later of the requested start time and the current timestamp.
 
-# 4. Set raise caps
+## 4. Set Raise Caps
 
 The minimum cap must be greater than zero, and the maximum cap must be at least the minimum cap.
 
@@ -55,7 +55,7 @@ For Fixed Price, the program also checks that:
 - the maximum cap can be fulfilled by the configured base supply
 - the minimum and maximum caps correspond to different bought base-token amounts
 
-# 5. Design registries
+## 5. Design Registries
 
 A vault must have 1 to 5 registries. Each registry has:
 
@@ -68,11 +68,11 @@ Registry supply must be greater than zero, and the sum of registry supplies must
 
 Registry deposit fee cannot exceed 5,000 bps.
 
-## Permissionless registries
+### Permissionless Registries
 
 Permissionless mode uses registry index `0`. Buyers create their own escrow in that registry.
 
-## Permissioned registries
+### Permissioned Registries
 
 Multiple registries require a permissioned mode.
 
@@ -86,7 +86,7 @@ For permissioned sales, the program uses the escrow's personal deposit cap to co
 
 The personal cap supplied during escrow creation must be within the registry range.
 
-# 6. Choose the whitelist mode
+## 6. Choose the Whitelist Mode
 
 Choose the whitelist mode based on who should be able to create buyer escrows:
 
@@ -98,7 +98,7 @@ Choose the whitelist mode based on who should be able to create buyer escrows:
 
 See [Access and States](/helper-products/presale-vault/access-and-states) for the escrow creation paths, operator rules, Merkle root accounts, and close conditions.
 
-# 7. Configure deposit fees
+## 7. Configure Deposit Fees
 
 Deposit fees are set per registry in bps and charged on top of the net deposit used for allocation.
 
@@ -114,7 +114,7 @@ The program rounds the gross amount up so the requested net deposit is preserved
 
 In Pro Rata, fee on overflow quote is refundable and is excluded from the creator's collectible fee.
 
-# 8. Configure unlocks
+## 8. Configure Unlocks
 
 If no lock and vesting params are provided, sold tokens are claimable after the sale completes with no additional lock or drip schedule.
 
@@ -129,7 +129,7 @@ If lock and vesting params are provided:
 
 When early completion changes the sale end time, vesting start and end are recalculated from the new end time. The immediate release timestamp preserves its offset from the previous end time.
 
-# 9. Choose unsold base-token action
+## 9. Choose Unsold Base-Token Action
 
 The unsold action is either:
 
@@ -138,7 +138,7 @@ The unsold action is either:
 
 The action is only available after a completed sale, only if there are unsold tokens, and only once.
 
-# 10. Pre-launch checklist
+## 10. Pre-Launch Checklist
 
 - Base and quote mints use supported token programs and extensions.
 - Sale start, end, and duration satisfy the program limits.
@@ -146,7 +146,7 @@ The action is only available after a completed sale, only if there are unsold to
 - Fixed-price `q_price` has been tested in smallest units, if using Fixed Price.
 - Registry count, supplies, fee bps, and cap ranges are valid for the selected whitelist mode.
 - Permissioned allowlist data includes wallet, registry index, and personal cap.
-- Token-2022 transfer hook accounts can be provided where needed.
+- Token 2022 transfer hook accounts can be provided where needed.
 - Buyer-facing docs explain whether deposits can be withdrawn during the sale.
 - Buyer-facing docs explain claim timing and vesting.
 - The team has a post-sale plan for creator withdrawal, fee collection, unsold tokens, and liquidity.

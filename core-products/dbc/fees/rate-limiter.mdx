@@ -11,7 +11,7 @@ The DBC rate limiter is a deprecated base fee mode that increases the fee as buy
   Rate limiter mode is deprecated for new configs and new pools. `create_config` and pool initialization reject `BaseFeeMode::RateLimiter`. Existing rate-limiter pools can still be quoted and swapped. Use a linear or exponential scheduler, or fixed-fee behavior, for new launches.
 </Warning>
 
-It was designed for launches where the main risk is not only who buys first, but how much they buy. Small buys can pay the starting fee, while larger buys pay a higher average fee during the limiter window.
+It targets launches where the risk is how much a buyer buys, not only who buys first. Small buys can pay the starting fee, while larger buys pay a higher average fee during the limiter window.
 
 ## How It Works
 
@@ -50,7 +50,7 @@ Then:
 
 This does not block large buys. It makes large buys more expensive during the configured launch window.
 
-It also helps protect the fee design at the transaction level. When the limiter is active, the program validates single-swap behavior for the pool so traders cannot easily split one large buy into multiple swaps inside the same transaction.
+When the limiter is active, the program validates single-swap behavior for the pool, so traders cannot split one large buy into multiple swaps inside the same transaction.
 
 For exact-in swaps, the limiter derives the fee from the included input amount. For exact-out swaps, it derives the fee from the excluded amount and performs a conservative reverse calculation, so different swap modes can produce slightly different effective limiter behavior.
 

@@ -14,17 +14,17 @@ This page lists the Anchor custom errors returned by the DLMM `lb_clmm` program.
     `InvalidBinId`.
 </Tip>
 
-## Instruction and Error Map
+## Instruction And Error Map
 
 The table below maps each `LBError` variant to where it can be raised in the current `lb_clmm` program. Use it to trace a transaction failure back to an instruction.
 
-### How to read the Instructions column
+### How To Read The Instructions Column
 
 | Entry type | Meaning |
 | --- | --- |
 | Instruction name (e.g. `swap2`) | Returned directly from that instruction's handler in `lb_clmm`. |
 | *Shared:* … | Returned from an internal module (not a top-level instruction). Any instruction that calls that module can surface the same error. |
-| — *(IDL only)* | Listed in `errors.rs`and the published IDL, but no `LBError::…` call site exists in the current program source. |
+| *(IDL only)* | Listed in `errors.rs` and the published IDL, but no `LBError::…` call site exists in the current program source. |
 
 | Code | Name | Instructions |
 | --- | --- | --- |
@@ -41,12 +41,12 @@ The table below maps each `LBError` variant to where it can be raised in the cur
 | `6010` | `InvalidTokenMint` | `swap`, `swap2` |
 | `6011` | `InvalidAccountForSingleDeposit` | `add_liquidity_by_weight_one_side`, `add_liquidity_single_side_precise2` |
 | `6012` | `PairInsufficientLiquidity` | <ul><li><code>swap</code></li><li><code>swap2</code></li><li><em>Shared:</em> lb pair state</li></ul> |
-| `6013` | `InvalidFeeOwner` | — *(IDL only)* |
-| `6014` | `InvalidFeeWithdrawAmount` | — *(IDL only)* |
+| `6013` | `InvalidFeeOwner` | *(IDL only)* |
+| `6014` | `InvalidFeeWithdrawAmount` | *(IDL only)* |
 | `6015` | `InvalidAdmin` | <ul><li><code>fund_reward</code></li><li><code>withdraw_ineligible_reward</code></li><li><em>Shared:</em> access control</li></ul> |
-| `6016` | `IdenticalFeeOwner` | — *(IDL only)* |
+| `6016` | `IdenticalFeeOwner` | *(IDL only)* |
 | `6017` | `InvalidBps` | <ul><li><code>add_liquidity</code></li><li><code>remove_liquidity2</code></li><li><code>remove_liquidity_by_range2</code></li><li><code>remove_liquidity</code></li><li><code>remove_liquidity_by_range</code></li></ul> |
-| `6018` | `MathOverflow` | <ul><li><code>rebalance_position</code></li><li><code>swap2</code></li><li><em>Shared:</em> price math, safe math, utils math, bin state, lb pair state, oracle state, Token-2022 utilities</li></ul> |
+| `6018` | `MathOverflow` | <ul><li><code>rebalance_position</code></li><li><code>swap2</code></li><li><em>Shared:</em> price math, safe math, utils math, bin state, lb pair state, oracle state, Token 2022 utilities</li></ul> |
 | `6019` | `TypeCastFailed` | <ul><li><code>claim_reward</code></li><li><code>add_liquidity</code></li><li><code>add_liquidity_by_strategy</code></li><li><code>initialize_customizable_permissionless_lb_pair</code></li><li><code>fund_reward</code></li><li><code>initialize_reward</code></li><li><code>update_reward_duration</code></li><li><code>update_reward_funder</code></li><li><code>withdraw_ineligible_reward</code></li><li><code>increase_position_length2</code></li><li><code>rebalance_position</code></li><li><code>set_pair_status_permissionless</code></li><li><code>claim_reward2</code></li><li><code>swap2</code></li><li><code>remove_liquidity</code></li><li><em>Shared:</em> bin math, safe math, utils math, weight-to-amounts math, bin state, dynamic position state, lb pair state, parameters state</li></ul> |
 | `6020` | `InvalidRewardIndex` | <ul><li><code>claim_reward</code></li><li><code>fund_reward</code></li><li><code>initialize_reward</code></li><li><code>update_reward_duration</code></li><li><code>update_reward_funder</code></li><li><code>withdraw_ineligible_reward</code></li><li><code>claim_reward2</code></li><li><em>Shared:</em> remaining accounts</li></ul> |
 | `6021` | `InvalidRewardDuration` | `initialize_reward`, `update_reward_duration` |
@@ -61,9 +61,9 @@ The table below maps each `LBError` variant to where it can be raised in the cur
 | `6030` | `NonEmptyPosition` | <ul><li><code>close_position</code></li><li><code>decrease_position_length</code></li><li><code>close_position2</code></li></ul> |
 | `6031` | `UnauthorizedAccess` | <ul><li><code>initialize_bin_array</code></li><li><code>initialize_position_by_operator</code></li><li><em>Shared:</em> position helpers, customizable permissionless pair access, permission pair access, permissionless pair access</li></ul> |
 | `6032` | `InvalidFeeParameter` | <code>update_fee_parameters</code> |
-| `6033` | `MissingOracle` | — *(IDL only)* |
+| `6033` | `MissingOracle` | *(IDL only)* |
 | `6034` | `InsufficientSample` | *Shared:* oracle state |
-| `6035` | `InvalidLookupTimestamp` | — *(IDL only)* |
+| `6035` | `InvalidLookupTimestamp` | *(IDL only)* |
 | `6036` | `BitmapExtensionAccountIsNotProvided` | <ul><li><code>initialize_permissionless_lb_pair</code></li><li><em>Shared:</em> lb pair state</li></ul> |
 | `6037` | `CannotFindNonZeroLiquidityBinArrayId` | *Shared:* bin array bitmap |
 | `6038` | `BinIdOutOfBound` | *Shared:* position helpers |
@@ -72,16 +72,16 @@ The table below maps each `LBError` variant to where it can be raised in the cur
 | `6041` | `ExcessiveFeeUpdate` | *Shared:* lb pair state, parameters state |
 | `6042` | `PoolDisabled` | <ul><li><code>add_liquidity</code></li><li><code>add_liquidity_by_weight_one_side</code></li><li><code>place_limit_order</code></li><li><code>go_to_a_bin</code></li><li><code>rebalance_position</code></li><li><code>swap</code></li><li><code>add_liquidity2</code></li><li><code>add_liquidity_single_side_precise2</code></li><li><code>swap2</code></li></ul> |
 | `6043` | `InvalidPoolType` | <ul><li><code>set_pair_status_permissionless</code></li><li><em>Shared:</em> pair access (base), lb pair state</li></ul> |
-| `6044` | `ExceedMaxWhitelist` | — *(IDL only)* |
+| `6044` | `ExceedMaxWhitelist` | *(IDL only)* |
 | `6045` | `InvalidIndex` | *Shared:* lb pair state |
 | `6046` | `RewardNotEnded` | <code>withdraw_ineligible_reward</code> |
 | `6047` | `MustWithdrawnIneligibleReward` | <code>fund_reward</code> |
-| `6048` | `UnauthorizedAddress` | — *(IDL only)* |
+| `6048` | `UnauthorizedAddress` | *(IDL only)* |
 | `6049` | `OperatorsAreTheSame` | <code>update_position_operator</code> |
 | `6050` | `WithdrawToWrongTokenAccount` | <ul><li><code>claim_fee</code></li><li><code>claim_reward</code></li><li><code>claim_fee2</code></li><li><code>claim_reward2</code></li><li><code>remove_liquidity2</code></li><li><code>remove_liquidity</code></li></ul> |
 | `6051` | `WrongRentReceiver` | <ul><li><code>close_position</code></li><li><code>close_position2</code></li><li><code>close_position_if_empty</code></li></ul> |
 | `6052` | `AlreadyPassActivationPoint` | <ul><li><code>initialize_customizable_permissionless_lb_pair</code></li><li><code>update_fee_parameters</code></li><li><em>Shared:</em> permission pair access</li></ul> |
-| `6053` | `ExceedMaxSwappedAmount` | — *(IDL only)* |
+| `6053` | `ExceedMaxSwappedAmount` | *(IDL only)* |
 | `6054` | `InvalidStrategyParameters` | `add_liquidity_by_strategy`, `add_liquidity_by_strategy_one_side` |
 | `6055` | `LiquidityLocked` | <ul><li><code>cancel_limit_order</code></li><li><code>rebalance_position</code></li><li><code>remove_liquidity2</code></li><li><code>remove_all_liquidity</code></li><li><code>remove_liquidity</code></li></ul> |
 | `6056` | `BinRangeIsNotEmpty` | <code>go_to_a_bin</code> |
@@ -89,7 +89,7 @@ The table below maps each `LBError` variant to where it can be raised in the cur
 | `6058` | `InvalidActivationType` | <ul><li><code>initialize_permission_lb_pair</code></li><li><em>Shared:</em> customizable permissionless pair access, permission pair access, permissionless pair access</li></ul> |
 | `6059` | `InvalidActivationDuration` | <ul><li><code>initialize_customizable_permissionless_lb_pair</code></li><li><em>Shared:</em> pair access (base)</li></ul> |
 | `6060` | `MissingTokenAmountAsTokenLaunchProof` | `initialize_customizable_permissionless_lb_pair`, `initialize_position_by_operator` |
-| `6061` | `InvalidQuoteToken` | — *(IDL only)* |
+| `6061` | `InvalidQuoteToken` | *(IDL only)* |
 | `6062` | `InvalidBinStep` | *Shared:* preset parameters |
 | `6063` | `InvalidBaseFee` | *Shared:* preset parameters |
 | `6064` | `InvalidPreActivationDuration` | *Shared:* permission pair access |
@@ -97,29 +97,29 @@ The table below maps each `LBError` variant to where it can be raised in the cur
 | `6066` | `InvalidStatus` | <code>set_pair_status</code> |
 | `6067` | `ExceededMaxOracleLength` | <code>increase_oracle_length</code> |
 | `6068` | `InvalidMinimumLiquidity` | *Shared:* bin state, dynamic position state |
-| `6069` | `NotSupportMint` | — *(IDL only)* |
-| `6070` | `UnsupportedMintExtension` | *Shared:* Token-2022 utilities |
-| `6071` | `UnsupportNativeMintToken2022` | *Shared:* Token-2022 utilities |
-| `6072` | `UnmatchTokenMint` | *Shared:* Token-2022 utilities |
-| `6073` | `UnsupportedTokenMint` | *Shared:* Token-2022 utilities |
+| `6069` | `NotSupportMint` | *(IDL only)* |
+| `6070` | `UnsupportedMintExtension` | *Shared:* Token 2022 utilities |
+| `6071` | `UnsupportNativeMintToken2022` | *Shared:* Token 2022 utilities |
+| `6072` | `UnmatchTokenMint` | *Shared:* Token 2022 utilities |
+| `6073` | `UnsupportedTokenMint` | *Shared:* Token 2022 utilities |
 | `6074` | `InsufficientRemainingAccounts` | <ul><li><code>rebalance_position</code></li><li><code>add_liquidity_by_strategy2</code></li><li><code>add_liquidity_by_weight2</code></li><li><em>Shared:</em> remaining accounts</li></ul> |
 | `6075` | `InvalidRemainingAccountSlice` | *Shared:* remaining accounts |
 | `6076` | `DuplicatedRemainingAccountTypes` | *Shared:* remaining accounts |
-| `6077` | `MissingRemainingAccountForTransferHook` | *Shared:* Token-2022 utilities |
-| `6078` | `NoTransferHookProgram` | *Shared:* Token-2022 utilities |
+| `6077` | `MissingRemainingAccountForTransferHook` | *Shared:* Token 2022 utilities |
+| `6078` | `NoTransferHookProgram` | *Shared:* Token 2022 utilities |
 | `6079` | `ZeroFundedAmount` | <code>fund_reward</code> |
 | `6080` | `InvalidSide` | `decrease_position_length`, `increase_position_length` |
 | `6081` | `InvalidResizeLength` | <ul><li><code>decrease_position_length</code></li><li><code>increase_position_length</code></li><li><code>increase_position_length2</code></li></ul> |
-| `6082` | `NotSupportAtTheMoment` | — *(IDL only)* |
+| `6082` | `NotSupportAtTheMoment` | *(IDL only)* |
 | `6083` | `InvalidRebalanceParameters` | <code>rebalance_position</code> |
-| `6084` | `InvalidRewardAccounts` | — *(IDL only)* |
+| `6084` | `InvalidRewardAccounts` | *(IDL only)* |
 | `6085` | `UndeterminedError` | <ul><li><code>close_bin_array</code></li><li><code>patch_bin_array_bitmap_extension</code></li><li><code>place_limit_order</code></li><li><code>rebalance_position</code></li><li><em>Shared:</em> bin state</li></ul> |
 | `6086` | `ReallocExceedMaxLengthPerInstruction` | <code>rebalance_position</code> |
 | `6087` | `InvalidBaseFeeMantissa` | *Shared:* preset parameters |
 | `6088` | `InvalidPositionOwner` | <code>initialize_position2</code> |
 | `6089` | `InvalidPoolAddress` | <code>initialize_position2</code> |
-| `6090` | `InvalidTokenBadgeType` | — *(IDL only)* |
-| `6091` | `InvalidTransferHookAuthority` | — *(IDL only)* |
+| `6090` | `InvalidTokenBadgeType` | *(IDL only)* |
+| `6091` | `InvalidTransferHookAuthority` | *(IDL only)* |
 | `6092` | `AmountXIsNegative` | <code>rebalance_position</code> |
 | `6093` | `AmountYIsNegative` | <code>rebalance_position</code> |
 | `6094` | `InvalidPoolCreator` | *Shared:* access control |
@@ -213,15 +213,15 @@ The table below maps each `LBError` variant to where it can be raised in the cur
 | `6066` | `InvalidStatus` | Invalid status | A status byte cannot be decoded or a status update tried to set the pool to its current status. |
 | `6067` | `ExceededMaxOracleLength` | Exceed max oracle length | Oracle length expansion would exceed the maximum oracle observation capacity. |
 | `6068` | `InvalidMinimumLiquidity` | Invalid minimum liquidity | A bin or position operation would violate the minimum liquidity requirement after adding or removing liquidity. |
-| `6069` | `NotSupportMint` | Not support token_2022 mint extension | A Token-2022 mint contains an extension that the pool creation or token validation path does not support. |
-| `6070` | `UnsupportedMintExtension` | Unsupported mint extension | Token-2022 validation found a mint extension outside the supported extension set. |
-| `6071` | `UnsupportNativeMintToken2022` | Unsupported native mint token2022 | The native mint was supplied through the Token-2022 path, which is not supported. |
+| `6069` | `NotSupportMint` | Not support token_2022 mint extension | A Token 2022 mint contains an extension that the pool creation or token validation path does not support. |
+| `6070` | `UnsupportedMintExtension` | Unsupported mint extension | Token 2022 validation found a mint extension outside the supported extension set. |
+| `6071` | `UnsupportNativeMintToken2022` | Unsupported native mint token2022 | The native mint was supplied through the Token 2022 path, which is not supported. |
 | `6072` | `UnmatchTokenMint` | Unmatch token mint | A token account, mint account, or remaining account does not match the expected pool or reward mint. |
 | `6073` | `UnsupportedTokenMint` | Unsupported token mint | The token mint is not supported for the requested pool or token path. |
-| `6074` | `InsufficientRemainingAccounts` | Insufficient remaining accounts | Token-2022 transfer hooks, reward accounts, or other extension paths require more remaining accounts than were provided. |
+| `6074` | `InsufficientRemainingAccounts` | Insufficient remaining accounts | Token 2022 transfer hooks, reward accounts, or other extension paths require more remaining accounts than were provided. |
 | `6075` | `InvalidRemainingAccountSlice` | Invalid remaining account slice | The encoded remaining-account slice metadata does not line up with the remaining accounts passed to the instruction. |
 | `6076` | `DuplicatedRemainingAccountTypes` | Duplicated remaining account types | The same remaining-account category was supplied more than once. |
-| `6077` | `MissingRemainingAccountForTransferHook` | Missing remaining account for transfer hook | A Token-2022 mint has a transfer hook, but the required extra accounts for the hook were not included. |
+| `6077` | `MissingRemainingAccountForTransferHook` | Missing remaining account for transfer hook | A Token 2022 mint has a transfer hook, but the required extra accounts for the hook were not included. |
 | `6078` | `NoTransferHookProgram` | Remaining account was passed for transfer hook but there's no hook program | Transfer-hook remaining accounts were supplied for a mint that has no transfer-hook program. |
 | `6079` | `ZeroFundedAmount` | Zero funded amount | Reward funding was attempted with an amount of zero. |
 | `6080` | `InvalidSide` | Invalid side | A resize or single-sided operation used a side value that cannot be decoded into the supported side enum. |
@@ -235,7 +235,7 @@ The table below maps each `LBError` variant to where it can be raised in the cur
 | `6088` | `InvalidPositionOwner` | Invalid position owner | The position owner is invalid, missing, or mismatched with the signer/position account for initialization. |
 | `6089` | `InvalidPoolAddress` | Invalid pool address | A position account is being initialized or used with an `lb_pair` address that does not match the expected pool. |
 | `6090` | `InvalidTokenBadgeType` | Invalid token badge type | Token badge validation found an unsupported badge type. |
-| `6091` | `InvalidTransferHookAuthority` | Invalid transfer hook authority | The configured transfer-hook authority is not the authority expected by the Token-2022 validation path. |
+| `6091` | `InvalidTransferHookAuthority` | Invalid transfer hook authority | The configured transfer-hook authority is not the authority expected by the Token 2022 validation path. |
 | `6092` | `AmountXIsNegative` | Amount x is negative | Rebalance math produced a negative token X amount where only unsigned token amounts are valid. |
 | `6093` | `AmountYIsNegative` | Amount y is negative | Rebalance math produced a negative token Y amount where only unsigned token amounts are valid. |
 | `6094` | `InvalidPoolCreator` | Invalid pool creator | A creator-only operation was signed by an address that is not the pool creator. |

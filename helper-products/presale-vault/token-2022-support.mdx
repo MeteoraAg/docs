@@ -1,33 +1,33 @@
 ---
 title: "Presale Vault Token 2022 Support"
 sidebarTitle: "Token 2022 Support"
-description: "See how Presale Vault supports SPL Token and supported Token-2022 mints, transfer fees, transfer hooks, memo transfer, and token integration constraints."
-llmsDescription: "Explains Presale Vault Token 2022 support based on the presale program, including SPL Token support, supported Token-2022 mint extensions TransferFeeConfig, MetadataPointer, TokenMetadata, and TransferHook, rejection of unsupported extensions and the Token-2022 native mint, base and quote token program flags, transfer-fee-inclusive deposits, transfer-fee-excluded withdrawals and claims, 100 percent transfer fee edge handling, transfer hook remaining account requirements for base and quote transfers, account-level MemoTransfer handling with the Presale memo, initialization funding effects, and integrator considerations for wallets, launchpads, indexers, and transfer-hook tokens."
+description: "See how Presale Vault supports SPL Token and supported Token 2022 mints, transfer fees, transfer hooks, memo transfer, and token integration constraints."
+llmsDescription: "Explains Presale Vault Token 2022 support based on the presale program, including SPL Token support, supported Token 2022 mint extensions TransferFeeConfig, MetadataPointer, TokenMetadata, and TransferHook, rejection of unsupported extensions and the Token 2022 native mint, base and quote token program flags, transfer-fee-inclusive deposits, transfer-fee-excluded withdrawals and claims, 100 percent transfer fee edge handling, transfer hook remaining account requirements for base and quote transfers, account-level MemoTransfer handling with the Presale memo, initialization funding effects, and integrator considerations for wallets, launchpads, indexers, and transfer-hook tokens."
 ---
 
-Presale Vault can use standard SPL Token mints or supported Token-2022 mints for both the base token being sold and the quote token buyers deposit.
+Presale Vault can use standard SPL Token mints or supported Token 2022 mints for both the base token being sold and the quote token buyers deposit.
 
-Unlike DLMM, Presale Vault does not use a token-badge review path in this program. A Token-2022 mint must use only the extensions accepted by the presale program.
+Unlike DLMM, Presale Vault does not use a token-badge review path in this program. A Token 2022 mint must use only the extensions accepted by the presale program.
 
 ## Supported Mints
 
 Presale Vault accepts:
 
 - standard SPL Token mints
-- Token-2022 mints with only supported mint extensions
+- Token 2022 mints with only supported mint extensions
 
-The Token-2022 native mint is rejected.
+The Token 2022 native mint is rejected.
 
-## Supported Token-2022 Extensions
+## Supported Token 2022 Extensions
 
-If a base or quote mint is Token-2022, the program currently accepts only these mint extensions:
+If a base or quote mint is Token 2022, the program currently accepts only these mint extensions:
 
 - `TransferFeeConfig`
 - `MetadataPointer`
 - `TokenMetadata`
 - `TransferHook`
 
-Any other Token-2022 mint extension fails validation with `UnsupportedToken2022MintOrExtension`.
+Any other Token 2022 mint extension fails validation with `UnsupportedToken2022MintOrExtension`.
 
 <Warning>
   Transfer hooks are supported by passing the hook accounts required by the hook program. Presale Vault does not require the transfer hook program or authority to be revoked.
@@ -35,13 +35,13 @@ Any other Token-2022 mint extension fails validation with `UnsupportedToken2022M
 
 ## Transfer Fees
 
-Presale Vault accounts for Token-2022 transfer fees when moving tokens.
+Presale Vault accounts for Token 2022 transfer fees when moving tokens.
 
 ### Deposits
 
-When a buyer deposits a quote token with transfer fees, the program calculates the transfer-fee-included amount needed for the intended net deposit and registry deposit fee. The escrow and presale state track the net deposit used for allocation, while the buyer may transfer more than the net amount because of Token-2022 transfer fees.
+When a buyer deposits a quote token with transfer fees, the program calculates the transfer-fee-included amount needed for the intended net deposit and registry deposit fee. The escrow and presale state track the net deposit used for allocation, while the buyer may transfer more than the net amount because of Token 2022 transfer fees.
 
-### Claims and withdrawals
+### Claims and Withdrawals
 
 When tokens move from the presale vault to a user, the transfer amount may be reduced by the token's transfer fee. Events report transfer-fee-excluded amounts where applicable.
 
@@ -55,9 +55,9 @@ This affects:
 - deposit-fee collection
 - unsold base-token refunds
 
-### 100% transfer-fee edge case
+### 100% Transfer-Fee Edge Case
 
-If a Token-2022 mint has a 100% transfer fee, the program uses the mint's maximum fee when calculating the inverse transfer fee needed for deposits. If that addition overflows, the instruction fails.
+If a Token 2022 mint has a 100% transfer fee, the program uses the mint's maximum fee when calculating the inverse transfer fee needed for deposits. If that addition overflows, the instruction fails.
 
 ## Transfer Hooks
 
@@ -74,7 +74,7 @@ If a transfer hook exists and the required accounts are missing, the instruction
 
 ## Memo Transfer
 
-`MemoTransfer` is an account-level Token-2022 extension, not a mint extension. Presale Vault checks destination token accounts when the program transfers tokens out of the vault.
+`MemoTransfer` is an account-level Token 2022 extension, not a mint extension. Presale Vault checks destination token accounts when the program transfers tokens out of the vault.
 
 If the destination account requires incoming transfer memos, the program builds a memo with:
 
@@ -92,9 +92,9 @@ The same transfer-hook rules apply if the base mint uses Transfer Hook.
 
 ## Integration Checklist
 
-- Confirm both base and quote mints are either SPL Token mints or supported Token-2022 mints.
-- Reject unsupported Token-2022 extensions before showing a launch flow.
+- Confirm both base and quote mints are either SPL Token mints or supported Token 2022 mints.
+- Reject unsupported Token 2022 extensions before showing a launch flow.
 - Include transfer hook remaining accounts for every instruction that transfers a hook-enabled mint.
-- Display net deposit separately from registry deposit fee and Token-2022 transfer fee.
+- Display net deposit separately from registry deposit fee and Token 2022 transfer fee.
 - Explain to buyers that transfer-fee tokens may deliver less on claims or refunds.
 - Ensure destination token accounts can receive memo-bearing transfers when `MemoTransfer` is enabled.

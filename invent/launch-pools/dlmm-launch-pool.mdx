@@ -5,43 +5,36 @@ description: "Learn how to create a Meteora DLMM launch pool with configurable p
 llmsDescription: "Guide to creating a DLMM launch pool with Meteora Invent Studio, covering setup, local validator, environment variables, keypair generation, dlmm_config.jsonc, quote mint, createBaseToken, bin step, fee bps, initial price, activation type and point, creator pool on-off control, concrete function type, collect fee mode, LFG seed liquidity, single-bin seed liquidity, DLMM pool status, optional Alpha Vault, dlmm-create-pool and seed commands, and dlmm-place-limit-order, dlmm-get-limit-orders, and dlmm-cancel-limit-order limit order commands."
 ---
 
-This guide walks you through the steps to create a DLMM launch pool on Meteora. Whether you’re a seasoned developer or just starting out, this guide has got you covered to deploy liquidity and launch your project on Meteora.
+Create a DLMM launch pool on Meteora with Meteora Invent Studio.
 
-# What You'll Achieve
+## What You'll Do
 
-By the end of this quicklaunch, you’ll have built a liquidity pool on Meteora by:
-- Configuring your liquidity pool settings
-- Interacting with our DLMM program
-- Seeing your liquidity pool in action on Meteora
+- Configure your liquidity pool settings
+- Create the pool through the DLMM program
+- View your pool on Meteora
 
-<Tip>
-**Why Meteora?**
-
-Meteora is a hyper optimized liquidity layer that ensures that your project's provided liquidity is secure, sustainable and composable for anyone to trade on. By following this guide, you'll be able to launch a concentrated liquidity pool with dynamic fees on Meteora in just a few quick and easy steps.
-</Tip>
-
-# Prerequisites
+## Prerequisites
 
 - Node.js >= 22.12.0
 - pnpm >= 10.0.0
 
-*If you don't have pnpm installed, you can install it by running the following command.*
+If you don't have pnpm installed, install it with:
 
 ```bash Terminal
 npm install -g pnpm
 ```
 
-# Steps
+## Steps
 
 <Steps>
   <Step title="Clone and Setup Meteora Invent">
-  Meteora Invent is a toolkit consisting of everything you need to invent innovative token launches on Meteora. Run the following command in your terminal to get started.
+  Meteora Invent is a toolkit for creating token launches on Meteora. Clone the repository:
 
   ```bash Terminal
   git clone https://github.com/MeteoraAg/meteora-invent.git
   ```
 
-  Once you've cloned the repository, you'll have a new project directory with a meteora-invent folder. Run the following to install pnpm and the project dependencies. 
+  Then install the project dependencies:
 
   ```bash Terminal
   cd meteora-invent
@@ -49,36 +42,36 @@ npm install -g pnpm
   ```
 
   <Frame>
-   <img src="/invent/assets/pnpm-install.webp" />
+   <img src="/invent/assets/pnpm-install.webp" alt="Terminal output of pnpm install in the meteora-invent directory" />
   </Frame>
 
   </Step>
    <Step title="Optional: Start a Local Test Validator">
-    In Meteora Invent we provide an optional command for you to run a local validator to test your pool before deploying it to devnet or mainnet. Run the following command in your code editor terminal to get started.
+    Run a local validator to test your pool before deploying to devnet or mainnet:
 
     ```bash Terminal
     pnpm studio start-test-validator
     ```
 
-    This will start a local validator on your machine which will be hosted on `http://localhost:8899`. <br /> <br />
-    
+    This starts a local validator on `http://localhost:8899`.
+
     <Frame>
-    <img src="/invent/assets/start-test-validator.webp" />
+    <img src="/invent/assets/start-test-validator.webp" alt="Terminal output of the local test validator starting" />
     </Frame>
 
     </Step>
   <Step title="Setup Environment Variables">
-  We provide an easy way to setup environment variables when getting started. Run the following command in your code editor terminal to get started.
+  Copy the example environment variables file to `.env`:
 
   ```bash Terminal
   cp studio/.env.example studio/.env
   ```
 
-  This will copy the example environment variables file to your `.env` file. Configure the following variables:
+  Configure the following variables:
 
   - `PRIVATE_KEY` - Your private key for the wallet you will be using to deploy the pool.
 
-  Thereafter, you will need to run this command to generate a keypair from your wallet private key.
+  Then generate a keypair from your wallet private key.
 
   ```bash Terminal
   pnpm studio generate-keypair
@@ -91,20 +84,18 @@ npm install -g pnpm
   pnpm studio generate-keypair --network localnet --airdrop
   ```
 
-  This will generate a `keypair.json` file in the `studio` directory which will be used for all actions in this guide. <br /> <br />
+  This generates a `keypair.json` file in the `studio` directory, which is used for all actions in this guide.
 
   <Frame>
-   <img src="/invent/assets/keypair.webp" />
+   <img src="/invent/assets/keypair.webp" alt="Terminal output of the generate-keypair command" />
   </Frame>
 
   </Step>
   <Step title="Configure your DLMM Pool">
-  Navigate to the `studio/config/dlmm_config.jsonc` file and configure your DLMM pool settings. <br /> <br />
+  Configure your DLMM pool settings in `studio/config/dlmm_config.jsonc`.
 
   <Accordion title="Set your DLMM configuration">
-  You can configure everything DLMM pool related in this file.
-
-  <Note>The comments in the file are to help you understand the different settings you can configure. Please ensure that you read through the comments while configuring your pool.</Note>
+  <Note>Read the comments in the file while configuring your pool. They explain each setting.</Note>
 
    ```jsonc dlmm_config.jsonc
     {
@@ -288,74 +279,70 @@ npm install -g pnpm
   </Accordion>
 
   <Tip>
-  The toolkit contains logic to make it easier for you to create the DLMM pool such as:
+  The toolkit handles:
 
-  - Minting a new `baseMint` token or parsing in an existing `baseMint` token.
+  - Minting a new `baseMint` token or using an existing one.
   - Launching the DLMM pool immediately or at a certain `activationPoint` (in slots or timestamp depending on the `activationType`).
   - Optional creation of an Alpha Vault with your DLMM launch pool.
   </Tip>
-
-
   </Step>
   <Step title="Create your DLMM Pool">
-  After configuring your DLMM pool settings in `dlmm_config.jsonc`, you can now create your pool by running the following command.
+  After configuring `dlmm_config.jsonc`, create your pool.
 
-  _If you don't have a base mint, you can configure `createBaseToken` in the config file and run the
-  following command._
+  Without a base mint, configure `createBaseToken` in the config file and run:
 
-  ```bash
+  ```bash Terminal
   pnpm studio dlmm-create-pool
   ```
 
-  _If you already have a base mint created, you can provide it via the CLI with a `--baseMint` flag
-  and run the following command._
+  With an existing base mint, pass it with the `--baseMint` flag:
 
-  ```bash
+  ```bash Terminal
   pnpm studio dlmm-create-pool --baseMint <YOUR_BASE_MINT_ADDRESS>
   ```
 
-  This will create your pool and print the pool address and other relevant information to the console. <br /> <br />
+  The console prints the pool address and other relevant information.
 
-  <Frame caption="This example includes creating of baseMint token before creating the DLMM launch pool.">
-   <img src="/invent/assets/dlmm-create-pool.webp" />
+  <Frame caption="This example creates the baseMint token before creating the DLMM launch pool.">
+   <img src="/invent/assets/dlmm-create-pool.webp" alt="Console output after creating a DLMM launch pool, showing the pool address" />
   </Frame>
 
   </Step>
   <Step title="Seed your DLMM Pool">
 
-    After creating your DLMM pool, you can now seed your pool with liquidity.
+    After creating your DLMM pool, seed it with liquidity.
 
     <Tabs>
       <Tab title="dlmm-seed-liquidity-lfg" icon="chart-bar">
-        *If you want to seed your pool with liquidity using the LFG model, you can run the following command.*
+        To seed with the LFG model, run:
 
-        <Warning>Please take note that the `dlmm-seed-liquidity-lfg` command will only work when your DLMM launch pool is not activated yet. You can configure the pool activation time using the `activationPoint` parameter in the `dlmm_config.jsonc` file.</Warning>
+        <Warning>The `dlmm-seed-liquidity-lfg` command only works while your DLMM launch pool is not activated yet. You can configure the pool activation time using the `activationPoint` parameter in the `dlmm_config.jsonc` file.</Warning>
 
         ```bash Terminal
         pnpm studio dlmm-seed-liquidity-lfg --baseMint <YOUR_BASE_MINT_ADDRESS>
         ```
 
-        This will seed your DLMM pool with liquidity based on the `curvature`, `minPrice` and `maxPrice` parameters that you have set in the `dlmm_config.jsonc` file.
+        This seeds your DLMM pool based on the `curvature`, `minPrice` and `maxPrice` parameters in `dlmm_config.jsonc`.
 
-        <Note>If you want to learn how the liquidity curvature works,   you can head to https://ilm.jup.ag/ to learn more.</Note>
+        <Note>For how liquidity curvature works, see https://ilm.jup.ag/.</Note>
 
         <Frame>
-        <img src="/invent/assets/dlmm-seed-liquidity-lfg.webp" />
+        <img src="/invent/assets/dlmm-seed-liquidity-lfg.webp" alt="Console output after seeding a DLMM pool with the LFG model" />
         </Frame>
       </Tab>
       <Tab title="dlmm-seed-liquidity-single-bin" icon="chart-area">
-        *If you want to seed your pool with liquidity in a single bin, you can run the following command.*
+        To seed liquidity in a single bin, run:
 
-        <Warning>Please take note that the `dlmm-seed-liquidity-single-bin` command will only work when your DLMM launch pool is not activated yet. You can configure the pool activation time using the `activationPoint` parameter in the `dlmm_config.jsonc` file.</Warning>
+        <Warning>The `dlmm-seed-liquidity-single-bin` command only works while your DLMM launch pool is not activated yet. You can configure the pool activation time using the `activationPoint` parameter in the `dlmm_config.jsonc` file.</Warning>
 
         ```bash Terminal
         pnpm studio dlmm-seed-liquidity-single-bin --baseMint <YOUR_BASE_MINT_ADDRESS>
         ```
 
-        This will seed your DLMM pool with liquidity in a single bin based on the `price` and `seedAmount` parameters that you have set in the `dlmm_config.jsonc` file. <br /> <br />
+        This seeds a single bin based on the `price` and `seedAmount` parameters in `dlmm_config.jsonc`.
 
         <Frame>
-          <img src="/invent/assets/dlmm-seed-liquidity-single-bin.webp" />
+          <img src="/invent/assets/dlmm-seed-liquidity-single-bin.webp" alt="Console output after seeding a DLMM pool in a single bin" />
         </Frame>
       </Tab>
     </Tabs>
@@ -364,25 +351,25 @@ npm install -g pnpm
 
     DLMM pools created with the limit order function type (`concreteFunctionType: 0`, the default) support onchain limit orders. A limit order deposits tokens into one or more bins and fills automatically as the market price crosses them.
 
-    <Note>To learn how DLMM limit orders work under the hood, head to [DLMM Limit Order](/core-products/dlmm/limit-order).</Note>
+    <Note>For how DLMM limit orders work, see [DLMM Limit Order](/core-products/dlmm/limit-order).</Note>
 
-    *After configuring the `placeLimitOrder` settings in `dlmm_config.jsonc`, place an order with the following command.*
+    After configuring the `placeLimitOrder` settings in `dlmm_config.jsonc`, place an order:
 
-    ```bash
+    ```bash Terminal
     pnpm studio dlmm-place-limit-order --poolAddress <YOUR_POOL_ADDRESS>
     ```
 
-    This will place the order and print the limit order address to the console. Save the address if you want to cancel a specific order later.
+    The console prints the limit order address. Save it if you want to cancel a specific order later.
 
-    *To inspect your open orders — per-bin fill status, fees earned, and withdrawable amounts — run the following command.*
+    To inspect your open orders (per-bin fill status, fees earned, and withdrawable amounts), run:
 
-    ```bash
+    ```bash Terminal
     pnpm studio dlmm-get-limit-orders --poolAddress <YOUR_POOL_ADDRESS>
     ```
 
-    *To cancel an order and withdraw unfilled deposits, filled proceeds, and earned fees, run the following command.*
+    To cancel an order and withdraw unfilled deposits, filled proceeds, and earned fees, run:
 
-    ```bash
+    ```bash Terminal
     pnpm studio dlmm-cancel-limit-order --poolAddress <YOUR_POOL_ADDRESS> --limitOrder <YOUR_LIMIT_ORDER_ADDRESS>
     ```
 
@@ -390,4 +377,4 @@ npm install -g pnpm
   </Step>
 </Steps>
 
-Voilà! You've successfully created your DLMM pool on Meteora. You can now see your pool in action on Meteora either on Meteora's [mainnet](https://app.meteora.ag) or [devnet](https://devnet.meteora.ag) app.
+Once the pool is created, you can view it on Meteora's [mainnet](https://app.meteora.ag) or [devnet](https://devnet.meteora.ag) app.

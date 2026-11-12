@@ -7,11 +7,11 @@ llmsDescription: "Overview of Meteora DLMM, explaining Dynamic Liquidity Market 
 
 ## Overview
 
-DLMM stands for **Dynamic Liquidity Market Maker**. It is Meteora's high-performance concentrated liquidity product for teams and LPs who want more control over where liquidity sits, how fees are captured, and how a pool reacts when the market gets volatile.
+DLMM stands for **Dynamic Liquidity Market Maker**. It is Meteora's concentrated liquidity product. LPs and teams choose where liquidity sits, how fees are captured, and how a pool reacts to volatility.
 
-Instead of spreading liquidity across every possible price like a traditional AMM, DLMM organizes liquidity into **discrete price bins**. Each bin represents one price point for a token pair. When traders swap inside the active bin, they trade at that bin's fixed price, which creates a smooth zero-slippage experience within the bin. When demand consumes the liquidity in one bin, the market moves to the next bin.
+Instead of spreading liquidity across every possible price like a traditional AMM, DLMM organizes liquidity into **discrete price bins**. Each bin represents one price point for a token pair. When traders swap inside the active bin, they trade at that bin's fixed price, so there is zero slippage within the bin. When demand consumes the liquidity in one bin, the market moves to the next bin.
 
-The result is a liquidity engine that can feel simple to traders while giving LPs and token teams a sharper set of tools: concentrated liquidity, single-sided deposits, dynamic fees, resizable positions, Token 2022 support, and pool modes for either liquidity mining or limit-order liquidity.
+DLMM supports concentrated liquidity, single-sided deposits, dynamic fees, resizable positions, Token 2022 mints, and pool modes for either liquidity mining or limit-order liquidity.
 
 <CardGroup cols={2}>
   <Card title="Capital Efficiency" icon="chart-line" iconType="solid">
@@ -21,7 +21,7 @@ The result is a liquidity engine that can feel simple to traders while giving LP
     Trades inside a bin execute at that bin's fixed price. Price only moves when liquidity in the active bin is consumed and the pool shifts to the next bin.
   </Card>
   <Card title="Dynamic Fees" icon="bolt" iconType="solid">
-    Fees can rise when volatility increases and cool down when markets are calmer, helping LPs price risk more intelligently.
+    Fees can rise when volatility increases and cool down when markets are calmer, so LPs are paid for the risk they take.
   </Card>
   <Card title="Flexible Liquidity Shapes" icon="sliders" iconType="solid">
     LPs can choose Spot, Curve, and Bid-Ask shapes to match their market view, from stable pairs to volatile launches.
@@ -34,7 +34,7 @@ The result is a liquidity engine that can feel simple to traders while giving LP
   </Card>
 </CardGroup>
 
-<Note>Unlike DAMM pools, DLMM liquidity is not connected to Meteora's Dynamic Vaults for lending yield. DLMM liquidity is used for trading, fee capture, and pool-level incentives where available.</Note>
+<Note>Unlike DAMM v1 pools, DLMM liquidity is not connected to Meteora's Dynamic Vaults for lending yield. DLMM liquidity is used for trading, fee capture, and pool-level incentives where available.</Note>
 
 <Info>
   DLMM runs on the mainnet program `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo`.
@@ -68,27 +68,27 @@ Bins are grouped into bin arrays of `70` bins. Positions also start from a `70` 
 
 ## Liquidity Shapes
 
-When LPs add liquidity, they choose how that liquidity is distributed across bins. This is one of DLMM's biggest product advantages because the same pool can support different strategies at the same time.
+When LPs add liquidity, they choose how that liquidity is distributed across bins. The same pool can support different strategies at the same time.
 
 <CardGroup cols={3}>
   <Card title="Spot" icon="chart-column" iconType="solid">
-    A balanced distribution across the selected range. It is straightforward, flexible, and useful when you want broad exposure without over-concentrating in one area.
+    A balanced distribution across the selected range. Gives broad exposure without over-concentrating in one area.
   </Card>
   <Card title="Curve" icon="chart-scatter-bubble" iconType="solid">
-    A concentrated distribution around the middle of the range. It is designed for higher efficiency when you expect trading to stay near the current price.
+    A concentrated distribution around the middle of the range. Suits pools where you expect trading to stay near the current price.
   </Card>
   <Card title="Bid-Ask" icon="chart-waterfall" iconType="solid">
-    A distribution that places more liquidity near the edges of the range. It is useful for capturing volatility or creating DCA-style buy and sell strategies.
+    A distribution that places more liquidity near the edges of the range. Captures volatility and supports DCA-style buy and sell strategies.
   </Card>
 </CardGroup>
 
 ## Dynamic Fees
 
-DLMM fees are designed to adapt to market conditions. Every swap pays a base fee, and pools can also charge a variable fee that responds to volatility.
+Every swap pays a base fee, and pools can also charge a variable fee that responds to volatility.
 
 When swaps cross more bins or happen in quick succession, DLMM treats the market as more volatile. The variable fee can increase during those periods, which helps LPs capture more value when they are taking more risk. When activity slows down, the volatility measurement decays and fees can normalize.
 
-This is especially important during launches, where demand and volatility are often highest. When a pool's variable fee parameters are configured, DLMM can raise fees during volatile periods and cool them down as activity stabilizes.
+This matters most during launches, where demand and volatility are highest. It only applies when the pool's variable fee parameters are configured.
 
 ## Pool Function Modes
 

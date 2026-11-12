@@ -5,43 +5,36 @@ description: "Learn how to create a Meteora DAMM v2 launch pool with balanced or
 llmsDescription: "Guide to creating a DAMM v2 launch pool with Meteora Invent Studio, covering setup, local validator, environment variables, keypair generation, damm_v2_config.jsonc, quote mint, createBaseToken, creator, base and quote amounts, initial price, min and max price, base fee modes, rate limiter, market cap scheduler, dynamic fees, collect fee mode, compounding fees, activation controls, add liquidity, split position, optional Alpha Vault, and balanced or one-sided pool commands."
 ---
 
-This guide walks you through the steps to create a DAMM v2 launch pool on Meteora. Whether you’re a seasoned developer or just starting out, this guide has got you covered to deploy liquidity and launch your project on Meteora.
+Create a DAMM v2 launch pool on Meteora with Meteora Invent Studio.
 
-# What You'll Achieve
+## What You'll Do
 
-By the end of this quicklaunch, you’ll have built a liquidity pool on Meteora by:
-- Configuring your liquidity pool settings
-- Interacting with our DAMM v2 program
-- Seeing your liquidity pool in action on Meteora
+- Configure your liquidity pool settings
+- Create the pool through the DAMM v2 program
+- View your pool on Meteora
 
-<Tip>
-**Why Meteora?**
-
-Meteora is a hyper optimized liquidity layer that ensures that your project's provided liquidity is secure, sustainable and composable for anyone to trade on. By following this guide, you'll be able to launch a balanced / concentrated / one-sided liquidity pool with dynamic fees on Meteora in just a few quick and easy steps.
-</Tip>
-
-# Prerequisites
+## Prerequisites
 
 - Node.js >= 22.12.0
 - pnpm >= 10.0.0
 
-*If you don't have pnpm installed, you can install it by running the following command.*
+If you don't have pnpm installed, install it with:
 
 ```bash Terminal
 npm install -g pnpm
 ```
 
-# Steps
+## Steps
 
 <Steps>
   <Step title="Clone and Setup Meteora Invent">
-  Meteora Invent is a toolkit consisting of everything you need to invent innovative token launches on Meteora. Run the following command in your terminal to get started.
+  Meteora Invent is a toolkit for creating token launches on Meteora. Clone the repository:
 
   ```bash Terminal
   git clone https://github.com/MeteoraAg/meteora-invent.git
   ```
 
-  Once you've cloned the repository, you'll have a new project directory with a meteora-invent folder. Run the following to install pnpm and the project dependencies. 
+  Then install the project dependencies:
 
   ```bash Terminal
   cd meteora-invent
@@ -49,36 +42,36 @@ npm install -g pnpm
   ```
 
   <Frame>
-   <img src="/invent/assets/pnpm-install.webp" />
+   <img src="/invent/assets/pnpm-install.webp" alt="Terminal output of pnpm install in the meteora-invent directory" />
   </Frame>
 
   </Step>
    <Step title="Optional: Start a Local Test Validator">
-    In Meteora Invent we provide an optional command for you to run a local validator to test your pool before deploying it to devnet or mainnet. Run the following command in your code editor terminal to get started.
+    Run a local validator to test your pool before deploying to devnet or mainnet:
 
     ```bash Terminal
     pnpm studio start-test-validator
     ```
 
-    This will start a local validator on your machine which will be hosted on `http://localhost:8899`. <br /> <br />
-    
+    This starts a local validator on `http://localhost:8899`.
+
     <Frame>
-    <img src="/invent/assets/start-test-validator.webp" />
+    <img src="/invent/assets/start-test-validator.webp" alt="Terminal output of the local test validator starting" />
     </Frame>
 
     </Step>
   <Step title="Setup Environment Variables">
-  We provide an easy way to setup environment variables when getting started. Run the following command in your code editor terminal to get started.
+  Copy the example environment variables file to `.env`:
 
   ```bash Terminal
   cp studio/.env.example studio/.env
   ```
 
-  This will copy the example environment variables file to your `.env` file. Configure the following variables:
+  Configure the following variables:
 
   - `PRIVATE_KEY` - Your private key for the wallet you will be using to deploy the pool.
 
-  Thereafter, you will need to run this command to generate a keypair from your wallet private key.
+  Then generate a keypair from your wallet private key.
 
   ```bash Terminal
   pnpm studio generate-keypair
@@ -91,20 +84,18 @@ npm install -g pnpm
   pnpm studio generate-keypair --network localnet --airdrop
   ```
 
-  This will generate a `keypair.json` file in the `studio` directory which will be used for all actions in this guide. <br /> <br />
+  This generates a `keypair.json` file in the `studio` directory, which is used for all actions in this guide.
 
   <Frame>
-   <img src="/invent/assets/keypair.webp" />
+   <img src="/invent/assets/keypair.webp" alt="Terminal output of the generate-keypair command" />
   </Frame>
 
   </Step>
   <Step title="Configure your DAMM v2 Pool">
-  Navigate to the `studio/config/damm_v2_config.jsonc` file and configure your DAMM v2 pool settings. <br /> <br />
+  Configure your DAMM v2 pool settings in `studio/config/damm_v2_config.jsonc`.
 
   <Accordion title="Set your DAMM v2 configuration">
-  You can configure everything DAMM v2 pool related in this file.
-
-  <Note>The comments in the file are to help you understand the different settings you can configure. Please ensure that you read through the comments while configuring your pool.</Note>
+  <Note>Read the comments in the file while configuring your pool. They explain each setting.</Note>
 
    ```jsonc damm_v2_config.jsonc
     {
@@ -289,62 +280,58 @@ npm install -g pnpm
   </Accordion>
 
     <Tip>
-        The toolkit contains logic to make it easier for you to create the DAMM v2 pool such as:
+        The toolkit handles:
 
-        - Minting a new `baseMint` token or parsing in an existing `baseMint` token.
+        - Minting a new `baseMint` token or using an existing one.
         - Launching the DAMM v2 pool immediately or at a certain `activationPoint` (in slots or timestamp depending on the `activationType`).
-        - Fully customizable pool fees (including fee scheduler and dynamic fee settings).
+        - Pool fee configuration, including fee scheduler and dynamic fee settings.
         - Optional creation of an Alpha Vault with your DAMM v2 launch pool.
     </Tip>
   </Step>
   <Step title="Create your DAMM v2 Pool">
-  After configuring your DAMM v2 pool settings in `damm_v2_config.jsonc`, you can now create your pool by running the following command.
+  After configuring `damm_v2_config.jsonc`, create your pool.
 
     <Tabs>
       <Tab title="damm-v2-create-balanced-pool" icon="scale-balanced">
-        _If you don't have a base mint, you can configure `createBaseToken` in the config file and run the
-        following command._
+        Without a base mint, configure `createBaseToken` in the config file and run:
 
-        ```bash
+        ```bash Terminal
         pnpm studio damm-v2-create-balanced-pool
         ```
 
-        _If you already have a base mint, you can provide it via the CLI with a `--baseMint` flag and run
-        the following command._
+        With an existing base mint, pass it with the `--baseMint` flag:
 
-        ```bash
+        ```bash Terminal
         pnpm studio damm-v2-create-balanced-pool --baseMint <YOUR_BASE_MINT_ADDRESS>
         ```
 
-        <Note>Creating a balanced pool will require the `quoteAmount` to be set in the `damm_v2_config.jsonc` file.</Note>
+        <Note>Creating a balanced pool requires `quoteAmount` to be set in `damm_v2_config.jsonc`.</Note>
 
         <Frame>
-        <img src="/invent/assets/damm-v2-create-balanced-pool.webp" />
+        <img src="/invent/assets/damm-v2-create-balanced-pool.webp" alt="Console output after creating a balanced DAMM v2 pool" />
         </Frame>
       </Tab>
       <Tab title="damm-v2-create-one-sided-pool" icon="scale-unbalanced">
-        _If you don't have a base mint, you can configure `createBaseToken` in the config file and run the
-        following command._
+        Without a base mint, configure `createBaseToken` in the config file and run:
 
-        ```bash
+        ```bash Terminal
         pnpm studio damm-v2-create-one-sided-pool
         ```
 
-        _If you already have a base mint, you can provide it via the CLI with a `--baseMint` flag and run
-        the following command._
+        With an existing base mint, pass it with the `--baseMint` flag:
 
-        ```bash
+        ```bash Terminal
         pnpm studio damm-v2-create-one-sided-pool --baseMint <YOUR_BASE_MINT_ADDRESS>
         ```
 
-        This will create your pool with liquidity deposited from your `keypair.json` and print the pool address and other relevant information to the console. <br /> <br />
+        This creates the pool with liquidity deposited from your `keypair.json`. The console prints the pool address and other relevant information.
 
         <Frame>
-        <img src="/invent/assets/damm-v2-create-one-sided-pool.webp" />
+        <img src="/invent/assets/damm-v2-create-one-sided-pool.webp" alt="Console output after creating a one-sided DAMM v2 pool" />
         </Frame>
       </Tab>
     </Tabs>
   </Step>
 </Steps>
 
-Voilà! You've successfully created your DAMM v2 pool on Meteora. You can now see your pool in action on Meteora either on Meteora's [mainnet](https://app.meteora.ag) or [devnet](https://devnet.meteora.ag) app.
+Once the pool is created, you can view it on Meteora's [mainnet](https://app.meteora.ag) or [devnet](https://devnet.meteora.ag) app.

@@ -2,10 +2,10 @@
 title: "DBC Rust Integration CPI"
 sidebarTitle: "CPI"
 description: "Learn how to plan DBC Anchor CPI integrations with generated bindings, event-CPI accounts, remaining accounts, swap limits, and migration constraints."
-llmsDescription: "Explains DBC Rust CPI integration for programs that call the public Meteora dynamic_bonding_curve program. Covers program ID, enabling Anchor CPI bindings, generated IDL clients, instruction scope, account planning for config, pool, swap, fee claim, and migration flows, event authority accounts, instructions sysvar remaining accounts, first-swap and rate-limiter behavior, Token-2022 token program handling, CPI invariant checks and common failures."
+llmsDescription: "Explains DBC Rust CPI integration for programs that call the public Meteora dynamic_bonding_curve program. Covers program ID, enabling Anchor CPI bindings, generated IDL clients, instruction scope, account planning for config, pool, swap, fee claim, and migration flows, event authority accounts, instructions sysvar remaining accounts, first-swap and rate-limiter behavior, Token 2022 token program handling, CPI invariant checks and common failures."
 ---
 
-Use CPI when your Solana program must call DBC directly, for example to swap, add or remove liquidity, claim fees or rewards, or manage a DBC position as part of a larger protocol instruction.
+Use CPI when your Solana program must call DBC directly, for example to swap, claim partner or creator trading fees, or migrate a pool as part of a larger protocol instruction.
 
 ## Program ID
 
@@ -80,13 +80,13 @@ Before calling DBC from your program:
 
 ## Token Programs
 
-DBC supports SPL Token and Token-2022 base mints. Migration and pool creation account lists differ by token type.
+DBC supports SPL Token and Token 2022 base mints. Migration and pool creation account lists differ by token type.
 
 | Token side | Guidance |
 | --- | --- |
 | Base mint | Read `PoolConfig.token_type` and `VirtualPool.pool_type`; use the matching token program. |
 | Quote mint | Native SOL uses wrapped SOL account handling in SDK-built transactions. CPI integrations must prepare token accounts explicitly. |
-| Token-2022 | Include Token-2022 program accounts where required and validate associated token accounts carefully. |
+| Token 2022 | Include Token 2022 program accounts where required and validate associated token accounts carefully. |
 
 ## Common CPI Failures
 

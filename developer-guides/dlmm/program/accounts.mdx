@@ -47,7 +47,7 @@ Bin array index for a bin ID: `floor(bin_id / 70)`, with extra adjustment for ne
 
 `LbPair` is the root pool account.
 
-### Fee parameters
+### Fee Parameters
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -70,7 +70,7 @@ Bin array index for a bin ID: `floor(bin_id / 70)`, with extra adjustment for ne
 
 `VariableParameters` tracks `volatility_accumulator`, `volatility_reference`, `index_reference`, and `last_update_timestamp` for dynamic fees.
 
-### Pool identity and reserves
+### Pool Identity And Reserves
 
 | Field | Meaning |
 | --- | --- |
@@ -81,11 +81,11 @@ Bin array index for a bin ID: `floor(bin_id / 70)`, with extra adjustment for ne
 | `bump_seed`, `bin_step_seed`, `base_factor_seed` | PDA derivation seeds stored on-chain |
 | `require_base_factor_seed` | Whether `base_factor` is included in permissionless pool seeds |
 
-### Status, type, and activation
+### Status, Type, And Activation
 
 | Field | Meaning |
 | --- | --- |
-| `pair_type` | `0` permissionless, `1` permission, `2` customizable permissionless, `3` permissionless v2 (Token-2022) |
+| `pair_type` | `0` permissionless, `1` permission, `2` customizable permissionless, `3` permissionless v2 (Token 2022) |
 | `status` | `0` enabled, `1` disabled (withdraw-only except whitelisted wallets) |
 | `activation_type` | Slot or timestamp activation unit for permission pools |
 | `activation_point` | Time point when a permission pool enables trading |
@@ -95,7 +95,7 @@ Bin array index for a bin ID: `floor(bin_id / 70)`, with extra adjustment for ne
 | `creator_pool_on_off_control` | Creator can toggle pool status (customizable permissionless only) |
 | `base_key` | Signer base key for permission pools |
 
-### Rewards, oracle, and bitmap
+### Rewards, Oracle, And Bitmap
 
 | Field | Meaning |
 | --- | --- |
@@ -105,14 +105,14 @@ Bin array index for a bin ID: `floor(bin_id / 70)`, with extra adjustment for ne
 
 Each `RewardInfo` is initialized when `mint != default`. The funder must match `funder` or be protocol admin.
 
-### Token program flags
+### Token Program Flags
 
 | Field | Meaning |
 | --- | --- |
-| `token_mint_x_program_flag`, `token_mint_y_program_flag` | `0` SPL Token, `1` Token-2022 |
+| `token_mint_x_program_flag`, `token_mint_y_program_flag` | `0` SPL Token, `1` Token 2022 |
 | `version` | Layout version (`LayoutVersion`, currently `V1` for new pools) |
 
-## BinArray and Bin
+## BinArray And Bin
 
 ### BinArray
 
@@ -165,7 +165,7 @@ PDA: `["bitmap", lb_pair]`.
 
 `PositionV2` is the current LP position format.
 
-### Fixed header
+### Fixed Header
 
 | Field | Meaning |
 | --- | --- |
@@ -183,7 +183,7 @@ PDA: `["bitmap", lb_pair]`.
 | `version` | Layout version |
 | `permissionless_operation_bits` | Bitmask for permissionless position actions |
 
-### Nested types
+### Nested Types
 
 `FeeInfo` per bin:
 
@@ -199,7 +199,7 @@ PDA: `["bitmap", lb_pair]`.
 | `reward_per_token_completes` | Per-reward cumulative checkpoints (2 slots) |
 | `reward_pendings` | Claimable pending rewards (2 slots) |
 
-### Dynamic extension
+### Dynamic Extension
 
 Positions wider than 70 bins append `PositionBinData` after the header:
 
@@ -211,7 +211,7 @@ Positions wider than 70 bins append `PositionBinData` after the header:
 
 Use `increase_position_length` / `decrease_position_length` (or v2 variants) to resize. PDA seeds include `lower_bin_id` and `width` (number of bins, not `upper_bin_id`).
 
-### Position (legacy)
+### Position (Legacy)
 
 `Position` uses a smaller integer type for liquidity shares instead of the current one. Migrate to `PositionV2` with `migrate_position_from_v1` / `migrate_position_from_v2`. New positions should use `initialize_position` / `initialize_position2`.
 
@@ -227,7 +227,7 @@ Use `increase_position_length` / `decrease_position_length` (or v2 variants) to 
 | `owner` | Order owner |
 | `bin_count` | Number of `LimitOrderBinData` entries |
 
-### Per-bin extension
+### Per-Bin Extension
 
 | Field | Meaning |
 | --- | --- |
@@ -250,7 +250,7 @@ Close empty accounts with `close_limit_order_if_empty`. Up to 50 bins.
 | `active_size` | Count of initialized samples |
 | `length` | Total observation capacity (default 100; extend with `increase_oracle_length`) |
 
-### Observation (each sample)
+### Observation (Each Sample)
 
 | Field | Meaning |
 | --- | --- |
@@ -260,7 +260,7 @@ Close empty accounts with `close_limit_order_if_empty`. Up to 50 bins.
 
 PDA: `["oracle", lb_pair]`.
 
-## PresetParameter (legacy)
+## PresetParameter (Legacy)
 
 `PresetParameter` is the legacy pool-creation preset keyed by `bin_step` only.
 
@@ -293,14 +293,14 @@ PDA: `["preset_parameter", bin_step.to_le_bytes()]`. Prefer `PresetParameter2` f
 
 ## TokenBadge
 
-`TokenBadge` records an admin-approved Token-2022 mint.
+`TokenBadge` records an admin-approved Token 2022 mint.
 
 | Field | Meaning |
 | --- | --- |
 | `token_mint` | Approved mint pubkey |
 
-Required in pool creation when a Token-2022 mint has restricted extensions. PDA: `["token_badge", mint]`.
+Required in pool creation when a Token 2022 mint has restricted extensions. PDA: `["token_badge", mint]`.
 
-## Token-2022 in transactions
+## Token 2022 In Transactions
 
-Pools with `token_mint_*_program_flag = 1` use Token-2022. When building custom instructions, include remaining accounts required by mint extensions (transfer hooks, transfer fees, and so on). The SDK resolves token program IDs and hook metas from mint accounts.
+Pools with `token_mint_*_program_flag = 1` use Token 2022. When building custom instructions, include remaining accounts required by mint extensions (transfer hooks, transfer fees, and so on). The SDK resolves token program IDs and hook metas from mint accounts.

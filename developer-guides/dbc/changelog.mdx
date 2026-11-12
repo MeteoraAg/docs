@@ -12,7 +12,7 @@ rss: true
 
 <Update
   label="dynamic-bonding-curve 0.2.2"
-  description="Token-2022 Transfer Fees and SDK 2.0.0"
+  description="Token 2022 Transfer Fees and SDK 2.0.0"
   rss="DBC dynamic-bonding-curve 0.2.2 adds base-mint transfer fees and non-zero quote-mint transfer fees through create_config2, emits EvtSwap3 with transfer-fee amounts, and ships TypeScript SDK 2.0.0."
 >
   <Info>
@@ -31,7 +31,7 @@ rss: true
   - Support for quote mints with a non-zero transfer fee through `create_config2` and a token badge
   - Permissionless support for quote mints with a zero transfer fee and a revoked transfer fee config authority
   - `MigratedCollectFeeMode.Compounding` accepts a `compounding_fee_bps` of 0
-  - TypeScript SDK `2.0.0`, with swap quotes that account for Token-2022 transfer fees
+  - TypeScript SDK `2.0.0`, with swap quotes that account for Token 2022 transfer fees
 
   ## What To Do
 
@@ -57,9 +57,9 @@ rss: true
           <td>
             <ul>
               <li>Use <code>@meteora-ag/dynamic-bonding-curve-sdk@2.0.0</code> or later.</li>
-              <li>Create configs with <code>client.partner.createConfig2</code>. Pass <code>transferFeeParameters</code> for a base-mint transfer fee, which requires a Token-2022 base mint and is at most 10%. Pass <code>null</code> when there is none.</li>
+              <li>Create configs with <code>client.partner.createConfig2</code>. Pass <code>transferFeeParameters</code> for a base-mint transfer fee, which requires a Token 2022 base mint and is at most 10%. Pass <code>null</code> when there is none.</li>
               <li>A base transfer fee, or a quote mint with a non-zero transfer fee or a live transfer fee config authority, requires a constant token supply, no locked vesting, <code>MigrationFeeOption.Customizable</code>, and <code>MigratedCollectFeeMode.Compounding</code>.</li>
-              <li>Set a non-default <code>feeClaimer</code> when the config uses a partner transfer-fee authority or a Token-2022 partner token-update authority.</li>
+              <li>Set a non-default <code>feeClaimer</code> when the config uses a partner transfer-fee authority or a Token 2022 partner token-update authority.</li>
               <li><code>withdrawLeftover</code> requires <code>leftoverReceiver</code> as a signer when the leftover charges a transfer fee.</li>
               <li>Import curve, fee, and swap math from <code>@meteora-ag/dynamic-bonding-curve-sdk/math</code>. Construct services through <code>DynamicBondingCurveClient</code>.</li>
             </ul>
@@ -76,7 +76,7 @@ rss: true
           </td>
           <td>
             <ul>
-              <li>Read <code>includedTransferFeeAmountIn</code> and <code>excludedTransferFeeAmountOut</code> from swap quotes. For a Token-2022 quote mint, pass <code>quoteMint</code> and <code>currentEpoch</code>.</li>
+              <li>Read <code>includedTransferFeeAmountIn</code> and <code>excludedTransferFeeAmountOut</code> from swap quotes. For a Token 2022 quote mint, pass <code>quoteMint</code> and <code>currentEpoch</code>.</li>
               <li>Check <code>minimum_amount_out</code> against the amount the user receives after the fee, and <code>maximum_amount_in</code> against the amount the user pays before the fee.</li>
               <li>Rust <code>quote_exact_in</code>, <code>quote_exact_out</code>, and <code>quote_partial_fill</code> take <code>current_epoch</code> plus the base and quote <code>TransferFeeConfig</code>, and return <code>SwapResultWithTransferFee</code>.</li>
               <li>Use <code>swap2WithTransferHook</code>, <code>claimPartnerTradingFee2</code>, and <code>claimCreatorTradingFee2</code> for transfer-hook pools.</li>
@@ -117,7 +117,7 @@ rss: true
   - Note that a token badge for a quote mint relies on trust in the management of that mint. As a limitation of this design, the badge does not restrict transfer fee changes. `migration_damm_v2` uses the fee of the current epoch and does not repeat the 1% price check, so a higher fee can reduce the migrated liquidity, add the undeposited base to the protocol migration fee, change the price, or block the migration.
   - Added permissionless support for quote mints with a `TransferFeeConfig` whose fee is zero and whose transfer fee config authority is revoked.
   - Added support for a zero `compounding_fee_bps` with `MigratedCollectFeeMode::Compounding` when migrating to DAMMv2.
-  - Added endpoint `create_config2` that takes the new optional `TransferFeeParameters` argument. Passing None creates a config with no base transfer fee. Passing Some always gives the base mint a TransferFeeConfig extension, so it requires the Token-2022 token type and is otherwise rejected with InvalidTokenType, including when the basis points are zero. It emits the new `EvtCreateConfig3` event and the `EvtCreateConfigV2` event. When there is a base transfer fee or the quote mint has a non-zero transfer fee or a live transfer fee config authority, the config is restricted to a constant token supply (fixed token supply and `pre_migration_token_supply` equals `post_migration_token_supply`), no locked vesting, `MigrationFeeOption::Customizable`, and `MigratedCollectFeeMode::Compounding`.
+  - Added endpoint `create_config2` that takes the new optional `TransferFeeParameters` argument. Passing None creates a config with no base transfer fee. Passing Some always gives the base mint a TransferFeeConfig extension, so it requires the Token 2022 token type and is otherwise rejected with InvalidTokenType, including when the basis points are zero. It emits the new `EvtCreateConfig3` event and the `EvtCreateConfigV2` event. When there is a base transfer fee or the quote mint has a non-zero transfer fee or a live transfer fee config authority, the config is restricted to a constant token supply (fixed token supply and `pre_migration_token_supply` equals `post_migration_token_supply`), no locked vesting, `MigrationFeeOption::Customizable`, and `MigratedCollectFeeMode::Compounding`.
   - Emit new events `EvtSwap3` and `EvtSwap3WithTransferHook` in swap endpoints. They report `included_transfer_fee_amount_in` and `excluded_transfer_fee_amount_out`.
 
   ### Changed
@@ -145,7 +145,7 @@ rss: true
 
   - Endpoints `create_config` and `create_config_with_transfer_hook` reject a quote mint with a non-zero transfer fee or a live transfer fee config authority with the error `InvalidQuoteMint`, even with a token badge. A badged quote mint with a `TransferFeeConfig` extension and a zero fee was previously accepted by these endpoints. Such a quote mint is now only accepted by `create_config2`.
   - Endpoints `create_config`, `create_config2`, `create_config_with_transfer_hook`, `initialize_virtual_pool_with_spl_token`, `initialize_virtual_pool_with_token2022` and `initialize_virtual_pool_with_token2022_transfer_hook` reject a quote mint that is not permissionless-supported and has no token badge with the error `InvalidQuoteMint`. Previously these endpoints returned `InvalidTokenBadge`, which is now returned only when the supplied token badge does not match the quote mint.
-  - Endpoints `create_config`, `create_config2` and `create_config_with_transfer_hook` reject a `Pubkey::default()` fee claimer with the error `InvalidFeeClaimer` when the token type is Token-2022 and `token_update_authority` is `PartnerUpdateAuthority` or `PartnerUpdateAndMintAuthority`. Previously such a config was created successfully with the `create_config` and `create_config_with_transfer_hook` endpoints, but every pool initialization from it failed, because Token-2022 rejects the `Pubkey::default()` as an authority.
+  - Endpoints `create_config`, `create_config2` and `create_config_with_transfer_hook` reject a `Pubkey::default()` fee claimer with the error `InvalidFeeClaimer` when the token type is Token 2022 and `token_update_authority` is `PartnerUpdateAuthority` or `PartnerUpdateAndMintAuthority`. Previously such a config was created successfully with the `create_config` and `create_config_with_transfer_hook` endpoints, but every pool initialization from it failed, because Token 2022 rejects the `Pubkey::default()` as an authority.
   - A base token transfer hook cannot be combined with a quote mint that has a non-zero transfer fee or a live transfer fee config authority. The endpoint `create_config_with_transfer_hook` rejects such a quote mint, and `create_config2` accepts it but does not take a transfer hook program.
   - Endpoints `initialize_virtual_pool_with_spl_token`, `initialize_virtual_pool_with_token2022` and `initialize_virtual_pool_with_token2022_transfer_hook` reject a legacy config whose quote mint has a non-zero transfer fee or a live transfer fee config authority, with the error `InvalidQuoteMint`. A badged quote mint is still accepted for a legacy config as long as it carries neither: the restriction exists only to keep a legacy config, which was never validated against the transfer fee restrictions, off the transfer fee path.
   - Endpoint `initialize_virtual_pool_with_token2022_transfer_hook` rejects a quote mint with a live transfer fee config authority, which was previously accepted with a token badge. A quote mint with a non-zero transfer fee was already rejected on this endpoint.
@@ -165,7 +165,7 @@ rss: true
 
   - `client.partner.createConfig2`. Pass `transferFeeParameters` for a base-mint transfer fee, or `null` when there is none. `0` basis points still creates a `TransferFeeConfig` and is rejected with `MigratedTransferFeeAuthorityOption.Immutable` or `RevokeZeroFee`.
   - `TransferFeeWithheldAuthority` and `MigratedTransferFeeAuthorityOption`.
-  - Swap quotes account for Token-2022 transfer fees and return `includedTransferFeeAmountIn` and `excludedTransferFeeAmountOut`. `getSwapQuoteTransferFees(connection, config, { commitment?, baseMint? })` fetches the quote mint, the base mint when `baseMint` is passed, and the current epoch.
+  - Swap quotes account for Token 2022 transfer fees and return `includedTransferFeeAmountIn` and `excludedTransferFeeAmountOut`. `getSwapQuoteTransferFees(connection, config, { commitment?, baseMint? })` fetches the quote mint, the base mint when `baseMint` is passed, and the current epoch.
   - `getQuoteFromInputAmount` and `getQuoteFromOutputAmount` quote a `buildCurve` result as its pool would be right after `initialize_pool`. `client.pool.swapQuote2` quotes an existing pool and requires `currentPoint`.
   - `@meteora-ag/dynamic-bonding-curve-sdk/math`: the ports of the program's curve, fee, transfer fee and swap math, plus `ProgramError`, the program's error strings the SDK throws.
   - `QuotePoolConfig`, `QuoteVirtualPool`, `QuotePoolFees`, `QuoteDynamicFee` and `QuoteVolatilityTracker`: the fields the quote math reads. A `PoolConfig` and a `VirtualPool` satisfy them.
@@ -179,7 +179,7 @@ rss: true
   ### Changed
 
   - `createConfigAndPool` and `createConfigAndPoolWithFirstBuy` always use `createConfig2`. Omitting `transferFeeParameters` is the same as `null`.
-  - A base transfer fee, or a quote mint with a non-zero transfer fee or a live transfer fee config authority, requires a constant token supply, no locked vesting, `MigrationFeeOption.Customizable` and `MigratedCollectFeeMode.Compounding`. The base fee is Token-2022 only and at most 10%. A partner transfer-fee authority, and a Token-2022 partner token-update authority, require a non-default `feeClaimer`.
+  - A base transfer fee, or a quote mint with a non-zero transfer fee or a live transfer fee config authority, requires a constant token supply, no locked vesting, `MigrationFeeOption.Customizable` and `MigratedCollectFeeMode.Compounding`. The base fee is Token 2022 only and at most 10%. A partner transfer-fee authority, and a Token 2022 partner token-update authority, require a non-default `feeClaimer`.
   - `MigratedCollectFeeMode.Compounding` allows `compoundingFeeBps` of `0`.
   - Configs created by program 0.2.2 have `PoolConfig.version` 1 and `transferFeeFlag`. Swap quotes read the base transfer fee from that flag unless `baseMint` or `baseTransferFeeBasisPoints` is passed. A transfer fee is zero when its basis points are 0 or its maximum fee is 0.
   - A legacy config (`version` 0) cannot initialize a pool on a quote mint with a non-zero transfer fee or a live transfer fee config authority, and `migrateToDammV2` rejects it when the quote mint's current transfer fee is non-zero. Transfer-hook pool initialization rejects those quote mints at any version.
@@ -220,7 +220,7 @@ rss: true
   - Import from `@meteora-ag/dynamic-bonding-curve-sdk` or `@meteora-ag/dynamic-bonding-curve-sdk/math`. The package root is an explicit export list and the `exports` map exposes only those two entries. The curve, fee, transfer fee and swap math moved to `./math` (57 functions, among them `calculateBaseToQuoteFromAmountIn`, `getFeeMode`, `getIncludedFeeAmount`, `getFeeNumeratorFromIncludedAmount`, `getSwapResult`, the `getDeltaAmount*` and `getNextSqrtPrice*` functions, `SafeMath`, `mulDiv` and `pow`). `swapQuoteExactIn`, `swapQuoteExactOut`, `swapQuotePartialFill` and `DynamicBondingCurveProgram` are not exported; `swapQuote` stays on the root. Internal helpers such as `getOrCreateATAInstruction`, `unwrapSOLInstruction`, `wrapSOLInstruction`, `deriveMintMetadata`, `derivePositionAddress`, `createDammV1Program`, `getFirstCurve`, `getTwoCurve`, `isDefaultLockedVesting` and the `validate*` building blocks are no longer exported.
   - Construct the services through `DynamicBondingCurveClient`. `new PoolService(connection, commitment)` and the same constructor on the other services are no longer supported.
   - `CreateConfigParams`, `CreateConfig2Params` and `CreateConfigWithTransferHookParams` declare `config`, `feeClaimer`, `leftoverReceiver`, `quoteMint` and `payer` as required `PublicKey`s.
-  - `getSwapQuoteTransferFees` takes an options object instead of a commitment string. Swap quotes for a Token-2022 quote mint require `quoteMint` and `currentEpoch`.
+  - `getSwapQuoteTransferFees` takes an options object instead of a commitment string. Swap quotes for a Token 2022 quote mint require `quoteMint` and `currentEpoch`.
   - `getFeeOnAmount` and `splitFees` no longer take `poolFees`. `calculateBaseToQuoteFromAmountOut` and `calculateQuoteToBaseFromAmountOut` return `{ amountIn, nextSqrtPrice }`.
   - `getOrCreateATAInstruction(connection, mint, owner, payer, tokenProgram, commitment?)`: the `allowOwnerOffCurve` argument is gone and always on. `unwrapSOLInstruction` always returns an instruction.
   - `createDbcProgram` returns the `Program` instead of `{ program }`. `deriveEscrow` is `deriveLockerEscrowAddress`.
@@ -327,7 +327,7 @@ rss: true
 
   - Updated the DBC IDL to program version 0.2.1.
   - `getOrCreateATAInstruction` and `prepareTokenAccountTx` now accept an optional `commitment` (defaults to `confirmed`) and pass it through to the token account fetch.
-  - Synced the DAMM v2 IDL and test-validator `cp_amm.so` fixture to cp_amm 0.2.4. DAMM v2 configs now include a `permission` bitmask. Migration tests create a private DAMM v2 config with `CreatePoolWithoutMintValidation` so Token-2022 quote mints that need a DBC token badge can still migrate. Token-2022 wrapped SOL is still rejected.
+  - Synced the DAMM v2 IDL and test-validator `cp_amm.so` fixture to cp_amm 0.2.4. DAMM v2 configs now include a `permission` bitmask. Migration tests create a private DAMM v2 config with `CreatePoolWithoutMintValidation` so Token 2022 quote mints that need a DBC token badge can still migrate. Token 2022 wrapped SOL is still rejected.
 
   ### Deprecated
 
@@ -344,7 +344,7 @@ rss: true
 <Update
   label="dynamic-bonding-curve 0.2.0"
   description="Transfer Hook Support and Restricted Mint Authority"
-  rss="DBC dynamic-bonding-curve 0.2.0 adds Token-2022 transfer-hook support and restricted mint authority, with transfer-hook config, pool, swap, fee-claim, event parsing, and nested poolState layout updates. SDK 1.5.8."
+  rss="DBC dynamic-bonding-curve 0.2.0 adds Token 2022 transfer-hook support and restricted mint authority, with transfer-hook config, pool, swap, fee-claim, event parsing, and nested poolState layout updates. SDK 1.5.8."
 >
   <Info>
     Mainnet deployment for Release 0.2.0 is planned for June 3, 2026, at 11:00 AM UTC+8 (Wednesday).
@@ -377,7 +377,7 @@ rss: true
           <td><strong>Swap Routers</strong></td>
           <td>
             <ul>
-              <li>Token-2022 transfer-hook pool support</li>
+              <li>Token 2022 transfer-hook pool support</li>
               <li>New transfer-hook swap endpoint: <code>swap2_with_transfer_hook</code></li>
             </ul>
           </td>
@@ -417,7 +417,7 @@ rss: true
           <td>
             <ul>
               <li>Bump your SDK version to at least <code>@meteora-ag/dynamic-bonding-curve-sdk@1.5.8</code>. Use <code>1.5.9+</code> for the transfer-hook state-fetch fix.</li>
-              <li>For Token-2022 transfer-hook launches, create configs with <code>create_config_with_transfer_hook</code> and initialize pools with <code>initialize_virtual_pool_with_token2022_transfer_hook</code>.</li>
+              <li>For Token 2022 transfer-hook launches, create configs with <code>create_config_with_transfer_hook</code> and initialize pools with <code>initialize_virtual_pool_with_token2022_transfer_hook</code>.</li>
               <li>Only use <code>CreatorUpdateAndMintAuthority</code> or <code>PartnerUpdateAndMintAuthority</code> with transfer-hook configs. <code>create_config</code>, <code>initialize_virtual_pool_with_spl_token</code>, and <code>initialize_virtual_pool_with_token2022</code> now reject those options.</li>
             </ul>
           </td>
@@ -470,7 +470,7 @@ rss: true
 
   ### Added
 
-  - Added Token-2022 transfer-hook support for DBC pool configs and pools:
+  - Added Token 2022 transfer-hook support for DBC pool configs and pools:
       - `client.partner.createConfigWithTransferHook`
       - `client.partner.createConfigAndPoolWithTransferHook`
       - `client.partner.createConfigAndPoolWithFirstBuyWithTransferHook`
