@@ -1,0 +1,68 @@
+---
+title: "Token 2022 Support"
+sidebarTitle: "Token 2022 Support"
+description: "Which Token 2022 mints DLMM Pro accepts without review, when a token badge is needed, and how transfer fees, transfer hooks and memos are handled."
+llmsDescription: "Explains DLMM Pro Token 2022 support: SPL Token mints accepted, Token 2022 mints accepted without review when they only use TransferFeeConfig, MetadataPointer, TokenMetadata, or a TransferHook with no program and no authority, rejection of the Token 2022 native mint, token badges from the access registry program regUFehW9oycnaV2auYyfqyYjKG1W1uLNT7rtUeemQr with seeds token_badge and mint, UnsupportedMint and InvalidTokenBadge errors, the OnlyY quote token rule for SOL, USDC or badged mints, reward mint freeze authority rules, transfer-fee-included caps and transfer-fee-excluded minimums, transfer hook extra accounts in remaining accounts, memo transfers to accounts that require memos, and Token 2022 position and limit-order NFTs."
+---
+
+DLMM Pro pools accept SPL Token mints and Token 2022 mints. Most Token 2022 mints work without review; mints with extensions that change how transfers behave need a token badge first.
+
+## Mints That Work Without Review
+
+| Mint | Accepted |
+| --- | --- |
+| SPL Token | Yes |
+| Token 2022 with only `TransferFeeConfig`, `MetadataPointer` or `TokenMetadata` | Yes |
+| Token 2022 with a `TransferHook` extension whose program and authority are both unset | Yes |
+| Token 2022 with any other extension, or an active transfer hook | Needs a token badge |
+| The Token 2022 native mint | Never |
+
+Pool mints can keep a freeze authority. Reward mints set up by a pool creator cannot, unless they have a badge (see [Liquidity Mining](/core-products/dlmm-pro/liquidity-mining#reward-mints)).
+
+Creating a pool or a reward slot with a mint that needs a badge fails with `UnsupportedMint` if no badge is passed.
+
+## Token Badges
+
+A token badge is an account in Meteora's access registry program (`regUFehW9oycnaV2auYyfqyYjKG1W1uLNT7rtUeemQr`), derived from the seeds `"token_badge"` and the mint. Meteora creates badges after reviewing a token. Pass the badge account when creating a pool or reward slot with that mint; a badge for a different mint fails with `InvalidTokenBadge`.
+
+To request a badge, complete the [Token 2022 Whitelist Request Form](https://forms.gle/59n3zDiGS2C6qMfd7) with the mint address, the extensions you need and that the pool is on DLMM Pro, then open a ticket in the [Meteora Discord](https://discord.gg/meteora).
+
+<Warning>
+  Do not include your launch date or time in the form or the ticket. Launch timing is not part of the review.
+</Warning>
+
+## Fee Token Rule
+
+A pool with the `OnlyY` collect fee mode earns every fee in token Y, so token Y must be SOL, USDC, or a mint with a token badge. This applies even to dynamic configs that skip the other mint checks.
+
+## Transfer Fees
+
+When a mint charges a transfer fee, the amount that leaves a wallet and the amount that arrives differ. DLMM Pro instructions are consistent about which side each amount is on:
+
+- **Caps** on what you pay (deposit maximums, order amounts, reward funding) include the transfer fee.
+- **Minimums** on what you receive (swap output, withdrawals, claims) are measured after the transfer fee.
+
+Swap quotes from the SDK and the Rust crate account for the transfer fee on both the input and the output.
+
+## Transfer Hooks
+
+For a mint with a badged transfer hook, every transfer runs the hook program, which needs extra accounts. These go in the instruction's remaining accounts, in one slice per transfer. The TypeScript SDK resolves them for you when you leave them out. It resolves them as if the transfer amount were zero, so a hook whose accounts depend on the amount needs them passed explicitly.
+
+## Memos
+
+When the program sends tokens to an account that requires memos on incoming transfers, it adds the memo itself. Swaps, withdrawals, fee and reward claims, limit order cancels and partner fee claims all do this.
+
+## Position and Order NFTs
+
+Positions and limit orders are Token 2022 NFTs regardless of the pool's mints. The NFT lives in its owner's associated token account under the Token 2022 program.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Pool Creation and Activation" href="/core-products/dlmm-pro/pool-creation-and-activation" icon="rocket">
+    Where badges are passed when creating a pool.
+  </Card>
+  <Card title="TypeScript SDK Reference" href="/developer-guides/dlmm-pro/typescript-sdk/reference" icon="code">
+    Transfer fee helpers and transfer hook resolution.
+  </Card>
+</CardGroup>

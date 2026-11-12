@@ -1,0 +1,138 @@
+---
+title: "DLMM Pro Rust Library"
+sidebarTitle: "Commons Library"
+description: "Use the dlmm-pro-commons Rust crate to parse DLMM Pro accounts, select tick arrays and quote exact-in swaps with the program's own math."
+llmsDescription: "Guide to dlmm-pro-commons, the Rust crate for DLMM Pro integrators and aggregators. Covers installing from git, declare_program!(dlmm_pro) types and the client accounts and args modules, why AccountDeserialize panics on accounts with a dynamic tail, DynamicPool, DynamicTickArray, DynamicPositionArray, DynamicLimitOrder and DynamicOracle parsers, deserialize_anchor_pod_account, tick_arrays_for_swap and quote_exact_in with QuoteExactInParams and QuoteExactInResult, snapshot semantics of the quote, swap remaining accounts order with transfer hook slices and tick arrays, remaining_accounts_from_hooks, Token 2022 transfer fee and transfer hook helpers, claimable_fees, claimable_rewards, get_amounts_from_liquidity, and PDA helpers."
+---
+
+`dlmm-pro-commons` is a Rust crate for off-chain DLMM Pro integrations, aimed at aggregators and quoting services. It parses DLMM Pro accounts and quotes exact-in swaps with a port of the program's swap loop, including the dynamic fee, limit order fills and Token 2022 transfer fees.
+
+It has no RPC client and no instruction builders. You fetch accounts however you like and build instructions from the generated `dlmm_pro::client` types.
+
+## Installation
+
+The crate is not published to crates.io. Depend on it from git, pinned to a commit:
+
+```toml
+[dependencies]
+dlmm-pro-commons = { git = "https://github.com/MeteoraAg/dlmm-pro-sdk", rev = "<commit>" }
+```
+
+`dlmm-pro-commons` 0.1.0 matches DLMM Pro program 0.1.0. It re-exports `anchor_lang`, so use `dlmm_pro_commons::anchor_lang` to keep your Anchor version in step with the crate's.
+
+## What's in the Crate
+
+| Area | Items |
+| --- | --- |
+| Program types | `declare_program!(dlmm_pro)`: account and type structs, `dlmm_pro::ID`, and `dlmm_pro::client::{accounts, args}` for building instructions |
+| Account parsers | `DynamicPool`, `DynamicTickArray`, `DynamicPositionArray`, `DynamicLimitOrder`, `DynamicOracle`, `deserialize_anchor_pod_account` |
+| Swaps | `tick_arrays_for_swap`, `quote_exact_in`, `QuoteExactInParams`, `QuoteExactInResult` |
+| Positions and orders | `tick_arrays_for_tick_ids`, `get_amounts_from_liquidity`, `claimable_fees`, `claimable_rewards` |
+| Token 2022 | `calculate_transfer_fee_excluded_amount`, `calculate_transfer_fee_included_amount`, `get_extra_account_metas_for_transfer_hook`, `remaining_accounts_from_hooks` |
+| Addresses and constants | `derive_pool`, `derive_launch_pool`, `derive_tick_array`, `derive_tick_array_bitmap_extension`, `derive_position`, `derive_limit_order`, `derive_oracle`, `derive_reserve`, `derive_reward_vault` and the rest, program constants, `PoolError` |
+
+## Parsing Accounts
+
+Pools, tick arrays, position arrays, limit orders and oracles have a fixed header followed by a variable tail. The structs from `declare_program!` describe only the header, so their `AccountDeserialize` panics on these accounts. Use the `Dynamic*` parsers instead.
+
+Parse the pool first. Whether the pool has the `LiquidityMining` extension changes the layout of its ticks and positions, so the tick array and position array parsers take the parsed pool:
+
+```rust
+use dlmm_pro_commons::*;
+
+let pool = DynamicPool::deserialize(&pool_data)?;
+let tick_array = DynamicTickArray::deserialize(&tick_array_data, &pool.pool)?;
+let positions = DynamicPositionArray::deserialize(&position_array_data, &pool.pool)?;
+```
+
+`DynamicPool` also exposes the reward slots (`pool_reward`) and activation rules (`pool_activation`) when the pool has those extensions. Accounts without a tail, such as `TickArrayBitmapExtension` and the configs, parse with `deserialize_anchor_pod_account`.
+
+## Quoting a Swap
+
+`tick_arrays_for_swap` picks the tick arrays holding liquidity in the swap direction, in the order the swap instruction reads them. `quote_exact_in` then runs the swap over those parsed accounts.
+
+```rust
+use dlmm_pro_commons::anchor_lang::prelude::{Clock, Pubkey, Result};
+use dlmm_pro_commons::*;
+
+/// Quote selling `input_amount` of token X for token Y.
+/// `fetch` returns an account's data, from RPC or your own account cache.
+pub fn quote_sell_x(
+    pool_address: Pubkey,
+    input_amount: u64,
+    clock: &Clock,
+    fetch: impl Fn(&Pubkey) -> Vec<u8>,
+) -> Result<(QuoteExactInResult, Vec<Pubkey>)> {
+    let swap_for_y = true;
+    let pool = DynamicPool::deserialize(&fetch(&pool_address))?;
+
+    let extension = if pool.pool.is_bitmap_extension_initialized() {
+        let data = fetch(&derive_tick_array_bitmap_extension(pool_address));
+        Some(deserialize_anchor_pod_account::<TickArrayBitmapExtension>(&data)?)
+    } else {
+        None
+    };
+
+    // The swap's remaining accounts, in traversal order
+    let tick_array_addresses =
+        tick_arrays_for_swap(pool_address, &pool.pool, extension.as_ref(), swap_for_y, 3)?;
+    let tick_arrays = tick_array_addresses
+        .iter()
+        .map(|address| DynamicTickArray::deserialize(&fetch(address), &pool.pool))
+        .collect::<Result<Vec<_>>>()?;
+
+    let input_mint_data = fetch(&pool.pool.token_x_mint);
+    let output_mint_data = fetch(&pool.pool.token_y_mint);
+    let quote = quote_exact_in(QuoteExactInParams {
+        pool_address,
+        pool: &pool,
+        tick_arrays: &tick_arrays,
+        bitmap_extension: extension.as_ref(),
+        input_amount,
+        swap_for_y,
+        has_referral: false,
+        swapper: None,
+        clock,
+        input_mint_data: &input_mint_data,
+        output_mint_data: &output_mint_data,
+    })?;
+
+    Ok((quote, tick_array_addresses))
+}
+```
+
+Reading the result:
+
+| Field | Meaning |
+| --- | --- |
+| `amount_left` | Input the loaded tick arrays could not fill. The on-chain swap fails with `NotConsumingFullAmountIn` unless this is 0; load more arrays or quote less. |
+| `transfer_fee_excluded_out_amount` | What the swapper receives, after the output mint's transfer fee. The program compares this with `minimum_output_amount`. |
+| `consumed_in_amount`, `transfer_fee_in` | Input the pool takes, and the input mint's transfer fee. |
+| `mm_fee`, `limit_order_fee`, `protocol_fee`, `host_fee`, `partner_fee` | How the trading fee splits. |
+| `next_sqrt_price`, `next_tick_id`, `next_liquidity` | Pool state after the swap. |
+
+The quote is a snapshot. It does not write the oracle, fee growth, reward growth, activation state or the post-swap volatility, so reparse the accounts before quoting the next swap on the same pool. `swapper: None` is conservative: on a pool that is not active yet it fails rather than assume the swapper is whitelisted.
+
+## Building the Swap Instruction
+
+Use `dlmm_pro::client::accounts::Swap` and `dlmm_pro::client::args::Swap` to build the instruction. The remaining accounts go in this order:
+
+1. Transfer hook accounts for each mint that has a hook, as slices described by the `remaining_accounts_info` argument. `remaining_accounts_from_hooks` builds both the slice list and the account list.
+2. The tick arrays from `tick_arrays_for_swap`, writable, in the same order you quoted with.
+
+`get_extra_account_metas_for_transfer_hook` resolves a hook's extra accounts through a fetch callback you provide. Mints without a transfer hook need no slice.
+
+## Positions and Limit Orders
+
+`tick_arrays_for_tick_ids` returns the tick arrays holding a set of ticks, sorted by index, which is the order the position and limit order instructions expect. `claimable_fees` and `claimable_rewards` preview what a claim would transfer, as long as every slot holding liquidity is refreshed by that claim.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Program Accounts" icon="table-cells" iconType="solid" href="/developer-guides/dlmm-pro/program/accounts">
+    Account layouts, PDA seeds and dynamic tails.
+  </Card>
+  <Card title="Commons README" icon="github" iconType="solid" href="https://github.com/MeteoraAg/dlmm-pro-sdk/tree/main/commons">
+    Crate source, tests and notes.
+  </Card>
+</CardGroup>

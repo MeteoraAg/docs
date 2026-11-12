@@ -1,0 +1,683 @@
+---
+title: "DLMM Pro TS SDK Reference"
+sidebarTitle: "Reference"
+description: "Look up every @meteora-ag/dlmm-pro-sdk export: DlmmProClient services, pure helpers, program IDs, enums, constants and errors."
+llmsDescription: "Reference for the DLMM Pro TypeScript SDK @meteora-ag/dlmm-pro-sdk 0.1.0. Covers dependencies, program IDs, DlmmProClient and its pool, position, limitOrder, reward and state services, builder conventions (token accounts, wrapped SOL, transfer hooks, signers), position slots and bitmaps, limit orders, quoteExactIn, tickArraysForSwap, transfer fee helpers, liquidity shapes, tick helpers, PDA helpers, account codecs, base fee and activation builders, dynamic fee parameters, enums, constants, PoolError and PoolErrorCode."
+---
+
+The package exports `DlmmProClient` plus pure helpers for quoting, liquidity shapes, ticks, PDAs, fees and activation. Every builder returns an unsigned transaction with the fee payer set and no recent blockhash. You sign it and send it.
+
+```typescript
+import {
+  DlmmProClient,
+  PoolError,
+  BaseFeeMode,
+  StrategyType,
+  baseFeeParameters,
+  buildLiquidityShape,
+  derivePool,
+  getDynamicFeeParams,
+  quoteExactIn,
+  tickArraysForSwap,
+} from "@meteora-ag/dlmm-pro-sdk";
+```
+
+## Dependencies
+
+| Package | Use |
+| --- | --- |
+| `@coral-xyz/anchor` | Program client and IDL types. |
+| `@coral-xyz/borsh` | Account layout decoding. |
+| `@solana/spl-token` | Token and Token 2022 accounts, mints, transfer fees and transfer hooks. |
+| `@solana/web3.js` | Connections, transactions, instructions and public keys. |
+| `bn.js` | Integer inputs and return values. |
+| `decimal.js` | Tick prices. |
+
+## Program IDs
+
+| Constant | Address |
+| --- | --- |
+| `DLMM_PRO_PROGRAM_ID` | `dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n` |
+| `ACCESS_REGISTRY_PROGRAM_ID` | `regUFehW9oycnaV2auYyfqyYjKG1W1uLNT7rtUeemQr` |
+
+`DLMM_PRO_PROGRAM_ID` is the same on mainnet and devnet. For another deployment, pass its address as the `programId` argument of the `DlmmProClient` constructor. The SDK rewrites the IDL address and the pool authority PDA to match.
+
+## Creating a Client
+
+```typescript
+new DlmmProClient(connection, commitment?, programId?)
+```
+
+| Argument | Type | Default |
+| --- | --- | --- |
+| `connection` | `Connection` | - |
+| `commitment` | `Commitment` | `"confirmed"`, used for every account read |
+| `programId` | `PublicKey` | `DLMM_PRO_PROGRAM_ID` |
+
+```typescript
+import { Connection } from "@solana/web3.js";
+import { DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+const client = new DlmmProClient(connection);
+```
+
+| Property | Type | Use |
+| --- | --- | --- |
+| `connection` | `Connection` | RPC connection. |
+| `commitment` | `Commitment` | Commitment for account reads. |
+| `program` | `Program<DlmmProTypes>` | Anchor program with a read-only provider. |
+| `pool` | `PoolService` | Pool creation, swaps, oracle and partner fees. |
+| `position` | `PositionService` | Positions and liquidity. |
+| `limitOrder` | `LimitOrderService` | Limit orders. |
+| `reward` | `RewardService` | Liquidity mining rewards. |
+| `state` | `StateService` | Account fetching and decoding. |
+
+### Builder Conventions
+
+- Builders return `{ tx, ... }`. `tx` is an unsigned `Transaction` with `feePayer` set and no recent blockhash. `sendAndConfirmTransaction(connection, tx, signers)` fills in the blockhash.
+- User token accounts are optional. Each defaults to the associated token account of the wallet its parameter names.
+- The builder creates a missing associated token account, funded by the fee payer. An account you pass explicitly is used as is.
+- For native SOL, the builder wraps the shortfall of the amount being paid from the owner's lamports and closes the owner's wrapped SOL account at the end, so the owner signs. A delegate withdrawing native SOL leaves that account open. `initializeLaunchPool` wraps 1 lamport when its SOL proof account is empty.
+- Token 2022 transfer-hook accounts are resolved from the mint for every transfer. Pass `transferHookX`, `transferHookY`, `transferHookReferral` or `transferHookReward` to override. An explicit array, including `[]`, is sent as given.
+- Builders read the accounts they need (pool, mints, transfer-hook accounts) at the client's commitment.
+- `state.fetchTokenBadge` always reads `ACCESS_REGISTRY_PROGRAM_ID`.
+- Operator and admin instructions are not wrapped. Build them with `client.program.methods.<instruction>(...).instruction()` or `.transaction()`. The program has a read-only provider and cannot send.
+
+`createDlmmProProgram(connection, programId?)` and `createAccessRegistryProgram(connection)` return the Anchor programs the client uses, each with a read-only provider.
+
+## Pool Service
+
+`client.pool`.
+
+| Method | Use | Signers |
+| --- | --- | --- |
+| `quoteExactIn(params)` | Fetch pool state and tick arrays, quote an exact-in swap and return the accounts `swap` needs. | - |
+| `swap(params)` | Build an exact-in swap. | `user` |
+| `initializePoolWithStaticConfig(params)` | Create a pool from a static config. | `payer`, plus the config's `poolCreatorAuthority` when set |
+| `initializePoolWithDynamicConfig(params)` | Create a pool with caller-chosen fees, spacing, activation and extensions. | `payer`, `poolCreatorAuthority` |
+| `initializeLaunchPool(params)` | Create a launch pool keyed by its mint pair, with no config. | `payer` |
+| `initializeTickArray(params)` | Create the tick array account for one index. | `funder` |
+| `initializeTickBitmapExtension(params)` | Create the pool's tick array bitmap extension. | `funder` |
+| `increaseOracleLength(params)` | Grow the oracle by `lengthToAdd` observations, up to 500 in total. | `payer` |
+| `claimPartnerFee(params)` | Withdraw the pool partner's accrued fees. | `signer` |
+
+The three initializers return `{ tx, pool, oracle, reserveX, reserveY, tickArrayBitmapExtension, tokenXProgram, tokenYProgram, tokenBadgeX, tokenBadgeY }`. `openPosition`, `expandPosition` and `openLimitOrder` create the tick arrays they need, so call `initializeTickArray` only to create one ahead of time.
+
+A mint needs a token badge from the access registry when it is a Token 2022 mint with an extension other than a transfer fee, metadata, or a transfer hook with neither a program nor an authority. Pass `tokenBadgeX` or `tokenBadgeY` from `deriveTokenBadge`. A config with `DynamicConfigPermission.CreatePoolWithoutMintValidation` skips the badge check.
+
+### Quote Then Swap
+
+`quoteExactIn` returns the tick arrays the quote used. Pass them to `swap` only when `quote.amountLeft` is zero. Otherwise the program reverts with `NotConsumingFullAmountIn`. The dynamic fee and scheduled base fees can change before the swap lands, so set `minimumOutputAmount` below `transferFeeExcludedOutAmount`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import { DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+const client = new DlmmProClient(connection);
+
+async function swapWithSlippage(pool: PublicKey, user: Keypair) {
+  const inputAmount = new BN(1_000_000);
+  const { quote, tickArrays, tickArrayBitmapExtension } =
+    await client.pool.quoteExactIn({
+      pool,
+      inputAmount,
+      swapForY: true,
+      swapper: user.publicKey,
+    });
+  if (!quote.amountLeft.isZero()) {
+    throw new Error("Not enough liquidity in the loaded tick arrays");
+  }
+
+  // Accept up to 0.5% less than quoted.
+  const minimumOutputAmount = quote.transferFeeExcludedOutAmount
+    .muln(9_950)
+    .divn(10_000);
+
+  const poolState = await client.state.fetchPool(pool);
+  const { tx } = await client.pool.swap({
+    pool,
+    tokenXMint: poolState.tokenXMint,
+    tokenYMint: poolState.tokenYMint,
+    user: user.publicKey,
+    swapForY: true,
+    tickArrays,
+    tickArrayBitmapExtension,
+    parameters: { inputAmount, minimumOutputAmount },
+  });
+  return sendAndConfirmTransaction(connection, tx, [user]);
+}
+```
+
+### Pool Parameters with a Dynamic Config
+
+`initializePoolWithDynamicConfig` and `initializeLaunchPool` take `InitializePoolWithDynamicParameters`. The builder validates it before building and throws a `PoolError` on the first violation. With the `ActivationAccess` extension, `poolActivation` is required and `activationPoint` defaults to the current slot or timestamp. Without it, both must be `null`.
+
+```typescript
+import { Keypair, PublicKey } from "@solana/web3.js";
+import {
+  ActivationType,
+  BaseFeeMode,
+  CollectFeeMode,
+  PoolExtension,
+  baseFeeParameters,
+  bondingCurveActivationParameters,
+  encodePoolExtensions,
+  getDynamicFeeParams,
+  getSqrtPriceFromTickId,
+  openActivationParameters,
+  type InitializePoolWithDynamicParameters,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+function launchParameters(
+  creator: Keypair,
+): InitializePoolWithDynamicParameters {
+  return {
+    poolFees: {
+      baseFeeParameter: baseFeeParameters({
+        baseFeeMode: BaseFeeMode.MarketCapSchedulerExponential,
+        startingBaseFeeBps: 1000, // 10%
+        endingBaseFeeBps: 25, // 0.25%
+        numberOfPeriod: 50,
+        priceMultiple: 100,
+        schedulerExpirationDuration: 86_400,
+      }),
+      dynamicFeeParameter: getDynamicFeeParams(25, 1),
+    },
+    tickSpacing: 10,
+    collectFeeMode: CollectFeeMode.OutputToken,
+    initialSqrtPrice: getSqrtPriceFromTickId(0),
+    activationType: ActivationType.Timestamp,
+    activationPoint: null,
+    extensions: encodePoolExtensions([PoolExtension.ActivationAccess]),
+    poolActivation: {
+      whitelistedSwap: PublicKey.default,
+      whitelistedAddLiquidity: creator.publicKey, // seeds the pool before the target
+      whitelistedRemoveLiquidity: PublicKey.default,
+      activations: [
+        openActivationParameters(),
+        bondingCurveActivationParameters({ targetIncreaseBps: 20_000 }),
+      ],
+    },
+  };
+}
+```
+
+## Position Service
+
+`client.position`. A position is a Token 2022 NFT plus a position array of up to `POSITION_MAX_RANGE` (45) slots. Each slot is a `TickRange` (`[tickLowerId, tickUpperId)`) with its own liquidity, fees and rewards.
+
+| Method | Use | Signers |
+| --- | --- | --- |
+| `openPosition(params)` | Mint a position NFT and create its position array with the given ranges. | `payer`, `nftMint` keypair |
+| `addLiquidity(params)` | Deposit explicit liquidity into selected slots. | `signer` |
+| `addLiquidityByWeight(params)` | Deposit `multiplier * weight` liquidity into each selected slot. | `signer` |
+| `addLiquidityImbalance(params)` | Deposit into one slot from wallet balances at execution, capped per side. | `signer` |
+| `removeLiquidity(params)` | Withdraw explicit liquidity from selected slots. | `signer` |
+| `removeLiquidityByBps(params)` | Withdraw a share of the unlocked liquidity of selected slots. | `signer` |
+| `claimFee(params)` | Refresh selected slots and transfer pending fees. | `signer` |
+| `getClaimableFees(params)` | Compute what `claimFee` would transfer. Read only. | - |
+| `compoundFees(params)` | Refresh, claim and redeposit fees into one slot in one transaction. | `signer` |
+| `expandPosition(params)` | Append slots to a position. | `signer`, `payer` |
+| `removePosition(params)` | Delete empty slots. | `signer` |
+| `closePosition(params)` | Close an empty position and burn its NFT. | `owner` |
+| `lockPermanentPosition(params)` | Permanently lock a share of the unlocked liquidity. | `owner` |
+| `lockVestingPosition(params)` | Lock a share and release it on a cliff-plus-periods schedule. | `owner` |
+| `refreshFeesAndRewards(params)` | Bring fee and reward checkpoints of selected slots up to date without a transfer. | `signer` |
+| `updatePositionDelegatePermission(params)` | Set the permissions of the approved delegate. | `owner` |
+
+### Slots, Bitmaps and Layout Version
+
+Instructions that act on some slots take a `bitmap` of slot indexes (`liquidityBitmap`) and the `tickRanges` of those slots. The builder passes the tick arrays of those ranges to the program. Slot `i` of a new position is `tickRanges[i]`.
+
+`expandPosition` and `removePosition` change the slot layout and increase the position's `layoutVersion`. Instructions that take `expectedLayoutVersion` fail with `InvalidLayoutVersion` when it no longer matches. Pass the `layoutVersion` you read the slots with, or `null` to skip the check.
+
+The owner can approve a delegate on the NFT account with a Token 2022 `approve` of amount 0, then grant permissions with `updatePositionDelegatePermission`. When a delegate signs an instruction that pays out tokens, each account receiving a non-zero amount must be the owner's associated token account, or the program fails with `IncorrectATA`.
+
+The liquidity builders share these account fields:
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `pool` | `PublicKey` | - |
+| `nftMint` | `PublicKey` | - |
+| `owner` | `PublicKey` | - |
+| `signer` | `PublicKey` | Owner or an approved delegate. Fee payer. |
+| `tokenXMint`, `tokenYMint` | `PublicKey` | - |
+| `userTokenX`, `userTokenY` | `PublicKey` | The signer's associated token account for a deposit, the owner's for a withdrawal |
+| `tokenXProgram`, `tokenYProgram` | `PublicKey` | From the pool's token flag |
+| `nftAccount` | `PublicKey` | `findNftAccount(nftMint, owner)` |
+| `tickArrayBitmapExtension` | `PublicKey` or `null` | The pool's extension when a range's tick array lies outside the inline bitmap |
+| `tickRanges` | `TickRange[]` | Ranges of the slots the instruction touches |
+| `transferHookX`, `transferHookY` | `AccountMeta[]` | Resolved from the mint |
+
+### Deposit by Weight
+
+`buildLiquidityShape` gives every tick column a weight and groups the columns into position ranges. `multiplierFromAmounts` sizes the deposit to your token budgets, and `encodeAddLiquidityByWeight` builds the `parameters`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  LiquidityLayout,
+  StrategyType,
+  buildLiquidityShape,
+  encodeAddLiquidityByWeight,
+  multiplierFromAmounts,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+const client = new DlmmProClient(connection);
+
+// The position behind nftMint was opened with tickRanges: shape.ranges.
+async function depositByWeight(
+  pool: PublicKey,
+  nftMint: PublicKey,
+  owner: Keypair,
+) {
+  const poolState = await client.state.fetchPool(pool);
+  const { tickSpacing, tickCurrentId } = poolState;
+  const aligned = Math.floor(tickCurrentId / tickSpacing) * tickSpacing;
+
+  const shape = buildLiquidityShape({
+    strategy: StrategyType.Curve,
+    minTickId: aligned - 10 * tickSpacing,
+    maxTickId: aligned + 10 * tickSpacing,
+    tickSpacing,
+    currentTickId: tickCurrentId,
+    layout: LiquidityLayout.Horizontal,
+  });
+
+  const amountX = new BN(1_000_000);
+  const amountY = new BN(1_000_000);
+  const multiplier = multiplierFromAmounts({
+    ranges: shape.ranges,
+    tickSpacing,
+    currentTickId: tickCurrentId,
+    currentSqrtPrice: poolState.sqrtPrice,
+    amountX,
+    amountY,
+    mintX: null, // unpacked Token 2022 mints for transfer-fee tokens
+    mintY: null,
+    epoch: 0n,
+  });
+
+  const { tx } = await client.position.addLiquidityByWeight({
+    pool,
+    nftMint,
+    owner: owner.publicKey,
+    signer: owner.publicKey,
+    tokenXMint: poolState.tokenXMint,
+    tokenYMint: poolState.tokenYMint,
+    tickRanges: shape.ranges,
+    parameters: encodeAddLiquidityByWeight({
+      ranges: shape.ranges,
+      maxAmountX: amountX,
+      maxAmountY: amountY,
+      multiplier,
+    }),
+  });
+  return sendAndConfirmTransaction(connection, tx, [owner]);
+}
+```
+
+## Limit Order Service
+
+`client.limitOrder`.
+
+| Method | Use | Signers |
+| --- | --- | --- |
+| `openLimitOrder(params)` | Mint a limit-order NFT and place the order. | `payer`, `owner`, `nftMint` keypair |
+| `cancelLimitOrder(params)` | Cancel the order at the given ticks and withdraw what they hold. | `signer` |
+| `closeLimitOrder(params)` | Close a fully canceled order and burn its NFT. | `owner` |
+| `updateLimitOrderDelegatePermission(params)` | Set the permissions of the approved delegate. | `owner` |
+
+A limit order is a Token 2022 NFT plus a limit-order account holding up to `LIMIT_ORDER_MAX_TICK` (25) ticks, all on one side. An ask (`isAskSide: true`) sells token X at ticks strictly above the current tick. A bid buys token X with token Y at ticks at or below it. A swap fills the orders at a tick once the price reaches it. On cancel the owner receives the unfilled amount, the filled proceeds and the order's share of the limit-order fee.
+
+With `relativeTick` set, each `ticks[].id` is an offset, in tick-spacing units, from the current tick aligned down to the spacing at execution. The program rejects the order with `ExceededSlippage` when that aligned tick has left `[spacingAlignedMinTickId, spacingAlignedMaxTickId]`. Without `relativeTick`, `ticks[].id` are absolute tick ids. `relativeTickFromSlippage` builds the band and `limitOrderTicksFromShape` builds the ticks from a liquidity shape.
+
+## Reward Service
+
+`client.reward`. Rewards need the `PoolExtension.LiquidityMining` extension. Without it the program fails with `InvalidPoolType`. A pool has `NUM_REWARDS` (2) reward slots. The pool creator initializes slot `CREATOR_REWARD_INDEX` (0) and assigns its reward authority. Operator-managed slots are set up with `client.program.methods`.
+
+| Method | Use | Signers |
+| --- | --- | --- |
+| `initializeReward(params)` | Initialize the creator's reward slot with a mint and an authority. | `creator`, `payer` |
+| `updateRewardAuthority(params)` | Replace the authority of the creator's reward slot. | `creator` |
+| `setRewardEmission(params)` | Fund a reward slot and start its emission. | `funder`, `authority` |
+| `claimReward(params)` | Refresh selected slots and transfer the pending reward from one reward slot. | `signer` |
+| `withdrawIneligibleRewards(params)` | Withdraw the reward a slot emitted while the pool had no liquidity. | `authority` |
+
+## State Service
+
+`client.state` fetches and decodes program accounts at the client's commitment. Each method throws an `Error` when the account does not exist or is not owned by the program. The `fetch*` methods return the Anchor-decoded account. Pool, position-array, tick-array, limit-order and oracle accounts also carry a variable tail that the `*With*` and `decode*` methods decode. `withReward` must match the pool's liquidity mining extension, because it changes the size of each position and tick.
+
+| Method | Argument | Returns |
+| --- | --- | --- |
+| `fetchPool(poolAddress)` | Pool address | `Pool` account |
+| `fetchPoolWithExtensions(poolAddress)` | Pool address | `{ pool, extensions }` with decoded reward slots and activation parameters |
+| `fetchPositionArrayWithPositions(address, opts)` | `derivePosition(nftMint)`, `opts.withReward` | `{ positionArray, positions }`, one entry per slot |
+| `fetchTickArraysWithTicks(addresses, opts)` | Tick array addresses, `opts.withReward` | One `{ tickArray, ticks }` per address, in order |
+| `decodeLimitOrderData(address)` | `deriveLimitOrder(nftMint)` | `DecodedLimitOrderData[]`, one per tick |
+| `decodeObservations(address)` | `deriveOracle(pool)` | `DecodedObservation[]` |
+| `fetchTokenBadge(address)` | `deriveTokenBadge(tokenMint)` | `TokenBadge`: `tokenMint`, `mintScore` |
+| `fetchStaticConfig(address)` | `deriveStaticConfig(index)` | `StaticConfig` |
+| `fetchDynamicConfig(address)` | `deriveDynamicConfig(poolCreatorAuthority, index)` | `DynamicConfig` |
+| `fetchPositionArray(address)` | `derivePosition(nftMint)` | `PositionArray` header: `pool`, `nftMint`, `delegatePermission`, `layoutVersion`, `vesting` |
+| `fetchLimitOrder(address)` | `deriveLimitOrder(nftMint)` | `LimitOrder` header: `pool`, `nftMint`, `referral`, `delegatePermission` |
+| `fetchTickArray(address)`, `fetchTickArrayBitmapExtension(address)` | `deriveTickArray(pool, index)`, `deriveTickArrayBitmapExtension(pool)` | `TickArray` header, `TickArrayBitmapExtension` |
+| `fetchOperator(address)`, `fetchOracle(address)` | `deriveOperator(whitelistedAddress)`, `deriveOracle(pool)` | `Operator`, `Oracle` header |
+| `decodePositions(address, opts?)` | `derivePosition(nftMint)`, `opts.withReward` defaults to the pool's extension | Position slots, as `fetchPositionArrayWithPositions` |
+| `decodeTicks(address, opts)` | `deriveTickArray(pool, index)`, `opts.withReward` | Ticks, as `fetchTickArraysWithTicks` |
+
+## Quote Helpers
+
+`client.pool.quoteExactIn` reads the accounts for you. The pure `quoteExactIn` export runs the program's exact-in swap over accounts you already hold, for example from a subscription. It applies dynamic and scheduled fees, market-maker and limit-order liquidity, the collect-fee mode, the protocol, host and partner fee split, and Token 2022 transfer fees. Nothing is fetched.
+
+| Function | Use |
+| --- | --- |
+| `quoteExactIn(params)` | Quote a swap from a `Pool`, its tick arrays, an optional bitmap extension, the clock and unpacked Token 2022 mints. Returns `QuoteExactInResult`. |
+| `tickArraysForSwap(args)` | Select the initialized tick arrays a swap traverses, in instruction order. Returns `{ tickArrays, requiresBitmapExtension }`. |
+| `calculateTransferFeeExcludedAmount(mint, epoch, amount)` | Amount that arrives when `amount` is sent. Returns `TransferFeeAmount`. |
+| `calculateTransferFeeIncludedAmount(mint, epoch, amount)` | Amount to send so that `amount` arrives. Returns `TransferFeeAmount`. |
+
+Pass the swap's tick arrays in traversal order: descending indexes when `swapForY`, ascending otherwise. `tickArraysForSwap` returns the first `maxTickArrays` (default 3) arrays with liquidity from the current tick onward. With `amountLeft` zero, the quote matches what `swap` produces against the same accounts and clock. The pure quote throws `InvalidParameters` when a Token 2022 side has no unpacked mint, and `BitmapExtensionAccountIsNotProvided` when the traversal leaves the inline bitmap without `bitmapExtension`.
+
+`QuoteExactInResult` fields:
+
+| Field | Meaning |
+| --- | --- |
+| `consumedInAmount` | Input the pool takes, after `transferFeeIn`. |
+| `transferFeeIn`, `transferFeeOut` | Transfer fees on the input and output mints. |
+| `amountLeft` | Input the loaded tick arrays could not take. The swap reverts unless this is zero. |
+| `outAmount` | Output the pool sends, before `transferFeeOut`. |
+| `transferFeeExcludedOutAmount` | What the swapper receives. Compare with `minimumOutputAmount`. |
+| `mmFee`, `limitOrderFee` | Fees to market-maker liquidity and to filled limit orders. |
+| `protocolFee` | Protocol share, after the host and partner fees. |
+| `hostFee`, `partnerFee` | Paid to the referral account, accrued to the pool partner. |
+| `feesOnTokenX` | Whether fees are taken in token X. |
+| `nextSqrtPrice`, `nextTickId`, `nextLiquidity` | Pool state after the swap. |
+| `consumedTickArrayIndexes` | Tick array indexes the swap touched, in order. |
+
+## Liquidity Shape Helpers
+
+A liquidity shape gives every tick column `[tickId, tickId + tickSpacing)` an integer weight up to `MAX_LIQUIDITY_WEIGHT` (255) and groups the columns into position ranges. `addLiquidityByWeight` deposits `multiplier * weight` liquidity into each range, so the weights set the profile and the multiplier sets the size.
+
+| Function | Use |
+| --- | --- |
+| `buildLiquidityShape(args)` | Build columns and ranges for `Spot`, `Curve`, `BidAsk` or `Custom` weights. |
+| `multiplierFromAmounts(args)` | Largest multiplier whose deposit, with transfer fees, fits both token budgets. |
+| `encodeAddLiquidityByWeight(args)` | Build the `parameters` of `addLiquidityByWeight` from shape ranges. |
+| `amountsFromShape(args)` | Deposit of each range for a multiplier, excluding transfer fees. |
+| `limitOrderTicksFromShape(args)` | Turn one side of a shape into `ticks` and a total `amount` for `openLimitOrder`. |
+| `relativeTickFromSlippage(args)` | Build the `relativeTick` band from the current tick and a slippage in ticks. |
+| `tickPrice(tickId)` | Price in atoms of token Y per atom of token X, as a `Decimal`. |
+| `tickUiPrice(tickId, decimalsX, decimalsY)` | Price in whole tokens Y per whole token X. |
+
+`Spot` weighs every column equally. `Curve` is heaviest at the column holding the current tick and `BidAsk` is lightest there. `LiquidityLayout.Vertical` (default) merges adjacent columns of equal weight into side-by-side ranges. `Horizontal` stacks overlapping ranges, which usually needs fewer ranges for `Curve` and `BidAsk`. `maxRanges` coarsens the weights until the ranges fit. A shape needing more than `POSITION_MAX_RANGE` ranges throws `InvalidParameters`.
+
+`limitOrderTicksFromShape` takes `unitAmount` or `totalAmount`, not both. From `totalAmount` the unit is `totalAmount / totalWeight` rounded down, so up to `totalWeight - 1` stays unspent. The returned `amount` excludes the transfer fee.
+
+## Liquidity and Position Helpers
+
+| Function | Use |
+| --- | --- |
+| `getLiquidityFromAmounts(args)` | Largest liquidity two pool-side token budgets fund in a range at the current price. |
+| `getAmountsFromLiquidity(args)` | Pool-side token amounts a liquidity change moves. Positive liquidity rounds up, negative rounds down. |
+| `liquidityBitmap(positionIndexes)` | Slot bitmap for the position instructions. Indexes must be below `POSITION_MAX_RANGE` with no duplicates. |
+| `positionIndexesFromBitmap(bitmap)` | Slot indexes set in a bitmap, ascending. |
+| `positionTotalLiquidity(position)` | `unlockedLiquidity + permanentLockedLiquidity + vestingLiquidity`, the liquidity that earns fees. |
+| `positionDelegatePermissionMask(permissions)` | Mask for `updatePositionDelegatePermission`. |
+| `limitOrderDelegatePermissionMask(permissions)` | Mask for `updateLimitOrderDelegatePermission`. |
+| `calculateRewardAmount(timeDelta, emissionPerSecond, rounding)` | `timeDelta * emissionPerSecond / 2^64` with `Rounding.Up` for funding or `Rounding.Down` for emitted amounts. |
+
+`MAX_POSITION_DELEGATE_PERMISSION` and `MAX_LIMIT_ORDER_DELEGATE_PERMISSION` are the masks of every permission. A larger mask throws `InvalidPermission`. For a transfer-fee mint, pass `calculateTransferFeeExcludedAmount(...).amount` as the budget to `getLiquidityFromAmounts`, because `maxAmountX` and `maxAmountY` of `addLiquidity` include the fee.
+
+## Tick Helpers
+
+Tick `i` has price `1.0001^i` (token Y per token X, in atoms), stored as a Q64.64 sqrt price. A tick is usable by a pool when it is a multiple of the pool's tick spacing within `MIN_TICK_ID` and `MAX_TICK_ID`. Tick array `n` covers the `MAX_TICKS_PER_ARRAY` (128) usable ticks starting at `n * 128 * tickSpacing`.
+
+| Function | Use |
+| --- | --- |
+| `getSqrtPriceFromTickId(tickId)` | Q64.64 sqrt price of a tick. |
+| `tickIdFromSqrtPrice(sqrtPrice)` | Tick `T` with `getSqrtPriceFromTickId(T) <= sqrtPrice < getSqrtPriceFromTickId(T + 1)`. |
+| `tickIndexFromId(tickId, tickSpacing)` | Index of the tick array holding a tick. |
+| `isUsableTickId(tickId, tickSpacing)` | Whether a tick is a multiple of the spacing within the tick bounds. |
+| `tickArrayIndexesForTickIds(tickIds, tickSpacing)` | Deduplicated, ascending tick array indexes for a list of ticks. |
+| `tickArraysForTickIds(pool, tickIds, tickSpacing, programId?)` | Tick array addresses for a list of ticks, in the order the limit-order builders take. |
+| `tickArraysForRanges(pool, ranges, tickSpacing, programId?)` | Tick array addresses of every range endpoint, in the order the position builders pass. |
+
+## PDA Helpers
+
+Each helper returns the address only. The optional last `programId` argument defaults to the program in the last column.
+
+| Helper | Seeds | Default program |
+| --- | --- | --- |
+| `derivePool(config, tokenXMint, tokenYMint, programId?)` | `"pool"`, config, the two mints in descending byte order | `DLMM_PRO_PROGRAM_ID` |
+| `deriveLaunchPool(tokenXMint, tokenYMint, programId?)` | `"l_pool"`, the two mints in descending byte order | `DLMM_PRO_PROGRAM_ID` |
+| `derivePoolAuthority(programId?)` | `"pool_auth"` | `DLMM_PRO_PROGRAM_ID` |
+| `deriveOracle(pool, programId?)` | `"oracle"`, pool | `DLMM_PRO_PROGRAM_ID` |
+| `deriveReserve(mint, pool, programId?)` | `"reserve"`, mint, pool | `DLMM_PRO_PROGRAM_ID` |
+| `deriveTickArray(pool, tickArrayIndex, programId?)` | `"tick_array"`, pool, index as `i32` LE | `DLMM_PRO_PROGRAM_ID` |
+| `deriveTickArrayBitmapExtension(pool, programId?)` | `"bitmap"`, pool | `DLMM_PRO_PROGRAM_ID` |
+| `derivePosition(nftMint, programId?)` | `"position"`, nftMint | `DLMM_PRO_PROGRAM_ID` |
+| `deriveLimitOrder(nftMint, programId?)` | `"limit_order"`, nftMint | `DLMM_PRO_PROGRAM_ID` |
+| `deriveRewardVault(pool, rewardIndex, programId?)` | `"reward"`, pool, index as `u8` | `DLMM_PRO_PROGRAM_ID` |
+| `deriveStaticConfig(index, programId?)` | `"s_config"`, index as `u64` LE | `DLMM_PRO_PROGRAM_ID` |
+| `deriveDynamicConfig(poolCreatorAuthority, index, programId?)` | `"d_config"`, poolCreatorAuthority, index as `u64` LE | `DLMM_PRO_PROGRAM_ID` |
+| `deriveOperator(whitelistedAddress, programId?)` | `"operator"`, whitelistedAddress | `DLMM_PRO_PROGRAM_ID` |
+| `deriveTokenBadge(tokenMint, programId?)` | `"token_badge"`, tokenMint | `ACCESS_REGISTRY_PROGRAM_ID` |
+
+`deriveStaticConfig` and `deriveDynamicConfig` take the index as a `BN` or a `number`. `deriveRewardVault` throws `InvalidRewardIndex` for an index outside `0` to `NUM_REWARDS - 1`. For an access-registry operator, pass `ACCESS_REGISTRY_PROGRAM_ID` to `deriveOperator`.
+
+## Account Helpers
+
+| Function | Use |
+| --- | --- |
+| `findNftAccount(nftMint, owner)` | The owner's Token 2022 associated token account for a position or limit-order NFT. The default `nftAccount` of every builder. |
+| `getTokenProgram(tokenProgramFlag)` | `TOKEN_PROGRAM_ID` or `TOKEN_2022_PROGRAM_ID` from `poolState.tokenXFlag` or `tokenYFlag`. Throws `TypeCastFailed` for any other flag. |
+| `wrapSOLInstruction(from, to, amount)` | A lamport transfer plus sync-native instruction. `from` must sign. |
+| `unwrapSOLInstruction(owner, receiver?)` | Close the owner's wrapped SOL account. `owner` must sign. |
+| `readClock(connection, commitment?)` | Clock sysvar `slot`, `timestamp` and `epoch`, the chain time the program checks activation points, reward windows and transfer-fee epochs against. |
+| `getExtraAccountMetasForTransferHook(connection, leg, commitment?)` | Resolve the extra accounts a Token 2022 transfer hook needs for one transfer. |
+
+`getExtraAccountMetasForTransferHook` takes a `TransferHookLeg` with `mint`, `source`, `destination` and `authority`. The authority is the user, or `derivePoolAuthority()` for a transfer out of the pool. The accounts are resolved for a transfer amount of zero. For a hook whose extra accounts depend on the amount, pass the `transferHook*` array to the builder yourself.
+
+## Account Codec Helpers
+
+| Function | Use |
+| --- | --- |
+| `encodePoolExtensions(extensions)` | Bitmask from `PoolExtension[]` for pool initialization. |
+| `isSupportExtension(extensions, extension)` | Whether `poolState.extensions` has an extension set. |
+| `decodePoolExtensionsFromData(data)` | Decode extensions from raw pool account data. Returns `DecodedPoolExtensions`. |
+| `decodePositionsFromData(data, withReward)` | Decode position slots from raw position array data. |
+| `decodeTicksFromData(data, withReward)` | Decode ticks from raw tick array data. |
+| `decodeLimitOrderDataFromData(data)` | Decode `DecodedLimitOrderData[]` from raw limit-order data. |
+| `decodeObservationsFromData(data)` | Decode `DecodedObservation[]` from raw oracle data. |
+
+The raw decoders read the variable tail of account data, for example from an `onAccountChange` subscription. Each throws an `Error` when the data is not that account type.
+
+## Base Fee and Activation Builders
+
+A pool's base fee is a `BaseFeeMode` plus 31 bytes of `data`. The builders take fees in basis points and return the whole `baseFeeParameter`. They reject schedules pool initialization would reject, with `InvalidParameters`. The raw encoders produce only `data` and check that each field fits its integer width. Fee numerators are over `FEE_DENOMINATOR` (1,000,000,000), so 1,000,000 is 0.1%. Pool initialization requires every fee the schedule can reach to lie within `MIN_FEE_NUMERATOR` and `MAX_FEE_NUMERATOR` (0.01% to 99%).
+
+| Function | Use |
+| --- | --- |
+| `bpsToFeeNumerator(bps)` | Convert an integer in 0 to 10000 bps to a numerator. 1 bps is 100,000. |
+| `baseFeeParameters(params)` | Pick the builder from `baseFeeMode`. Each mode's fields sit at the top level. |
+| `fixedBaseFeeParameters(feeBps)` | `BaseFeeMode.Fixed` with a fee of 1 to 9900 bps. |
+| `timeSchedulerBaseFeeParameters(params)` | Fee that starts high at activation and settles after `totalDuration`. |
+| `marketCapSchedulerBaseFeeParameters(params)` | Fee that falls as the spot price rises above the initial price. |
+| `encodeFixedBaseFeeData(cliffFeeNumerator)` | Raw `data` for `Fixed`. |
+| `encodeTimeSchedulerBaseFeeData(params)` | Raw `data` for the time scheduler modes. |
+| `encodeMarketCapSchedulerBaseFeeData(params)` | Raw `data` for the market cap scheduler modes. |
+| `getBaseFeeNumerator(baseFee, currentPoint, activationPoint, initSqrtPrice, currentSqrtPrice)` | Evaluate a pool's base fee the way the program does. |
+| `openActivationParameters()` | Activation slot that allows swaps, deposits and withdrawals from creation. |
+| `bondingCurveActivationParameters({ targetIncreaseBps })` | Swaps from creation. Deposits and withdrawals once the sqrt price reaches `initSqrtPrice * targetIncreaseBps / 10000`. |
+| `timeBasedActivationParameters({ swapPoint, addLiquidityPoint, removeLiquidityPoint })` | Open each action at its own slot or timestamp. |
+
+`TimeSchedulerBpsParams` and `MarketCapSchedulerBpsParams` need `startingBaseFeeBps` above `endingBaseFeeBps`, both integers from 1 to 9900, and a non-zero `numberOfPeriod`. The time scheduler adds `totalDuration` in slots or seconds per the pool's activation type. The market cap scheduler adds `priceMultiple` above 1 and `schedulerExpirationDuration`. For a constant fee use `fixedBaseFeeParameters`.
+
+A pool with the `ActivationAccess` extension has two activation slots and three whitelisted wallets (`poolActivation`). A swap, deposit or withdrawal is allowed only when both slots allow it, unless the swapper, or the position or order owner, is the matching whitelisted wallet. Pool initialization accepts these slot pairs, in this order:
+
+`Open` + `Open`, `Open` + `BondingCurve`, `Open` + `TimeBased`, and `BondingCurve` + `TimeBased`.
+
+Without a `TimeBased` slot, pass `activationPoint: null`. A `BondingCurve` slot needs a `whitelistedAddLiquidity` other than the default key, since nobody else can deposit before the target. Each `TimeBased` point must fall between now and now plus `MAX_TIME_BUFFER` seconds, or `MAX_SLOT_BUFFER` slots on a slot-activated pool.
+
+## Dynamic Fee
+
+`getDynamicFeeParams(baseFeeBps, minDeltaTickForSignificantSwap, options?)` returns the `dynamicFeeParameter` for pool initialization. The variable fee stays within 20% of `baseFeeBps`. Filter, decay and reduction use `DYNAMIC_FEE_FILTER_PERIOD`, `DYNAMIC_FEE_DECAY_PERIOD` and `DYNAMIC_FEE_REDUCTION_FACTOR`.
+
+| Argument | Type | Rule |
+| --- | --- | --- |
+| `baseFeeBps` | `number` | Integer in 0 to 10000. |
+| `minDeltaTickForSignificantSwap` | `number` | Non-zero `u16`. |
+| `options.maxPriceChangeBps` | `number` | Integer in 1 to 10000. Default 1500, set by `DYNAMIC_FEE_MAX_PRICE_CHANGE_BPS`. |
+| `options.maxVolatilityAccumulator` | `number` | Non-zero `u24`. Used instead of `maxPriceChangeBps`. |
+
+Pass `null` as `dynamicFeeParameter` to disable the dynamic fee.
+
+## Enums
+
+Values are numbered from 0 in the order listed.
+
+| Enum | Values |
+| --- | --- |
+| `BaseFeeMode` | `Fixed`, `TimeSchedulerLinear`, `TimeSchedulerExponential`, `MarketCapSchedulerLinear`, `MarketCapSchedulerExponential` |
+| `CollectFeeMode` | `OutputToken` (fee in the output token), `OnlyY` (fee always in token Y) |
+| `ActivationType` | `Slot`, `Timestamp` |
+| `ActivationMode` | `Open`, `BondingCurve`, `TimeBased` |
+| `PoolType` | `Static`, `Dynamic`, `LaunchPool` |
+| `PoolExtension` | `LiquidityMining`, `ActivationAccess` |
+| `PoolStatus` | `Swap`, `AddLiquidity`. Bits of `poolState.poolStatus`. A set bit disables the action. |
+| `TokenProgramFlags` | `TokenProgram`, `TokenProgram2022` |
+| `StrategyType` | `Spot`, `Curve`, `BidAsk`, `Custom` |
+| `LiquidityLayout` | `Vertical`, `Horizontal` |
+| `LiquiditySide` | `Bid`, `Ask`, `Active` |
+| `Rounding` | `Up`, `Down` |
+| `PositionDelegatePermission` | `AddLiquidity`, `RemoveLiquidity`, `ClaimFee`, `ClaimReward`, `UpdatePositionRange` |
+| `LimitOrderDelegatePermission` | `CancelLimitOrder` |
+| `DynamicConfigPermission` | `CreatePoolWithoutMintValidation` |
+| `OperatorPermission` | `CreateConfigKey`, `RemoveConfigKey`, `SetPoolStatus`, `InitializeReward`, `UpdateRewardAuthority`, `UpdatePartnerFee` |
+| `AccessRegistryOperatorPermission` | `CreateTokenBadge`, `CloseTokenBadge` |
+
+## Constants
+
+| Constant | Value |
+| --- | --- |
+| `DLMM_PRO_PROGRAM_ID` | `dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n` |
+| `ACCESS_REGISTRY_PROGRAM_ID` | `regUFehW9oycnaV2auYyfqyYjKG1W1uLNT7rtUeemQr` |
+| `WHITELISTED_QUOTE_MINTS` | Wrapped SOL and USDC |
+| `MIN_TICK_ID`, `MAX_TICK_ID` | -443636, 443636 |
+| `MIN_SQRT_PRICE`, `MAX_SQRT_PRICE` | Q64.64 sqrt price bounds (`BN`) |
+| `MAX_TICK_SPACING` | 256 |
+| `MAX_TICKS_PER_ARRAY` | 128 |
+| `BITMAP_SIZE` | 512. The inline bitmap covers tick array indexes -512 to 511. |
+| `POSITION_MAX_RANGE` | 45 slots per position |
+| `LIMIT_ORDER_MAX_TICK` | 25 ticks per limit order |
+| `MAX_LIQUIDITY_WEIGHT` | 255 |
+| `NUM_REWARDS` | 2 reward slots per pool |
+| `CREATOR_REWARD_INDEX` | 0 |
+| `MIN_REWARD_DURATION` | 86,400 s (`BN`) |
+| `MAX_REWARD_DURATION` | 31,536,000 s (`BN`) |
+| `MAX_REWARD_START_DELAY` | 2,592,000 s (`BN`) |
+| `MAX_VESTING_DURATION` | 315,360,000 s (`BN`) |
+| `MAX_VESTING_DURATION_SLOT` | 1,261,440,000 slots (`BN`) |
+| `MAX_TIME_BUFFER`, `MAX_SLOT_BUFFER` | 2,592,000 s, 10,368,000 slots |
+| `MS_PER_SLOT` | 250 ms |
+| `MAX_OBSERVATION_LENGTH` | 500 |
+| `MAX_REFERENCE_AGE` | 3,600 s (`BN`) |
+| `DYNAMIC_FEE_FILTER_PERIOD` | 10 s |
+| `DYNAMIC_FEE_DECAY_PERIOD` | 120 s |
+| `DYNAMIC_FEE_REDUCTION_FACTOR` | 5,000 (50%) |
+| `DYNAMIC_FEE_MAX_PRICE_CHANGE_BPS` | 1,500 (15%) |
+| `FEE_DENOMINATOR` | 1,000,000,000 (`BN`) |
+| `MIN_FEE_NUMERATOR` | 100,000, 0.01% (`BN`) |
+| `MAX_FEE_NUMERATOR` | 990,000,000, 99% (`BN`) |
+| `MAX_BASIS_POINT` | 10,000 |
+| `MM_PROTOCOL_FEE_BPS` | 1,000. Protocol share of the market-maker fee. |
+| `MM_LAUNCH_POOL_PROTOCOL_FEE_BPS` | 2,000. The same on a launch pool. |
+| `LIMIT_ORDER_PROTOCOL_FEE_BPS` | 5,000. Protocol share of the limit-order fee. |
+| `LIMIT_ORDER_REFERRAL_FEE_BPS` | 2,000. Referral share of an order's fee. |
+| `HOST_FEE_BPS` | 2,000. Host share of the protocol fee. |
+| `MAX_PARTNER_FEE_BPS` | 5,000 |
+| `MAX_POSITION_DELEGATE_PERMISSION` | 31 |
+| `MAX_LIMIT_ORDER_DELEGATE_PERMISSION` | 1 |
+| `Q64` | 2^64 (`BN`) |
+
+## Core Types
+
+Account and instruction types derived from the IDL, such as `Pool`, `TickRange` and `SwapParameters`, are exported from the package root.
+
+| Export | Use |
+| --- | --- |
+| `DlmmProIDL`, `AccessRegistryIDL` | IDL JSON. Also published as `@meteora-ag/dlmm-pro-sdk/idl/dlmm-pro` and `@meteora-ag/dlmm-pro-sdk/idl/access-registry`. |
+| `DlmmProTypes`, `AccessRegistryTypes` | Anchor types generated from the IDLs. |
+| `QuoteExactInParams`, `QuoteExactInResult`, `QuoteTickArray`, `TransferFeeAmount` | Pure quote and transfer-fee helper types. |
+| `LiquidityShape`, `LiquidityColumn`, `LiquidityRange`, `LiquidityAmounts`, `TickWeight`, `LimitOrderSide`, `ShapeLimitOrderTicks` | Liquidity shape and limit-order tick types. |
+| `BaseFeeBpsParams`, `TimeSchedulerBpsParams`, `MarketCapSchedulerBpsParams`, `TimeSchedulerParams`, `MarketCapSchedulerParams`, `DynamicFeeParamsOptions` | Base fee and dynamic fee builder inputs. |
+| `TimeBasedActivationParams`, `BondingCurveActivationParams`, `TransferHookLeg` | Activation builder inputs and the transfer-hook leg. |
+
+## Errors
+
+```typescript
+class PoolError extends Error {
+  readonly code: PoolErrorCode;
+}
+```
+
+Builders and helpers throw `PoolError` for input they can reject before sending. The message names the argument that failed and its constraint. `PoolErrorCode` uses the program's error numbering, so the custom error code of a failed transaction maps to the same name. See [DLMM Pro program errors](/developer-guides/dlmm-pro/program/errors) for the full list.
+
+```typescript
+import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  PoolError,
+  PoolErrorCode,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+declare const client: DlmmProClient;
+
+async function quoteOrNull(pool: PublicKey, inputAmount: BN) {
+  try {
+    return await client.pool.quoteExactIn({
+      pool,
+      inputAmount,
+      swapForY: true,
+    });
+  } catch (error) {
+    if (
+      error instanceof PoolError &&
+      error.code === PoolErrorCode.LiquidityIsZero
+    ) {
+      return null; // no liquidity in that direction
+    }
+    throw error;
+  }
+}
+
+// A failed transaction's InstructionError: [0, { Custom: 6020 }]
+console.log(PoolErrorCode[6020]); // "NotConsumingFullAmountIn"
+```
+
+<CardGroup cols={2}>
+  <Card title="Examples" icon="code" href="/developer-guides/dlmm-pro/typescript-sdk/examples">
+    Runnable flows for pools, positions, swaps and limit orders.
+  </Card>
+  <Card title="Full Function Reference" icon="github" href="https://github.com/MeteoraAg/dlmm-pro-sdk/blob/main/docs.md">
+    Every function with all parameters, return types and thrown errors.
+  </Card>
+</CardGroup>

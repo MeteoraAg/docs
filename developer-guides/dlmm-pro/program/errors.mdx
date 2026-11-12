@@ -1,0 +1,98 @@
+---
+title: "DLMM Pro Program Errors"
+sidebarTitle: "Errors"
+description: "All 51 DLMM Pro error codes with names and messages, plus the common causes integrators hit when a transaction fails."
+llmsDescription: "Reference for the DLMM Pro program errors (codes 6000 to 6050, release 0.1.0) taken from the IDL. Lists every error code, name and message, explains how to decode custom program error hex values, the matching PoolErrorCode numbering in the TypeScript SDK, and common causes for NotConsumingFullAmountIn, ExceededSlippage, LiquidityIsZero, InvalidActivationAccess, TickArrayBitmapExtensionAccountIsNotProvided, InvalidLayoutVersion, PositionIsNotEmpty, LimitOrderIsNotEmpty, UnsupportedMint, InvalidTokenBadge, IncorrectATA and InvalidParameters."
+---
+
+The program returns Anchor custom errors, numbered from 6000.
+
+<Tip>
+A failed transaction log shows `custom program error: 0x1784`. Convert the hex value to decimal to find the error: `0x1784` is `6020`, `NotConsumingFullAmountIn`.
+</Tip>
+
+## Error Codes
+
+| Code | Name | Message |
+| --- | --- | --- |
+| 6000 | `MathOverflow` | Math operation overflow |
+| 6001 | `TypeCastFailed` | Type cast error |
+| 6002 | `InvalidAdmin` | Invalid admin |
+| 6003 | `InvalidPermission` | Invalid permission |
+| 6004 | `UnsupportNativeMintToken2022` | Unsupported native mint token2022 |
+| 6005 | `InvalidTokenBadge` | Invalid token badge |
+| 6006 | `UnsupportedMint` | Unsupported mint |
+| 6007 | `InvalidTokenOwnerProof` | Invalid token owner proof |
+| 6008 | `UnmatchedTickIndex` | Tick index is unmatched |
+| 6009 | `ReallocExceedMaxLengthPerInstruction` | Realloc exceed max length per instruction |
+| 6010 | `TickIdIsOutOfBound` | Tick id is out of bound |
+| 6011 | `InsufficientRemainingAccounts` | Insufficient remaining accounts |
+| 6012 | `InvalidRemainingAccountSlice` | Invalid remaining account slice |
+| 6013 | `DuplicatedRemainingAccountTypes` | Duplicated remaining account types |
+| 6014 | `InvalidRewardIndex` | Invalid reward index |
+| 6015 | `InvalidTickArray` | Invalid tick array |
+| 6016 | `CannotFindTickFromId` | Cannot find tick from id |
+| 6017 | `MissingRemainingAccountForTransferHook` | Missing remaining account for transfer hook |
+| 6018 | `NoTransferHookProgram` | Remaining account was passed for transfer hook but there's no hook program |
+| 6019 | `ExceededSlippage` | Exceeded slippage tolerance |
+| 6020 | `NotConsumingFullAmountIn` | Not consuming full amount in |
+| 6021 | `TickArrayBitmapExtensionAccountIsNotProvided` | TickArray bitmap extension account is not provided |
+| 6022 | `LiquidityIsTooHigh` | Liquidity is too high |
+| 6023 | `LiquidityIsZero` | Liquidity is zero |
+| 6024 | `UndeterminedError` | Undetermined error |
+| 6025 | `CannotFindLimitOrderByTickId` | Cannot find limit order by tick id |
+| 6026 | `CancelNonEmptyLimitOrder` | Cancel on empty limit order |
+| 6027 | `InvalidPoolType` | Invalid pool type |
+| 6028 | `MissingOperatorAccount` | Missing operator account |
+| 6029 | `RewardUninitialized` | Reward not initialized |
+| 6030 | `InvalidRewardMint` | Invalid reward mint |
+| 6031 | `InvalidRewardVault` | Invalid reward vault |
+| 6032 | `IdenticalFunder` | Identical funder |
+| 6033 | `PositionIsNotEmpty` | Position is not empty |
+| 6034 | `LimitOrderIsNotEmpty` | Limit order is not empty |
+| 6035 | `InvalidActivationType` | Invalid activation type |
+| 6036 | `InvalidBaseFeeMode` | Invalid base fee mode |
+| 6037 | `InvalidParameters` | Invalid parameters |
+| 6038 | `InvalidAccount` | Invalid account in instruction |
+| 6039 | `AmountIsZero` | Amount is zero |
+| 6040 | `InvalidActivationAccess` | Invalid activation access |
+| 6041 | `InvalidRewardState` | Invalid reward state |
+| 6042 | `PositionAlreadyHadVesting` | Position already had vesting |
+| 6043 | `InsufficientLiquidity` | Liquidity is insufficient |
+| 6044 | `BitmapExtensionAccountIsNotProvided` | Bitmap extension account is not provided |
+| 6045 | `CannotModifyAccount` | Cannot modify account |
+| 6046 | `InvalidPoolCreatorAuthority` | Invalid pool creator authority |
+| 6047 | `InvalidAuthority` | Invalid authority |
+| 6048 | `DelegatedAmountNonZero` | Delegated amount is not zero |
+| 6049 | `IncorrectATA` | Incorrect ATA |
+| 6050 | `InvalidLayoutVersion` | Position layout version mismatch |
+
+## Common Causes
+
+| Error | Cause | Fix |
+| --- | --- | --- |
+| `NotConsumingFullAmountIn` | The swap did not consume all of `input_amount`, because the tick arrays passed ran out of liquidity (the quote has `amountLeft` above zero). | Raise `maxTickArrays` in the quote or lower `inputAmount`, then pass the quote tick arrays. |
+| `ExceededSlippage` | A swap output, withdrawal or claim is below its minimum, a deposit plus transfer fee is above its maximum, an imbalanced deposit moved past its price or liquidity bound, or a `relative_tick` limit order opened outside its tick range. | Re-quote and widen the bound. |
+| `LiquidityIsZero` | A swap found no initialized tick array with liquidity in its direction, or a liquidity amount in an add, remove or lock instruction is zero. | Check pool liquidity in the swap direction and pass non-zero amounts. |
+| `InvalidActivationAccess` | Swaps or add liquidity are disabled by `pool_status`, or the pool is not active yet for the signer under its activation schedule. | Wait for the activation point, or sign with a whitelisted address. |
+| `TickArrayBitmapExtensionAccountIsNotProvided` | Liquidity or limit orders touch a tick array outside indexes -512 to 511 and the bitmap extension account is missing. | Pass `deriveTickArrayBitmapExtension(pool)`, creating it first if needed. |
+| `InvalidLayoutVersion` | `expected_layout_version` differs from the position `layout_version`, which changes on `expand_position` and `remove_position`. | Read the position again and pass the current version, or `null`. |
+| `PositionIsNotEmpty` | A slot to remove or close still has liquidity, pending fees or pending rewards. | Remove liquidity and claim fees and rewards first. |
+| `LimitOrderIsNotEmpty` | Closing a limit order that still has ticks that are not canceled. | Cancel every tick, then close. |
+| `UnsupportedMint` | A Token 2022 mint has an extension other than transfer fee, metadata or a transfer hook without program or authority, or a reward mint has a freeze authority, and no token badge was passed. | Pass a token badge from the access registry. |
+| `InvalidTokenBadge` | A token badge does not match the mint, or a `CollectFeeMode.OnlyY` pool has a token Y that needs a badge and none was passed. | Pass `deriveTokenBadge(mint)` for the right mint. |
+| `IncorrectATA` | A delegate signed an instruction that pays tokens to an account other than the owner associated token account. | Pay into the owner associated token account, or sign as the owner. |
+| `InvalidParameters` | An argument is out of range, such as identical mints, a price outside the sqrt price bounds, no ranges or more than 45, `bps` outside 1 to 10000, or an oracle above 500 observations. | Check the argument against the constants in the Accounts page. |
+
+## SDK Error Codes
+
+The TypeScript SDK exports `PoolErrorCode` with the same numbering, so the custom code of a failed transaction maps to the same name. `PoolError` is thrown for inputs the builders reject before sending, and its `message` names the argument that failed.
+
+```typescript
+import { PoolErrorCode } from "@meteora-ag/dlmm-pro-sdk";
+
+// A failed transaction's InstructionError: [0, { Custom: 6020 }]
+console.log(PoolErrorCode[6020]); // "NotConsumingFullAmountIn"
+```
+
+See the [TypeScript SDK reference](/developer-guides/dlmm-pro/typescript-sdk/reference) for the full list of builders that throw it.

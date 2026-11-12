@@ -1,0 +1,497 @@
+---
+title: "DLMM Pro Program Events"
+sidebarTitle: "Events"
+description: "Events emitted by the DLMM Pro program, with fields and types for pool, swap, position, limit order and reward flows, and how to decode them from a transaction."
+llmsDescription: "Reference for the 31 events in the DLMM Pro IDL (release 0.1.0). Explains Anchor event CPI delivery through inner instructions, the two events emitted as program logs (EvtClaimProtocolFee and EvtInitializeBitmapExtension), the event authority account, per-family field tables for pool and config, EvtSwap, tick array and oracle, position, limit order and reward events, nested parameter types, and a TypeScript example that decodes events with Anchor's BorshCoder events decoder and EventParser using DlmmProIDL and DlmmProTypes from @meteora-ag/dlmm-pro-sdk."
+---
+
+The program emits 31 events, defined in the IDL (`DlmmProIDL`). Use this page to build indexers, analytics and monitoring from transaction data.
+
+## Delivery
+
+Most events use Anchor event CPI. The program calls itself with an inner instruction whose data is an 8-byte event tag (`e445a52e51cb9a1d` in hex), the 8-byte event discriminator and the Borsh-encoded fields. Instructions that emit this way include the `event_authority` account (the standard Anchor PDA, seed `__event_authority`) and the `program` account. Inner instructions are not truncated by the log size limit.
+
+Two events, `EvtClaimProtocolFee` and `EvtInitializeBitmapExtension`, are written to the transaction log as `Program data:` lines instead. The runtime can truncate logs, so an `EvtInitializeBitmapExtension` line can be missing from a transaction that created the extension.
+
+Anchor's `EventParser` reads only log lines, so it does not see event CPI events. See [Reading Events](#reading-events).
+
+| Event | Emitted by | Delivery |
+| --- | --- | --- |
+| `EvtAddLiquidity` | `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance` | Inner instruction |
+| `EvtCancelLimitOrder` | `cancel_limit_order` | Inner instruction |
+| `EvtClaimFee` | `claim_fee` | Inner instruction |
+| `EvtClaimPartnerFee` | `claim_partner_fee` | Inner instruction |
+| `EvtClaimProtocolFee` | `claim_protocol_fee2` | Program log |
+| `EvtClaimReward` | `claim_reward` (only when the amount is non-zero) | Inner instruction |
+| `EvtCloseConfig` | `close_config` | Inner instruction |
+| `EvtCloseLimitOrder` | `close_limit_order` | Inner instruction |
+| `EvtClosePosition` | `close_position` | Inner instruction |
+| `EvtCreateDynamicConfig` | `create_dynamic_config` | Inner instruction |
+| `EvtCreateStaticConfig` | `create_static_config` | Inner instruction |
+| `EvtExpandPosition` | `expand_position` | Inner instruction |
+| `EvtIncreaseOracleLength` | `increase_oracle_length` | Inner instruction |
+| `EvtInitializeBitmapExtension` | `initialize_tick_bitmap_extension`, and pool creation when a bitmap extension is passed | Program log |
+| `EvtInitializePool` | `initialize_pool_with_static_config`, `initialize_pool_with_dynamic_config`, `initialize_launch_pool` | Inner instruction |
+| `EvtInitializeReward` | `initialize_reward` | Inner instruction |
+| `EvtInitializeTickArray` | `initialize_tick_array` (only when it creates the account) | Inner instruction |
+| `EvtLockPermanent` | `lock_permanent_position` | Inner instruction |
+| `EvtLockVesting` | `lock_vesting_position` | Inner instruction |
+| `EvtOpenLimitOrder` | `open_limit_order` | Inner instruction |
+| `EvtOpenPosition` | `open_position` | Inner instruction |
+| `EvtRemoveLiquidity` | `remove_liquidity`, `remove_liquidity_by_bps` | Inner instruction |
+| `EvtRemovePosition` | `remove_position` | Inner instruction |
+| `EvtSetPoolStatus` | `set_pool_status` | Inner instruction |
+| `EvtSetRewardEmission` | `set_reward_emission` | Inner instruction |
+| `EvtSwap` | `swap` | Inner instruction |
+| `EvtUpdateLimitOrderDelegatePermission` | `update_limit_order_delegate_permission` | Inner instruction |
+| `EvtUpdatePartnerFee` | `update_partner_fee` | Inner instruction |
+| `EvtUpdatePositionDelegatePermission` | `update_position_delegate_permission` | Inner instruction |
+| `EvtUpdateRewardAuthority` | `update_reward_authority` | Inner instruction |
+| `EvtWithdrawIneligibleReward` | `withdraw_ineligible_rewards` | Inner instruction |
+
+## Reading Events
+
+The example decodes both kinds from one transaction. It uses the exported `DlmmProIDL` and `DlmmProTypes` with `@coral-xyz/anchor` 0.32.
+
+```typescript
+import { Connection } from "@solana/web3.js";
+import { EventParser, Program, utils } from "@coral-xyz/anchor";
+import { DlmmProIDL, type DlmmProTypes } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+const program = new Program<DlmmProTypes>(DlmmProIDL as DlmmProTypes, {
+  connection,
+});
+
+// First 8 bytes of every Anchor event CPI instruction
+const EVENT_IX_TAG = Buffer.from("e445a52e51cb9a1d", "hex");
+
+async function readEvents(signature: string) {
+  const tx = await connection.getParsedTransaction(signature, {
+    commitment: "confirmed",
+    maxSupportedTransactionVersion: 0,
+  });
+  if (!tx?.meta) throw new Error(`Transaction ${signature} not found`);
+
+  const events: { name: string; data: any }[] = [];
+
+  // Event CPI: inner instructions that call the program itself
+  for (const inner of tx.meta.innerInstructions ?? []) {
+    for (const ix of inner.instructions) {
+      if (!("data" in ix) || !ix.programId.equals(program.programId)) continue;
+      const data = utils.bytes.bs58.decode(ix.data);
+      if (!data.subarray(0, 8).equals(EVENT_IX_TAG)) continue;
+      const event = program.coder.events.decode(
+        utils.bytes.base64.encode(data.subarray(8)),
+      );
+      if (event) events.push(event);
+    }
+  }
+
+  // Log events: "Program data:" lines
+  const parser = new EventParser(program.programId, program.coder);
+  events.push(...parser.parseLogs(tx.meta.logMessages ?? []));
+
+  return events;
+}
+```
+
+Each decoded event has `name` and `data`. Field names in `data` are camel case in the TypeScript coder (`currentSqrtPrice`) and snake case in the tables below.
+
+## Pool and Config Events
+
+### EvtInitializePool
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `creator` | `Pubkey` |
+| `payer` | `Pubkey` |
+| `token_x_mint` | `Pubkey` |
+| `token_y_mint` | `Pubkey` |
+| `token_x_flag` | `u8` |
+| `token_y_flag` | `u8` |
+| `pool_type` | `u8` |
+| `pool_fees` | `PoolFeeParameters` |
+| `tick_spacing` | `u16` |
+| `collect_fee_mode` | `u8` |
+| `initial_sqrt_price` | `u128` |
+| `activation_type` | `u8` |
+| `activation_point` | `u64` |
+| `extensions` | `u8` |
+| `pool_activation` | `Option<PoolActivationParameters>` |
+
+### EvtCreateStaticConfig
+
+| Field | Type |
+| --- | --- |
+| `config` | `Pubkey` |
+| `signer` | `Pubkey` |
+| `pool_creator_authority` | `Pubkey` |
+| `index` | `u64` |
+| `pool_fees` | `PoolFeeParameters` |
+| `tick_spacing` | `u16` |
+| `collect_fee_mode` | `u8` |
+| `activation_type` | `u8` |
+| `extensions` | `u8` |
+
+### EvtCreateDynamicConfig
+
+| Field | Type |
+| --- | --- |
+| `config` | `Pubkey` |
+| `signer` | `Pubkey` |
+| `pool_creator_authority` | `Pubkey` |
+| `index` | `u64` |
+| `permission` | `u128` |
+| `partner_fee_bps` | `u16` |
+
+### EvtCloseConfig
+
+| Field | Type |
+| --- | --- |
+| `config` | `Pubkey` |
+| `signer` | `Pubkey` |
+
+### EvtSetPoolStatus
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `signer` | `Pubkey` |
+| `status` | `u16` |
+
+### EvtUpdatePartnerFee
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `signer` | `Pubkey` |
+| `old_partner_fee_bps` | `u16` |
+| `new_partner_fee_bps` | `u16` |
+
+### EvtClaimPartnerFee
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `signer` | `Pubkey` |
+| `amount_x` | `u64` |
+| `amount_y` | `u64` |
+
+### EvtClaimProtocolFee
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `receiver_token_account` | `Pubkey` |
+| `token_mint` | `Pubkey` |
+| `amount` | `u64` |
+
+## Swap Events
+
+### EvtSwap
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `pre_tick_id` | `i32` |
+| `post_tick_id` | `i32` |
+| `pre_sqrt_price` | `u128` |
+| `post_sqrt_price` | `u128` |
+| `swap_for_y` | `bool` |
+| `amount_in` | `u64` |
+| `amount_left` | `u64` |
+| `amount_out` | `u64` |
+| `transfer_fee_in` | `u64` |
+| `transfer_fee_out` | `u64` |
+| `mm_fee` | `u64` |
+| `protocol_fee` | `u64` |
+| `limit_order_fee` | `u64` |
+| `host_fee` | `u64` |
+| `partner_fee` | `u64` |
+| `fees_on_input` | `bool` |
+| `fees_on_token_x` | `bool` |
+
+## Tick Array and Oracle Events
+
+### EvtInitializeTickArray
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `index` | `i32` |
+
+### EvtInitializeBitmapExtension
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+
+### EvtIncreaseOracleLength
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `old_length` | `u64` |
+| `new_length` | `u64` |
+
+## Position Events
+
+### EvtOpenPosition
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `position` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+| `tick_ranges` | `Vec<TickRange>` |
+
+### EvtExpandPosition
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `position` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+| `tick_ranges` | `Vec<TickRange>` |
+
+### EvtRemovePosition
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `position` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+| `bitmap` | `u64` |
+| `tick_ranges` | `Vec<TickRange>` |
+
+### EvtClosePosition
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `position` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+
+### EvtAddLiquidity
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `position` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+| `amount_x` | `u64` |
+| `amount_y` | `u64` |
+| `current_sqrt_price` | `u128` |
+| `bitmap` | `u64` |
+| `liquidities` | `Vec<u128>` |
+
+### EvtRemoveLiquidity
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `position` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+| `amount_x` | `u64` |
+| `amount_y` | `u64` |
+| `current_sqrt_price` | `u128` |
+| `bitmap` | `u64` |
+| `liquidities` | `Vec<u128>` |
+
+### EvtClaimFee
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `position` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+| `amount_x` | `u64` |
+| `amount_y` | `u64` |
+| `current_sqrt_price` | `u128` |
+
+### EvtLockPermanent
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `position` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+| `bps` | `u16` |
+| `liquidities` | `Vec<u128>` |
+
+### EvtLockVesting
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `position` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+| `parameters` | `LockVestingPositionParameters` |
+| `liquidities` | `Vec<u128>` |
+
+### EvtUpdatePositionDelegatePermission
+
+| Field | Type |
+| --- | --- |
+| `position` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `permission` | `u32` |
+| `delegate` | `Option<Pubkey>` |
+
+## Limit Order Events
+
+### EvtOpenLimitOrder
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `limit_order` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `is_ask_side` | `bool` |
+| `order_ages` | `Vec<u64>` |
+| `referral` | `Option<Pubkey>` |
+| `actual_tick_limit_order_amount` | `Vec<TickLimitOrderAmount>` |
+
+### EvtCancelLimitOrder
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `referral` | `Pubkey` |
+| `limit_order` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+| `owner_amount_x` | `u64` |
+| `owner_amount_y` | `u64` |
+| `owner_fee_x` | `u64` |
+| `owner_fee_y` | `u64` |
+| `referral_fee` | `u64` |
+| `referral_fees_on_token_x` | `bool` |
+| `tick_ids` | `Vec<i32>` |
+
+### EvtCloseLimitOrder
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `limit_order` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+
+### EvtUpdateLimitOrderDelegatePermission
+
+| Field | Type |
+| --- | --- |
+| `limit_order` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `permission` | `u32` |
+| `delegate` | `Option<Pubkey>` |
+
+## Reward Events
+
+### EvtInitializeReward
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `reward_mint` | `Pubkey` |
+| `reward_authority` | `Pubkey` |
+| `reward_index` | `u8` |
+
+### EvtSetRewardEmission
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `reward_index` | `u8` |
+| `open_time` | `u64` |
+| `end_time` | `u64` |
+| `emission_per_second` | `u128` |
+
+### EvtUpdateRewardAuthority
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `new_authority` | `Pubkey` |
+| `reward_index` | `u8` |
+
+### EvtClaimReward
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `owner` | `Pubkey` |
+| `position` | `Pubkey` |
+| `nft_mint` | `Pubkey` |
+| `nft_account` | `Pubkey` |
+| `reward_mint` | `Pubkey` |
+| `reward_index` | `u8` |
+| `amount` | `u64` |
+
+### EvtWithdrawIneligibleReward
+
+| Field | Type |
+| --- | --- |
+| `pool` | `Pubkey` |
+| `reward_index` | `u8` |
+| `reward_amount` | `u64` |
+
+## Nested Types
+
+Types used inside the events above.
+
+| Type | Field | Type of field |
+| --- | --- | --- |
+| `PoolFeeParameters` | `base_fee_parameter` | `BaseFeeConfigParameters` |
+| `PoolFeeParameters` | `dynamic_fee_parameter` | `Option<DynamicFeeParameters>` |
+| `BaseFeeConfigParameters` | `base_fee_mode` | `u8` |
+| `BaseFeeConfigParameters` | `data` | `[u8; 31]` |
+| `DynamicFeeParameters` | `max_volatility_accumulator` | `u32` |
+| `DynamicFeeParameters` | `variable_fee_control` | `u32` |
+| `DynamicFeeParameters` | `filter_period` | `u16` |
+| `DynamicFeeParameters` | `decay_period` | `u16` |
+| `DynamicFeeParameters` | `reduction_factor` | `u16` |
+| `DynamicFeeParameters` | `min_delta_tick_for_significant_swap` | `u16` |
+| `PoolActivationParameters` | `whitelisted_swap` | `Pubkey` |
+| `PoolActivationParameters` | `whitelisted_add_liquidity` | `Pubkey` |
+| `PoolActivationParameters` | `whitelisted_remove_liquidity` | `Pubkey` |
+| `PoolActivationParameters` | `activations` | `[PoolActivationInfoParameters; 2]` |
+| `PoolActivationInfoParameters` | `activation_mode` | `u8` |
+| `PoolActivationInfoParameters` | `data` | `[u8; 15]` |
+| `LockVestingPositionParameters` | `cliff_point` | `Option<u64>` |
+| `LockVestingPositionParameters` | `cliff_unlock_bps` | `u16` |
+| `LockVestingPositionParameters` | `bps_per_period` | `u16` |
+| `LockVestingPositionParameters` | `period_frequency` | `u64` |
+| `LockVestingPositionParameters` | `number_of_period` | `u16` |
+| `LockVestingPositionParameters` | `bps` | `u16` |
+| `LockVestingPositionParameters` | `expected_layout_version` | `Option<u16>` |
+| `TickRange` | `tick_lower_id` | `i32` |
+| `TickRange` | `tick_upper_id` | `i32` |
+| `TickLimitOrderAmount` | `id` | `i32` |
+| `TickLimitOrderAmount` | `amount` | `u64` |
+
+`create_operator_account` and `close_operator_account` emit no event. Read account state to track operators.

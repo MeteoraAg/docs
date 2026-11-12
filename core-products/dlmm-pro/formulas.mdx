@@ -1,0 +1,199 @@
+---
+title: "DLMM Pro Formulas"
+sidebarTitle: "Formulas"
+description: "The math DLMM Pro uses for tick prices, liquidity and token amounts, fees, fee schedules, the dynamic fee, the fee split, limit order proceeds and rewards."
+llmsDescription: "Formula reference for DLMM Pro: tick price 1.0001^tick, Q64.64 sqrt price, UI price with decimals, token amounts for liquidity in a range below, inside or above the current price, liquidity from amounts, rounding, trading fee on input or output with FEE_DENOMINATOR 1e9, linear and exponential time scheduler and market cap scheduler base fees with periods, sqrt price steps and expiration, the dynamic fee with delta tick, volatility accumulator, volatility reference, reduction factor and variable fee control, the fee split between LP and limit-order fills with protocol shares, host fee and partner fee, fee growth per unit of liquidity, limit order proceeds at the tick price, reward funding and reward growth, and vesting release."
+---
+
+On-chain values are integers. Prices are stored as Q64.64 fixed-point square roots, fee numerators are over `1,000,000,000`, and shares in basis points are over `10,000`. Where rounding matters, the program rounds against the user: deposits round up, withdrawals and outputs round down.
+
+## Prices
+
+Tick `i` has price, in atoms of token Y per atom of token X:
+
+```math
+P(i) = 1.0001^{i}
+```
+
+The pool stores the square root as a Q64.64 number:
+
+```math
+\text{sqrt\_price} = \sqrt{P} \times 2^{64}
+```
+
+To convert to whole tokens:
+
+```math
+P_{\text{UI}} = P \times 10^{\,\text{decimals}_X - \text{decimals}_Y}
+```
+
+The current tick is the largest `i` with `P(i) ≤ P`. Usable ticks are multiples of the tick spacing `s`, so neighbouring usable ticks differ in price by a factor of `1.0001^s`.
+
+## Liquidity and Token Amounts
+
+For a range `[P_l, P_u)` holding liquidity `L`, with the pool at price `P`:
+
+| Pool price | Token X | Token Y |
+| --- | --- | --- |
+| Below the range | `L × (√P_u − √P_l) / (√P_l × √P_u)` | 0 |
+| Inside the range | `L × (√P_u − √P) / (√P × √P_u)` | `L × (√P − √P_l)` |
+| At or above the upper edge | 0 | `L × (√P_u − √P_l)` |
+
+Deposits round these amounts up and withdrawals round them down.
+
+Going the other way, the most liquidity two budgets can fund inside the range is:
+
+```math
+L = \min\left( \frac{x \times \sqrt{P}\sqrt{P_u}}{\sqrt{P_u} - \sqrt{P}},\; \frac{y}{\sqrt{P} - \sqrt{P_l}} \right)
+```
+
+Below the range only the X term applies, and above it only the Y term. A by-weight deposit gives each range `L = multiplier × weight`.
+
+## Trading Fee
+
+The fee rate is the base fee plus the dynamic fee, capped at 99%:
+
+```math
+f = \min(f_{\text{base}} + f_{\text{dynamic}},\; 990{,}000{,}000)
+```
+
+When the fee is taken from an amount `a` (the input, or the output, depending on the collect fee mode), the fee is rounded up:
+
+```math
+\text{fee} = \left\lceil \frac{a \times f}{10^{9}} \right\rceil
+```
+
+## Base Fee Schedules
+
+Let `c` be the cliff fee, `r` the reduction factor and `N` the number of periods. After `n` periods (with `n` capped at `N`):
+
+| Curve | Fee after `n` periods |
+| --- | --- |
+| Linear | `c − r × n` |
+| Exponential | `c × (1 − r / 10,000)^n` |
+
+For the linear curve `r` is a fee numerator; for the exponential curve it is in basis points.
+
+**Time scheduler.** With period length `T` and activation point `t_0`:
+
+```math
+n = \min\left( \left\lfloor \frac{t - t_0}{T} \right\rfloor,\; N \right)
+```
+
+Before `t_0`, `n = N`, so the settled fee applies.
+
+**Market cap scheduler.** With initial square-root price `√P_0` and step size `step` in basis points:
+
+```math
+n = \min\left( \left\lfloor \frac{(\sqrt{P} - \sqrt{P_0}) \times 10{,}000}{\sqrt{P_0} \times \text{step}} \right\rfloor,\; N \right)
+```
+
+Before activation and after `t_0 + expiration`, `n = N`. At or below the initial price, `n = 0` while the schedule is running.
+
+## Dynamic Fee
+
+The program measures price movement in 1 bp ticks. For two square-root prices with `√P_a ≥ √P_b`:
+
+```math
+\Delta\text{tick} \approx \frac{20{,}000 \times \sqrt{P_a}}{\sqrt{P_b}} - 20{,}000
+```
+
+The volatility accumulator compares the current price with a reference price `P_ref`:
+
+```math
+v_a = \min\left( \Delta\text{tick}(P, P_{\text{ref}}) \times 10{,}000 + v_r,\; v_{\max} \right)
+```
+
+and the dynamic fee numerator is:
+
+```math
+f_{\text{dynamic}} = \left\lceil \frac{\text{variable\_fee\_control} \times v_a^2}{10^{11}} \right\rceil
+```
+
+Before each swap, with `elapsed` the time since the later of the last reference update and the last significant swap:
+
+| Elapsed | Reference price | Volatility reference `v_r` |
+| --- | --- | --- |
+| Below the filter period | Unchanged | Unchanged |
+| Between the filter and decay periods | Current price | `v_a × reduction_factor / 10,000` |
+| At or above the decay period | Current price | 0 |
+
+The reference also resets if it is more than an hour old. After each swap, `v_a` is recomputed at the new price, and the swap counts as significant if it moved the price by at least `min_delta_tick_for_significant_swap`.
+
+## Fee Split
+
+In each swap step, with `a_LP` the part of the step filled by LP liquidity and `a_LO` the part filled by limit orders (measured on the side the fee is taken from):
+
+```math
+\text{fee}_{LP} = \left\lceil \text{fee} \times \frac{a_{LP}}{a_{LP} + a_{LO}} \right\rceil, \qquad \text{fee}_{LO} = \text{fee} - \text{fee}_{LP}
+```
+
+| Part | Protocol takes | Rest goes to |
+| --- | --- | --- |
+| `fee_LP` | `⌊fee_LP × p / 10,000⌋`, with `p` = 1,000 (2,000 on launch pools) | LPs in range |
+| `fee_LO` | `⌊fee_LO × 5,000 / 10,000⌋` | Filled limit orders |
+
+Over the whole swap, with `π_LP` and `π_LO` the protocol amounts above:
+
+```math
+\text{host} = \left\lfloor \left( \pi_{LP} + \min\left(\pi_{LO}, \left\lfloor \frac{\text{fee}_{LO} \times p}{10{,}000} \right\rfloor\right) \right) \times \frac{2{,}000}{10{,}000} \right\rfloor
+```
+
+when the swap passes a referral account, and 0 otherwise. Then:
+
+```math
+\text{partner} = \left\lfloor (\pi_{LP} + \pi_{LO} - \text{host}) \times \frac{\text{partner\_fee\_bps}}{10{,}000} \right\rfloor
+```
+
+and the protocol keeps `π_LP + π_LO − host − partner`.
+
+## LP Fees and Rewards per Position
+
+The pool tracks fees per unit of liquidity as a Q64.64 number. A swap step that pays `fee_LP` with active liquidity `L`:
+
+```math
+g_{\text{global}} \mathrel{+}= \frac{\text{fee}_{LP} \times 2^{64}}{L}
+```
+
+Each tick stores the growth on its far side, so the growth inside a range is `g_global − g_below(lower) − g_above(upper)`. A slot earns:
+
+```math
+\text{fees} = \frac{L_{\text{slot}} \times (g_{\text{inside}} - g_{\text{checkpoint}})}{2^{64}}
+```
+
+where `L_slot` counts unlocked, permanently locked and vesting liquidity. Rewards use the same scheme with:
+
+```math
+g_{\text{reward}} \mathrel{+}= \frac{\Delta t \times \text{emission\_per\_second}}{L}
+```
+
+`emission_per_second` is Q64.64. Seconds when `L = 0` are counted instead and become withdrawable as ineligible reward.
+
+## Rewards Funding
+
+Funding an emission from `t_open` to `t_end` transfers, before the mint's transfer fee:
+
+```math
+\text{amount} = \left\lceil \frac{(t_{\text{end}} - t_{\text{open}}) \times \text{emission\_per\_second}}{2^{64}} \right\rceil
+```
+
+## Limit Order Proceeds
+
+An order filled for amount `a` at a tick with price `P` receives, rounded down:
+
+| Side | Deposited | Receives |
+| --- | --- | --- |
+| Ask | `a` of token X | `⌊a × P⌋` of token Y |
+| Bid | `a` of token Y | `⌊a / P⌋` of token X |
+
+Within a batch, each order's filled amount is its share of the batch: `filled = amount × (batch filled / batch total)`.
+
+## Vesting
+
+A vesting schedule with cliff point `t_c`, cliff share `b_c`, per-period share `b_p` and period length `T` (with `b_c + N × b_p = 10,000`) has released, at time `t ≥ t_c`:
+
+```math
+\text{released share} = \min\left( b_c + \left\lfloor \frac{t - t_c}{T} \right\rfloor \times b_p,\; 10{,}000 \right) \text{ bps}
+```
+
+and nothing before `t_c`.

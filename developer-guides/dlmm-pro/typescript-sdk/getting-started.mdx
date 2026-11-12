@@ -1,0 +1,196 @@
+---
+title: "DLMM Pro TS SDK Getting Started"
+sidebarTitle: "Getting Started"
+description: "Install @meteora-ag/dlmm-pro-sdk, create a client, read a pool's price, and quote and send your first swap."
+llmsDescription: "First steps with the DLMM Pro TypeScript SDK @meteora-ag/dlmm-pro-sdk: installing with npm, pnpm or yarn, creating a DlmmProClient from a Solana Connection, the pool, position, limitOrder, reward and state services, devnet and custom program IDs, reading a pool with fetchPool and tickUiPrice, quoting an exact-in swap with quoteExactIn, setting minimumOutputAmount for slippage, sending the unsigned transaction with sendAndConfirmTransaction, builder conventions for signers, token accounts, wrapped SOL and transfer hooks, and handling PoolError."
+---
+
+`@meteora-ag/dlmm-pro-sdk` builds DLMM Pro transactions and reads DLMM Pro accounts. It also quotes swaps with the same math as the program.
+
+<CardGroup cols={2}>
+  <Card title="DLMM Pro SDK" icon="github" iconType="solid" href="https://github.com/MeteoraAg/dlmm-pro-sdk">
+    Source, tests and the full function reference (`docs.md`).
+  </Card>
+  <Card title="npm Package" icon="npm" iconType="solid" href="https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk">
+    Published versions of `@meteora-ag/dlmm-pro-sdk`.
+  </Card>
+</CardGroup>
+
+## Installation
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install @meteora-ag/dlmm-pro-sdk @solana/web3.js @solana/spl-token bn.js
+    ```
+  </Tab>
+  <Tab title="pnpm">
+    ```bash
+    pnpm add @meteora-ag/dlmm-pro-sdk @solana/web3.js @solana/spl-token bn.js
+    ```
+  </Tab>
+  <Tab title="yarn">
+    ```bash
+    yarn add @meteora-ag/dlmm-pro-sdk @solana/web3.js @solana/spl-token bn.js
+    ```
+  </Tab>
+</Tabs>
+
+The SDK uses `@solana/web3.js` 1.x and `bn.js` for amounts. `@solana/spl-token` is only needed if you read mints yourself, as the example below does.
+
+## Create a Client
+
+```typescript
+import { Connection } from "@solana/web3.js";
+import { DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+```
+
+One client covers every pool. Its services group the builders and readers:
+
+| Service | Use |
+| --- | --- |
+| `client.pool` | Quote and swap, create pools, tick arrays and oracles, claim partner fees |
+| `client.position` | Open, fund, withdraw, claim, compound, lock, resize and close positions |
+| `client.limitOrder` | Open, cancel and close limit orders |
+| `client.reward` | Set up and fund reward slots, claim rewards |
+| `client.state` | Fetch and decode pools, positions, tick arrays, limit orders, oracles and configs |
+
+The program ID is the same on mainnet and devnet, so the same client works on both; point the connection at the cluster you want. `new DlmmProClient(connection, commitment, programId)` takes an optional commitment (default `"confirmed"`) and program ID for other deployments.
+
+## Quote and Swap
+
+This script reads a pool, prints its price, quotes selling one whole token X, and sends the swap with 0.5% slippage.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { getMint } from "@solana/spl-token";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  getTokenProgram,
+  tickUiPrice,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const user = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+
+// Read the pool
+const poolState = await client.state.fetchPool(pool);
+const [mintX, mintY] = await Promise.all([
+  getMint(
+    connection,
+    poolState.tokenXMint,
+    "confirmed",
+    getTokenProgram(poolState.tokenXFlag),
+  ),
+  getMint(
+    connection,
+    poolState.tokenYMint,
+    "confirmed",
+    getTokenProgram(poolState.tokenYFlag),
+  ),
+]);
+const price = tickUiPrice(
+  poolState.tickCurrentId,
+  mintX.decimals,
+  mintY.decimals,
+);
+console.log(`tick ${poolState.tickCurrentId}, ~${price.toFixed(6)} Y per X`);
+
+// Quote 1 token X for token Y
+const inputAmount = new BN(10).pow(new BN(mintX.decimals));
+const { quote, tickArrays, tickArrayBitmapExtension } =
+  await client.pool.quoteExactIn({
+    pool,
+    inputAmount,
+    swapForY: true,
+    swapper: user.publicKey,
+  });
+if (!quote.amountLeft.isZero()) {
+  throw new Error("Not enough liquidity for this input");
+}
+
+// Swap, accepting up to 0.5% less than the quote
+const { tx } = await client.pool.swap({
+  pool,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  user: user.publicKey,
+  swapForY: true,
+  tickArrays,
+  tickArrayBitmapExtension,
+  parameters: {
+    inputAmount,
+    minimumOutputAmount: quote.transferFeeExcludedOutAmount
+      .muln(9_950)
+      .divn(10_000),
+  },
+});
+const signature = await sendAndConfirmTransaction(connection, tx, [user]);
+console.log("swap", signature);
+```
+
+A few things to note:
+
+- `quoteExactIn` loads the tick arrays the swap will cross and returns them; pass them to `swap` unchanged. If `quote.amountLeft` is not zero, the loaded arrays ran out of liquidity and the swap would fail. Raise `maxTickArrays` or reduce the input.
+- The quote reads the fee at the current time. Scheduled and dynamic fees can change before the transaction lands, which is one more reason to leave room in `minimumOutputAmount`.
+- `transferFeeExcludedOutAmount` is what the wallet receives after any Token 2022 transfer fee on the output mint, and it is what `minimumOutputAmount` is compared with.
+
+## How Builders Work
+
+Every builder returns `{ tx, ... }`, where `tx` is an unsigned `Transaction` with the fee payer set and no recent blockhash. `sendAndConfirmTransaction` fills in the blockhash. Each builder's reference entry lists who must sign; new NFT mints (positions and limit orders) sign too.
+
+- **Token accounts.** User token accounts default to the wallet's associated token accounts. A missing one is created in the same transaction, paid by the fee payer.
+- **Wrapped SOL.** When a wallet pays SOL, the builder wraps what is needed and closes the wrapped account at the end.
+- **Accounts the program needs.** Tick arrays, the bitmap extension and Token 2022 transfer hook accounts are resolved when you leave them out.
+- **Operator and admin instructions** are not wrapped. Build them with `client.program.methods.<instruction>(...)` if you need them.
+
+## Errors
+
+Builders check their arguments before sending and throw `PoolError`. Its `code` uses the program's numbering, so you can handle a builder error and a failed transaction the same way.
+
+```typescript
+import { PoolError, PoolErrorCode } from "@meteora-ag/dlmm-pro-sdk";
+
+try {
+  await client.pool.quoteExactIn({ pool, inputAmount, swapForY: true });
+} catch (error) {
+  if (
+    error instanceof PoolError &&
+    error.code === PoolErrorCode.LiquidityIsZero
+  ) {
+    console.log("No liquidity in that direction");
+  } else {
+    throw error;
+  }
+}
+
+// A failed transaction reports InstructionError: [0, { Custom: 6020 }]
+PoolErrorCode[6020]; // "NotConsumingFullAmountIn"
+```
+
+See [Program Errors](/developer-guides/dlmm-pro/program/errors) for every code.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="SDK Examples" icon="bolt" iconType="solid" href="/developer-guides/dlmm-pro/typescript-sdk/examples">
+    Create a pool, open a shaped position, place limit orders and run rewards.
+  </Card>
+  <Card title="SDK Reference" icon="code" iconType="solid" href="/developer-guides/dlmm-pro/typescript-sdk/reference">
+    Every service method and helper, with signers and defaults.
+  </Card>
+</CardGroup>

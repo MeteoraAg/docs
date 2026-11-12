@@ -1,0 +1,122 @@
+---
+title: "What is DLMM Pro?"
+sidebarTitle: "What is DLMM Pro?"
+description: "DLMM Pro is Meteora's tick-based concentrated liquidity AMM, with multi-range NFT positions, on-chain limit orders, scheduled and dynamic fees, and launch controls."
+llmsDescription: "Overview of Meteora DLMM Pro, the dlmm_pro program (dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n). Covers tick-based concentrated liquidity with 1 bp ticks and tick spacing, multi-range Token 2022 NFT positions with up to 45 ranges, limit orders that share tick storage with LP liquidity and fill at the tick price, base fee modes (fixed, time scheduler, market cap scheduler), the optional dynamic fee, collect fee modes, static configs, dynamic configs and launch pools, activation access and whitelists, liquidity mining with two reward slots, Token 2022 support with token badges, and how DLMM Pro differs from DLMM."
+---
+
+DLMM Pro is Meteora's concentrated liquidity AMM built on ticks. LPs place liquidity in price ranges, makers place limit orders at single prices, and both live in the same tick state, so one swap fills LP liquidity and limit orders together.
+
+Each pool takes its tick spacing, fee schedule, fee token and optional extensions from a config chosen at creation. Positions and limit orders are Token 2022 NFTs, so they can be transferred, delegated and tracked like any other token.
+
+<Info>
+  DLMM Pro runs on the program `dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n` on mainnet and devnet.
+</Info>
+
+<CardGroup cols={2}>
+  <Card title="Ticks, Not Bins" icon="ruler-horizontal" iconType="solid">
+    Every tick is a 0.01% price step. A pool's tick spacing (1 to 256) sets how far apart LP range edges and orders can be.
+  </Card>
+  <Card title="Multi-Range Positions" icon="layer-group" iconType="solid">
+    One position NFT holds up to 45 ranges, each with its own liquidity, fees and rewards. Spot, Curve and Bid-Ask shapes are built from these ranges.
+  </Card>
+  <Card title="Limit Orders in the Pool" icon="list-check" iconType="solid">
+    Orders of up to 25 ticks sit beside LP liquidity, fill at the exact tick price and earn a share of the trading fee.
+  </Card>
+  <Card title="Scheduled and Dynamic Fees" icon="percent" iconType="solid">
+    Fixed, time-scheduled or market-cap-scheduled base fees, plus an optional fee that rises with volatility. Fees range from 0.01% to 99%.
+  </Card>
+  <Card title="Launch Controls" icon="rocket" iconType="solid">
+    Activation rules open swaps, deposits and withdrawals at a set time or once the price reaches a target, with whitelisted wallets for each action.
+  </Card>
+  <Card title="Liquidity Mining" icon="seedling" iconType="solid">
+    Pools with the liquidity mining extension stream up to two reward tokens to in-range liquidity.
+  </Card>
+</CardGroup>
+
+## How DLMM Pro Works
+
+A pool stores the current price as a square-root price and the tick it falls in. Liquidity is recorded at ticks: each tick holds the change in LP liquidity at that price (`liquidity_net`) and the limit orders resting there. Ticks live in tick arrays, and the pool keeps a bitmap of which tick arrays hold anything, so swaps skip empty stretches of the price curve.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, ui-sans-serif, system-ui", "fontSize": "14px", "primaryColor": "#202031", "primaryTextColor": "#F9F9FB", "primaryBorderColor": "#434360", "lineColor": "#8585A1", "textColor": "#8585A1", "edgeLabelBackground": "#202031", "clusterBkg": "#12121C", "clusterBorder": "#2A2A3C"}}}%%
+flowchart TB
+  config["Config<br/>static or dynamic"] --> pool["Pool<br/>price, tick, liquidity, fees"]
+  pool --> reserves["Reserve X and Y"]
+  pool --> oracle["Oracle"]
+  pool --> arrays["Tick arrays<br/>LP liquidity and orders per tick"]
+  position["Position NFT<br/>up to 45 ranges"] -- "liquidity at range edges" --> arrays
+  order["Limit order NFT<br/>up to 25 ticks"] -- "amounts at ticks" --> arrays
+  classDef accent fill:#F54B00,stroke:#F54B00,color:#FFFFFF
+  classDef violet fill:#6E45FF,stroke:#6E45FF,color:#FFFFFF
+  class pool accent
+  class position,order violet
+```
+
+A swap starts at the current price and walks toward the next tick that holds liquidity. Between ticks it trades against LP liquidity, and the price moves along the curve. When it reaches a tick with resting limit orders on the other side of the trade, it fills those orders at that tick's price, then crosses the tick, applies its liquidity change and keeps going. A swap is always exact-in: it consumes the whole input or fails.
+
+Read [Ticks and Liquidity](/core-products/dlmm-pro/ticks-and-liquidity) for the price grid and [Limit Orders](/core-products/dlmm-pro/limit-orders) for how orders at one tick are filled.
+
+## DLMM Pro and DLMM
+
+DLMM Pro is a separate program from [DLMM](/core-products/dlmm/what-is-dlmm), and pools on one cannot be used from the other. The main differences:
+
+| | DLMM | DLMM Pro |
+| --- | --- | --- |
+| Price grid | Bins, spaced by the pool's bin step | Ticks of 0.01%, with usable ticks set by the tick spacing |
+| Liquidity inside a step | Constant sum: one price per bin | Concentrated constant product between ticks; limit orders fill at the tick price |
+| Position | One account, one contiguous bin range | One NFT, up to 45 ranges that can overlap |
+| Limit orders | Only on pools in limit-order mode | On every pool |
+| Liquidity mining | Only on pools in liquidity-mining mode | Optional extension; limit orders still work |
+| Base fee | Bin step and base factor | Fixed, time scheduler or market cap scheduler |
+| Fee token | `InputOnly` or `OnlyY` | `OutputToken` or `OnlyY` |
+
+## Who DLMM Pro Is For
+
+<AccordionGroup>
+  <Accordion title="Liquidity providers">
+    Build a position from several ranges instead of one, shape it with Spot, Curve or Bid-Ask weights, and adjust it without closing it. Locked and vesting liquidity keeps earning fees and rewards.
+  </Accordion>
+  <Accordion title="Traders and market makers">
+    Place bids and asks at exact prices inside the pool. Filled orders earn half of the fee charged on the volume they fill, and relative orders protect you if the price moves before the transaction lands.
+  </Accordion>
+  <Accordion title="Token teams and launchpads">
+    Start a pool with a high fee that falls over time or as the price rises, open trading at a set time or after a price milestone, and run a reward campaign from the pool itself.
+  </Accordion>
+  <Accordion title="Aggregators and integrators">
+    The TypeScript SDK and the Rust commons crate quote exact-in swaps with the same math as the program, including limit-order fills and Token 2022 transfer fees.
+  </Accordion>
+</AccordionGroup>
+
+## Explore DLMM Pro
+
+<CardGroup cols={2}>
+  <Card title="Ticks and Liquidity" href="/core-products/dlmm-pro/ticks-and-liquidity" icon="ruler-horizontal">
+    Tick prices, tick spacing, ranges, tick arrays and how a swap moves through them.
+  </Card>
+  <Card title="Positions" href="/core-products/dlmm-pro/positions" icon="layer-group">
+    Multi-range NFT positions, liquidity shapes, fees, locks and delegates.
+  </Card>
+  <Card title="Limit Orders" href="/core-products/dlmm-pro/limit-orders" icon="list-check">
+    Asks and bids at single ticks, fill order, maker fees and the order lifecycle.
+  </Card>
+  <Card title="Fees" href="/core-products/dlmm-pro/fees" icon="percent">
+    Base fee modes, the dynamic fee, the fee token, and where each part of a fee goes.
+  </Card>
+  <Card title="Pool Creation and Activation" href="/core-products/dlmm-pro/pool-creation-and-activation" icon="rocket">
+    Static configs, dynamic configs, launch pools and activation rules.
+  </Card>
+  <Card title="Liquidity Mining" href="/core-products/dlmm-pro/liquidity-mining" icon="seedling">
+    Reward slots, emission schedules and rewards emitted while no liquidity is in range.
+  </Card>
+  <Card title="Token 2022 Support" href="/core-products/dlmm-pro/token-2022-support" icon="certificate">
+    Which mints work without review, token badges, transfer fees and transfer hooks.
+  </Card>
+  <Card title="Formulas" href="/core-products/dlmm-pro/formulas" icon="calculator">
+    The math behind prices, liquidity amounts, fees, fee schedules and rewards.
+  </Card>
+</CardGroup>
+
+<Warning>
+  Concentrated liquidity earns fees only while the price is inside your ranges. If the price leaves every range of a position, that position stops earning trading fees until the price returns or you move the liquidity.
+</Warning>

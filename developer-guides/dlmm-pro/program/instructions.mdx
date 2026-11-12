@@ -1,0 +1,147 @@
+---
+title: "DLMM Pro Program Instructions"
+sidebarTitle: "Instructions"
+description: "All DLMM Pro instructions grouped by area, with signers, purpose and the matching TypeScript SDK builder."
+llmsDescription: "Reference for the 39 instructions of the DLMM Pro program (release 0.1.0). Groups instructions into pool creation, swap, tick arrays and oracle, positions, liquidity, fees and locks, limit orders, rewards, partner and protocol fees, and operator and admin. Lists signers derived from the IDL and access control, the SDK builder for each user instruction, exact-in swaps and NotConsumingFullAmountIn, position range slot bitmaps and layout versions, remaining accounts for Token 2022 transfer hooks and tick arrays, and NFT delegate permissions."
+---
+
+The DLMM Pro IDL (`DlmmProIDL` in `@meteora-ag/dlmm-pro-sdk`) defines 39 instructions. Build user transactions with the [TypeScript SDK](/developer-guides/dlmm-pro/typescript-sdk/getting-started), or call the program by CPI using the account lists in the IDL. The SDK builder for each user instruction is named in the Use column.
+
+Instructions that emit events through event CPI include the `event_authority` and `program` accounts. See [Events](/developer-guides/dlmm-pro/program/events).
+
+## Pool Creation
+
+All three create the pool, its two reserve vaults and its oracle. The bitmap extension is created too when you pass it. The pool creator is recorded as `creator` and does not sign.
+
+| Instruction | Signer(s) | Use |
+| --- | --- | --- |
+| `initialize_pool_with_static_config` | Payer, plus the config's pool creator authority when the config is not public | Creates a pool from a `StaticConfig`, which fixes fees, tick spacing, collect fee mode, activation type and extensions. `client.pool.initializePoolWithStaticConfig`. |
+| `initialize_pool_with_dynamic_config` | Payer, pool creator authority | Creates a pool with caller-chosen fees, tick spacing, activation and extensions, under a `DynamicConfig`. `client.pool.initializePoolWithDynamicConfig`. |
+| `initialize_launch_pool` | Payer | Creates a launch pool keyed by its mint pair, with no config. The payer proves it holds both tokens through `user_token_x` and `user_token_y` (non-zero balances, nothing transferred). `client.pool.initializeLaunchPool`. |
+
+A mint that needs a token badge is checked against the access registry during creation. `CollectFeeMode.OnlyY` also needs a badge for token Y unless it is wrapped SOL or USDC. See [Pool Creation and Activation](/core-products/dlmm-pro/pool-creation-and-activation).
+
+## Swap
+
+| Instruction | Signer(s) | Use |
+| --- | --- | --- |
+| `swap` | User | Exact-in swap. The direction comes from the mint of `user_token_out`. `client.pool.swap`, with `client.pool.quoteExactIn` to pick the tick arrays. |
+
+<Warning>
+`swap` is exact-in only. The program reverts with `NotConsumingFullAmountIn` unless the swap consumes all of `input_amount`. This happens when the tick arrays you pass run out of liquidity. Pass the tick arrays of a quote whose `amountLeft` is zero, in swap direction order (descending index for `swap_for_y`, ascending otherwise).
+</Warning>
+
+`input_amount` is the exact input before the input mint transfer fee. `minimum_output_amount` is the least you accept after the output mint transfer fee. The optional `referral` token account receives the host fee and must hold the fee token.
+
+## Tick Arrays and Oracle
+
+| Instruction | Signer(s) | Use |
+| --- | --- | --- |
+| `initialize_tick_array` | Funder | Creates the tick array account for one index. Does nothing if it exists. `client.pool.initializeTickArray`. |
+| `initialize_tick_bitmap_extension` | Funder | Creates the bitmap extension for tick array indexes outside -512 to 511. `client.pool.initializeTickBitmapExtension`. |
+| `increase_oracle_length` | Payer | Grows the oracle by `length_to_add` observations, up to 500 in total. `client.pool.increaseOracleLength`. |
+
+## Positions
+
+| Instruction | Signer(s) | Use |
+| --- | --- | --- |
+| `open_position` | Position NFT mint (new keypair), payer | Mints the position NFT to `owner` and creates the position array with one slot per range in `tick_ranges`, up to 45. Creates missing tick arrays and ticks. `client.position.openPosition`. |
+| `expand_position` | Position owner, or a delegate with UpdatePositionRange, payer | Adds range slots to a position. Raises `layout_version`. `client.position.expandPosition`. |
+| `remove_position` | Position owner, or a delegate with UpdatePositionRange | Removes empty range slots selected by `bitmap`. Raises `layout_version`. Cannot select every slot. `client.position.removePosition`. |
+| `close_position` | Position owner | Closes an empty position. Burns the NFT, closes its token account and mint, collects tick array rent and sends rent to `rent_receiver`. `client.position.closePosition`. |
+| `update_position_delegate_permission` | Position owner | Sets the permission bitmask for the NFT delegate. `client.position.updatePositionDelegatePermission`. |
+
+Instructions that act on range slots take a `u64` bitmap in which bit `i` selects slot `i`. Those that depend on the slot layout also take `expected_layout_version` (`Option<u16>`) and fail with `InvalidLayoutVersion` when it differs from the position array. Pass `None` (`null` in the SDK) to skip the check. See [Positions](/core-products/dlmm-pro/positions).
+
+## Liquidity
+
+Each instruction needs the position NFT token account (`nft_account`) and the tick arrays of the selected slots.
+
+| Instruction | Signer(s) | Use |
+| --- | --- | --- |
+| `add_liquidity` | Position owner, or a delegate with AddLiquidity | Deposits `liquidities[k]` into each selected slot, capped by `max_amount_x` and `max_amount_y`. `client.position.addLiquidity`. |
+| `add_liquidity_by_weight` | Position owner, or a delegate with AddLiquidity | Splits a deposit across the selected slots by weight (`multiplier`, with one weight byte per slot in `liquidities`). `client.position.addLiquidityByWeight`. |
+| `add_liquidity_imbalance` | Position owner, or a delegate with AddLiquidity | Deposits one slot with optional per-token caps and a price or minimum liquidity slippage check. `client.position.addLiquidityImbalance`. |
+| `remove_liquidity` | Position owner, or a delegate with RemoveLiquidity | Withdraws `liquidities[k]` from each selected slot, with `min_amount_x` and `min_amount_y` as slippage bounds. `client.position.removeLiquidity`. |
+| `remove_liquidity_by_bps` | Position owner, or a delegate with RemoveLiquidity | Withdraws `bps` of each selected slot (all slots when `bitmap` is `None`). `client.position.removeLiquidityByBps`. |
+
+A delegate that withdraws tokens can only pay into the owner associated token accounts, or the program fails with `IncorrectATA`.
+
+## Fees and Locks
+
+| Instruction | Signer(s) | Use |
+| --- | --- | --- |
+| `refresh_fees_and_rewards` | Position owner, or any delegate | Accrues fees and rewards into the selected slots without moving tokens. `client.position.refreshFeesAndRewards`. |
+| `claim_fee` | Position owner, or a delegate with ClaimFee | Pays out the pending fees of the position, with `min_amount_x` and `min_amount_y` as slippage bounds. `client.position.claimFee`. |
+| `lock_permanent_position` | Position owner | Locks `bps` of the position liquidity for good. The locked liquidity cannot be removed. `client.position.lockPermanentPosition`. |
+| `lock_vesting_position` | Position owner | Moves liquidity into a vesting schedule (cliff, then periodic releases). One schedule per position. `client.position.lockVestingPosition`. |
+
+Fees and rewards accrue to a slot when it is refreshed. Claim after refreshing every slot that holds liquidity.
+
+## Limit Orders
+
+| Instruction | Signer(s) | Use |
+| --- | --- | --- |
+| `open_limit_order` | Limit order NFT mint (new keypair), payer, owner | Mints the limit order NFT and deposits one side into up to 25 ticks. `client.limitOrder.openLimitOrder`. |
+| `cancel_limit_order` | Order owner, or a delegate with CancelLimitOrder | Cancels the listed ticks and pays out the unfilled amount, the filled proceeds and the owner share of the fee. `client.limitOrder.cancelLimitOrder`. |
+| `close_limit_order` | Order owner | Closes a limit order whose ticks are all canceled. Burns the NFT, closes its token account and mint, and sends rent to `rent_receiver`. `client.limitOrder.closeLimitOrder`. |
+| `update_limit_order_delegate_permission` | Order owner | Sets the permission bitmask for the NFT delegate. `client.limitOrder.updateLimitOrderDelegatePermission`. |
+
+See [Limit Orders](/core-products/dlmm-pro/limit-orders).
+
+## Rewards
+
+Rewards apply to pools with the LiquidityMining extension. A pool has 2 reward slots. See [Liquidity Mining](/core-products/dlmm-pro/liquidity-mining).
+
+| Instruction | Signer(s) | Use |
+| --- | --- | --- |
+| `initialize_reward` | Payer, plus an operator with InitializeReward or the pool creator (slot 0 only) | Creates the reward vault and sets the reward mint and authority of a slot. `client.reward.initializeReward`. |
+| `update_reward_authority` | Pool creator (slot 0), or an operator with UpdateRewardAuthority | Changes the authority of a reward slot. `client.reward.updateRewardAuthority`. |
+| `set_reward_emission` | Funder, reward authority | Funds the reward vault and sets the emission window and rate. `client.reward.setRewardEmission`. |
+| `claim_reward` | Position owner, or a delegate with ClaimReward | Pays out the pending reward of one slot of the position. `client.reward.claimReward`. |
+| `withdraw_ineligible_rewards` | Reward authority | Withdraws rewards emitted while the pool had no liquidity, once the emission has ended. `client.reward.withdrawIneligibleRewards`. |
+
+## Partner and Protocol Fees
+
+| Instruction | Signer(s) | Use |
+| --- | --- | --- |
+| `claim_partner_fee` | Pool partner | Pays out the accrued partner fee, capped by `max_amount_x` and `max_amount_y`. `client.pool.claimPartnerFee`. |
+| `claim_protocol_fee2` | Protocol fee authority | Pays out the accrued protocol fee of one token to the protocol. Not callable by integrators. |
+
+## Operator and Admin
+
+The SDK does not wrap these. Build them with `client.program.methods.<instruction>(...)`.
+
+| Instruction | Signer(s) | Use |
+| --- | --- | --- |
+| `create_operator_account` | Admin, payer | Creates an `Operator` account with a permission bitmask for an address. |
+| `close_operator_account` | Admin | Closes an `Operator` account. |
+| `create_static_config` | Operator with CreateConfigKey, payer | Creates a `StaticConfig`. |
+| `create_dynamic_config` | Operator with CreateConfigKey, payer | Creates a `DynamicConfig`. |
+| `close_config` | Operator with RemoveConfigKey | Closes a static or dynamic config. |
+| `set_pool_status` | Operator with SetPoolStatus | Disables or enables swaps and add liquidity on a pool. |
+| `update_partner_fee` | Operator with UpdatePartnerFee | Sets `partner_fee_bps` on a pool. |
+
+## Remaining Accounts
+
+Instructions that transfer tokens take a `RemainingAccountsInfo` argument. Its `slices` list `{ accounts_type, length }` entries, and the program consumes that many remaining accounts for each slice in order from the start. `accounts_type` is one of `TransferHookX`, `TransferHookY`, `TransferHookReferral` and `TransferHookReward`. Each type can appear once, and it must be valid for the instruction. Pass the extra accounts a Token 2022 transfer hook program needs for that leg. Use an empty list for mints without a hook.
+
+Tick arrays follow the transfer hook accounts:
+
+| Instruction | Tick array order |
+| --- | --- |
+| `swap` | Swap direction: descending index for `swap_for_y`, ascending otherwise. |
+| `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance`, `remove_liquidity`, `remove_liquidity_by_bps`, `cancel_limit_order` | Any order. |
+| `open_position`, `expand_position`, `remove_position`, `close_position`, `refresh_fees_and_rewards`, `close_limit_order` | Ascending index. |
+| `open_limit_order` | Ascending index. With `relative_tick`, any order, including the tick arrays of the slippage range. |
+
+The SDK builders resolve transfer hook accounts, and `quoteExactIn` returns swap tick arrays in traversal order. See the [TypeScript SDK reference](/developer-guides/dlmm-pro/typescript-sdk/reference) for each builder and [Rust library](/developer-guides/dlmm-pro/rust-integration/library) for account helpers.
+
+## Delegates
+
+The owner of a position or limit order NFT can approve a delegate on the NFT token account (a Token 2022 `approve` of amount 0, since a non-zero delegated amount fails with `DelegatedAmountNonZero`) and set its permissions with `update_position_delegate_permission` or `update_limit_order_delegate_permission`.
+
+| Account | Permission bits |
+| --- | --- |
+| Position | 0 AddLiquidity, 1 RemoveLiquidity, 2 ClaimFee, 3 ClaimReward, 4 UpdatePositionRange |
+| Limit order | 0 CancelLimitOrder |

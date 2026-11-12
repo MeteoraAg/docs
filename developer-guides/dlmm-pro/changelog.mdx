@@ -1,0 +1,56 @@
+---
+title: "DLMM Pro Changelog"
+sidebarTitle: "Changelog"
+description: "Release notes for the DLMM Pro program, the @meteora-ag/dlmm-pro-sdk TypeScript SDK and the dlmm-pro-commons Rust crate."
+llmsDescription: "Changelog for DLMM Pro integrations. Covers the first release: dlmm_pro program 0.1.0 (dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n), @meteora-ag/dlmm-pro-sdk 0.1.0 with DlmmProClient and pool, position, limit order, reward and state services, quoteExactIn, liquidity shapes, base fee, activation and dynamic fee builders, and dlmm-pro-commons 0.1.0 with declare_program types, dynamic account parsers, quote_exact_in, tick array selection, Token 2022 helpers, claimable fees and rewards."
+rss: true
+---
+
+<Update
+  label="DLMM Pro 0.1.0"
+  description="First release"
+  rss="First release of DLMM Pro: the dlmm_pro program 0.1.0, @meteora-ag/dlmm-pro-sdk 0.1.0 and the dlmm-pro-commons 0.1.0 Rust crate."
+>
+  ## Release Summary
+
+  | Component | Version | Link |
+  | --- | --- | --- |
+  | Program | `0.1.0` | `dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n` |
+  | TypeScript SDK | `0.1.0` | [`@meteora-ag/dlmm-pro-sdk@0.1.0`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.0) |
+  | Rust crate | `0.1.0` | [`dlmm-pro-commons`](https://github.com/MeteoraAg/dlmm-pro-sdk/tree/main/commons) |
+
+  ## Program: `dlmm_pro` `0.1.0`
+
+  Program ID (mainnet and devnet): `dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n`
+
+  - Tick-based concentrated liquidity with tick spacing from 1 to 256 and tick arrays that grow and shrink with the ticks in use.
+  - Position NFTs with up to 45 ranges, explicit, by-weight and imbalanced deposits, withdrawals by amount or share, permanent and vesting locks, and delegate permissions.
+  - Limit orders of up to 25 ticks that fill at the tick price and earn half of the limit-order share of the trading fee.
+  - Fixed, time scheduler and market cap scheduler base fees, an optional dynamic fee, and `OutputToken` or `OnlyY` fee collection.
+  - Pools from static configs, dynamic configs with a partner fee, and launch pools, with optional `LiquidityMining` and `ActivationAccess` extensions.
+  - Liquidity mining with two reward slots, and an extendable tick-cumulative oracle.
+
+  ## TypeScript SDK: `@meteora-ag/dlmm-pro-sdk` `0.1.0`
+
+  ### Added
+
+  - `DlmmProClient` with `pool`, `position`, `limitOrder`, `reward` and `state` services. Builders return unsigned transactions, default user token accounts to associated token accounts, wrap and unwrap SOL, and resolve transfer hook accounts, tick arrays and the bitmap extension when you leave them out.
+  - `quoteExactIn`, on the client and as a pure function, covering the dynamic fee, limit order fills, the fee token and Token 2022 transfer fees. It returns the tick arrays the swap needs.
+  - `getClaimableFees` and `compoundFees`.
+  - `buildLiquidityShape` for Spot, Curve, Bid-Ask and custom shapes, with `multiplierFromAmounts`, `encodeAddLiquidityByWeight`, `limitOrderTicksFromShape` and `relativeTickFromSlippage`.
+  - Base fee builders that take basis points (`baseFeeParameters`, `fixedBaseFeeParameters`, `timeSchedulerBaseFeeParameters`, `marketCapSchedulerBaseFeeParameters`), raw base fee encoders, activation builders and `getDynamicFeeParams`.
+  - PDA, tick, liquidity and account decoding helpers, and the DLMM Pro and access registry IDLs.
+
+  ## Rust Crate: `dlmm-pro-commons` `0.1.0`
+
+  Install from git; the crate is not on crates.io.
+
+  ### Added
+
+  - `declare_program!(dlmm_pro)` types and instruction structs, generated from the same IDL as the TypeScript SDK.
+  - `DynamicPool`, `DynamicTickArray`, `DynamicPositionArray`, `DynamicLimitOrder` and `DynamicOracle` parsers for accounts with a dynamic tail.
+  - `quote_exact_in` and `tick_arrays_for_swap`, plus `tick_arrays_for_tick_ids` for position and limit order instructions.
+  - Token 2022 transfer fee helpers and `get_extra_account_metas_for_transfer_hook`.
+  - `claimable_fees`, `claimable_rewards` and `get_amounts_from_liquidity`.
+  - PDA helpers, program constants and `PoolError`.
+</Update>

@@ -1,0 +1,60 @@
+---
+title: "Liquidity Mining"
+sidebarTitle: "Liquidity Mining"
+description: "How DLMM Pro pools stream reward tokens to in-range liquidity, who can set up each reward slot, how emissions are funded, and what happens to rewards emitted while no liquidity is in range."
+llmsDescription: "Explains DLMM Pro liquidity mining: the LiquidityMining pool extension chosen at creation, two reward slots (NUM_REWARDS), the creator-managed slot 0 (CREATOR_REWARD_INDEX) and operator-managed slots, reward authority, initialize_reward, update_reward_authority, set_reward_emission with open time, end time, Q64.64 emission per second and an upfront funding cap, MIN_REWARD_DURATION of 1 day, MAX_REWARD_DURATION of 1 year and MAX_REWARD_START_DELAY of 30 days, reward accrual to in-range liquidity by reward growth per tick, claim_reward per slot, locked liquidity earning rewards, ineligible rewards emitted while no liquidity is in range and withdraw_ineligible_rewards, refunding a slot, and reward mint rules including freeze authority and token badges."
+---
+
+A DLMM Pro pool created with the `LiquidityMining` extension can stream up to two reward tokens to its LPs, on top of trading fees. Rewards go to liquidity that is in range, in proportion to how much each range holds, so a campaign pays for depth near the price rather than for idle liquidity far from it.
+
+The extension is chosen when the pool is created and cannot be added later. Limit orders work the same with or without it.
+
+## Reward Slots
+
+Each pool has two reward slots. Each slot has one reward mint, a vault, and a reward authority that funds it.
+
+| Slot | Set up by |
+| --- | --- |
+| 0 | The pool creator, who picks the reward mint and the reward authority, and can later hand the authority to another wallet |
+| 0 or 1 | A Meteora operator, for campaigns run with the protocol |
+
+Once a slot has a mint, the mint cannot be changed.
+
+## Funding an Emission
+
+The reward authority starts an emission with a start time, an end time and a rate in reward atoms per second. The whole emission is paid into the vault upfront, so the authority passes a cap on what it is willing to pay, transfer fee included.
+
+| Rule | Limit |
+| --- | --- |
+| Start | Now, or up to 30 days ahead |
+| Duration | 1 day to 1 year |
+| Rate | Reward atoms per second, as a Q64.64 number |
+
+Reward times are always Unix timestamps, even on pools whose activation type is slot.
+
+A slot can be funded again once its previous emission has ended and any ineligible reward has been withdrawn.
+
+## How Rewards Accrue
+
+Every second of an emission, the reward emitted that second is shared among the liquidity in range at the pool's current price. The pool tracks this as reward growth per unit of liquidity, and each tick records the growth on its far side, so every range earns only for the time the price spent inside it.
+
+A position's rewards are credited to its slots when they are refreshed, and claiming a reward slot refreshes the slots you select first. Permanently locked and vesting liquidity earn rewards like unlocked liquidity. A delegate with the `ClaimReward` permission can claim on the owner's behalf; the reward always goes to the owner's associated token account.
+
+## Ineligible Rewards
+
+If no liquidity is in range, the reward emitted during that time has nobody to go to. The pool counts those seconds instead of losing the tokens. After the emission ends, the reward authority withdraws that amount with `withdraw_ineligible_rewards`, which also leaves the slot ready to be funded again.
+
+## Reward Mints
+
+A reward mint goes through the same checks as a pool mint (see [Token 2022 Support](/core-products/dlmm-pro/token-2022-support)), with one difference for slots set up by the pool creator: the mint must not have a freeze authority unless it has a token badge. SOL and USDC are always accepted. Operator-managed slots may use mints with a freeze authority.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Positions" href="/core-products/dlmm-pro/positions" icon="layer-group">
+    Slots, refreshes and claiming.
+  </Card>
+  <Card title="Formulas" href="/core-products/dlmm-pro/formulas#rewards" icon="calculator">
+    Funding amounts and reward growth.
+  </Card>
+</CardGroup>
