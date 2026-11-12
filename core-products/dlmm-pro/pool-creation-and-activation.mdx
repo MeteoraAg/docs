@@ -50,7 +50,7 @@ Launch pools take 20% of the LP fee as protocol fee instead of 10%, and have no 
 
 ## Initial Price and Activation Type
 
-The creator sets the initial price as a square-root price (see [Ticks and Liquidity](/core-products/dlmm-pro/ticks-and-liquidity#tick-price)). If the initial tick is outside the range the pool's inline bitmap covers, the program creates the tick array bitmap extension with the pool.
+The creator sets the initial price as a square-root price (see [Ticks and Liquidity](/core-products/dlmm-pro/ticks-and-liquidity#tick-price)). If the initial tick is outside the range the pool's inline bitmap covers, pass the tick array bitmap extension account at creation; the program initializes it with the pool.
 
 The activation type, slot or timestamp, sets the unit for the activation point, fee scheduler periods, vesting schedules and activation rules.
 
@@ -77,7 +77,7 @@ Each activation slot uses one mode:
 | `BondingCurve` | Open | Open once a swap takes the price to a target, set in basis points of the initial square-root price (20,000 doubles it). Stay open after that. |
 | `TimeBased` | Open at the swap point | Deposits open at their own point, withdrawals at theirs |
 
-The two slots must be one of these pairs: `Open` + `Open`, `Open` + `BondingCurve`, `Open` + `TimeBased`, or `BondingCurve` + `TimeBased`.
+The two slots must be, in this order, `[Open, Open]`, `[Open, BondingCurve]`, `[Open, TimeBased]` or `[BondingCurve, TimeBased]`.
 
 - With a `TimeBased` slot, the swap point must equal the pool's activation point, and every point must be within 30 days of creation. Fee schedulers count from that point.
 - With a `BondingCurve` slot, the deposit whitelist cannot be the default key, because nobody else can add liquidity before the target is reached.

@@ -20,7 +20,7 @@ An order holds up to 25 ticks, all on the same side.
 
 Ticks must be usable ticks of the pool's tick spacing, listed in ascending order, each with a non-zero amount. A tick can hold orders on only one side at a time.
 
-Placing an order on a tick that no one has used yet creates the tick, and the order's payer funds its rent.
+Each order tick charges the payer one tick's worth of rent, refunded when the order is closed.
 
 ### Relative Ticks
 
@@ -43,9 +43,9 @@ If you cancel while your batch is partly filled, you receive your share of what 
 Limit orders earn a share of the trading fee on the volume they fill. In each step of a swap, the fee is split between LP liquidity and limit orders in proportion to how much of the step each one filled. Of the limit-order share:
 
 - 50% goes to the protocol.
-- 50% goes to the orders that filled, in proportion to what each order filled.
+- 50% goes to makers. It is pooled per tick and side, and a canceled order takes a share in proportion to its filled amount among the filled orders at that tick that are not canceled yet. A newer order can therefore share in fees from fills that happened before it was placed.
 
-An order can name a referral wallet when it is opened. When the order is canceled, 20% of its fee share goes to the referral's token account, as long as the referral is not the order's owner. See [Fees](/core-products/dlmm-pro/fees#where-the-fee-goes) for the full split.
+An order can name a referral wallet when it is opened. When the order is canceled, 20% of its fee share goes to the referral, but only if the canceller passes a token account owned by the referral and the referral is not the order's owner. Otherwise the owner keeps the whole fee share. See [Fees](/core-products/dlmm-pro/fees#where-the-fee-goes) for the full split.
 
 ## Lifecycle
 

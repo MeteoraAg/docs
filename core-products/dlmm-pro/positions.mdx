@@ -38,7 +38,7 @@ The slot also records how much vesting liquidity it has released so far, which t
 
 ## Adding Liquidity
 
-You open a position with its first ranges, then deposit. Opening a range on ticks no one has used yet creates those ticks, and the payer funds their rent.
+You open a position with its first ranges, then deposit. Each range edge charges the payer one tick's worth of rent, refunded when the slot is removed or the position is closed.
 
 | Method | What it does |
 | --- | --- |
@@ -83,13 +83,13 @@ When a shape needs more ranges than you allow, the SDK coarsens the weights unti
 
 ## Fees and Rewards
 
-Fees accrue to a slot when it is refreshed. Claiming fees or rewards refreshes the slots you select first, so select every slot you want paid out. A refresh without a claim is also available, and anyone the owner approved as a delegate can run it.
+Fees and rewards are credited to a slot when it is refreshed or when its liquidity changes. The claim instructions pay out what is already credited across every slot. The SDK's claim builders refresh the slots you select first, so select every slot whose latest earnings you want included. A refresh on its own is also available, and any delegate the owner approved can run it.
 
 The SDK can also compound: one transaction claims fees and deposits them back into a chosen slot as an imbalanced deposit.
 
 ## Withdrawing and Closing
 
-You withdraw unlocked liquidity either as explicit amounts per slot or as a share (in basis points) of each selected slot. A share withdrawal first releases any vested liquidity.
+You withdraw unlocked liquidity either as an explicit liquidity per slot or as a share (in basis points) of each selected slot. A share withdrawal first releases any vested liquidity.
 
 To shrink a position, remove empty slots. A slot is empty when it has no liquidity, no unclaimed fees and no unclaimed rewards. To finish, withdraw everything, claim, and close the position: the program burns the NFT and returns the rent.
 

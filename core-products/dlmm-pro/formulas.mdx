@@ -27,7 +27,7 @@ To convert to whole tokens:
 P_{\text{UI}} = P \times 10^{\,\text{decimals}_X - \text{decimals}_Y}
 ```
 
-The current tick is the largest `i` with `P(i) ≤ P`. Usable ticks are multiples of the tick spacing `s`, so neighbouring usable ticks differ in price by a factor of `1.0001^s`.
+The current tick is the largest `i` with `P(i) ≤ P`, except that at a tick a swap has just crossed downward (or a swap buying X stopped on with asks left), the pool records the tick below. Usable ticks are multiples of the tick spacing `s`, so neighbouring usable ticks differ in price by a factor of `1.0001^s`.
 
 ## Liquidity and Token Amounts
 
@@ -57,11 +57,13 @@ The fee rate is the base fee plus the dynamic fee, capped at 99%:
 f = \min(f_{\text{base}} + f_{\text{dynamic}},\; 990{,}000{,}000)
 ```
 
-When the fee is taken from an amount `a` (the input, or the output, depending on the collect fee mode), the fee is rounded up:
+When the fee is taken from a whole amount `a` (the input, or the output, depending on the collect fee mode), the fee is rounded up:
 
 ```math
 \text{fee} = \left\lceil \frac{a \times f}{10^{9}} \right\rceil
 ```
+
+When a step uses only part of the input, the program works back from the net amount `a_net` that the step fills: the gross input is `⌈a_net × 10^9 / (10^9 − f)⌉`, and the fee is the difference.
 
 ## Base Fee Schedules
 
@@ -133,7 +135,9 @@ In each swap step, with `a_LP` the part of the step filled by LP liquidity and `
 | `fee_LP` | `⌊fee_LP × p / 10,000⌋`, with `p` = 1,000 (2,000 on launch pools) | LPs in range |
 | `fee_LO` | `⌊fee_LO × 5,000 / 10,000⌋` | Filled limit orders |
 
-Over the whole swap, with `π_LP` and `π_LO` the protocol amounts above:
+Two edge cases: if a step's limit-order fill rounds down to zero output, the protocol takes that step's whole `fee_LO`; if nothing is filled on the side the fee is taken from, the protocol takes the whole step fee.
+
+Over the whole swap, with `fee_LO`, `π_LP` and `π_LO` summed across steps:
 
 ```math
 \text{host} = \left\lfloor \left( \pi_{LP} + \min\left(\pi_{LO}, \left\lfloor \frac{\text{fee}_{LO} \times p}{10{,}000} \right\rfloor\right) \right) \times \frac{2{,}000}{10{,}000} \right\rfloor
@@ -186,7 +190,7 @@ An order filled for amount `a` at a tick with price `P` receives, rounded down:
 | Ask | `a` of token X | `⌊a × P⌋` of token Y |
 | Bid | `a` of token Y | `⌊a / P⌋` of token X |
 
-Within a batch, each order's filled amount is its share of the batch: `filled = amount × (batch filled / batch total)`.
+Within a batch, each order's filled amount rounds down: `filled = amount − ⌈amount × batch remaining / batch total⌉`.
 
 ## Vesting
 
