@@ -18,7 +18,7 @@ The crate is not published to crates.io. Depend on it from git, pinned to a comm
 dlmm-pro-commons = { git = "https://github.com/MeteoraAg/dlmm-pro-sdk", rev = "<commit>" }
 ```
 
-`dlmm-pro-commons` 0.1.0 matches DLMM Pro program 0.1.0. It re-exports `anchor_lang`, so use `dlmm_pro_commons::anchor_lang` to keep your Anchor version in step with the crate's.
+`dlmm-pro-commons` 0.1.0 is built for DLMM Pro program 0.1.0. It re-exports `anchor_lang`, so use `dlmm_pro_commons::anchor_lang` to keep your Anchor version in step with the crate's.
 
 ## What's in the Crate
 
@@ -33,7 +33,7 @@ dlmm-pro-commons = { git = "https://github.com/MeteoraAg/dlmm-pro-sdk", rev = "<
 
 ## Parsing Accounts
 
-Pools, tick arrays, position arrays, limit orders and oracles have a fixed header followed by a variable tail. The structs from `declare_program!` describe only the header, so their `AccountDeserialize` panics on these accounts. Use the `Dynamic*` parsers instead.
+Tick arrays, position arrays, limit orders, oracles and pools with extensions have a fixed header followed by a variable tail. The structs from `declare_program!` describe only the header, so their `AccountDeserialize` panics on these accounts. Use the `Dynamic*` parsers instead.
 
 Parse the pool first. Whether the pool has the `LiquidityMining` extension changes the layout of its ticks and positions, so the tick array and position array parsers take the parsed pool:
 
@@ -111,16 +111,16 @@ Reading the result:
 | `mm_fee`, `limit_order_fee`, `protocol_fee`, `host_fee`, `partner_fee` | How the trading fee splits. |
 | `next_sqrt_price`, `next_tick_id`, `next_liquidity` | Pool state after the swap. |
 
-The quote is a snapshot. It does not write the oracle, fee growth, reward growth, activation state or the post-swap volatility, so reparse the accounts before quoting the next swap on the same pool. `swapper: None` is conservative: on a pool that is not active yet it fails rather than assume the swapper is whitelisted.
+The quote is a snapshot. It does not write the oracle, fee growth, reward growth, activation state or the post-swap volatility, so reparse the accounts before quoting the next swap on the same pool. `swapper` only matters on pools with the `ActivationAccess` extension. `None` is conservative: before activation it fails rather than assume the swapper is whitelisted.
 
 ## Building the Swap Instruction
 
-Use `dlmm_pro::client::accounts::Swap` and `dlmm_pro::client::args::Swap` to build the instruction. The remaining accounts go in this order:
+Use `dlmm_pro::client::accounts::Swap` and `dlmm_pro::client::args::Swap` to build the instruction. The fixed accounts include the pool authority (`pool_authority::ID`) and the event authority (`derive_event_authority()`). When `pool.is_bitmap_extension_initialized()`, pass the tick array bitmap extension too, or the swap fails with `BitmapExtensionAccountIsNotProvided`. The remaining accounts go in this order:
 
-1. Transfer hook accounts for each mint that has a hook, as slices described by the `remaining_accounts_info` argument. `remaining_accounts_from_hooks` builds both the slice list and the account list.
+1. Transfer hook accounts for each mint that has a hook, as slices described by the `remaining_accounts_info` argument. A swap accepts the `TransferHookX`, `TransferHookY` and `TransferHookReferral` slices. `remaining_accounts_from_hooks` builds both the slice list and the account list.
 2. The tick arrays from `tick_arrays_for_swap`, writable, in the same order you quoted with.
 
-`get_extra_account_metas_for_transfer_hook` resolves a hook's extra accounts through a fetch callback you provide. Mints without a transfer hook need no slice.
+`get_extra_account_metas_for_transfer_hook` is async. Give it the mint, the mint's data, a `TransferHookContext` with the transfer's source, destination, authority (`pool_authority::ID` for transfers out of the pool) and amount, and a callback that fetches account data. Mints without a transfer hook need no slice.
 
 ## Positions and Limit Orders
 

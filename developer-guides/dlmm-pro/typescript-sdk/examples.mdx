@@ -13,8 +13,12 @@ Each example is a complete script. They read settings from environment variables
 | `WALLET_SECRET_KEY` | The signer's secret key as a JSON byte array |
 | `POOL_ADDRESS` | The DLMM Pro pool to act on |
 | `POSITION_NFT` | A position's NFT mint, for the fee and close examples |
+| `TOKEN_X_MINT` | Your token's mint, for the two launch pool examples |
+| `INITIAL_TICK` | The starting tick of the scheduled launch |
+| `REWARD_MINT` | The reward token's mint, for the reward example |
+| `COMPOUND` | Set it to compound instead of claim in the fee example |
 
-All amounts are in atoms (the token's smallest unit). Run the scripts as ES modules, for example with `npx tsx script.ts`.
+All amounts are in atoms (the token's smallest unit). The scripts use top-level `await`, so run them as ES modules: save each one with an `.mts` extension (or set `"type": "module"` in your `package.json`) and run it with `npx tsx script.mts`.
 
 ## Create a Launch Pool
 
@@ -82,7 +86,7 @@ await sendAndConfirmTransaction(connection, tx, [creator]);
 console.log("launch pool", pool.toBase58());
 ```
 
-The initial price must sit on a usable tick, so the script rounds to the nearest multiple of the tick spacing. A pool can only be created once per pair this way; [Pool Creation and Activation](/core-products/dlmm-pro/pool-creation-and-activation) covers static and dynamic configs.
+The script rounds the starting tick to a multiple of the tick spacing so the price starts on a usable tick. The program does not require this; any price within the bounds works. A pool can only be created once per pair this way; [Pool Creation and Activation](/core-products/dlmm-pro/pool-creation-and-activation) covers static and dynamic configs.
 
 ## Open a Position With a Curve Shape
 
@@ -194,7 +198,7 @@ A Curve over 41 tick spacings stacks into 21 ranges with the horizontal layout. 
 
 ## Claim or Compound Fees
 
-`getClaimableFees` refreshes nothing on-chain; it computes what a claim would pay right now and returns the slot bitmap and ranges to pass to `claimFee`. `compoundFees` claims and deposits the result into one slot in the same transaction.
+`getClaimableFees` refreshes nothing on-chain; it computes what a claim would pay right now and returns the slot bitmap and ranges to pass to `claimFee`. `compoundFees` claims and deposits into one slot in the same transaction. The deposit is an imbalanced deposit, so for a slot that holds both tokens it adds as much as the slot's current token ratio allows, and anything that does not fit stays in the wallet.
 
 ```typescript
 import {
@@ -401,7 +405,7 @@ const opened = await client.limitOrder.openLimitOrder({
   tokenMint: poolState.tokenYMint, // bids pay in token Y
   parameters: {
     isAskSide: false,
-    maxAmount: bid.amount,
+    maxAmount: bid.amount, // add the transfer fee if token Y has one
     // Reject the order if the price moves more than two tick spacings first
     relativeTick: relativeTickFromSlippage({
       currentTickId: tickCurrentId,
@@ -464,7 +468,7 @@ const creator = Keypair.fromSecretKey(
 const pool = new PublicKey(process.env.POOL_ADDRESS!); // created with the LiquidityMining extension
 const rewardMint = new PublicKey(process.env.REWARD_MINT!);
 
-// 1. Set up slot 0 with the reward mint; the creator funds it
+// 1. Set up slot 0 with the reward mint, with the creator as reward authority
 const initialized = await client.reward.initializeReward({
   pool,
   rewardMint,
@@ -490,6 +494,7 @@ const funded = await client.reward.setRewardEmission({
     openTime,
     endTime,
     emissionPerSecond,
+    // Add the transfer fee here if the reward mint has one
     maxAmount: calculateRewardAmount(
       endTime.sub(openTime),
       emissionPerSecond,
@@ -537,7 +542,7 @@ const creator = Keypair.fromSecretKey(
 const tokenXMint = new PublicKey(process.env.TOKEN_X_MINT!);
 const tokenYMint = new PublicKey("So11111111111111111111111111111111111111112");
 const tickSpacing = 100;
-const initialTick = Number(process.env.INITIAL_TICK!); // a multiple of tickSpacing
+const initialTick = Number(process.env.INITIAL_TICK!); // usually a multiple of tickSpacing
 
 // The creator can deposit at once; everyone else trades and deposits in an hour
 const { timestamp } = await readClock(connection);

@@ -79,7 +79,7 @@ const client = new DlmmProClient(connection);
 - User token accounts are optional. Each defaults to the associated token account of the wallet its parameter names.
 - The builder creates a missing associated token account, funded by the fee payer. An account you pass explicitly is used as is.
 - For native SOL, the builder wraps the shortfall of the amount being paid from the owner's lamports and closes the owner's wrapped SOL account at the end, so the owner signs. A delegate withdrawing native SOL leaves that account open. `initializeLaunchPool` wraps 1 lamport when its SOL proof account is empty.
-- Token 2022 transfer-hook accounts are resolved from the mint for every transfer. Pass `transferHookX`, `transferHookY`, `transferHookReferral` or `transferHookReward` to override. An explicit array, including `[]`, is sent as given.
+- Token 2022 transfer-hook accounts are resolved from the mint for every transfer. Pass `transferHookX`, `transferHookY`, `transferHookReferral` or `transferHookReward` to override (`openLimitOrder` takes a single `transferHook`). An explicit array, including `[]`, is sent as given.
 - Builders read the accounts they need (pool, mints, transfer-hook accounts) at the client's commitment.
 - `state.fetchTokenBadge` always reads `ACCESS_REGISTRY_PROGRAM_ID`.
 - Operator and admin instructions are not wrapped. Build them with `client.program.methods.<instruction>(...).instruction()` or `.transaction()`. The program has a read-only provider and cannot send.
@@ -104,7 +104,7 @@ const client = new DlmmProClient(connection);
 
 The three initializers return `{ tx, pool, oracle, reserveX, reserveY, tickArrayBitmapExtension, tokenXProgram, tokenYProgram, tokenBadgeX, tokenBadgeY }`. `openPosition`, `expandPosition` and `openLimitOrder` create the tick arrays they need, so call `initializeTickArray` only to create one ahead of time.
 
-A mint needs a token badge from the access registry when it is a Token 2022 mint with an extension other than a transfer fee, metadata, or a transfer hook with neither a program nor an authority. Pass `tokenBadgeX` or `tokenBadgeY` from `deriveTokenBadge`. A config with `DynamicConfigPermission.CreatePoolWithoutMintValidation` skips the badge check.
+A mint needs a token badge from the access registry when it is a Token 2022 mint with an extension other than a transfer fee, metadata, or a transfer hook with neither a program nor an authority. Pass `tokenBadgeX` or `tokenBadgeY` from `deriveTokenBadge`. A config with `DynamicConfigPermission.CreatePoolWithoutMintValidation` skips the badge check. On an `OnlyY` pool, token Y must be wrapped SOL or USDC, or have a token badge.
 
 ### Quote Then Swap
 
@@ -158,7 +158,7 @@ async function swapWithSlippage(pool: PublicKey, user: Keypair) {
 
 ### Pool Parameters with a Dynamic Config
 
-`initializePoolWithDynamicConfig` and `initializeLaunchPool` take `InitializePoolWithDynamicParameters`. The builder validates it before building and throws a `PoolError` on the first violation. With the `ActivationAccess` extension, `poolActivation` is required and `activationPoint` defaults to the current slot or timestamp. Without it, both must be `null`.
+`initializePoolWithDynamicConfig` and `initializeLaunchPool` take `InitializePoolWithDynamicParameters`. The builder checks the fee schedule, dynamic fee, tick spacing, price, extensions and activation parameters before building, and throws a `PoolError` on the first violation. Mint and token badge rules, including the `OnlyY` rule below, are checked by the program. With the `ActivationAccess` extension, `poolActivation` is required and `activationPoint` defaults to the current slot or timestamp. Without it, both must be `null`.
 
 ```typescript
 import { Keypair, PublicKey } from "@solana/web3.js";
@@ -224,7 +224,7 @@ function launchParameters(
 | `removeLiquidityByBps(params)` | Withdraw a share of the unlocked liquidity of selected slots. | `signer` |
 | `claimFee(params)` | Refresh selected slots and transfer pending fees. | `signer` |
 | `getClaimableFees(params)` | Compute what `claimFee` would transfer. Read only. | - |
-| `compoundFees(params)` | Refresh, claim and redeposit fees into one slot in one transaction. | `signer` |
+| `compoundFees(params)` | Refresh, claim and redeposit fees into one slot in one transaction. A delegate signer also needs an SPL token approval from the owner on both token accounts. | `signer` |
 | `expandPosition(params)` | Append slots to a position. | `signer`, `payer` |
 | `removePosition(params)` | Delete empty slots. | `signer` |
 | `closePosition(params)` | Close an empty position and burn its NFT. | `owner` |
@@ -271,41 +271,31 @@ import {
 import BN from "bn.js";
 import {
   DlmmProClient,
-  LiquidityLayout,
-  StrategyType,
-  buildLiquidityShape,
   encodeAddLiquidityByWeight,
   multiplierFromAmounts,
+  type LiquidityShape,
 } from "@meteora-ag/dlmm-pro-sdk";
 
 const connection = new Connection("https://api.mainnet-beta.solana.com");
 const client = new DlmmProClient(connection);
 
-// The position behind nftMint was opened with tickRanges: shape.ranges.
+// `shape` is the buildLiquidityShape result the position was opened with
+// (openPosition tickRanges: shape.ranges). Reuse it instead of rebuilding it:
+// a shape rebuilt after the price moves has different ranges.
 async function depositByWeight(
   pool: PublicKey,
   nftMint: PublicKey,
   owner: Keypair,
+  shape: LiquidityShape,
 ) {
   const poolState = await client.state.fetchPool(pool);
-  const { tickSpacing, tickCurrentId } = poolState;
-  const aligned = Math.floor(tickCurrentId / tickSpacing) * tickSpacing;
-
-  const shape = buildLiquidityShape({
-    strategy: StrategyType.Curve,
-    minTickId: aligned - 10 * tickSpacing,
-    maxTickId: aligned + 10 * tickSpacing,
-    tickSpacing,
-    currentTickId: tickCurrentId,
-    layout: LiquidityLayout.Horizontal,
-  });
 
   const amountX = new BN(1_000_000);
   const amountY = new BN(1_000_000);
   const multiplier = multiplierFromAmounts({
     ranges: shape.ranges,
-    tickSpacing,
-    currentTickId: tickCurrentId,
+    tickSpacing: poolState.tickSpacing,
+    currentTickId: poolState.tickCurrentId,
     currentSqrtPrice: poolState.sqrtPrice,
     amountX,
     amountY,
@@ -393,7 +383,7 @@ With `relativeTick` set, each `ticks[].id` is an offset, in tick-spacing units, 
 | `calculateTransferFeeExcludedAmount(mint, epoch, amount)` | Amount that arrives when `amount` is sent. Returns `TransferFeeAmount`. |
 | `calculateTransferFeeIncludedAmount(mint, epoch, amount)` | Amount to send so that `amount` arrives. Returns `TransferFeeAmount`. |
 
-Pass the swap's tick arrays in traversal order: descending indexes when `swapForY`, ascending otherwise. `tickArraysForSwap` returns the first `maxTickArrays` (default 3) arrays with liquidity from the current tick onward. With `amountLeft` zero, the quote matches what `swap` produces against the same accounts and clock. The pure quote throws `InvalidParameters` when a Token 2022 side has no unpacked mint, and `BitmapExtensionAccountIsNotProvided` when the traversal leaves the inline bitmap without `bitmapExtension`.
+Pass the swap's tick arrays in traversal order: descending indexes when `swapForY`, ascending otherwise. `tickArraysForSwap` returns the first `maxTickArrays` (default 3) arrays with liquidity from the current tick onward. With `amountLeft` zero, the quoted input and output amounts match what `swap` produces against the same accounts and clock. The pure quote throws `InvalidParameters` when a Token 2022 side has no unpacked mint, and `BitmapExtensionAccountIsNotProvided` when the traversal leaves the inline bitmap without `bitmapExtension`.
 
 `QuoteExactInResult` fields:
 

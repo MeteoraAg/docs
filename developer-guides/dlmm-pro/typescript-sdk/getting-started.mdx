@@ -62,7 +62,7 @@ The program ID is the same on mainnet and devnet, so the same client works on bo
 
 ## Quote and Swap
 
-This script reads a pool, prints its price, quotes selling one whole token X, and sends the swap with 0.5% slippage.
+This script reads a pool, prints its price, quotes selling one whole token X, and sends the swap with 0.5% slippage. It uses top-level `await`, so save it as `swap.mts` and run it with `npx tsx swap.mts`.
 
 ```typescript
 import {
@@ -154,8 +154,8 @@ A few things to note:
 Every builder returns `{ tx, ... }`, where `tx` is an unsigned `Transaction` with the fee payer set and no recent blockhash. `sendAndConfirmTransaction` fills in the blockhash. Each builder's reference entry lists who must sign; new NFT mints (positions and limit orders) sign too.
 
 - **Token accounts.** User token accounts default to the wallet's associated token accounts. A missing one is created in the same transaction, paid by the fee payer.
-- **Wrapped SOL.** When a wallet pays SOL, the builder wraps what is needed and closes the wrapped account at the end.
-- **Accounts the program needs.** Tick arrays, the bitmap extension and Token 2022 transfer hook accounts are resolved when you leave them out.
+- **Wrapped SOL.** When a wallet pays or receives SOL through its default token account, the builder wraps or unwraps it in the same transaction. An account you pass explicitly is used as is.
+- **Accounts the program needs.** `swap` takes its tick arrays from `quoteExactIn`, position builders derive theirs from the `tickRanges` you pass, and limit order builders resolve their own. The bitmap extension and Token 2022 transfer hook accounts are resolved when you leave them out.
 - **Operator and admin instructions** are not wrapped. Build them with `client.program.methods.<instruction>(...)` if you need them.
 
 ## Errors
