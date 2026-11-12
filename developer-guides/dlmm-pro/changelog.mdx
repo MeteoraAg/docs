@@ -1,56 +1,89 @@
 ---
 title: "DLMM Pro Changelog"
 sidebarTitle: "Changelog"
-description: "Release notes for the DLMM Pro program, the @meteora-ag/dlmm-pro-sdk TypeScript SDK and the dlmm-pro-commons Rust crate."
-llmsDescription: "Changelog for DLMM Pro integrations. Covers the first release: dlmm_pro program 0.1.0 (dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n), @meteora-ag/dlmm-pro-sdk 0.1.0 with DlmmProClient and pool, position, limit order, reward and state services, quoteExactIn, liquidity shapes, base fee, activation and dynamic fee builders, and dlmm-pro-commons 0.1.0 with declare_program types, dynamic account parsers, quote_exact_in, tick array selection, Token 2022 helpers, claimable fees and rewards."
+description: "Track DLMM Pro release notes, breaking changes and upgrade guidance for the dlmm_pro program, the TypeScript SDK and the Rust commons crate."
+llmsDescription: "Explains the DLMM Pro integration changelog for builders maintaining Meteora DLMM Pro integrations. Covers versioned release entries for the dlmm_pro program (dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n), the @meteora-ag/dlmm-pro-sdk TypeScript SDK and the dlmm-pro-commons Rust crate, PR links, breaking-change callouts and what swap routers, trading terminals and partners need to do for each release. Release 0.1.0 is the first version."
 rss: true
 ---
 
+<Tip>
+  Track DLMM Pro releases here.
+</Tip>
+
 <Update
-  label="DLMM Pro 0.1.0"
+  label="dlmm_pro 0.1.0"
   description="First release"
   rss="First release of DLMM Pro: the dlmm_pro program 0.1.0, @meteora-ag/dlmm-pro-sdk 0.1.0 and the dlmm-pro-commons 0.1.0 Rust crate."
 >
+  <Warning>
+    DLMM Pro is in beta and is subject to breaking changes. Pin the SDK version you integrate against and check this page before upgrading.
+  </Warning>
+
   ## Release Summary
 
-  | Component | Version | Link |
+  | Component | Version | PR |
   | --- | --- | --- |
-  | Program | `0.1.0` | `dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n` |
-  | TypeScript SDK | `0.1.0` | [`@meteora-ag/dlmm-pro-sdk@0.1.0`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.0) |
-  | Rust crate | `0.1.0` | [`dlmm-pro-commons`](https://github.com/MeteoraAg/dlmm-pro-sdk/tree/main/commons) |
+  | Program | `0.1.0` | - |
+  | TypeScript SDK | `0.1.0` | [dlmm-pro-sdk #16](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/16) |
+  | Commons | `0.1.0` | [dlmm-pro-sdk #17](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/17) |
+
+  ## What We Shipped
+
+  - The DLMM Pro program on mainnet and devnet
+  - The TypeScript SDK on npm
+  - The `dlmm-pro-commons` Rust crate for aggregators
+
+  ## What To Do
+
+  | Integrators | What To Do |
+  | --- | --- |
+  | Swap routers | Quote with `quote_exact_in` and `tick_arrays_for_swap` from `dlmm-pro-commons`, or `quoteExactIn` in the TypeScript SDK. Pass the tick arrays in traversal order, the bitmap extension when the pool has one, and any Token 2022 transfer hook accounts. |
+  | Trading terminals | Index pools under the program ID. Pool accounts have a dynamic tail, so decode them with `DynamicPool` or `client.state.fetchPoolWithExtensions`, not a plain layout decode. |
+  | Partners | Install `@meteora-ag/dlmm-pro-sdk@0.1.0` and start from the [getting started guide](/developer-guides/dlmm-pro/typescript-sdk/getting-started). |
 
   ## Program: `dlmm_pro` `0.1.0`
 
   Program ID (mainnet and devnet): `dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n`
 
-  - Tick-based concentrated liquidity with tick spacing from 1 to 256 and tick arrays that grow and shrink with the ticks in use.
-  - Position NFTs with up to 45 ranges, explicit, by-weight and imbalanced deposits, withdrawals by amount or share, permanent and vesting locks, and delegate permissions.
-  - Limit orders of up to 25 ticks that fill at the tick price and earn half of the limit-order share of the trading fee.
-  - Fixed, time scheduler and market cap scheduler base fees, an optional dynamic fee, and `OutputToken` or `OnlyY` fee collection.
-  - Pools from static configs, dynamic configs with a partner fee, and launch pools, with optional `LiquidityMining` and `ActivationAccess` extensions.
-  - Liquidity mining with two reward slots, and an extendable tick-cumulative oracle.
+  - First version
 
   ## TypeScript SDK: `@meteora-ag/dlmm-pro-sdk` `0.1.0`
 
-  ### Added
+  [SDK PR #16](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/16)
 
-  - `DlmmProClient` with `pool`, `position`, `limitOrder`, `reward` and `state` services. Builders return unsigned transactions, default user token accounts to associated token accounts, wrap and unwrap SOL, and resolve transfer hook accounts, tick arrays and the bitmap extension when you leave them out.
-  - `quoteExactIn`, on the client and as a pure function, covering the dynamic fee, limit order fills, the fee token and Token 2022 transfer fees. It returns the tick arrays the swap needs.
-  - `getClaimableFees` and `compoundFees`.
-  - `buildLiquidityShape` for Spot, Curve, Bid-Ask and custom shapes, with `multiplierFromAmounts`, `encodeAddLiquidityByWeight`, `limitOrderTicksFromShape` and `relativeTickFromSlippage`.
-  - Base fee builders that take basis points (`baseFeeParameters`, `fixedBaseFeeParameters`, `timeSchedulerBaseFeeParameters`, `marketCapSchedulerBaseFeeParameters`), raw base fee encoders, activation builders and `getDynamicFeeParams`.
-  - PDA, tick, liquidity and account decoding helpers, and the DLMM Pro and access registry IDLs.
-
-  ## Rust Crate: `dlmm-pro-commons` `0.1.0`
-
-  Install from git; the crate is not on crates.io.
+  <Tip>
+    Production: [`@meteora-ag/dlmm-pro-sdk@0.1.0`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.0).
+  </Tip>
 
   ### Added
 
-  - `declare_program!(dlmm_pro)` types and instruction structs, generated from the same IDL as the TypeScript SDK.
-  - `DynamicPool`, `DynamicTickArray`, `DynamicPositionArray`, `DynamicLimitOrder` and `DynamicOracle` parsers for accounts with a dynamic tail.
-  - `quote_exact_in` and `tick_arrays_for_swap`, plus `tick_arrays_for_tick_ids` for position and limit order instructions.
-  - Token 2022 transfer fee helpers and `get_extra_account_metas_for_transfer_hook`.
-  - `claimable_fees`, `claimable_rewards` and `get_amounts_from_liquidity`.
-  - PDA helpers, program constants and `PoolError`.
+  - Added `DlmmProClient` with `pool`, `position`, `limitOrder`, `reward` and `state` services for DLMM Pro release 0.1.0.
+  - Added pool functions `swap`, `initializePoolWithStaticConfig`, `initializePoolWithDynamicConfig`, `initializeLaunchPool`, `initializeTickArray`, `initializeTickBitmapExtension`, `increaseOracleLength` and `claimPartnerFee`.
+  - Added function `quoteExactIn` to quote an exact in swap. It covers dynamic fee, limit order liquidity, collect fee mode and Token 2022 transfer fee, and returns the tick arrays the swap needs.
+  - Added position functions `openPosition`, `addLiquidity`, `addLiquidityByWeight`, `addLiquidityImbalance`, `removeLiquidity`, `removeLiquidityByBps`, `claimFee`, `expandPosition`, `removePosition`, `closePosition`, `lockPermanentPosition`, `lockVestingPosition`, `refreshFeesAndRewards` and `updatePositionDelegatePermission`.
+  - Added function `getClaimableFees` to get the fees a position can claim, and `compoundFees` to claim fees and add them back to the position in one transaction.
+  - Added limit order functions `openLimitOrder`, `cancelLimitOrder`, `closeLimitOrder` and `updateLimitOrderDelegatePermission`.
+  - Added reward functions `initializeReward`, `updateRewardAuthority`, `setRewardEmission`, `claimReward` and `withdrawIneligibleRewards`.
+  - Added function `buildLiquidityShape` to build Spot, Curve, BidAsk or custom liquidity shapes, with `multiplierFromAmounts`, `encodeAddLiquidityByWeight`, `limitOrderTicksFromShape` and `relativeTickFromSlippage` to turn a shape into deposit or limit order parameters.
+  - Added base fee and activation helpers for pool creation: `encodeFixedBaseFeeData`, `encodeTimeSchedulerBaseFeeData`, `encodeMarketCapSchedulerBaseFeeData`, `openActivationParameters`, `bondingCurveActivationParameters` and `timeBasedActivationParameters`.
+  - Added base fee builders that take fees in basis points: `fixedBaseFeeParameters`, `timeSchedulerBaseFeeParameters` and `marketCapSchedulerBaseFeeParameters`, with `baseFeeParameters` to pick one by `baseFeeMode` and `bpsToFeeNumerator`.
+  - Added `getDynamicFeeParams` to build a pool's dynamic fee from a base fee in basis points, capping the variable fee at 20% of that fee.
+  - Added PDA, tick, liquidity and account decoding helpers.
+  - Builders resolve Token 2022 transfer hook accounts, tick arrays and the tick array bitmap extension when they are not passed in.
+  - Exported the DLMM Pro and access registry IDLs, also available as `@meteora-ag/dlmm-pro-sdk/idl/dlmm-pro` and `@meteora-ag/dlmm-pro-sdk/idl/access-registry`.
+
+  ## Commons: `dlmm-pro-commons` `0.1.0`
+
+  [Commons PR #17](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/17)
+
+  ### Added
+
+  - Added `dlmm-pro-commons` crate for DLMM Pro release 0.1.0. It is not published to crates.io, depend on it from git.
+  - Added `declare_program!(dlmm_pro)` types and instruction structs, generated from the same IDL as the TypeScript SDK.
+  - Added `DynamicPool`, `DynamicTickArray`, `DynamicPositionArray`, `DynamicLimitOrder` and `DynamicOracle` to support parsing on accounts with dynamic data.
+  - Added `quote_exact_in()` to quote an exact in swap, and `tick_arrays_for_swap()` to get the tick arrays a swap needs.
+  - Added `tick_arrays_for_tick_ids()` to get the tick arrays for position and limit order instructions.
+  - Added Token 2022 transfer fee helpers and `get_extra_account_metas_for_transfer_hook()`.
+  - Added `claimable_fees()` and `claimable_rewards()` to get the fees and rewards a position can claim, and `get_amounts_from_liquidity()` to get position amounts.
+  - Added PDA helpers, program constants and `PoolError`.
 </Update>
