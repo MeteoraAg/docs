@@ -9,7 +9,7 @@ Each example is a complete script. They read settings from environment variables
 
 | Variable | Value |
 | --- | --- |
-| `RPC_URL` | A mainnet or devnet RPC endpoint |
+| `RPC_URL` | A mainnet or devnet RPC endpoint. On devnet, use wrapped SOL as `tokenYMint` in the first example: its USDC mint exists only on mainnet. |
 | `WALLET_SECRET_KEY` | The signer's secret key as a JSON byte array |
 | `POOL_ADDRESS` | The DLMM Pro pool to act on |
 | `POSITION_NFT` | A position's NFT mint, for the fee and close examples |
@@ -245,7 +245,7 @@ if (process.env.COMPOUND) {
 }
 ```
 
-If the target slot needs both tokens at the current price and the position only earned one of them, the compound deposit fails. Pass `maxAmountX` or `maxAmountY` to top it up from the wallet.
+If the target slot needs both tokens at the current price and the position only earned one of them, the program rejects the compound deposit with `ExceededSlippage`. Pass `maxAmountX` or `maxAmountY` to top it up from the wallet. On an `OnlyY` pool, such as the launch pool above, fees are always token Y, so a slot that spans the current price always needs a `maxAmountX` top-up. With nothing to claim, `compoundFees` throws `AmountIsZero`.
 
 ## Withdraw Everything and Close a Position
 
@@ -442,7 +442,7 @@ Canceling collects everything an order holds: the unfilled amount, the token rec
 
 ## Run a Reward Campaign
 
-The pool must have been created with the `LiquidityMining` extension. The pool creator sets up slot 0, and the reward authority funds the whole emission upfront.
+The pool must have been created with the `LiquidityMining` extension. The pool creator sets up slot 0, and the reward authority funds the whole emission upfront. Unless it has a token badge (passed as `tokenBadge`), the reward mint cannot have a freeze authority, and wrapped SOL and USDC are always accepted. See [Reward Mints](/core-products/dlmm-pro/liquidity-mining#reward-mints).
 
 ```typescript
 import {

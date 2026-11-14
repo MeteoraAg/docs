@@ -15,10 +15,10 @@ The crate is not published to crates.io. Depend on it from git, pinned to a comm
 
 ```toml
 [dependencies]
-dlmm-pro-commons = { git = "https://github.com/MeteoraAg/dlmm-pro-sdk", rev = "<commit>" }
+dlmm-pro-commons = { git = "https://github.com/MeteoraAg/dlmm-pro-sdk", rev = "6c8ab97c3451f6801bce623a887e9add80b78d4e" }
 ```
 
-`dlmm-pro-commons` 0.1.0 is built for DLMM Pro program 0.1.0. It re-exports `anchor_lang`, so use `dlmm_pro_commons::anchor_lang` to keep your Anchor version in step with the crate's.
+That commit is `dlmm-pro-commons` 0.1.1, built for DLMM Pro program 0.1.0. The repository has no release tags, so take the commit of the release you want from the [changelog](/developer-guides/dlmm-pro/changelog). The crate uses Anchor 1.x and the repository pins Rust 1.94.0. It re-exports `anchor_lang`, so use `dlmm_pro_commons::anchor_lang` to keep your Anchor version in step with the crate's.
 
 ## What's in the Crate
 
@@ -115,7 +115,7 @@ The quote is a snapshot. It does not write the oracle, fee growth, reward growth
 
 ## Building the Swap Instruction
 
-Use `dlmm_pro::client::accounts::Swap` and `dlmm_pro::client::args::Swap` to build the instruction. The fixed accounts include the pool authority (`pool_authority::ID`) and the event authority (`derive_event_authority()`). When `pool.is_bitmap_extension_initialized()`, pass the tick array bitmap extension too, or the swap fails with `BitmapExtensionAccountIsNotProvided`. The remaining accounts go in this order:
+Use `dlmm_pro::client::accounts::Swap` and `dlmm_pro::client::args::Swap` to build the instruction. The fixed accounts include the pool authority (`pool_authority::ID`) and the event authority (`derive_event_authority()`). When `pool.is_bitmap_extension_initialized()`, pass the tick array bitmap extension too: a swap that searches past the inline bitmap without it fails with `BitmapExtensionAccountIsNotProvided`. The remaining accounts go in this order:
 
 1. Transfer hook accounts for each mint that has a hook, as slices described by the `remaining_accounts_info` argument. A swap accepts the `TransferHookX`, `TransferHookY` and `TransferHookReferral` slices. `remaining_accounts_from_hooks` builds both the slice list and the account list.
 2. The tick arrays from `tick_arrays_for_swap`, writable, in the same order you quoted with.
@@ -124,7 +124,7 @@ Use `dlmm_pro::client::accounts::Swap` and `dlmm_pro::client::args::Swap` to bui
 
 ## Positions and Limit Orders
 
-`tick_arrays_for_tick_ids` returns the tick arrays holding a set of ticks, sorted by index, which is the order the position and limit order instructions expect. `claimable_fees` and `claimable_rewards` preview what a claim would transfer, as long as every slot holding liquidity is refreshed by that claim.
+`tick_arrays_for_tick_ids` returns the tick arrays holding a set of ticks, sorted by index, which is the order the position and limit order instructions expect. `claimable_fees` and `claimable_rewards` preview what a claim would transfer once every slot holding liquidity has been refreshed with `refresh_fees_and_rewards`. The claim instructions themselves pay out only what is already credited.
 
 ## Related
 

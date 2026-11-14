@@ -2,10 +2,12 @@
 title: "DLMM Pro TS SDK Reference"
 sidebarTitle: "Reference"
 description: "Look up every @meteora-ag/dlmm-pro-sdk export: DlmmProClient services, pure helpers, program IDs, enums, constants and errors."
-llmsDescription: "Reference for the DLMM Pro TypeScript SDK @meteora-ag/dlmm-pro-sdk 0.1.0. Covers dependencies, program IDs, DlmmProClient and its pool, position, limitOrder, reward and state services, builder conventions (token accounts, wrapped SOL, transfer hooks, signers), position slots and bitmaps, limit orders, quoteExactIn, tickArraysForSwap, transfer fee helpers, liquidity shapes, tick helpers, PDA helpers, account codecs, base fee and activation builders, dynamic fee parameters, enums, constants, PoolError and PoolErrorCode."
+llmsDescription: "Reference for the DLMM Pro TypeScript SDK @meteora-ag/dlmm-pro-sdk 0.1.1. Covers dependencies, program IDs, DlmmProClient and its pool, position, limitOrder, reward and state services, builder conventions (token accounts, wrapped SOL, transfer hooks, signers), position slots and bitmaps, limit orders, quoteExactIn, tickArraysForSwap, transfer fee helpers, liquidity shapes, tick helpers, PDA helpers, account codecs, base fee and activation builders, dynamic fee parameters, enums, constants, PoolError and PoolErrorCode."
 ---
 
 The package exports `DlmmProClient` plus pure helpers for quoting, liquidity shapes, ticks, PDAs, fees and activation. Every builder returns an unsigned transaction with the fee payer set and no recent blockhash. You sign it and send it.
+
+Each section starts with a summary table of what it contains. An entry for every function follows, with its signature, each parameter and its default, the return value, an example and notes on behaviour and thrown errors.
 
 ```typescript
 import {
@@ -86,6 +88,113 @@ const client = new DlmmProClient(connection);
 
 `createDlmmProProgram(connection, programId?)` and `createAccessRegistryProgram(connection)` return the Anchor programs the client uses, each with a read-only provider.
 
+### DlmmProClient
+
+Entry point. Holds the connection, the Anchor program, and one service per
+area.
+
+**Function**
+
+```typescript
+new DlmmProClient(connection, commitment?, programId?)
+```
+
+**Parameters**
+
+```typescript
+connection: Connection; // RPC connection
+commitment?: Commitment; // Commitment for every account read; default "confirmed"
+programId?: PublicKey; // DLMM Pro program; default DLMM_PRO_PROGRAM_ID
+```
+
+**Returns**
+
+```typescript
+class DlmmProClient {
+  connection: Connection;
+  commitment: Commitment;
+  program: Program<DlmmProTypes>; // createDlmmProProgram(connection, programId)
+  pool: PoolService; // Pool Functions
+  position: PositionService; // Position Functions
+  limitOrder: LimitOrderService; // Limit Order Functions
+  reward: RewardService; // Reward Functions
+  state: StateService; // State Functions
+}
+```
+
+**Example**
+
+```typescript
+import { Connection } from "@solana/web3.js";
+import { DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+const client = new DlmmProClient(connection);
+```
+
+**Notes**
+
+- Builders return `{ tx, ... }`. `tx` is an unsigned `Transaction` with
+  `feePayer` set and no recent blockhash; each builder lists its signers.
+  `sendAndConfirmTransaction(connection, tx, signers)` fills in the blockhash.
+- User token accounts are optional and default to the associated token
+  account of the wallet each parameter names. The builder creates a missing
+  associated token account, with the fee payer funding it. For native SOL it
+  also wraps the shortfall of the amount being paid from the owner's lamports
+  and closes the owner's wrapped-SOL account at the end, so the owner signs.
+  A delegate withdrawing native SOL leaves that account open. An account
+  passed explicitly is used as is. `initializeLaunchPool` wraps 1 lamport when
+  its SOL proof account is empty.
+- Builders read the accounts they need (pool, mints, transfer-hook accounts)
+  at the client's commitment.
+- `state.fetchTokenBadge` always reads `ACCESS_REGISTRY_PROGRAM_ID`.
+- Operator and admin instructions are not wrapped. Build them with
+  `client.program.methods.<instruction>(...).instruction()` or
+  `.transaction()`; the program has a read-only provider and cannot send.
+
+### createDlmmProProgram
+
+**Function**
+
+```typescript
+createDlmmProProgram(connection, programId?): Program<DlmmProTypes>
+```
+
+**Parameters**
+
+```typescript
+connection: Connection; // RPC connection
+programId?: PublicKey; // Default DLMM_PRO_PROGRAM_ID
+```
+
+**Returns**
+
+An Anchor `Program` with a read-only provider.
+
+**Notes**
+
+- For another deployment, the IDL's address and the pool-authority PDA it
+  embeds are rewritten to `programId`.
+
+### createAccessRegistryProgram
+
+**Function**
+
+```typescript
+createAccessRegistryProgram(connection): Program<AccessRegistryTypes>
+```
+
+**Parameters**
+
+```typescript
+connection: Connection; // RPC connection
+```
+
+**Returns**
+
+An Anchor `Program` for `ACCESS_REGISTRY_PROGRAM_ID` with a read-only
+provider.
+
 ## Pool Service
 
 `client.pool`.
@@ -104,11 +213,13 @@ const client = new DlmmProClient(connection);
 
 The three initializers return `{ tx, pool, oracle, reserveX, reserveY, tickArrayBitmapExtension, tokenXProgram, tokenYProgram, tokenBadgeX, tokenBadgeY }`. `openPosition`, `expandPosition` and `openLimitOrder` create the tick arrays they need, so call `initializeTickArray` only to create one ahead of time.
 
-A mint needs a token badge from the access registry when it is a Token 2022 mint with an extension other than a transfer fee, metadata, or a transfer hook with neither a program nor an authority. Pass `tokenBadgeX` or `tokenBadgeY` from `deriveTokenBadge`. A config with `DynamicConfigPermission.CreatePoolWithoutMintValidation` skips the badge check. On an `OnlyY` pool, token Y must be wrapped SOL or USDC, or have a token badge.
+A mint needs a token badge from the access registry when it is a Token 2022 mint with an extension other than a transfer fee, metadata, or a transfer hook with neither a program nor an authority. Pass `tokenBadgeX` or `tokenBadgeY` from `deriveTokenBadge`. A config with `DynamicConfigPermission.CreatePoolWithoutMintValidation` skips the badge check. On an `OnlyY` pool, token Y must be wrapped SOL or USDC, or have a token badge. The three initializers throw `InvalidTokenBadge` when it is neither wrapped SOL nor USDC and no `tokenBadgeY` is passed.
 
 ### Quote Then Swap
 
 `quoteExactIn` returns the tick arrays the quote used. Pass them to `swap` only when `quote.amountLeft` is zero. Otherwise the program reverts with `NotConsumingFullAmountIn`. The dynamic fee and scheduled base fees can change before the swap lands, so set `minimumOutputAmount` below `transferFeeExcludedOutAmount`.
+
+To pay the host fee to a referrer, pass `referral` to `swap`: a token account for the fee token, which is the output mint, or token Y on an `OnlyY` pool. Pass `hasReferral: true` to the quote to see the same fee split. The swapper's output does not change.
 
 ```typescript
 import {
@@ -158,7 +269,7 @@ async function swapWithSlippage(pool: PublicKey, user: Keypair) {
 
 ### Pool Parameters with a Dynamic Config
 
-`initializePoolWithDynamicConfig` and `initializeLaunchPool` take `InitializePoolWithDynamicParameters`. The builder checks the fee schedule, dynamic fee, tick spacing, price, extensions and activation parameters before building, and throws a `PoolError` on the first violation. Mint and token badge rules, including the `OnlyY` rule below, are checked by the program. With the `ActivationAccess` extension, `poolActivation` is required and `activationPoint` defaults to the current slot or timestamp. Without it, both must be `null`.
+`initializePoolWithDynamicConfig` and `initializeLaunchPool` take `InitializePoolWithDynamicParameters`. The builder checks the fee schedule, dynamic fee, tick spacing, price, extensions and activation parameters before building, and throws a `PoolError` on the first violation. Mint and token badge rules are checked by the program, apart from the `OnlyY` rule above. With the `ActivationAccess` extension, `poolActivation` is required and `activationPoint` defaults to the current slot or timestamp. Without it, both must be `null`.
 
 ```typescript
 import { Keypair, PublicKey } from "@solana/web3.js";
@@ -209,6 +320,533 @@ function launchParameters(
   };
 }
 ```
+
+### quoteExactIn
+
+Quotes an exact-in swap from the current on-chain state and returns the
+accounts `swap` needs.
+
+**Function**
+
+```typescript
+quoteExactIn(params: QuoteExactInRequest): Promise<QuoteExactInResponse>
+```
+
+**Parameters**
+
+```typescript
+type QuoteExactInRequest = {
+  pool: PublicKey; // Pool address
+  inputAmount: BN; // Amount sent, before the input mint's transfer fee
+  swapForY: boolean; // true sells X for Y, false sells Y for X
+  hasReferral?: boolean; // The swap passes a referral account; default false
+  swapper?: PublicKey | null; // Swapping wallet; a whitelisted swapper can quote before activation
+  maxTickArrays?: number; // Initialized tick arrays to load in the swap direction; default 3
+};
+```
+
+**Returns**
+
+```typescript
+type QuoteExactInResponse = {
+  quote: QuoteExactInResult; // See quoteExactIn (pure)
+  tickArrays: PublicKey[]; // Pass to swap
+  tickArrayBitmapExtension: PublicKey | null; // Pass to swap; set when the pool has a bitmap extension
+};
+```
+
+**Example**
+
+```typescript
+const inputAmount = new BN(1_000_000);
+const { quote, tickArrays, tickArrayBitmapExtension } =
+  await client.pool.quoteExactIn({
+    pool,
+    inputAmount,
+    swapForY: true,
+    swapper: user.publicKey,
+  });
+if (!quote.amountLeft.isZero()) {
+  throw new Error("Not enough liquidity in the loaded tick arrays");
+}
+// Accept up to 0.5% less than quoted.
+const minimumOutputAmount = quote.transferFeeExcludedOutAmount
+  .muln(9_950)
+  .divn(10_000);
+```
+
+**Notes**
+
+- `quote.amountLeft > 0` means the loaded tick arrays ran out of liquidity.
+  A swap of that input reverts with `NotConsumingFullAmountIn`; raise
+  `maxTickArrays` or lower `inputAmount`.
+- The quote uses the clock at read time. The dynamic fee and scheduled base
+  fees can change before the swap lands, so set `minimumOutputAmount` below
+  `transferFeeExcludedOutAmount`.
+- `hasReferral` changes only how the protocol fee is split (`hostFee`,
+  `protocolFee`, `partnerFee`), not what the swapper receives.
+- Throws `AmountIsZero` for a zero input, `InvalidActivationAccess` when
+  swaps are disabled or the pool is not yet active for `swapper`, and
+  `LiquidityIsZero` when no initialized tick array lies in the swap direction.
+
+### swap
+
+Builds an exact-in swap.
+
+**Function**
+
+```typescript
+swap(params: SwapParams): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+type SwapParams = {
+  pool: PublicKey; // Pool address
+  tokenXMint: PublicKey; // Pool token X mint
+  tokenYMint: PublicKey; // Pool token Y mint
+  user: PublicKey; // Pays the input; signer and fee payer
+  swapForY: boolean; // true sells X for Y
+  tickArrays: PublicKey[]; // From quoteExactIn, in traversal order
+  parameters: {
+    inputAmount: BN; // Exact input, before the input mint's transfer fee
+    minimumOutputAmount: BN; // Least the swapper accepts, after the output mint's transfer fee
+  };
+  userTokenIn?: PublicKey; // Pays the input. Default: user's associated token account
+  userTokenOut?: PublicKey; // Receives the output; its mint sets the direction. Default: user's associated token account
+  tokenXProgram?: PublicKey; // Default from the pool's token flag
+  tokenYProgram?: PublicKey; // Default from the pool's token flag
+  tickArrayBitmapExtension?: PublicKey | null; // Default: the pool's extension when it has one
+  referral?: PublicKey | null; // Token account receiving the host fee
+  transferHookX?: AccountMeta[]; // Default: resolved from the mint
+  transferHookY?: AccountMeta[]; // Default: resolved from the mint
+  transferHookReferral?: AccountMeta[]; // Default: resolved from the referral account's mint
+};
+```
+
+**Returns**
+
+`{ tx }`. Signer: `user`.
+
+**Example**
+
+```typescript
+const poolState = await client.state.fetchPool(pool);
+const { tx } = await client.pool.swap({
+  pool,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  user: user.publicKey,
+  swapForY: true,
+  tickArrays,
+  tickArrayBitmapExtension,
+  parameters: { inputAmount, minimumOutputAmount },
+});
+await sendAndConfirmTransaction(connection, tx, [user]);
+```
+
+**Notes**
+
+- Pass the `tickArrays` and `tickArrayBitmapExtension` of a quote whose
+  `amountLeft` is zero. The program reverts with `NotConsumingFullAmountIn`
+  unless the swap consumes all of `inputAmount`.
+- The program takes the direction from the mint of `userTokenOut`; the
+  builder uses `swapForY` to pick the default accounts and resolve the
+  transfer-hook accounts of each leg.
+- `referral` must hold the fee token: the output mint, or token Y on a pool
+  with `CollectFeeMode.OnlyY`. It may be the swapper's own account.
+- Throws `AmountIsZero` for a zero `inputAmount`.
+
+### initializePoolWithStaticConfig
+
+Creates a pool from a static config, which fixes the fees, tick spacing,
+collect-fee mode, activation type, and extensions.
+
+**Function**
+
+```typescript
+initializePoolWithStaticConfig(params: InitializePoolWithStaticConfigParams): Promise<InitializePoolResult>
+```
+
+**Parameters**
+
+```typescript
+type InitializePoolWithStaticConfigParams = {
+  config: PublicKey; // Static config (deriveStaticConfig)
+  tokenXMint: PublicKey; // Token X mint
+  tokenYMint: PublicKey; // Token Y mint
+  creator: PublicKey; // Recorded as the pool creator
+  payer: PublicKey; // Pays rent and the transaction fee
+  initialSqrtPrice: BN; // sqrt(Y per X) as Q64.64, within MIN_SQRT_PRICE..=MAX_SQRT_PRICE
+  tokenXProgram?: PublicKey; // Default: the mint's owner
+  tokenYProgram?: PublicKey; // Default: the mint's owner
+  tokenBadgeX?: PublicKey | null; // deriveTokenBadge(tokenXMint) when X needs a badge
+  tokenBadgeY?: PublicKey | null; // deriveTokenBadge(tokenYMint) when Y needs a badge
+  tickArrayBitmapExtension?: PublicKey | null; // Default: derived when the initial tick lies outside the inline bitmap
+};
+```
+
+**Returns**
+
+```typescript
+type InitializePoolResult = {
+  tx: Transaction;
+  pool: PublicKey; // derivePool(config, tokenXMint, tokenYMint)
+  oracle: PublicKey;
+  reserveX: PublicKey;
+  reserveY: PublicKey;
+  tickArrayBitmapExtension: PublicKey | null;
+  tokenXProgram: PublicKey;
+  tokenYProgram: PublicKey;
+  tokenBadgeX: PublicKey | null;
+  tokenBadgeY: PublicKey | null;
+};
+```
+
+Signers: `payer`, and the config's `poolCreatorAuthority` when it is not the
+default key.
+
+**Example**
+
+```typescript
+const { tx, pool } = await client.pool.initializePoolWithStaticConfig({
+  config: deriveStaticConfig(0),
+  tokenXMint,
+  tokenYMint,
+  creator: owner.publicKey,
+  payer: owner.publicKey,
+  initialSqrtPrice: getSqrtPriceFromTickId(0),
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- A mint needs a token badge from the access registry when it is a
+  Token 2022 mint with an extension other than a transfer fee, metadata, or a
+  transfer hook with neither a program nor an authority (`UnsupportedMint`
+  without it). Token Y also needs one on a `CollectFeeMode.OnlyY` pool unless
+  it is in `WHITELISTED_QUOTE_MINTS` (`InvalidTokenBadge`).
+- The program creates the bitmap extension with the pool when the initial
+  tick lies outside the inline bitmap.
+- Throws `InvalidParameters` for identical mints or an `initialSqrtPrice`
+  outside `MIN_SQRT_PRICE..=MAX_SQRT_PRICE`, and `InvalidTokenBadge` on an
+  `OnlyY` config when token Y is not in `WHITELISTED_QUOTE_MINTS` and
+  `tokenBadgeY` is not passed.
+
+### initializePoolWithDynamicConfig
+
+Creates a pool from a dynamic config with caller-chosen fees, tick spacing,
+activation, and extensions.
+
+**Function**
+
+```typescript
+initializePoolWithDynamicConfig(params: InitializePoolWithDynamicConfigParams): Promise<InitializePoolResult>
+```
+
+**Parameters**
+
+```typescript
+type InitializePoolWithDynamicConfigParams = {
+  config: PublicKey; // Dynamic config (deriveDynamicConfig)
+  poolCreatorAuthority: PublicKey; // The config's authority; signs
+  tokenXMint: PublicKey; // Token X mint
+  tokenYMint: PublicKey; // Token Y mint
+  creator: PublicKey; // Recorded as the pool creator
+  payer: PublicKey; // Pays rent and the transaction fee
+  parameters: InitializePoolWithDynamicParameters;
+  tokenXProgram?: PublicKey; // Default: the mint's owner
+  tokenYProgram?: PublicKey; // Default: the mint's owner
+  tokenBadgeX?: PublicKey | null; // deriveTokenBadge(tokenXMint) when X needs a badge
+  tokenBadgeY?: PublicKey | null; // deriveTokenBadge(tokenYMint) when Y needs a badge
+  tickArrayBitmapExtension?: PublicKey | null; // Default: derived when the initial tick lies outside the inline bitmap
+};
+
+type InitializePoolWithDynamicParameters = {
+  poolFees: {
+    baseFeeParameter: {
+      baseFeeMode: number; // BaseFeeMode
+      data: number[]; // 31 bytes from the base-fee encoder for that mode
+    };
+    dynamicFeeParameter: {
+      maxVolatilityAccumulator: number; // u24
+      variableFeeControl: number; // u24
+      filterPeriod: number; // Seconds; below decayPeriod
+      decayPeriod: number; // Seconds
+      reductionFactor: number; // Basis points, 1..=10000
+      minDeltaTickForSignificantSwap: number; // Tick move that counts as a significant swap
+    } | null; // null disables the dynamic fee; otherwise from getDynamicFeeParams
+  };
+  tickSpacing: number; // 1..=MAX_TICK_SPACING
+  collectFeeMode: number; // CollectFeeMode
+  initialSqrtPrice: BN; // sqrt(Y per X) as Q64.64
+  activationType: number; // ActivationType
+  activationPoint: BN | null; // Slot or timestamp; only with the ActivationAccess extension
+  extensions: number; // encodePoolExtensions(...)
+  poolActivation: {
+    whitelistedSwap: PublicKey; // Swaps before activation
+    whitelistedAddLiquidity: PublicKey; // Deposits before activation
+    whitelistedRemoveLiquidity: PublicKey; // Withdrawals before activation
+    activations: PoolActivationInfoParameters[]; // Exactly two, from the activation builders
+  } | null; // Required with the ActivationAccess extension, otherwise null
+};
+```
+
+**Returns**
+
+`InitializePoolResult`, as for `initializePoolWithStaticConfig`. Signers:
+`payer` and `poolCreatorAuthority`.
+
+**Example**
+
+```typescript
+const parameters: InitializePoolWithDynamicParameters = {
+  poolFees: {
+    baseFeeParameter: {
+      baseFeeMode: BaseFeeMode.Fixed,
+      data: encodeFixedBaseFeeData(1_000_000), // 0.1%
+    },
+    dynamicFeeParameter: null,
+  },
+  tickSpacing: 10,
+  collectFeeMode: CollectFeeMode.OutputToken,
+  initialSqrtPrice: getSqrtPriceFromTickId(0),
+  activationType: ActivationType.Timestamp,
+  activationPoint: null,
+  extensions: encodePoolExtensions([PoolExtension.LiquidityMining]),
+  poolActivation: null,
+};
+const { tx, pool } = await client.pool.initializePoolWithDynamicConfig({
+  config: deriveDynamicConfig(poolCreatorAuthority.publicKey, 0),
+  poolCreatorAuthority: poolCreatorAuthority.publicKey,
+  tokenXMint,
+  tokenYMint,
+  creator: owner.publicKey,
+  payer: owner.publicKey,
+  parameters,
+});
+await sendAndConfirmTransaction(connection, tx, [owner, poolCreatorAuthority]);
+```
+
+**Notes**
+
+- The builder validates `parameters` before building (fee schedule and
+  bounds, dynamic fee, tick spacing, price, extensions, activation slots) and
+  throws a `PoolError` on the first violation. See
+  [Base Fee and Activation Functions](#base-fee-and-activation-functions) and
+  [Dynamic Fee](#dynamic-fee). With the ActivationAccess extension it reads
+  the clock to check the activation points.
+- With the ActivationAccess extension, `poolActivation` is required and
+  `activationPoint` defaults to the current slot or timestamp. Without it,
+  both must be `null`.
+- Token badges as for `initializePoolWithStaticConfig`; a config with
+  `DynamicConfigPermission.CreatePoolWithoutMintValidation` skips the badge
+  and Token 2022 extension checks; the Token 2022 native mint is still
+  rejected and `OnlyY` still needs a badge for token Y.
+
+### initializeLaunchPool
+
+Creates a launch pool: a dynamic pool keyed by its mint pair, with no config.
+
+**Function**
+
+```typescript
+initializeLaunchPool(params: InitializeLaunchPoolParams): Promise<InitializePoolResult>
+```
+
+**Parameters**
+
+```typescript
+type InitializeLaunchPoolParams = {
+  tokenXMint: PublicKey; // Token X mint
+  tokenYMint: PublicKey; // Token Y mint
+  creator: PublicKey; // Recorded as the pool creator
+  payer: PublicKey; // Pays rent and the transaction fee
+  parameters: InitializePoolWithDynamicParameters; // As for initializePoolWithDynamicConfig
+  userTokenX?: PublicKey; // payer's token X account, non-zero balance. Default: payer's associated token account
+  userTokenY?: PublicKey; // payer's token Y account, non-zero balance. Default: payer's associated token account
+  tokenXProgram?: PublicKey; // Default: the mint's owner
+  tokenYProgram?: PublicKey; // Default: the mint's owner
+  tokenBadgeX?: PublicKey | null; // deriveTokenBadge(tokenXMint) when X needs a badge
+  tokenBadgeY?: PublicKey | null; // deriveTokenBadge(tokenYMint) when Y needs a badge
+  tickArrayBitmapExtension?: PublicKey | null; // Default: derived when the initial tick lies outside the inline bitmap
+};
+```
+
+**Returns**
+
+`InitializePoolResult`; `pool` is `deriveLaunchPool(tokenXMint, tokenYMint)`. Signer: `payer`.
+
+**Notes**
+
+- `userTokenX` and `userTokenY` prove that `payer` holds both tokens; nothing
+  is transferred. The program fails with `InvalidTokenOwnerProof` when either
+  balance is zero.
+- The protocol takes `MM_LAUNCH_POOL_PROTOCOL_FEE_BPS` of the market-maker
+  fee on a launch pool instead of `MM_PROTOCOL_FEE_BPS`.
+- Parameter validation and token badges as for
+  `initializePoolWithDynamicConfig`.
+
+### initializeTickArray
+
+Creates the tick array account for one index.
+
+**Function**
+
+```typescript
+initializeTickArray(params): Promise<{ tx: Transaction; tickArray: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  index: number; // Tick array index (tickIndexFromId)
+  funder: PublicKey; // Pays rent and the transaction fee
+}
+```
+
+**Returns**
+
+`{ tx, tickArray }`. Signer: `funder`.
+
+**Example**
+
+```typescript
+const index = tickIndexFromId(tickId, poolState.tickSpacing);
+if (!(await connection.getAccountInfo(deriveTickArray(pool, index)))) {
+  const { tx } = await client.pool.initializeTickArray({
+    pool,
+    index,
+    funder: owner.publicKey,
+  });
+  await sendAndConfirmTransaction(connection, tx, [owner]);
+}
+```
+
+**Notes**
+
+- `openPosition`, `expandPosition`, and `openLimitOrder` create the tick
+  arrays they need; call this only to create one ahead of time.
+- The program rejects an index with no tick inside
+  `MIN_TICK_ID..=MAX_TICK_ID` (`InvalidParameters`).
+
+### initializeTickBitmapExtension
+
+Creates the pool's tick array bitmap extension.
+
+**Function**
+
+```typescript
+initializeTickBitmapExtension(params): Promise<{ tx: Transaction; tickArrayBitmapExtension: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  funder: PublicKey; // Pays rent and the transaction fee
+}
+```
+
+**Returns**
+
+`{ tx, tickArrayBitmapExtension }`. Signer: `funder`.
+
+**Notes**
+
+- The inline bitmap tracks tick array indexes -512..511. Liquidity or limit
+  orders in an array outside that range need the extension; without it the
+  program fails with `TickArrayBitmapExtensionAccountIsNotProvided`.
+
+### increaseOracleLength
+
+Grows the pool's oracle by `lengthToAdd` observations.
+
+**Function**
+
+```typescript
+increaseOracleLength(params): Promise<{ tx: Transaction; oracle: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  payer: PublicKey; // Pays the extra rent and the transaction fee
+  lengthToAdd: number; // 1..=65535
+}
+```
+
+**Returns**
+
+`{ tx, oracle }`. Signer: `payer`.
+
+**Notes**
+
+- The program caps the oracle at `MAX_OBSERVATION_LENGTH` (500)
+  observations (`InvalidParameters`).
+
+### claimPartnerFee
+
+Withdraws the pool partner's accrued fees.
+
+**Function**
+
+```typescript
+claimPartnerFee(params): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  tokenXMint: PublicKey; // Pool token X mint
+  tokenYMint: PublicKey; // Pool token Y mint
+  signer: PublicKey; // The pool's partner; fee payer
+  maxAmountX: BN; // Cap on token X claimed, before transfer fees
+  maxAmountY: BN; // Cap on token Y claimed, before transfer fees
+  minAmountX?: BN; // Minimum token X received after transfer fees; default 0
+  minAmountY?: BN; // Minimum token Y received after transfer fees; default 0
+  receiverTokenX?: PublicKey; // Receives token X. Default: signer's associated token account
+  receiverTokenY?: PublicKey; // Receives token Y. Default: signer's associated token account
+  tokenXProgram?: PublicKey; // Default: the mint's owner
+  tokenYProgram?: PublicKey; // Default: the mint's owner
+  transferHookX?: AccountMeta[]; // Default: resolved from the mint
+  transferHookY?: AccountMeta[]; // Default: resolved from the mint
+}
+```
+
+**Returns**
+
+`{ tx }`. Signer: `signer`.
+
+**Example**
+
+```typescript
+const poolState = await client.state.fetchPool(pool);
+const { tx } = await client.pool.claimPartnerFee({
+  pool,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  signer: partner.publicKey,
+  maxAmountX: poolState.poolPartner.pendingFeeX,
+  maxAmountY: poolState.poolPartner.pendingFeeY,
+});
+await sendAndConfirmTransaction(connection, tx, [partner]);
+```
+
+**Notes**
+
+- The program transfers the lesser of the pending fee and the cap on each
+  side, and rejects a signer other than `poolState.poolPartner.partner`
+  (`InvalidAuthority`).
 
 ## Position Service
 
@@ -323,6 +961,986 @@ async function depositByWeight(
 }
 ```
 
+A position is a Token 2022 NFT plus a position array of up to
+`POSITION_MAX_RANGE` (45) slots. Each slot is a `TickRange`
+(`[tickLowerId, tickUpperId)`) with its own liquidity, fees, and rewards.
+Instructions that act on some slots take a `bitmap` of slot indexes
+(`liquidityBitmap`) and the `tickRanges` of those slots, whose tick arrays the
+builder passes to the program.
+
+`expandPosition` and `removePosition` change the slot layout and increase the
+position's `layoutVersion`. Instructions that take `expectedLayoutVersion`
+fail with `InvalidLayoutVersion` when it no longer matches; pass the
+`layoutVersion` you read the slots with, or `null` to skip the check.
+
+The owner can approve a delegate on the NFT account (a Token 2022 `approve`
+of amount 0; the program rejects any other amount with
+`DelegatedAmountNonZero`) and grant it permissions with
+`updatePositionDelegatePermission`. When a delegate signs an instruction that
+pays out tokens, each account receiving a non-zero amount must be the
+owner's associated token account (`IncorrectATA`).
+
+The liquidity builders share these fields:
+
+```typescript
+type PositionTokenAccounts = {
+  pool: PublicKey; // Pool address
+  nftMint: PublicKey; // Position NFT mint
+  owner: PublicKey; // NFT owner
+  signer: PublicKey; // Owner or an approved delegate; fee payer
+  tokenXMint: PublicKey; // Pool token X mint
+  tokenYMint: PublicKey; // Pool token Y mint
+  userTokenX?: PublicKey; // Token X source of a deposit or destination of a withdrawal. Default: the signer's associated token account for a deposit, the owner's for a withdrawal
+  userTokenY?: PublicKey; // Token Y source of a deposit or destination of a withdrawal. Default: as for userTokenX
+  tokenXProgram?: PublicKey; // Default from the pool's token flag
+  tokenYProgram?: PublicKey; // Default from the pool's token flag
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+  tickArrayBitmapExtension?: PublicKey | null; // Default: the pool's extension when it has one and a range's tick array lies outside the inline bitmap
+  tickRanges: TickRange[]; // Ranges of the slots the instruction touches
+  transferHookX?: AccountMeta[]; // Default: resolved from the mint
+  transferHookY?: AccountMeta[]; // Default: resolved from the mint
+};
+```
+
+The examples in this section use these values:
+
+```typescript
+const accounts = {
+  pool,
+  nftMint, // nft.publicKey from openPosition
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+};
+const { positionArray, positions } =
+  await client.state.fetchPositionArrayWithPositions(derivePosition(nftMint), {
+    withReward: isSupportExtension(
+      poolState.extensions,
+      PoolExtension.LiquidityMining,
+    ),
+  });
+```
+
+### openPosition
+
+Mints a position NFT and creates its position array with the given ranges.
+
+**Function**
+
+```typescript
+openPosition(params: OpenPositionParams): Promise<{
+  tx: Transaction;
+  position: PublicKey;
+  nftAccount: PublicKey;
+}>
+```
+
+**Parameters**
+
+```typescript
+type OpenPositionParams = {
+  pool: PublicKey; // Pool address
+  owner: PublicKey; // Receives the NFT
+  payer: PublicKey; // Pays rent and the transaction fee
+  nftMint: PublicKey; // Fresh keypair's public key
+  tickRanges: TickRange[]; // 1..=POSITION_MAX_RANGE ranges on usable ticks; slot i is tickRanges[i]
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+};
+```
+
+**Returns**
+
+`{ tx, position, nftAccount }`, where `position` is `derivePosition(nftMint)`.
+Signers: `payer` and the `nftMint` keypair.
+
+**Example**
+
+```typescript
+const poolState = await client.state.fetchPool(pool);
+const { tickSpacing, tickCurrentId } = poolState;
+const aligned = Math.floor(tickCurrentId / tickSpacing) * tickSpacing;
+const tickRanges = [
+  {
+    tickLowerId: aligned - 10 * tickSpacing,
+    tickUpperId: aligned + 10 * tickSpacing,
+  },
+];
+const nft = Keypair.generate();
+const { tx, position } = await client.position.openPosition({
+  pool,
+  owner: owner.publicKey,
+  payer: owner.publicKey,
+  nftMint: nft.publicKey,
+  tickRanges,
+});
+await sendAndConfirmTransaction(connection, tx, [owner, nft]);
+```
+
+**Notes**
+
+- The position opens empty; deposit with `addLiquidity`,
+  `addLiquidityByWeight`, or `addLiquidityImbalance`.
+- The program creates missing tick arrays of the range endpoints, paid by
+  `payer`.
+- Throws `InvalidParameters` for no ranges, more than `POSITION_MAX_RANGE`,
+  a range with `tickLowerId >= tickUpperId`, or a tick that is not a usable
+  tick of the pool's spacing (`isUsableTickId`).
+
+### addLiquidity
+
+Deposits explicit liquidity into selected slots.
+
+**Function**
+
+```typescript
+addLiquidity(params: AddLiquidityParams): Promise<{ tx: Transaction; position: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+type AddLiquidityParams = PositionTokenAccounts & {
+  parameters: {
+    maxAmountX: BN; // Cap on token X paid, transfer fee included
+    maxAmountY: BN; // Cap on token Y paid, transfer fee included
+    expectedLayoutVersion: number | null; // null skips the check
+    bitmap: BN; // Slots to fund (liquidityBitmap)
+    liquidities: BN[]; // One per slot set in bitmap, ascending slot order
+  };
+};
+```
+
+**Returns**
+
+`{ tx, position }`. Signer: `signer`.
+
+**Example**
+
+```typescript
+const maxAmountX = new BN(1_000_000);
+const maxAmountY = new BN(1_000_000);
+const liquidity = getLiquidityFromAmounts({
+  maxTokenX: maxAmountX,
+  maxTokenY: maxAmountY,
+  tickLowerId: tickRanges[0].tickLowerId,
+  tickUpperId: tickRanges[0].tickUpperId,
+  tickCurrentId: poolState.tickCurrentId,
+  currentSqrtPrice: poolState.sqrtPrice,
+});
+const { tx } = await client.position.addLiquidity({
+  ...accounts,
+  tickRanges,
+  parameters: {
+    maxAmountX,
+    maxAmountY,
+    expectedLayoutVersion: null,
+    bitmap: liquidityBitmap([0]),
+    liquidities: [liquidity],
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- The program fails with `ExceededSlippage` when a side's deposit plus its
+  transfer fee exceeds `maxAmountX` / `maxAmountY`.
+- A delegate needs `PositionDelegatePermission.AddLiquidity` and pays from
+  its own token accounts.
+- Throws `InvalidParameters` when `liquidities` does not have one entry per
+  selected slot, `LiquidityIsZero` for a zero entry, and `LiquidityIsTooHigh`
+  above `i128::MAX`.
+
+### addLiquidityByWeight
+
+Deposits `multiplier * weight` liquidity into each selected slot.
+
+**Function**
+
+```typescript
+addLiquidityByWeight(params: AddLiquidityByWeightParams): Promise<{ tx: Transaction; position: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+type AddLiquidityByWeightParams = PositionTokenAccounts & {
+  parameters: {
+    maxAmountX: BN; // Cap on token X paid, transfer fee included
+    maxAmountY: BN; // Cap on token Y paid, transfer fee included
+    expectedLayoutVersion: number | null; // null skips the check
+    bitmap: BN; // Slots to fund (liquidityBitmap)
+    multiplier: BN; // Liquidity per weight unit
+    liquidities: Buffer; // One u8 weight (1..=255) per slot set in bitmap, ascending slot order
+  };
+};
+```
+
+`encodeAddLiquidityByWeight` builds `parameters` from a liquidity shape.
+
+**Returns**
+
+`{ tx, position }`. Signer: `signer`.
+
+**Example**
+
+```typescript
+const shape = buildLiquidityShape({
+  strategy: StrategyType.Curve,
+  minTickId: aligned - 10 * tickSpacing,
+  maxTickId: aligned + 10 * tickSpacing,
+  tickSpacing,
+  currentTickId: tickCurrentId,
+  layout: LiquidityLayout.Horizontal,
+});
+// The position was opened with tickRanges: shape.ranges.
+const amountX = new BN(1_000_000);
+const amountY = new BN(1_000_000);
+const multiplier = multiplierFromAmounts({
+  ranges: shape.ranges,
+  tickSpacing,
+  currentTickId: tickCurrentId,
+  currentSqrtPrice: poolState.sqrtPrice,
+  amountX,
+  amountY,
+  mintX: null, // unpacked Token-2022 mints for transfer-fee tokens
+  mintY: null,
+  epoch: 0n,
+});
+const { tx } = await client.position.addLiquidityByWeight({
+  ...accounts,
+  tickRanges: shape.ranges,
+  parameters: encodeAddLiquidityByWeight({
+    ranges: shape.ranges,
+    maxAmountX: amountX,
+    maxAmountY: amountY,
+    multiplier,
+  }),
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- `ExceededSlippage` and delegate rules as for `addLiquidity`.
+- Throws `LiquidityIsZero` for a zero multiplier or weight,
+  `InvalidParameters` when the weight count differs from the selected slot
+  count, and `LiquidityIsTooHigh` when `multiplier * weight` exceeds
+  `i128::MAX`.
+
+### addLiquidityImbalance
+
+Deposits into one slot from the wallet balances at execution, capped per
+side.
+
+**Function**
+
+```typescript
+addLiquidityImbalance(params: AddLiquidityImbalanceParams): Promise<{ tx: Transaction; position: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+type AddLiquidityImbalanceParams = PositionTokenAccounts & {
+  parameters: {
+    maxAmountX: BN | null; // Cap on token X, transfer fee included; null deposits no X
+    maxAmountY: BN | null; // Cap on token Y, transfer fee included; null deposits no Y
+    slippage: {
+      sqrtPriceSlippage: { minSqrtPrice: BN; maxSqrtPrice: BN } | null; // Band the pool price must be in
+      minLiquidity: BN | null; // Least liquidity the deposit must add
+    };
+    expectedLayoutVersion: number | null; // null skips the check
+    index: number; // Slot receiving the deposit
+  };
+};
+```
+
+`tickRanges` holds the range of slot `index`.
+
+**Returns**
+
+`{ tx, position }`. Signer: `signer`.
+
+**Example**
+
+```typescript
+const { tx } = await client.position.addLiquidityImbalance({
+  ...accounts,
+  tickRanges: [tickRanges[0]],
+  parameters: {
+    maxAmountX: new BN(1_000_000),
+    maxAmountY: new BN(1_000_000),
+    slippage: {
+      sqrtPriceSlippage: {
+        minSqrtPrice: getSqrtPriceFromTickId(tickCurrentId - 100),
+        maxSqrtPrice: getSqrtPriceFromTickId(tickCurrentId + 100),
+      },
+      minLiquidity: null,
+    },
+    expectedLayoutVersion: null,
+    index: 0,
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- The program uses the lesser of each cap and the `userTokenX` /
+  `userTokenY` balance, and deposits the largest liquidity both sides fund at
+  the current price.
+- A `null` side fails with `ExceededSlippage` unless the slot needs none of
+  that token at the current price (the range lies entirely on the other
+  side). The price band and `minLiquidity` also fail with
+  `ExceededSlippage`.
+- Throws `InvalidParameters` when both caps are `null`, the price band is
+  inverted or outside `MIN_SQRT_PRICE..=MAX_SQRT_PRICE`, or `index` is not
+  below `POSITION_MAX_RANGE`, and `AmountIsZero` for a zero cap.
+
+### removeLiquidity
+
+Withdraws explicit liquidity from selected slots.
+
+**Function**
+
+```typescript
+removeLiquidity(params: RemoveLiquidityParams): Promise<{ tx: Transaction; position: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+type RemoveLiquidityParams = PositionTokenAccounts & {
+  parameters: {
+    minAmountX: BN; // Minimum token X received after transfer fees
+    minAmountY: BN; // Minimum token Y received after transfer fees
+    expectedLayoutVersion: number | null; // null skips the check
+    bitmap: BN; // Slots to withdraw from (liquidityBitmap)
+    liquidities: BN[]; // One per slot set in bitmap, ascending slot order
+  };
+};
+```
+
+**Returns**
+
+`{ tx, position }`. Signer: `signer`.
+
+**Example**
+
+```typescript
+const slot = positions[0];
+const { tx } = await client.position.removeLiquidity({
+  ...accounts,
+  tickRanges: [
+    { tickLowerId: slot.tickLowerId, tickUpperId: slot.tickUpperId },
+  ],
+  parameters: {
+    minAmountX: new BN(0),
+    minAmountY: new BN(0),
+    expectedLayoutVersion: positionArray.layoutVersion,
+    bitmap: liquidityBitmap([0]),
+    liquidities: [slot.unlockedLiquidity],
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- Only unlocked liquidity can be withdrawn; permanently locked and unvested
+  liquidity stays.
+- The program fails with `ExceededSlippage` when a side receives less than
+  its minimum.
+- A delegate needs `PositionDelegatePermission.RemoveLiquidity` and can only
+  pay into the owner's associated token accounts, the defaults.
+- Same `liquidities` checks as `addLiquidity`.
+
+### removeLiquidityByBps
+
+Withdraws a share of the unlocked liquidity of selected slots.
+
+**Function**
+
+```typescript
+removeLiquidityByBps(params: RemoveLiquidityByBpsParams): Promise<{ tx: Transaction; position: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+type RemoveLiquidityByBpsParams = PositionTokenAccounts & {
+  parameters: {
+    minAmountX: BN; // Minimum token X received after transfer fees
+    minAmountY: BN; // Minimum token Y received after transfer fees
+    expectedLayoutVersion: number | null; // null skips the check
+    bps: number; // Share of each selected slot's unlocked liquidity, 1..=10000
+    bitmap: BN | null; // Slots to withdraw from; null selects every slot
+  };
+};
+```
+
+**Returns**
+
+`{ tx, position }`. Signer: `signer`.
+
+**Example**
+
+```typescript
+const { tx } = await client.position.removeLiquidityByBps({
+  ...accounts,
+  tickRanges, // every slot's range
+  parameters: {
+    minAmountX: new BN(0),
+    minAmountY: new BN(0),
+    expectedLayoutVersion: positionArray.layoutVersion,
+    bps: 5_000,
+    bitmap: null,
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- `tickRanges` must cover every selected slot that has unlocked liquidity;
+  the ranges of all selected slots always do.
+- The program releases vested liquidity first, then withdraws
+  `unlockedLiquidity * bps / 10000` from each selected slot.
+- Slippage and delegate rules as for `removeLiquidity`.
+- Throws `InvalidParameters` for `bps` outside `1..=10000`.
+
+### claimFee
+
+Refreshes the selected slots and transfers the position's pending fees.
+
+**Function**
+
+```typescript
+claimFee(params: ClaimFeeParams): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+type ClaimFeeParams = Omit<
+  PositionTokenAccounts,
+  "tickArrayBitmapExtension"
+> & {
+  bitmap: BN; // Slots to refresh before claiming (liquidityBitmap)
+  minAmountX?: BN; // Minimum token X received after transfer fees; default 0
+  minAmountY?: BN; // Minimum token Y received after transfer fees; default 0
+};
+```
+
+`tickRanges` must cover every selected slot that holds liquidity; the refresh
+skips the others.
+
+**Returns**
+
+`{ tx }` holding the refresh and the claim. Signer: `signer`.
+
+**Example**
+
+```typescript
+const claimable = await client.position.getClaimableFees({ pool, nftMint });
+const { tx } = await client.position.claimFee({
+  ...accounts,
+  bitmap: claimable.bitmap,
+  tickRanges: claimable.tickRanges,
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- Fees accrue to a slot when it is refreshed; select every slot whose fees
+  you want. Unselected slots pay out only what is already pending.
+- A delegate needs `PositionDelegatePermission.ClaimFee` and can only pay
+  into the owner's associated token accounts, the defaults.
+
+### getClaimableFees
+
+Computes what `claimFee` would transfer for `bitmap`, from the current pool
+and tick state.
+
+**Function**
+
+```typescript
+getClaimableFees(params: ClaimableFeesParams): Promise<ClaimableFees>
+```
+
+**Parameters**
+
+```typescript
+type ClaimableFeesParams = {
+  pool: PublicKey; // Pool address
+  nftMint: PublicKey; // Position NFT mint
+  bitmap?: BN; // Slots to refresh before claiming; default every slot
+};
+```
+
+**Returns**
+
+```typescript
+type ClaimableFees = {
+  layoutVersion: number; // Position layout version read
+  bitmap: BN; // Slots the refresh touches; pass to claimFee
+  tickRanges: TickRange[]; // Ranges of the selected slots holding liquidity; pass to claimFee
+  slots: ClaimableFeeSlot[]; // Every slot of the position
+  feeX: BN; // Total token X claimFee transfers, before transfer fees
+  feeY: BN; // Total token Y claimFee transfers, before transfer fees
+};
+
+type ClaimableFeeSlot = {
+  index: number;
+  tickLowerId: number;
+  tickUpperId: number;
+  feeX: BN;
+  feeY: BN;
+};
+```
+
+**Example**
+
+```typescript
+const { feeX, feeY } = await client.position.getClaimableFees({
+  pool,
+  nftMint,
+});
+```
+
+**Notes**
+
+- Swaps that land after the read add fees the result does not include.
+- Throws `InvalidParameters` when `bitmap` selects a slot the position does
+  not have, and an `Error` when the position belongs to another pool.
+
+### compoundFees
+
+Refreshes and claims fees, then redeposits them into one slot, in one
+transaction.
+
+**Function**
+
+```typescript
+compoundFees(params: CompoundFeesParams): Promise<{
+  tx: Transaction;
+  position: PublicKey;
+  claimable: ClaimableFees;
+  parameters: AddLiquidityImbalanceParameters;
+}>
+```
+
+**Parameters**
+
+```typescript
+type CompoundFeesParams = Omit<PositionTokenAccounts, "tickRanges"> & {
+  bitmap?: BN; // Slots to refresh before claiming; default every slot
+  index: number; // Slot receiving the deposit
+  maxAmountX?: BN | null; // Deposit cap, transfer fee included; default: the claimed X after its transfer fee, or null when none
+  maxAmountY?: BN | null; // Deposit cap, transfer fee included; default: the claimed Y after its transfer fee, or null when none
+  slippage?: AddLiquidityImbalanceSlippage; // Default: no price band, no minimum liquidity
+  expectedLayoutVersion?: number | null; // Default: the layout version read; null skips the check
+  minAmountX?: BN; // Minimum token X the claim delivers after transfer fees; default 0
+  minAmountY?: BN; // Minimum token Y the claim delivers after transfer fees; default 0
+};
+```
+
+**Returns**
+
+`{ tx, position, claimable, parameters }`: `claimable` is the
+`getClaimableFees` result the caps come from, and `parameters` the
+`addLiquidityImbalance` input of the deposit. Signer: `signer`.
+
+**Example**
+
+```typescript
+const { tx, parameters } = await client.position.compoundFees({
+  ...accounts,
+  index: 0,
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- The deposit is `addLiquidityImbalance` into slot `index`. With the default
+  caps it uses only what the claim delivers, leaving existing wallet balances
+  alone.
+- A side that earned nothing defaults to `null`, which fails with
+  `ExceededSlippage` unless the slot needs none of that token at the current
+  price. To compound into a slot that needs both tokens, pass a wallet-funded
+  cap for that side.
+- A delegate `signer` needs the `ClaimFee` and `AddLiquidity` permissions and
+  an SPL token `approve` from the owner on `userTokenX` and `userTokenY`: the
+  claim pays into the owner's associated token accounts and the deposit
+  spends from them with `signer` as the transfer authority. Approve only the
+  amount to compound.
+- Throws `InvalidParameters` when `index` is not a slot of the position, and
+  `AmountIsZero` when neither cap is given and the claim delivers nothing.
+
+### expandPosition
+
+Appends slots to a position.
+
+**Function**
+
+```typescript
+expandPosition(params: ExpandPositionParams): Promise<{ tx: Transaction; position: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+type ExpandPositionParams = {
+  pool: PublicKey; // Pool address
+  signer: PublicKey; // Owner or a delegate with UpdatePositionRange
+  payer: PublicKey; // Pays the extra rent and the transaction fee
+  nftMint: PublicKey; // Position NFT mint
+  owner: PublicKey; // NFT owner
+  tickRanges: TickRange[]; // Ranges to append, on usable ticks
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+};
+```
+
+**Returns**
+
+`{ tx, position }`. Signers: `signer` and `payer`.
+
+**Example**
+
+```typescript
+const upper = Math.max(...positions.map((slot) => slot.tickUpperId));
+const { tx } = await client.position.expandPosition({
+  pool,
+  signer: owner.publicKey,
+  payer: owner.publicKey,
+  nftMint,
+  owner: owner.publicKey,
+  tickRanges: [{ tickLowerId: upper, tickUpperId: upper + 10 * tickSpacing }],
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- New slots follow the existing ones. The program rejects a total above
+  `POSITION_MAX_RANGE` slots (`InvalidParameters`), creates missing tick
+  arrays, paid by `payer`, and increases `layoutVersion`.
+- Same range checks as `openPosition`.
+
+### removePosition
+
+Deletes empty slots from a position.
+
+**Function**
+
+```typescript
+removePosition(params: RemovePositionRangesParams): Promise<{ tx: Transaction; position: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+type RemovePositionRangesParams = {
+  pool: PublicKey; // Pool address
+  signer: PublicKey; // Owner or a delegate with UpdatePositionRange; fee payer
+  nftMint: PublicKey; // Position NFT mint
+  owner: PublicKey; // NFT owner
+  rentReceiver: PublicKey; // Receives the freed rent; the owner when a delegate signs
+  tickRanges: TickRange[]; // Exactly the ranges of the slots in parameters.bitmap
+  parameters: {
+    expectedLayoutVersion: number | null; // null skips the check
+    bitmap: BN; // Slots to delete (liquidityBitmap)
+  };
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+};
+```
+
+**Returns**
+
+`{ tx, position }`. Signer: `signer`.
+
+**Example**
+
+```typescript
+const index = positions.length - 1;
+const { tx } = await client.position.removePosition({
+  pool,
+  signer: owner.publicKey,
+  nftMint,
+  owner: owner.publicKey,
+  rentReceiver: owner.publicKey,
+  tickRanges: [
+    {
+      tickLowerId: positions[index].tickLowerId,
+      tickUpperId: positions[index].tickUpperId,
+    },
+  ],
+  parameters: {
+    expectedLayoutVersion: positionArray.layoutVersion,
+    bitmap: liquidityBitmap([index]),
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- The program fails with `PositionIsNotEmpty` for a slot with liquidity,
+  pending fees, or pending rewards, and with `InvalidParameters` when
+  `bitmap` selects every slot; use `closePosition` for that. It increases
+  `layoutVersion`.
+- Throws `InvalidPermission` when a delegate names anyone but the owner as
+  `rentReceiver`.
+
+### closePosition
+
+Closes an empty position and burns its NFT.
+
+**Function**
+
+```typescript
+closePosition(params: ClosePositionParams): Promise<{ tx: Transaction; position: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+type ClosePositionParams = {
+  pool: PublicKey; // Pool address
+  owner: PublicKey; // NFT owner; signer and fee payer
+  nftMint: PublicKey; // Position NFT mint
+  rentReceiver: PublicKey; // Receives the freed rent
+  tickRanges: TickRange[]; // Every range of the position
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+};
+```
+
+**Returns**
+
+`{ tx, position }`. Signer: `owner`.
+
+**Example**
+
+```typescript
+const { tx } = await client.position.closePosition({
+  pool,
+  owner: owner.publicKey,
+  nftMint,
+  rentReceiver: owner.publicKey,
+  tickRanges, // every slot's range
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- The program fails with `PositionIsNotEmpty` while any slot holds
+  liquidity, pending fees, or pending rewards. Withdraw and claim first.
+
+### lockPermanentPosition
+
+Permanently locks a share of the position's unlocked liquidity. Locked
+liquidity keeps earning fees and rewards.
+
+**Function**
+
+```typescript
+lockPermanentPosition(params: LockPermanentPositionParams): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+type LockPermanentPositionParams = {
+  pool: PublicKey; // Pool address
+  nftMint: PublicKey; // Position NFT mint
+  owner: PublicKey; // NFT owner; signer and fee payer
+  bps: number; // Share of the unlocked liquidity to lock, 1..=10000
+  expectedLayoutVersion?: number; // Default: no check
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+};
+```
+
+**Returns**
+
+`{ tx }`. Signer: `owner`.
+
+**Notes**
+
+- Owner only; delegates cannot lock.
+- Throws `InvalidParameters` for `bps` outside `1..=10000`.
+
+### lockVestingPosition
+
+Locks a share of the position's unlocked liquidity and releases it on a
+cliff-plus-periods schedule.
+
+**Function**
+
+```typescript
+lockVestingPosition(params: LockVestingPositionParams): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+type LockVestingPositionParams = {
+  pool: PublicKey; // Pool address
+  nftMint: PublicKey; // Position NFT mint
+  owner: PublicKey; // NFT owner; signer and fee payer
+  parameters: {
+    cliffPoint: BN | null; // Slot or timestamp, per the pool's activation type; null means now
+    cliffUnlockBps: number; // Share released at the cliff
+    bpsPerPeriod: number; // Share released each period after the cliff
+    periodFrequency: BN; // Period length in slots or seconds
+    numberOfPeriod: number; // Number of periods
+    bps: number; // Share of the unlocked liquidity to vest, 1..=10000
+    expectedLayoutVersion: number | null; // null skips the check
+  };
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+};
+```
+
+**Returns**
+
+`{ tx }`. Signer: `owner`.
+
+**Example**
+
+```typescript
+const { tx } = await client.position.lockVestingPosition({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  parameters: {
+    cliffPoint: null,
+    cliffUnlockBps: 5_000,
+    bpsPerPeriod: 1_000,
+    periodFrequency: new BN(86_400),
+    numberOfPeriod: 5,
+    bps: 2_500,
+    expectedLayoutVersion: positionArray.layoutVersion,
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- `cliffUnlockBps + bpsPerPeriod * numberOfPeriod` must equal 10000, and
+  `periodFrequency`, `bpsPerPeriod`, and `numberOfPeriod` are all set or all
+  zero (`InvalidParameters`).
+- The program rejects a `cliffPoint` in the past, and a schedule whose cliff
+  delay plus `periodFrequency * numberOfPeriod` exceeds
+  `MAX_VESTING_DURATION` seconds, or `MAX_VESTING_DURATION_SLOT` slots on a
+  slot-activated pool.
+- One schedule per position; a second fails with
+  `PositionAlreadyHadVesting`. Owner only.
+
+### refreshFeesAndRewards
+
+Brings the fee and reward checkpoints of selected slots up to date without
+transferring anything.
+
+**Function**
+
+```typescript
+refreshFeesAndRewards(params: RefreshFeesAndRewardsParams): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+type RefreshFeesAndRewardsParams = {
+  pool: PublicKey; // Pool address
+  nftMint: PublicKey; // Position NFT mint
+  owner: PublicKey; // NFT owner
+  signer: PublicKey; // Owner or any approved delegate; fee payer
+  bitmap: BN; // Slots to refresh (liquidityBitmap)
+  tickRanges: TickRange[]; // Ranges of every selected slot that holds liquidity
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+};
+```
+
+**Returns**
+
+`{ tx }`. Signer: `signer`.
+
+**Example**
+
+```typescript
+const funded = positions
+  .map((slot, index) => ({ slot, index }))
+  .filter(({ slot }) => !positionTotalLiquidity(slot).isZero());
+const { tx } = await client.position.refreshFeesAndRewards({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  bitmap: liquidityBitmap(funded.map(({ index }) => index)),
+  tickRanges: funded.map(({ slot }) => ({
+    tickLowerId: slot.tickLowerId,
+    tickUpperId: slot.tickUpperId,
+  })),
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- `claimFee` and `claimReward` include this refresh.
+- A delegate needs no specific permission.
+
+### updatePositionDelegatePermission
+
+Sets the permissions of the position's approved delegate.
+
+**Function**
+
+```typescript
+updatePositionDelegatePermission(params): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  nftMint: PublicKey; // Position NFT mint
+  owner: PublicKey; // NFT owner; signer and fee payer
+  permission: number; // positionDelegatePermissionMask(...)
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+}
+```
+
+**Returns**
+
+`{ tx }`. Signer: `owner`.
+
+**Example**
+
+```typescript
+const { tx } = await client.position.updatePositionDelegatePermission({
+  nftMint,
+  owner: owner.publicKey,
+  permission: positionDelegatePermissionMask([
+    PositionDelegatePermission.ClaimFee,
+    PositionDelegatePermission.ClaimReward,
+  ]),
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- The delegate itself is set by a Token 2022 `approve` of amount 0 on the NFT
+  account.
+- Throws `InvalidPermission` for a mask above
+  `MAX_POSITION_DELEGATE_PERMISSION`.
+
 ## Limit Order Service
 
 `client.limitOrder`.
@@ -338,6 +1956,262 @@ A limit order is a Token 2022 NFT plus a limit-order account holding up to `LIMI
 
 With `relativeTick` set, each `ticks[].id` is an offset, in tick-spacing units, from the current tick aligned down to the spacing at execution. The program rejects the order with `ExceededSlippage` when that aligned tick has left `[spacingAlignedMinTickId, spacingAlignedMaxTickId]`. Without `relativeTick`, `ticks[].id` are absolute tick ids. `relativeTickFromSlippage` builds the band and `limitOrderTicksFromShape` builds the ticks from a liquidity shape.
 
+A limit order is a Token 2022 NFT plus a limit-order account holding up to
+`LIMIT_ORDER_MAX_TICK` (25) ticks, all on one side. An ask sells token X at
+ticks above the current tick; a bid buys token X with token Y at ticks at or
+below it. A swap fills the orders at a tick once the price reaches it. On
+cancel the owner receives the unfilled amount, the filled proceeds, and the
+order's share of the limit-order fee.
+
+With `relativeTick` set, each `ticks[].id` is an offset, in tick-spacing
+units, from the current tick aligned down to the spacing at execution, and
+the program rejects the order with `ExceededSlippage` when that aligned tick
+has left `[spacingAlignedMinTickId, spacingAlignedMaxTickId]`. Without it,
+`ticks[].id` are absolute tick ids.
+
+The owner can approve a delegate on the NFT account (a Token 2022 `approve`
+of amount 0) and grant `LimitOrderDelegatePermission.CancelLimitOrder` with
+`updateLimitOrderDelegatePermission`. A delegate canceling an order can only
+pay into the owner's associated token accounts, the defaults.
+
+### openLimitOrder
+
+Mints a limit-order NFT and places the order.
+
+**Function**
+
+```typescript
+openLimitOrder(params): Promise<{
+  tx: Transaction;
+  limitOrder: PublicKey;
+  nftAccount: PublicKey;
+}>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  nftMint: PublicKey; // Fresh keypair's public key
+  owner: PublicKey; // Receives the NFT and pays the order amount
+  payer: PublicKey; // Pays rent and the transaction fee
+  tokenMint: PublicKey; // Token X mint for an ask, token Y mint for a bid
+  parameters: {
+    isAskSide: boolean; // true sells X above the price, false buys X below it
+    maxAmount: BN; // Cap on the total deposit, transfer fee included
+    relativeTick: {
+      spacingAlignedMinTickId: number; // Lowest aligned current tick accepted
+      spacingAlignedMaxTickId: number; // Highest aligned current tick accepted
+    } | null; // null: ticks[].id are absolute tick ids
+    ticks: { id: number; amount: BN }[]; // 1..=25 entries, strictly ascending ids, non-zero amounts
+  };
+  userToken?: PublicKey; // Pays the order amount. Default: owner's associated token account
+  tickArrays?: PublicKey[]; // Default: the arrays the order's ticks can land in; an explicit list is ascending by index
+  tokenProgram?: PublicKey; // Default from the pool's token flag for that side
+  tickArrayBitmapExtension?: PublicKey | null; // Default: the pool's extension when it has one and a tick array lies outside the inline bitmap
+  referral?: PublicKey | null; // Wallet recorded on the order; shares the limit-order fee on cancel
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+  transferHook?: AccountMeta[]; // Hook metas for the deposited token; default: resolved from the mint
+}
+```
+
+**Returns**
+
+`{ tx, limitOrder, nftAccount }`, where `limitOrder` is
+`deriveLimitOrder(nftMint)`. Signers: `payer`, `owner`, and the `nftMint`
+keypair.
+
+**Example**
+
+```typescript
+const poolState = await client.state.fetchPool(pool);
+const { tickSpacing, tickCurrentId } = poolState;
+const aligned = Math.floor(tickCurrentId / tickSpacing) * tickSpacing;
+const shape = buildLiquidityShape({
+  strategy: StrategyType.Spot,
+  minTickId: aligned - 5 * tickSpacing,
+  maxTickId: aligned - tickSpacing,
+  tickSpacing,
+  currentTickId: tickCurrentId,
+});
+const bid = limitOrderTicksFromShape({
+  shape,
+  side: "bid",
+  totalAmount: new BN(1_000_000),
+  relative: true,
+});
+const nftMint = Keypair.generate();
+const { tx, limitOrder } = await client.limitOrder.openLimitOrder({
+  pool,
+  nftMint: nftMint.publicKey,
+  owner: owner.publicKey,
+  payer: owner.publicKey,
+  tokenMint: poolState.tokenYMint,
+  parameters: {
+    isAskSide: false,
+    maxAmount: bid.amount,
+    relativeTick: relativeTickFromSlippage({
+      currentTickId: tickCurrentId,
+      tickSpacing,
+      slippageTicks: 2 * tickSpacing,
+    }),
+    ticks: bid.ticks,
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner, nftMint]);
+```
+
+**Notes**
+
+- Ask ticks must lie strictly above the current tick and bid ticks at or
+  below it, on usable ticks of the pool's spacing (`InvalidParameters`). The
+  builder checks the tick list, the band, and the alignment before sending.
+- The program fails with `ExceededSlippage` when the deposit plus its
+  transfer fee exceeds `maxAmount`.
+- The program creates missing tick arrays, paid by `payer`. For a relative
+  order the default `tickArrays` cover every array the band can resolve the
+  ticks to.
+
+### cancelLimitOrder
+
+Cancels the order at the given ticks and withdraws what they hold.
+
+**Function**
+
+```typescript
+cancelLimitOrder(params): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  nftMint: PublicKey; // Limit-order NFT mint
+  owner: PublicKey; // NFT owner
+  signer: PublicKey; // Owner or a delegate with CancelLimitOrder; fee payer
+  tokenXMint: PublicKey; // Pool token X mint
+  tokenYMint: PublicKey; // Pool token Y mint
+  tickIds?: number[]; // Strictly ascending; default every tick of the order not yet canceled
+  minAmountX?: BN; // Minimum token X received after transfer fees; default 0
+  minAmountY?: BN; // Minimum token Y received after transfer fees; default 0
+  userTokenX?: PublicKey; // Receives token X. Default: owner's associated token account
+  userTokenY?: PublicKey; // Receives token Y. Default: owner's associated token account
+  tickArrays?: PublicKey[]; // Default: the arrays holding tickIds
+  tokenXProgram?: PublicKey; // Default from the pool's token flag
+  tokenYProgram?: PublicKey; // Default from the pool's token flag
+  tickArrayBitmapExtension?: PublicKey | null; // Default: the pool's extension when it has one and a tick array lies outside the inline bitmap
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+  referralToken?: PublicKey | null; // Token account of the order's referral
+  transferHookX?: AccountMeta[]; // Default: resolved from the mint
+  transferHookY?: AccountMeta[]; // Default: resolved from the mint
+  transferHookReferral?: AccountMeta[]; // Default: resolved from the referral account's mint
+}
+```
+
+**Returns**
+
+`{ tx }`. Signer: `signer`.
+
+**Example**
+
+```typescript
+const { tx } = await client.limitOrder.cancelLimitOrder({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- `LIMIT_ORDER_REFERRAL_FEE_BPS` of the order's fee goes to `referralToken`
+  when the order has a referral, the referral is not the NFT owner, and
+  `referralToken` is owned by it; otherwise the owner keeps the whole fee.
+  `referralToken` must hold the mint the fee is paid in.
+- When the builder reads the order to default `tickIds`, it throws
+  `InvalidParameters` if nothing is left to cancel.
+
+### closeLimitOrder
+
+Closes a fully canceled limit order and burns its NFT.
+
+**Function**
+
+```typescript
+closeLimitOrder(params): Promise<{ tx: Transaction; limitOrder: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  nftMint: PublicKey; // Limit-order NFT mint
+  owner: PublicKey; // NFT owner; signer and fee payer
+  rentReceiver: PublicKey; // Receives the freed rent
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+  tickArrays?: PublicKey[]; // Default: the arrays of every tick the order was placed on; an explicit list is ascending by index
+}
+```
+
+**Returns**
+
+`{ tx, limitOrder }`. Signer: `owner`.
+
+**Notes**
+
+- The program fails with `LimitOrderIsNotEmpty` until every tick is
+  canceled.
+
+### updateLimitOrderDelegatePermission
+
+Sets the permissions of the limit order's approved delegate.
+
+**Function**
+
+```typescript
+updateLimitOrderDelegatePermission(params): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  nftMint: PublicKey; // Limit-order NFT mint
+  owner: PublicKey; // NFT owner; signer and fee payer
+  permission: number; // limitOrderDelegatePermissionMask(...)
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+}
+```
+
+**Returns**
+
+`{ tx }`. Signer: `owner`.
+
+**Example**
+
+```typescript
+const { tx } = await client.limitOrder.updateLimitOrderDelegatePermission({
+  nftMint,
+  owner: owner.publicKey,
+  permission: limitOrderDelegatePermissionMask([
+    LimitOrderDelegatePermission.CancelLimitOrder,
+  ]),
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- Throws `InvalidPermission` for a mask above
+  `MAX_LIMIT_ORDER_DELEGATE_PERMISSION`.
+
 ## Reward Service
 
 `client.reward`. Rewards need the `PoolExtension.LiquidityMining` extension. Without it the program fails with `InvalidPoolType`. A pool has `NUM_REWARDS` (2) reward slots. The pool creator initializes slot `CREATOR_REWARD_INDEX` (0) and assigns its reward authority. Operator-managed slots are set up with `client.program.methods`.
@@ -349,6 +2223,277 @@ With `relativeTick` set, each `ticks[].id` is an offset, in tick-spacing units, 
 | `setRewardEmission(params)` | Fund a reward slot and start its emission. | `funder`, `authority` |
 | `claimReward(params)` | Refresh selected slots and transfer the pending reward from one reward slot. | `signer` |
 | `withdrawIneligibleRewards(params)` | Withdraw the reward a slot emitted while the pool had no liquidity. | `authority` |
+
+Rewards need the pool's `PoolExtension.LiquidityMining` extension; without it
+the program fails with `InvalidPoolType`. A pool has `NUM_REWARDS` (2) reward
+slots. The pool creator initializes slot `CREATOR_REWARD_INDEX` (0) and
+assigns its reward authority; operator-managed slots are set up with
+`client.program.methods`. A slot's reward authority funds it with
+`setRewardEmission` and withdraws its ineligible reward.
+
+### initializeReward
+
+Initializes the creator's reward slot with a mint and an authority.
+
+**Function**
+
+```typescript
+initializeReward(params): Promise<{ tx: Transaction; rewardVault: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  rewardMint: PublicKey; // Reward token mint
+  rewardAuthority: PublicKey; // Wallet that funds the slot and withdraws ineligible reward
+  creator: PublicKey; // The pool creator
+  payer: PublicKey; // Pays rent and the transaction fee
+  tokenBadge?: PublicKey | null; // deriveTokenBadge(rewardMint) when the mint needs a badge
+  tokenProgram?: PublicKey; // Default: the mint's owner
+}
+```
+
+**Returns**
+
+`{ tx, rewardVault }`, where `rewardVault` is
+`deriveRewardVault(pool, CREATOR_REWARD_INDEX)`. Signers: `creator` and
+`payer`.
+
+**Example**
+
+```typescript
+const { tx, rewardVault } = await client.reward.initializeReward({
+  pool,
+  rewardMint,
+  rewardAuthority: owner.publicKey,
+  creator: owner.publicKey,
+  payer: owner.publicKey,
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- Without a `tokenBadge` the program rejects a reward mint with a freeze
+  authority, or a Token 2022 mint with an extension other than a transfer
+  fee, metadata, or a transfer hook with neither a program nor an authority
+  (`UnsupportedMint`). Mints in `WHITELISTED_QUOTE_MINTS` are always
+  accepted.
+- The program fails with `InvalidRewardState` when the slot is already
+  initialized and `InvalidPermission` when `creator` is not the pool
+  creator.
+
+### updateRewardAuthority
+
+Replaces the authority of the creator's reward slot.
+
+**Function**
+
+```typescript
+updateRewardAuthority(params): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  creator: PublicKey; // The pool creator; signer and fee payer
+  newAuthority: PublicKey; // Replacement reward authority
+}
+```
+
+**Returns**
+
+`{ tx }`. Signer: `creator`.
+
+**Notes**
+
+- The program fails with `RewardUninitialized` for an uninitialized slot and
+  `InvalidParameters` when `newAuthority` is the current authority.
+
+### setRewardEmission
+
+Funds a reward slot and starts its emission.
+
+**Function**
+
+```typescript
+setRewardEmission(params): Promise<{ tx: Transaction; rewardVault: PublicKey }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  rewardMint: PublicKey; // The slot's mint
+  funder: PublicKey; // Pays the reward; fee payer
+  authority: PublicKey; // The slot's reward authority
+  parameters: {
+    index: number; // Reward slot
+    openTime: BN | null; // Unix timestamp emission starts; null means when the transaction executes
+    endTime: BN; // Unix timestamp emission ends
+    emissionPerSecond: BN; // Q64.64 reward atoms per second
+    maxAmount: BN; // Cap on the amount taken from funderTokenAccount, transfer fee included
+  };
+  funderTokenAccount?: PublicKey; // Source of the reward. Default: funder's associated token account
+  tokenProgram?: PublicKey; // Default: the mint's owner
+  transferHookReward?: AccountMeta[]; // Default: resolved from the mint
+}
+```
+
+**Returns**
+
+`{ tx, rewardVault }`. Signers: `funder` and `authority`.
+
+**Example**
+
+```typescript
+const clock = await readClock(connection);
+const openTime = clock.timestamp.addn(600);
+const endTime = openTime.add(MIN_REWARD_DURATION);
+const emissionPerSecond = new BN(10).shln(64); // 10 atoms per second
+const { tx } = await client.reward.setRewardEmission({
+  pool,
+  rewardMint,
+  funder: owner.publicKey,
+  authority: owner.publicKey,
+  parameters: {
+    index: CREATOR_REWARD_INDEX,
+    openTime,
+    endTime,
+    emissionPerSecond,
+    maxAmount: calculateRewardAmount(
+      endTime.sub(openTime),
+      emissionPerSecond,
+      Rounding.Up,
+    ),
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- The program transfers
+  `calculateRewardAmount(endTime - openTime, emissionPerSecond, Rounding.Up)`
+  plus the mint's transfer fee, and fails with `ExceededSlippage` when that
+  exceeds `maxAmount`. For a transfer-fee mint, cap with
+  `calculateTransferFeeIncludedAmount(mint, epoch, amount).amount`.
+- The program requires `openTime` between now and now plus
+  `MAX_REWARD_START_DELAY`, and `endTime - openTime` within
+  `MIN_REWARD_DURATION..=MAX_REWARD_DURATION` (`InvalidParameters`).
+  `openTime: null` starts the emission when the transaction executes, so the
+  duration shrinks by the time the transaction takes to land; pass an
+  explicit future `openTime` when the duration is near the minimum.
+- The slot must be idle: never funded, or brought up to `endTime` with no
+  ineligible reward left (`InvalidRewardState`). After an emission ends, call
+  `withdrawIneligibleRewards` before funding the slot again; it does both.
+- The program fails with `InvalidPermission` when `authority` is not the
+  slot's reward authority.
+
+### claimReward
+
+Refreshes the selected slots and transfers the position's pending reward from
+one reward slot.
+
+**Function**
+
+```typescript
+claimReward(params): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  nftMint: PublicKey; // Position NFT mint
+  owner: PublicKey; // NFT owner
+  signer: PublicKey; // Owner or a delegate with ClaimReward; fee payer
+  rewardMint: PublicKey; // The reward slot's mint
+  rewardIndex: number; // Reward slot
+  minAmount?: BN; // Minimum received after transfer fees; default 0
+  bitmap: BN; // Position slots to refresh before claiming (liquidityBitmap)
+  tickRanges: TickRange[]; // Ranges of every selected slot that holds liquidity
+  userTokenAccount?: PublicKey; // Receives the reward. Default: owner's associated token account
+  tokenProgram?: PublicKey; // Default: the mint's owner
+  nftAccount?: PublicKey; // Default findNftAccount(nftMint, owner)
+  transferHookReward?: AccountMeta[]; // Default: resolved from the mint
+}
+```
+
+**Returns**
+
+`{ tx }` holding the refresh and the claim. Signer: `signer`.
+
+**Example**
+
+```typescript
+// Every slot, and the ranges of the slots holding liquidity.
+const { bitmap, tickRanges } = await client.position.getClaimableFees({
+  pool,
+  nftMint,
+});
+const { tx } = await client.reward.claimReward({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  rewardMint,
+  rewardIndex: CREATOR_REWARD_INDEX,
+  bitmap,
+  tickRanges,
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+**Notes**
+
+- Rewards accrue to a slot when it is refreshed, as with `claimFee`.
+- A delegate can only pay into the owner's associated token account, the
+  default `userTokenAccount` (`IncorrectATA`).
+
+### withdrawIneligibleRewards
+
+Withdraws the reward a slot emitted while the pool had no liquidity.
+
+**Function**
+
+```typescript
+withdrawIneligibleRewards(params): Promise<{ tx: Transaction }>
+```
+
+**Parameters**
+
+```typescript
+params: {
+  pool: PublicKey; // Pool address
+  rewardMint: PublicKey; // The slot's mint
+  authority: PublicKey; // The slot's reward authority; signer and fee payer
+  rewardIndex: number; // Reward slot
+  minAmount?: BN; // Minimum received after transfer fees; default 0
+  receiverTokenAccount?: PublicKey; // Any token account of rewardMint. Default: authority's associated token account
+  tokenProgram?: PublicKey; // Default: the mint's owner
+  transferHookReward?: AccountMeta[]; // Default: resolved from the mint
+}
+```
+
+**Returns**
+
+`{ tx }`. Signer: `authority`.
+
+**Notes**
+
+- The program refreshes the slot and fails with `InvalidRewardState` until
+  its emission has ended. It transfers
+  `calculateRewardAmount(cumulativeSecondsWithEmptyLiquidityReward, emissionPerSecond, Rounding.Down)`;
+  a zero amount succeeds without a transfer.
+- The program fails with `InvalidPermission` when `authority` is not the
+  slot's reward authority.
 
 ## State Service
 
@@ -371,6 +2516,289 @@ With `relativeTick` set, each `ticks[].id` is an offset, in tick-spacing units, 
 | `fetchOperator(address)`, `fetchOracle(address)` | `deriveOperator(whitelistedAddress)`, `deriveOracle(pool)` | `Operator`, `Oracle` header |
 | `decodePositions(address, opts?)` | `derivePosition(nftMint)`, `opts.withReward` defaults to the pool's extension | Position slots, as `fetchPositionArrayWithPositions` |
 | `decodeTicks(address, opts)` | `deriveTickArray(pool, index)`, `opts.withReward` | Ticks, as `fetchTickArraysWithTicks` |
+
+`client.state` fetches and decodes program accounts at the client's
+commitment. Each method throws an `Error` when the account does not exist or
+is not owned by the program. The `fetch*` methods return the Anchor-decoded
+account; pool, position-array, tick-array, limit-order, and oracle accounts
+also carry a variable tail that the `*With*` and `decode*` methods decode.
+`withReward` must match the pool's liquidity-mining extension, because it
+changes the size of each position and tick.
+
+### fetchPool
+
+**Function**
+
+```typescript
+fetchPool(poolAddress): Promise<Pool>
+```
+
+**Parameters**
+
+```typescript
+poolAddress: PublicKey; // Pool address
+```
+
+**Returns**
+
+The `Pool` account: mints and token flags, reserves, `tickSpacing`,
+`tickCurrentId`, `sqrtPrice`, `liquidity`, fee configuration and dynamic fee
+state, `poolStatus`, `extensions`, the inline tick-array bitmap, and the
+partner's state.
+
+**Example**
+
+```typescript
+const poolState = await client.state.fetchPool(pool);
+const price = tickPrice(poolState.tickCurrentId);
+```
+
+### fetchPoolWithExtensions
+
+**Function**
+
+```typescript
+fetchPoolWithExtensions(poolAddress): Promise<{ pool: Pool; extensions: DecodedPoolExtensions }>
+```
+
+**Parameters**
+
+```typescript
+poolAddress: PublicKey; // Pool address
+```
+
+**Returns**
+
+```typescript
+type DecodedPoolExtensions = {
+  extensions: number; // The pool's extension bitmask
+  rewards?: DecodedPoolRewardInfo[]; // Reward slots, with LiquidityMining
+  activation?: PoolActivationParameters; // Whitelists and activation slots, with ActivationAccess
+};
+
+type DecodedPoolRewardInfo = {
+  mint: PublicKey;
+  vault: PublicKey;
+  authority: PublicKey;
+  emissionPerSecond: BN; // Q64.64
+  openTime: BN;
+  endTime: BN;
+  lastUpdateTime: BN;
+  cumulativeSecondsWithEmptyLiquidityReward: BN;
+  rewardGrowthGlobal: BN;
+  rewardTokenFlag: number;
+};
+```
+
+**Example**
+
+```typescript
+const { pool: poolState, extensions } =
+  await client.state.fetchPoolWithExtensions(pool);
+const rewardMint = extensions.rewards?.[CREATOR_REWARD_INDEX].mint;
+```
+
+### fetchPositionArrayWithPositions
+
+**Function**
+
+```typescript
+fetchPositionArrayWithPositions(positionArrayAddress, opts): Promise<{
+  positionArray: PositionArray;
+  positions: DecodedPosition[] | DecodedPositionWithReward[];
+}>
+```
+
+**Parameters**
+
+```typescript
+positionArrayAddress: PublicKey; // derivePosition(nftMint)
+opts.withReward: boolean; // The pool's liquidity-mining extension
+```
+
+**Returns**
+
+The header and one entry per slot, in slot order.
+
+```typescript
+type DecodedPosition = {
+  unlockedLiquidity: BN;
+  permanentLockedLiquidity: BN;
+  vestingLiquidity: BN;
+  releasedVestingLiquidity: BN;
+  feeGrowthCheckpointX: BN;
+  feeGrowthCheckpointY: BN;
+  feePendingX: BN;
+  feePendingY: BN;
+  tickLowerId: number;
+  tickUpperId: number;
+};
+
+type DecodedPositionWithReward = DecodedPosition & {
+  rewards: { growthInsideCheckpoint: BN; pendingAmount: BN }[];
+};
+```
+
+### fetchTickArraysWithTicks
+
+Fetches several tick arrays in one RPC call.
+
+**Function**
+
+```typescript
+fetchTickArraysWithTicks(tickArrayAddresses, opts): Promise<{
+  tickArray: TickArray;
+  ticks: DecodedTick[] | DecodedTickWithReward[];
+}[]>
+```
+
+**Parameters**
+
+```typescript
+tickArrayAddresses: PublicKey[]; // Arrays to load
+opts.withReward: boolean; // The pool's liquidity-mining extension
+```
+
+**Returns**
+
+One entry per address, in the given order.
+
+```typescript
+type DecodedTick = {
+  sqrtPrice: BN;
+  liquidityNet: BN;
+  liquidityGross: BN;
+  feeGrowthOutsideX: BN;
+  feeGrowthOutsideY: BN;
+  refCount: BN;
+  tickId: number;
+  limitOrderAskSide: number;
+  openOrderAmount: BN;
+  totalProcessingOrderAmount: BN;
+  processedOrderRemainingAmount: BN;
+  orderAge: BN;
+  fulfilledOrderAmountX: BN;
+  fulfilledOrderAmountY: BN;
+  limitOrderFeeAskSide: BN;
+  limitOrderFeeBidSide: BN;
+};
+
+type DecodedTickWithReward = DecodedTick & {
+  rewardGrowthsOutside: BN[];
+};
+```
+
+**Example**
+
+```typescript
+const index = tickIndexFromId(poolState.tickCurrentId, poolState.tickSpacing);
+const [current] = await client.state.fetchTickArraysWithTicks(
+  [deriveTickArray(pool, index)],
+  { withReward: false },
+);
+```
+
+**Notes**
+
+- Throws an `Error` when any address is missing or not owned by the program.
+
+### decodeLimitOrderData
+
+**Function**
+
+```typescript
+decodeLimitOrderData(limitOrderAddress): Promise<DecodedLimitOrderData[]>
+```
+
+**Parameters**
+
+```typescript
+limitOrderAddress: PublicKey; // deriveLimitOrder(nftMint)
+```
+
+**Returns**
+
+One entry per tick the order was placed on.
+
+```typescript
+type DecodedLimitOrderData = {
+  amount: BN; // Deposited amount; zero once canceled
+  age: BN; // Order age at the tick; zero once canceled
+  tickId: number;
+  isAsk: number; // 1 for an ask, 0 for a bid
+};
+```
+
+### decodeObservations
+
+**Function**
+
+```typescript
+decodeObservations(oracleAddress): Promise<DecodedObservation[]>
+```
+
+**Parameters**
+
+```typescript
+oracleAddress: PublicKey; // deriveOracle(pool)
+```
+
+**Returns**
+
+```typescript
+type DecodedObservation = {
+  lastUpdatedTimestamp: BN;
+  tickCumulative: BN;
+};
+```
+
+### fetchTokenBadge
+
+Fetches a token badge from the access-registry program.
+
+**Function**
+
+```typescript
+fetchTokenBadge(address): Promise<TokenBadge>
+```
+
+**Parameters**
+
+```typescript
+address: PublicKey; // deriveTokenBadge(tokenMint)
+```
+
+**Returns**
+
+The `TokenBadge` account: `tokenMint` and `mintScore`.
+
+**Example**
+
+```typescript
+const badge = await client.state.fetchTokenBadge(deriveTokenBadge(tokenMint));
+```
+
+**Notes**
+
+- Throws an `Error` when the badge does not exist or is not owned by the
+  access-registry program. Badges are created by access-registry operators.
+
+### Other State Methods
+
+Each returns a `Promise` of the value shown.
+
+| Method                                            | Argument                                                                      | Returns                                                                                                                                                    |
+| ------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fetchStaticConfig(configAddress)`                | `deriveStaticConfig(index)`                                                   | `StaticConfig`: `poolCreatorAuthority` (the default key for a public config), `collectFeeMode`, `activationType`, `extensions`, `tickSpacing`, `feeConfig` |
+| `fetchDynamicConfig(configAddress)`               | `deriveDynamicConfig(poolCreatorAuthority, index)`                            | `DynamicConfig`: `poolCreatorAuthority`, `permission` (`DynamicConfigPermission` mask), `partnerFeeBps`                                                    |
+| `fetchPositionArray(positionArrayAddress)`        | `derivePosition(nftMint)`                                                     | `PositionArray` header: `pool`, `nftMint`, `delegatePermission`, `layoutVersion`, `vesting`                                                                |
+| `fetchLimitOrder(limitOrderAddress)`              | `deriveLimitOrder(nftMint)`                                                   | `LimitOrder` header: `pool`, `nftMint`, `referral`, `delegatePermission`                                                                                   |
+| `fetchTickArray(tickArrayAddress)`                | `deriveTickArray(pool, index)`                                                | `TickArray` header: `pool`, `tickIndex`                                                                                                                    |
+| `fetchTickArrayBitmapExtension(extensionAddress)` | `deriveTickArrayBitmapExtension(pool)`                                        | `TickArrayBitmapExtension`: `pool`, `positiveBitmap`, `negativeBitmap`                                                                                     |
+| `fetchOperator(operatorAddress)`                  | `deriveOperator(whitelistedAddress)`                                          | `Operator`: `whitelistedAddress`, `permission` (`OperatorPermission` mask)                                                                                 |
+| `fetchOracle(oracleAddress)`                      | `deriveOracle(pool)`                                                          | `Oracle` header: `pool`, `idx` (latest observation), `lastObservationCreatedTimestamp`                                                                     |
+| `decodePositions(positionArrayAddress, opts?)`    | `derivePosition(nftMint)`; `opts.withReward` defaults to the pool's extension | `DecodedPosition[]` or `DecodedPositionWithReward[]`, as `fetchPositionArrayWithPositions`                                                                 |
+| `decodeTicks(tickArrayAddress, opts)`             | `deriveTickArray(pool, index)`; `opts.withReward`                             | `DecodedTick[]` or `DecodedTickWithReward[]`, as `fetchTickArraysWithTicks`                                                                                |
 
 ## Quote Helpers
 
@@ -401,6 +2829,240 @@ Pass the swap's tick arrays in traversal order: descending indexes when `swapFor
 | `nextSqrtPrice`, `nextTickId`, `nextLiquidity` | Pool state after the swap. |
 | `consumedTickArrayIndexes` | Tick array indexes the swap touched, in order. |
 
+### quoteExactIn (pure)
+
+Runs the program's exact-in swap over accounts you already hold: dynamic and
+scheduled fees, market-maker and limit-order liquidity, collect-fee mode, the
+protocol, host, and partner fee split, and Token 2022 transfer fees. Nothing
+is fetched.
+
+**Function**
+
+```typescript
+quoteExactIn(params: QuoteExactInParams): QuoteExactInResult
+```
+
+**Parameters**
+
+```typescript
+type QuoteExactInParams = {
+  poolAddress: PublicKey; // Pool address
+  pool: Pool; // fetchPool / fetchPoolWithExtensions
+  poolActivation?: PoolActivationParameters | null; // extensions.activation; required with the ActivationAccess extension
+  tickArrays: QuoteTickArray[]; // In traversal order (tickArraysForSwap)
+  bitmapExtension?: TickArrayBitmapExtension | null; // Required when the pool has a bitmap extension
+  inputAmount: BN; // Amount sent, before the input mint's transfer fee
+  swapForY: boolean; // true sells X for Y
+  hasReferral: boolean; // The swap passes a referral account
+  swapper?: PublicKey | null; // Swapping wallet; a whitelisted swapper can quote before activation
+  currentSlot: BN; // Clock slot
+  currentTimestamp: BN; // Clock unix timestamp
+  epoch: bigint; // Clock epoch, for transfer-fee schedules
+  inputMint?: Mint | null; // Unpacked input mint; required when it is a Token-2022 mint
+  outputMint?: Mint | null; // Unpacked output mint; required when it is a Token-2022 mint
+};
+
+type QuoteTickArray = {
+  pool: PublicKey; // tickArray.pool
+  tickIndex: number; // tickArray.tickIndex
+  ticks: DecodedTick[];
+};
+```
+
+**Returns**
+
+```typescript
+type QuoteExactInResult = {
+  consumedInAmount: BN; // Input the pool takes, after transferFeeIn
+  transferFeeIn: BN; // Input mint transfer fee on inputAmount
+  amountLeft: BN; // Input the loaded tick arrays could not take; the swap reverts unless zero
+  outAmount: BN; // Output the pool sends, before transferFeeOut
+  transferFeeOut: BN; // Output mint transfer fee on outAmount
+  transferFeeExcludedOutAmount: BN; // What the swapper receives; compared with minimumOutputAmount
+  mmFee: BN; // Fee to market-maker liquidity
+  limitOrderFee: BN; // Fee to filled limit orders
+  protocolFee: BN; // Protocol share, after the host and partner fees
+  hostFee: BN; // Paid to the referral account
+  partnerFee: BN; // Accrued to the pool partner
+  feesOnTokenX: boolean; // Whether the fees are taken in token X, as EvtSwap.feesOnTokenX
+  nextSqrtPrice: BN; // Pool sqrt price after the swap
+  nextTickId: number; // Pool tick after the swap
+  nextLiquidity: BN; // Active liquidity after the swap
+  consumedTickArrayIndexes: number[]; // Tick array indexes the swap touched, in order
+};
+```
+
+**Example**
+
+```typescript
+const { pool: poolState, extensions } =
+  await client.state.fetchPoolWithExtensions(pool);
+const bitmapExtension =
+  poolState.isBitmapExtensionInitialized === 1
+    ? await client.state.fetchTickArrayBitmapExtension(
+        deriveTickArrayBitmapExtension(pool),
+      )
+    : null;
+const selection = tickArraysForSwap({
+  pool,
+  poolState,
+  extensionState: bitmapExtension,
+  swapForY: true,
+});
+const loaded = await client.state.fetchTickArraysWithTicks(
+  selection.tickArrays,
+  { withReward: extensions.rewards !== undefined },
+);
+const unpack = (mint: PublicKey, flag: number) =>
+  getMint(connection, mint, "confirmed", getTokenProgram(flag));
+const [inputMint, outputMint] = await Promise.all([
+  unpack(poolState.tokenXMint, poolState.tokenXFlag),
+  unpack(poolState.tokenYMint, poolState.tokenYFlag),
+]);
+const clock = await readClock(connection);
+
+const quote = quoteExactIn({
+  poolAddress: pool,
+  pool: poolState,
+  poolActivation: extensions.activation ?? null,
+  tickArrays: loaded.map(({ tickArray, ticks }) => ({
+    pool: tickArray.pool,
+    tickIndex: tickArray.tickIndex,
+    ticks,
+  })),
+  bitmapExtension,
+  inputAmount: new BN(1_000_000),
+  swapForY: true,
+  hasReferral: false,
+  currentSlot: clock.slot,
+  currentTimestamp: clock.timestamp,
+  epoch: clock.epoch,
+  inputMint,
+  outputMint,
+});
+```
+
+**Notes**
+
+- `client.pool.quoteExactIn` does these reads for you. Call this directly
+  when you already hold the accounts, for example from a subscription.
+- With `amountLeft` zero, the amounts match what `swap` produces against the
+  same accounts and clock. The inputs are not modified, so quote consecutive
+  swaps from fresh account state.
+- Throws `InvalidParameters` when a Token 2022 side has no unpacked mint, a
+  mint does not match the pool, or an ActivationAccess pool has no
+  `poolActivation`, and `BitmapExtensionAccountIsNotProvided` when the
+  traversal leaves the inline bitmap without `bitmapExtension`. Other errors
+  as for `client.pool.quoteExactIn`.
+
+### tickArraysForSwap
+
+Selects the initialized tick arrays a swap traverses, in the order the swap
+instruction reads them.
+
+**Function**
+
+```typescript
+tickArraysForSwap(args): {
+  tickArrays: PublicKey[];
+  requiresBitmapExtension: boolean;
+}
+```
+
+**Parameters**
+
+```typescript
+args: {
+  pool: PublicKey; // Pool address
+  poolState: PoolBitmapState; // The Pool account, or its tickCurrentId, tickSpacing, tickArrayBitmap, isBitmapExtensionInitialized
+  extensionState?: BitmapExtensionState | null; // The bitmap extension account; required when the pool has one
+  swapForY: boolean; // Swap direction
+  maxTickArrays?: number; // Arrays to return; default 3
+  programId?: PublicKey; // Default DLMM_PRO_PROGRAM_ID
+}
+```
+
+**Returns**
+
+The first `maxTickArrays` tick arrays with liquidity, from the current
+tick's array onward in the swap direction: descending indexes when
+`swapForY`, ascending otherwise. `requiresBitmapExtension` is true when the
+pool has a bitmap extension, which the swap then needs as
+`tickArrayBitmapExtension`.
+
+**Notes**
+
+- Throws `BitmapExtensionAccountIsNotProvided` when the pool has an
+  extension and `extensionState` is missing, and `InvalidParameters` for a
+  `maxTickArrays` below 1.
+
+### calculateTransferFeeExcludedAmount
+
+**Function**
+
+```typescript
+calculateTransferFeeExcludedAmount(mint, epoch, transferFeeIncludedAmount): TransferFeeAmount
+```
+
+**Parameters**
+
+```typescript
+mint: Mint | null | undefined; // Unpacked mint; null for a mint without a transfer fee
+epoch: bigint; // Current epoch
+transferFeeIncludedAmount: BN; // Amount sent
+```
+
+**Returns**
+
+```typescript
+type TransferFeeAmount = {
+  amount: BN; // Amount that arrives
+  transferFee: BN; // Token-2022 transfer fee withheld
+};
+```
+
+### calculateTransferFeeIncludedAmount
+
+**Function**
+
+```typescript
+calculateTransferFeeIncludedAmount(mint, epoch, transferFeeExcludedAmount): TransferFeeAmount
+```
+
+**Parameters**
+
+```typescript
+mint: Mint | null | undefined; // Unpacked mint; null for a mint without a transfer fee
+epoch: bigint; // Current epoch
+transferFeeExcludedAmount: BN; // Amount that must arrive
+```
+
+**Returns**
+
+`TransferFeeAmount`: the amount to send so that
+`transferFeeExcludedAmount` arrives, and the fee.
+
+**Example**
+
+```typescript
+const mint = await getMint(
+  connection,
+  rewardMint,
+  "confirmed",
+  TOKEN_2022_PROGRAM_ID,
+);
+const { epoch } = await connection.getEpochInfo();
+const { amount: maxAmount } = calculateTransferFeeIncludedAmount(
+  mint,
+  BigInt(epoch),
+  new BN(1_000_000), // must arrive
+);
+```
+
+**Notes**
+
+- Throws `MathOverflow` when the result does not fit in a `u64`.
+
 ## Liquidity Shape Helpers
 
 A liquidity shape gives every tick column `[tickId, tickId + tickSpacing)` an integer weight up to `MAX_LIQUIDITY_WEIGHT` (255) and groups the columns into position ranges. `addLiquidityByWeight` deposits `multiplier * weight` liquidity into each range, so the weights set the profile and the multiplier sets the size.
@@ -420,6 +3082,331 @@ A liquidity shape gives every tick column `[tickId, tickId + tickSpacing)` an in
 
 `limitOrderTicksFromShape` takes `unitAmount` or `totalAmount`, not both. From `totalAmount` the unit is `totalAmount / totalWeight` rounded down, so up to `totalWeight - 1` stays unspent. The returned `amount` excludes the transfer fee.
 
+A liquidity shape gives every tick column `[tickId, tickId + tickSpacing)`
+an integer weight up to `MAX_LIQUIDITY_WEIGHT` (255) and groups the columns
+into position ranges. The columns run from `minTickId` to `maxTickId`, except
+for `StrategyType.Custom`, where `weights` alone defines them.
+`addLiquidityByWeight` deposits `multiplier * weight` liquidity into each
+range, so the weights set the liquidity profile and the multiplier sets the
+size. `limitOrderTicksFromShape` turns the same columns into limit-order
+ticks.
+
+### buildLiquidityShape
+
+**Function**
+
+```typescript
+buildLiquidityShape(args): LiquidityShape
+```
+
+**Parameters**
+
+```typescript
+args: {
+  strategy: StrategyType; // Spot, Curve, BidAsk, or Custom
+  minTickId: number; // First column, a usable tick
+  maxTickId: number; // Last column, a usable tick
+  tickSpacing: number; // The pool's tick spacing
+  currentTickId: number; // The pool's current tick
+  weights?: TickWeight[]; // Custom only: { tickId, weight } per column; the columns come from these alone, and minTickId/maxTickId are only checked as usable ticks
+  layout?: LiquidityLayout; // Default Vertical
+  maxRanges?: number; // Cap on ranges.length, 1..=POSITION_MAX_RANGE
+}
+```
+
+**Returns**
+
+```typescript
+type LiquidityShape = {
+  strategy: StrategyType;
+  layout: LiquidityLayout;
+  tickSpacing: number;
+  currentTickId: number;
+  columns: LiquidityColumn[]; // One per tick column
+  ranges: LiquidityRange[]; // TickRange & { weight }; one per position slot
+};
+
+type LiquidityColumn = {
+  tickId: number;
+  tickUpperId: number; // tickId + tickSpacing
+  weight: number;
+  side: LiquiditySide; // Bid below the current tick, Ask above, Active containing it
+  priceLower: Decimal; // tickPrice(tickId)
+  priceUpper: Decimal; // tickPrice(tickUpperId)
+};
+```
+
+**Example**
+
+```typescript
+const shape = buildLiquidityShape({
+  strategy: StrategyType.BidAsk,
+  minTickId: aligned - 20 * tickSpacing,
+  maxTickId: aligned + 20 * tickSpacing,
+  tickSpacing,
+  currentTickId: poolState.tickCurrentId,
+  layout: LiquidityLayout.Horizontal,
+  maxRanges: 10,
+});
+// shape.ranges → openPosition / expandPosition tickRanges,
+// multiplierFromAmounts and encodeAddLiquidityByWeight ranges.
+```
+
+**Notes**
+
+- `Spot` weighs every column equally. `Curve` is heaviest at the column
+  holding the current tick and falls off away from it; `BidAsk` is lightest
+  there and rises away from it. With the current tick outside the range,
+  `Curve` is heaviest and `BidAsk` lightest at the nearest edge. `Custom`
+  takes `weights` for usable tick ids, without duplicates; a zero weight
+  leaves a gap. Weights above 255 are scaled down.
+- `Vertical` merges adjacent columns of equal weight into side-by-side
+  ranges. `Horizontal` stacks overlapping ranges, one per run of columns at
+  or above each weight level, which usually needs fewer ranges for `Curve`
+  and `BidAsk`. Both give every column the same total weight.
+- `maxRanges` coarsens the weights, in either layout, until the ranges fit;
+  `columns` then show the reduced weights. Without it, a shape needing more
+  than `POSITION_MAX_RANGE` ranges throws `InvalidParameters`, as does a
+  shape that cannot fit `maxRanges`.
+- Throws `InvalidParameters` for an unusable tick, `minTickId` above
+  `maxTickId`, missing or invalid `Custom` weights, all-zero weights, or a
+  last column ending past `MAX_TICK_ID`.
+
+### multiplierFromAmounts
+
+Finds the largest multiplier whose deposit fits both token budgets.
+
+**Function**
+
+```typescript
+multiplierFromAmounts(args): BN
+```
+
+**Parameters**
+
+```typescript
+args: {
+  ranges: LiquidityRange[]; // shape.ranges
+  tickSpacing: number; // The pool's tick spacing
+  currentTickId: number; // The pool's current tick
+  currentSqrtPrice: BN; // The pool's sqrt price
+  amountX: BN; // Token X budget, transfer fee included
+  amountY: BN; // Token Y budget, transfer fee included
+  mintX: Mint | null; // Unpacked token X mint; null when it has no transfer fee
+  mintY: Mint | null; // Unpacked token Y mint; null when it has no transfer fee
+  epoch: bigint; // Current epoch, for transfer-fee schedules
+}
+```
+
+**Returns**
+
+The multiplier for `encodeAddLiquidityByWeight`. Its deposit, from
+`amountsFromShape`, plus transfer fees fits `amountX` and `amountY`.
+
+**Notes**
+
+- Also bounded by the program's per-tick liquidity cap, assuming the range
+  boundaries hold no liquidity yet; existing liquidity there lowers the cap.
+- Throws `InvalidParameters` for a weight outside `1..=255`, an inverted or
+  unusable range, or budgets too small to fund a multiplier of 1.
+
+### encodeAddLiquidityByWeight
+
+Builds the `parameters` of `addLiquidityByWeight` from shape ranges.
+
+**Function**
+
+```typescript
+encodeAddLiquidityByWeight(args): AddLiquidityByWeightParameters
+```
+
+**Parameters**
+
+```typescript
+args: {
+  ranges: LiquidityRange[]; // shape.ranges, 1..=POSITION_MAX_RANGE
+  positionIndexes?: number[]; // Slot of each range; default 0, 1, 2, ...
+  maxAmountX: BN; // Cap on token X paid, transfer fee included
+  maxAmountY: BN; // Cap on token Y paid, transfer fee included
+  multiplier: BN; // Liquidity per weight unit (multiplierFromAmounts)
+  expectedLayoutVersion?: number; // Default: no check
+}
+```
+
+**Returns**
+
+`{ maxAmountX, maxAmountY, expectedLayoutVersion, bitmap, multiplier, liquidities }`
+with one weight byte per slot in ascending slot order.
+
+**Notes**
+
+- Pass `positionIndexes` when the ranges go into existing slots other than
+  `0..ranges.length - 1`, for example after `expandPosition`.
+- Throws `InvalidParameters` for no ranges or more than `POSITION_MAX_RANGE`,
+  a non-positive multiplier, a weight outside `1..=255`, or
+  `positionIndexes` that do not match the ranges, and `LiquidityIsTooHigh`
+  when `multiplier * weight` exceeds `i128::MAX`.
+
+### amountsFromShape
+
+Computes the deposit of each range for a multiplier.
+
+**Function**
+
+```typescript
+amountsFromShape(args): LiquidityAmounts[]
+```
+
+**Parameters**
+
+```typescript
+args: {
+  ranges: LiquidityRange[]; // shape.ranges
+  currentTickId: number; // The pool's current tick
+  currentSqrtPrice: BN; // The pool's sqrt price
+  multiplier: BN; // Liquidity per weight unit
+}
+```
+
+**Returns**
+
+```typescript
+type LiquidityAmounts = {
+  tickId: number; // Range lower tick
+  tickUpperId: number; // Range upper tick
+  liquidity: BN; // multiplier * weight
+  amountX: BN; // Token X the pool receives, rounded up
+  amountY: BN; // Token Y the pool receives, rounded up
+};
+```
+
+**Notes**
+
+- Amounts exclude transfer fees. Throws `LiquidityIsTooHigh` when a range's
+  liquidity exceeds `i128::MAX`.
+
+### limitOrderTicksFromShape
+
+Turns the columns of one side of a shape into limit-order ticks.
+
+**Function**
+
+```typescript
+limitOrderTicksFromShape(args): ShapeLimitOrderTicks
+```
+
+**Parameters**
+
+```typescript
+args: {
+  shape: LiquidityShape; // From buildLiquidityShape with the pool's tick spacing
+  side: LimitOrderSide; // "bid" or "ask"
+  unitAmount?: BN; // Amount per weight unit; pass this or totalAmount
+  totalAmount?: BN; // Budget split by weight; pass this or unitAmount
+  relative?: boolean; // Emit ids as offsets for relativeTick; default false
+  includeActiveTick?: boolean; // Bid only: include the column holding the current tick; default false
+}
+```
+
+**Returns**
+
+```typescript
+type ShapeLimitOrderTicks = {
+  ticks: { id: number; amount: BN }[]; // parameters.ticks of openLimitOrder
+  amount: BN; // Sum of the tick amounts, before transfer fees
+};
+```
+
+**Notes**
+
+- An ask takes the weighted columns above the current tick; a bid takes
+  those below the column holding the current tick, plus that column with
+  `includeActiveTick`.
+- Each tick gets `unitAmount * weight`. From `totalAmount` the unit is
+  `totalAmount / totalWeight` rounded down, so up to `totalWeight - 1` stays
+  unspent.
+- `amount` excludes the transfer fee. For a transfer-fee mint, set
+  `maxAmount` to `calculateTransferFeeIncludedAmount(mint, epoch, amount).amount`.
+- Throws `InvalidParameters` when both or neither amount is given, the unit
+  rounds to zero, or the side has no columns or more than
+  `LIMIT_ORDER_MAX_TICK`.
+
+### relativeTickFromSlippage
+
+Builds the `relativeTick` band of `openLimitOrder`.
+
+**Function**
+
+```typescript
+relativeTickFromSlippage(args): RelativeTick
+```
+
+**Parameters**
+
+```typescript
+args: {
+  currentTickId: number; // The pool's current tick
+  tickSpacing: number; // The pool's tick spacing
+  slippageTicks: number; // Allowed move each way, a multiple of tickSpacing
+}
+```
+
+**Returns**
+
+`{ spacingAlignedMinTickId, spacingAlignedMaxTickId }`: the current tick
+aligned down to `tickSpacing`, minus and plus `slippageTicks`.
+
+**Notes**
+
+- Throws `InvalidParameters` for a `tickSpacing` outside
+  `1..=MAX_TICK_SPACING` or a `slippageTicks` that is negative or not a
+  multiple of `tickSpacing`.
+
+### tickPrice
+
+**Function**
+
+```typescript
+tickPrice(tickId): Decimal
+```
+
+**Parameters**
+
+```typescript
+tickId: number; // Tick id
+```
+
+**Returns**
+
+The price at the tick in atoms of token Y per atom of token X, as a
+`decimal.js` `Decimal`.
+
+### tickUiPrice
+
+**Function**
+
+```typescript
+tickUiPrice(tickId, decimalsX, decimalsY): Decimal
+```
+
+**Parameters**
+
+```typescript
+tickId: number; // Tick id
+decimalsX: number; // Token X decimals
+decimalsY: number; // Token Y decimals
+```
+
+**Returns**
+
+Whole tokens Y per whole token X: `tickPrice(tickId) * 10^(decimalsX - decimalsY)`.
+
+**Example**
+
+```typescript
+const price = tickUiPrice(poolState.tickCurrentId, 9, 6);
+```
+
 ## Liquidity and Position Helpers
 
 | Function | Use |
@@ -435,6 +3422,225 @@ A liquidity shape gives every tick column `[tickId, tickId + tickSpacing)` an in
 
 `MAX_POSITION_DELEGATE_PERMISSION` and `MAX_LIMIT_ORDER_DELEGATE_PERMISSION` are the masks of every permission. A larger mask throws `InvalidPermission`. For a transfer-fee mint, pass `calculateTransferFeeExcludedAmount(...).amount` as the budget to `getLiquidityFromAmounts`, because `maxAmountX` and `maxAmountY` of `addLiquidity` include the fee.
 
+### getLiquidityFromAmounts
+
+Computes the largest liquidity two token budgets fund in a range at the
+current price.
+
+**Function**
+
+```typescript
+getLiquidityFromAmounts(args): BN
+```
+
+**Parameters**
+
+```typescript
+args: {
+  maxTokenX: BN; // Token X the pool receives
+  maxTokenY: BN; // Token Y the pool receives
+  tickLowerId: number; // Range lower tick
+  tickUpperId: number; // Range upper tick
+  tickCurrentId: number; // The pool's current tick
+  currentSqrtPrice: BN; // The pool's sqrt price
+}
+```
+
+**Returns**
+
+The liquidity: from token X alone when the range is above the current tick,
+from token Y alone when it is at or below, and the smaller of the two when
+the range contains the current tick.
+
+**Notes**
+
+- The budgets are pool-side. For a transfer-fee mint, pass
+  `calculateTransferFeeExcludedAmount(mint, epoch, budget).amount`, because
+  `maxAmountX` / `maxAmountY` of `addLiquidity` include the fee.
+- Throws `LiquidityIsZero` when the budgets fund no liquidity.
+
+### getAmountsFromLiquidity
+
+Computes the token amounts a liquidity change moves in a range at the current
+price.
+
+**Function**
+
+```typescript
+getAmountsFromLiquidity(args): { amountX: BN; amountY: BN }
+```
+
+**Parameters**
+
+```typescript
+args: {
+  tickCurrentId: number; // The pool's current tick
+  tickLowerId: number; // Range lower tick
+  tickUpperId: number; // Range upper tick
+  currentSqrtPrice: BN; // The pool's sqrt price
+  liquidity: BN; // Positive for a deposit, negative for a withdrawal
+}
+```
+
+**Returns**
+
+Pool-side amounts, before transfer fees: rounded up for a deposit, down for a
+withdrawal.
+
+**Example**
+
+```typescript
+const { amountX, amountY } = getAmountsFromLiquidity({
+  tickCurrentId: poolState.tickCurrentId,
+  tickLowerId: slot.tickLowerId,
+  tickUpperId: slot.tickUpperId,
+  currentSqrtPrice: poolState.sqrtPrice,
+  liquidity: slot.unlockedLiquidity.neg(),
+});
+```
+
+### liquidityBitmap
+
+**Function**
+
+```typescript
+liquidityBitmap(positionIndexes): BN
+```
+
+**Parameters**
+
+```typescript
+positionIndexes: number[]; // Slot indexes, each below POSITION_MAX_RANGE, no duplicates
+```
+
+**Returns**
+
+The slot bitmap the position instructions take.
+
+**Example**
+
+```typescript
+const bitmap = liquidityBitmap([0, 2]); // slots 0 and 2
+```
+
+**Notes**
+
+- Throws `InvalidParameters` for an empty list, a duplicate, or an index
+  outside `0..POSITION_MAX_RANGE - 1`.
+
+### positionIndexesFromBitmap
+
+**Function**
+
+```typescript
+positionIndexesFromBitmap(bitmap): number[]
+```
+
+**Parameters**
+
+```typescript
+bitmap: BN; // Slot bitmap
+```
+
+**Returns**
+
+The slot indexes set in `bitmap`, ascending.
+
+**Notes**
+
+- Throws `InvalidParameters` for a zero or negative bitmap, or one with bits
+  at or above `POSITION_MAX_RANGE`.
+
+### positionTotalLiquidity
+
+**Function**
+
+```typescript
+positionTotalLiquidity(position): BN
+```
+
+**Parameters**
+
+```typescript
+position: DecodedPosition; // A slot from fetchPositionArrayWithPositions
+```
+
+**Returns**
+
+`unlockedLiquidity + permanentLockedLiquidity + vestingLiquidity`, the
+liquidity that earns fees.
+
+### positionDelegatePermissionMask
+
+**Function**
+
+```typescript
+positionDelegatePermissionMask(permissions): number
+```
+
+**Parameters**
+
+```typescript
+permissions: readonly PositionDelegatePermission[]; // AddLiquidity, RemoveLiquidity, ClaimFee, ClaimReward, UpdatePositionRange
+```
+
+**Returns**
+
+The mask for `updatePositionDelegatePermission`. `MAX_POSITION_DELEGATE_PERMISSION`
+is the mask of every permission.
+
+**Notes**
+
+- Throws `InvalidPermission` for an unknown permission.
+
+### limitOrderDelegatePermissionMask
+
+**Function**
+
+```typescript
+limitOrderDelegatePermissionMask(permissions): number
+```
+
+**Parameters**
+
+```typescript
+permissions: readonly LimitOrderDelegatePermission[]; // CancelLimitOrder
+```
+
+**Returns**
+
+The mask for `updateLimitOrderDelegatePermission`.
+`MAX_LIMIT_ORDER_DELEGATE_PERMISSION` is the mask of every permission.
+
+**Notes**
+
+- Throws `InvalidPermission` for an unknown permission.
+
+### calculateRewardAmount
+
+**Function**
+
+```typescript
+calculateRewardAmount(timeDelta, emissionPerSecond, rounding): BN
+```
+
+**Parameters**
+
+```typescript
+timeDelta: BN; // Seconds
+emissionPerSecond: BN; // Q64.64 atoms per second
+rounding: Rounding; // Up for a funding amount, Down for an emitted amount
+```
+
+**Returns**
+
+`timeDelta * emissionPerSecond / 2^64`, rounded as requested, as the program
+computes reward amounts.
+
+**Notes**
+
+- Throws `TypeCastFailed` when the result does not fit in a `u64`.
+
 ## Tick Helpers
 
 Tick `i` has price `1.0001^i` (token Y per token X, in atoms), stored as a Q64.64 sqrt price. A tick is usable by a pool when it is a multiple of the pool's tick spacing within `MIN_TICK_ID` and `MAX_TICK_ID`. Tick array `n` covers the `MAX_TICKS_PER_ARRAY` (128) usable ticks starting at `n * 128 * tickSpacing`.
@@ -448,6 +3654,174 @@ Tick `i` has price `1.0001^i` (token Y per token X, in atoms), stored as a Q64.6
 | `tickArrayIndexesForTickIds(tickIds, tickSpacing)` | Deduplicated, ascending tick array indexes for a list of ticks. |
 | `tickArraysForTickIds(pool, tickIds, tickSpacing, programId?)` | Tick array addresses for a list of ticks, in the order the limit-order builders take. |
 | `tickArraysForRanges(pool, ranges, tickSpacing, programId?)` | Tick array addresses of every range endpoint, in the order the position builders pass. |
+
+Tick `i` has price `1.0001^i` (token Y per token X, in atoms), stored as a
+Q64.64 sqrt price. A tick is usable by a pool when it is a multiple of the
+pool's tick spacing within `MIN_TICK_ID..=MAX_TICK_ID`. Tick array `n` covers
+the `MAX_TICKS_PER_ARRAY` (128) usable ticks starting at
+`n * 128 * tickSpacing`.
+
+### getSqrtPriceFromTickId
+
+**Function**
+
+```typescript
+getSqrtPriceFromTickId(tickId): BN
+```
+
+**Parameters**
+
+```typescript
+tickId: number; // Tick id
+```
+
+**Returns**
+
+The tick's Q64.64 sqrt price, `sqrt(1.0001^tickId) * 2^64`.
+
+**Example**
+
+```typescript
+const initialSqrtPrice = getSqrtPriceFromTickId(0); // price 1
+```
+
+### tickIdFromSqrtPrice
+
+**Function**
+
+```typescript
+tickIdFromSqrtPrice(sqrtPrice): number
+```
+
+**Parameters**
+
+```typescript
+sqrtPrice: BN; // Q64.64, within MIN_SQRT_PRICE..=MAX_SQRT_PRICE
+```
+
+**Returns**
+
+The tick `T` with `getSqrtPriceFromTickId(T) <= sqrtPrice < getSqrtPriceFromTickId(T + 1)`.
+
+**Notes**
+
+- Throws `InvalidParameters` outside `MIN_SQRT_PRICE..=MAX_SQRT_PRICE`.
+
+### tickIndexFromId
+
+**Function**
+
+```typescript
+tickIndexFromId(tickId, tickSpacing): number
+```
+
+**Parameters**
+
+```typescript
+tickId: number; // Tick id
+tickSpacing: number; // The pool's tick spacing, 1..=MAX_TICK_SPACING
+```
+
+**Returns**
+
+The index of the tick array holding `tickId`.
+
+**Example**
+
+```typescript
+const index = tickIndexFromId(poolState.tickCurrentId, poolState.tickSpacing);
+const tickArray = deriveTickArray(pool, index);
+```
+
+**Notes**
+
+- Throws `InvalidParameters` for a tick spacing outside
+  `1..=MAX_TICK_SPACING`.
+
+### isUsableTickId
+
+**Function**
+
+```typescript
+isUsableTickId(tickId, tickSpacing): boolean
+```
+
+**Parameters**
+
+```typescript
+tickId: number; // Tick id
+tickSpacing: number; // The pool's tick spacing
+```
+
+**Returns**
+
+Whether `tickId` is a multiple of `tickSpacing` within
+`MIN_TICK_ID..=MAX_TICK_ID`.
+
+### tickArrayIndexesForTickIds
+
+**Function**
+
+```typescript
+tickArrayIndexesForTickIds(tickIds, tickSpacing): number[]
+```
+
+**Parameters**
+
+```typescript
+tickIds: number[]; // Tick ids
+tickSpacing: number; // The pool's tick spacing
+```
+
+**Returns**
+
+The indexes of the tick arrays holding `tickIds`, deduplicated and
+ascending.
+
+### tickArraysForTickIds
+
+**Function**
+
+```typescript
+tickArraysForTickIds(pool, tickIds, tickSpacing, programId?): PublicKey[]
+```
+
+**Parameters**
+
+```typescript
+pool: PublicKey; // Pool address
+tickIds: number[]; // Tick ids
+tickSpacing: number; // The pool's tick spacing
+programId?: PublicKey; // Default DLMM_PRO_PROGRAM_ID
+```
+
+**Returns**
+
+The tick arrays holding `tickIds`, deduplicated and ascending by index: the
+`tickArrays` order of the limit-order builders.
+
+### tickArraysForRanges
+
+**Function**
+
+```typescript
+tickArraysForRanges(pool, ranges, tickSpacing, programId?): PublicKey[]
+```
+
+**Parameters**
+
+```typescript
+pool: PublicKey; // Pool address
+ranges: TickRange[]; // Position ranges
+tickSpacing: number; // The pool's tick spacing
+programId?: PublicKey; // Default DLMM_PRO_PROGRAM_ID
+```
+
+**Returns**
+
+The tick arrays of every range endpoint, deduplicated and ascending by index:
+the arrays the position builders pass. A swap uses `tickArraysForSwap`
+instead.
 
 ## PDA Helpers
 
@@ -485,6 +3859,173 @@ Each helper returns the address only. The optional last `programId` argument def
 
 `getExtraAccountMetasForTransferHook` takes a `TransferHookLeg` with `mint`, `source`, `destination` and `authority`. The authority is the user, or `derivePoolAuthority()` for a transfer out of the pool. The accounts are resolved for a transfer amount of zero. For a hook whose extra accounts depend on the amount, pass the `transferHook*` array to the builder yourself.
 
+### findNftAccount
+
+**Function**
+
+```typescript
+findNftAccount(nftMint, owner): PublicKey
+```
+
+**Parameters**
+
+```typescript
+nftMint: PublicKey; // Position or limit-order NFT mint
+owner: PublicKey; // NFT owner; may be off curve
+```
+
+**Returns**
+
+The owner's Token 2022 associated token account for the NFT, the default
+`nftAccount` of every builder.
+
+### getTokenProgram
+
+**Function**
+
+```typescript
+getTokenProgram(tokenProgramFlag): PublicKey
+```
+
+**Parameters**
+
+```typescript
+tokenProgramFlag: number; // poolState.tokenXFlag or tokenYFlag (TokenProgramFlags)
+```
+
+**Returns**
+
+`TOKEN_PROGRAM_ID` for `TokenProgramFlags.TokenProgram`, `TOKEN_2022_PROGRAM_ID`
+for `TokenProgramFlags.TokenProgram2022`.
+
+**Example**
+
+```typescript
+const userTokenX = getAssociatedTokenAddressSync(
+  poolState.tokenXMint,
+  owner.publicKey,
+  false,
+  getTokenProgram(poolState.tokenXFlag),
+);
+```
+
+**Notes**
+
+- Throws `TypeCastFailed` for any other flag.
+
+### wrapSOLInstruction
+
+**Function**
+
+```typescript
+wrapSOLInstruction(from, to, amount): TransactionInstruction[]
+```
+
+**Parameters**
+
+```typescript
+from: PublicKey; // Source of the lamports; must sign
+to: PublicKey; // Wrapped SOL account
+amount: bigint; // Lamports to wrap
+```
+
+**Returns**
+
+A transfer of `amount` lamports and a sync-native instruction.
+
+### unwrapSOLInstruction
+
+**Function**
+
+```typescript
+unwrapSOLInstruction(owner, receiver?): TransactionInstruction
+```
+
+**Parameters**
+
+```typescript
+owner: PublicKey; // Owner of the wrapped SOL account; must sign
+receiver?: PublicKey; // Receives the lamports; default owner
+```
+
+**Returns**
+
+A close of the owner's wrapped SOL account.
+
+### readClock
+
+**Function**
+
+```typescript
+readClock(connection, commitment?): Promise<{ slot: BN; timestamp: BN; epoch: bigint }>
+```
+
+**Parameters**
+
+```typescript
+connection: Connection;
+commitment?: Commitment;
+```
+
+**Returns**
+
+The Clock sysvar's slot, unix timestamp, and epoch: the chain time the
+program checks activation points, reward windows, and transfer-fee epochs
+against.
+
+### getExtraAccountMetasForTransferHook
+
+Resolves the extra accounts a Token 2022 transfer-hook program needs for one
+transfer. The builders call it for every transfer whose `transferHook*` array
+you omit.
+
+**Function**
+
+```typescript
+getExtraAccountMetasForTransferHook(connection, leg, commitment?): Promise<AccountMeta[]>
+```
+
+**Parameters**
+
+```typescript
+connection: Connection; // RPC connection
+leg: TransferHookLeg;
+commitment?: Commitment; // Commitment for the mint and hook account reads
+
+type TransferHookLeg = {
+  mint: PublicKey; // Transferred mint
+  source: PublicKey; // Source token account
+  destination: PublicKey; // Destination token account
+  authority: PublicKey; // Transfer authority: the user, or derivePoolAuthority() for a transfer out of the pool
+};
+```
+
+**Returns**
+
+The accounts that follow source, mint, destination, and authority in a
+Token 2022 `transferChecked` for this transfer, the slice the program reads
+from the remaining accounts. Empty for an SPL Token mint or a Token 2022 mint
+without a hook.
+
+**Example**
+
+```typescript
+const transferHookY = await getExtraAccountMetasForTransferHook(connection, {
+  mint: poolState.tokenYMint,
+  source: deriveReserve(poolState.tokenYMint, pool),
+  destination: userTokenY,
+  authority: derivePoolAuthority(),
+});
+```
+
+**Notes**
+
+- The accounts are resolved for a transfer amount of zero. For a hook whose
+  extra accounts depend on the amount, pass the `transferHookX`,
+  `transferHookY`, `transferHookReferral`, or `transferHookReward` array to
+  the builder yourself.
+- A builder sends an explicit array, including `[]`, as given.
+
 ## Account Codec Helpers
 
 | Function | Use |
@@ -498,6 +4039,78 @@ Each helper returns the address only. The optional last `programId` argument def
 | `decodeObservationsFromData(data)` | Decode `DecodedObservation[]` from raw oracle data. |
 
 The raw decoders read the variable tail of account data, for example from an `onAccountChange` subscription. Each throws an `Error` when the data is not that account type.
+
+### encodePoolExtensions
+
+**Function**
+
+```typescript
+encodePoolExtensions(extensions): number
+```
+
+**Parameters**
+
+```typescript
+extensions: PoolExtension[]; // LiquidityMining, ActivationAccess
+```
+
+**Returns**
+
+The `extensions` bitmask for pool initialization.
+
+**Notes**
+
+- Throws `InvalidParameters` for an unknown extension.
+
+### isSupportExtension
+
+**Function**
+
+```typescript
+isSupportExtension(extensions, extension): boolean
+```
+
+**Parameters**
+
+```typescript
+extensions: number; // poolState.extensions
+extension: PoolExtension; // Extension to test
+```
+
+**Returns**
+
+Whether `extension` is set in `extensions`.
+
+**Example**
+
+```typescript
+const withReward = isSupportExtension(
+  poolState.extensions,
+  PoolExtension.LiquidityMining,
+);
+```
+
+### Raw Account Decoders
+
+These decode the variable tail of raw account data, for example from an
+`onAccountChange` subscription. Each throws an `Error` when the data is not
+that account type.
+
+| Function                                    | Returns                                              |
+| ------------------------------------------- | ---------------------------------------------------- |
+| `decodePoolExtensionsFromData(data)`        | `DecodedPoolExtensions`                              |
+| `decodePositionsFromData(data, withReward)` | Position slots, as `fetchPositionArrayWithPositions` |
+| `decodeTicksFromData(data, withReward)`     | Ticks, as `fetchTickArraysWithTicks`                 |
+| `decodeLimitOrderDataFromData(data)`        | `DecodedLimitOrderData[]`                            |
+| `decodeObservationsFromData(data)`          | `DecodedObservation[]`                               |
+
+**Example**
+
+```typescript
+connection.onAccountChange(derivePosition(nftMint), ({ data }) => {
+  const positions = decodePositionsFromData(data, withReward);
+});
+```
 
 ## Base Fee and Activation Builders
 
@@ -526,6 +4139,472 @@ A pool with the `ActivationAccess` extension has two activation slots and three 
 
 Without a `TimeBased` slot, pass `activationPoint: null`. A `BondingCurve` slot needs a `whitelistedAddLiquidity` other than the default key, since nobody else can deposit before the target. Each `TimeBased` point must fall between now and now plus `MAX_TIME_BUFFER` seconds, or `MAX_SLOT_BUFFER` slots on a slot-activated pool.
 
+A pool's base fee is a `BaseFeeMode` plus 31 bytes of `data`. The builders
+below take fees in basis points and return the whole `baseFeeParameter`
+(mode and data); they reject schedules pool initialization would reject
+(`InvalidParameters`). The raw encoders produce only `data` and check that
+each field fits its integer width. Fee numerators are over `FEE_DENOMINATOR`
+(1,000,000,000), so 1,000,000 is 0.1%. Pool initialization requires every
+fee the schedule can reach to lie within `MIN_FEE_NUMERATOR..=MAX_FEE_NUMERATOR`
+(0.01% to 99%).
+
+A pool with the ActivationAccess extension has two activation slots and
+three whitelisted wallets (`poolActivation`). A swap, deposit, or withdrawal
+is allowed only when both slots allow it, unless the swapper, or the
+position or order owner, is the matching whitelisted wallet. Pool
+initialization accepts these slot pairs, in this order: Open + Open,
+Open + BondingCurve, Open + TimeBased, BondingCurve + TimeBased. Without a
+TimeBased slot, `activationPoint` must be the current point; pass `null`.
+
+### bpsToFeeNumerator
+
+**Function**
+
+```typescript
+bpsToFeeNumerator(bps: number): BN
+```
+
+**Parameters**
+
+```typescript
+bps: number; // Integer in 0..=10000
+```
+
+**Returns**
+
+The fee over `FEE_DENOMINATOR`; 1 bps is 100,000.
+
+### baseFeeParameters
+
+Picks the builder from `baseFeeMode`. Equivalent of the damm-v2 SDK's
+`getBaseFeeParams`, with each mode's fields at the top level instead of in a
+per-mode sub-object.
+
+**Function**
+
+```typescript
+baseFeeParameters(params: BaseFeeBpsParams): BaseFeeConfigParameters
+```
+
+**Parameters**
+
+```typescript
+type BaseFeeBpsParams =
+  | { baseFeeMode: BaseFeeMode.Fixed; feeBps: number }
+  | TimeSchedulerBpsParams
+  | MarketCapSchedulerBpsParams;
+```
+
+**Returns**
+
+The `baseFeeParameter` from `fixedBaseFeeParameters`,
+`timeSchedulerBaseFeeParameters` or `marketCapSchedulerBaseFeeParameters`.
+
+**Example**
+
+```typescript
+const baseFeeMode = BaseFeeMode.MarketCapSchedulerExponential; // e.g. from a UI selector
+const baseFeeParameter = baseFeeParameters({
+  baseFeeMode,
+  startingBaseFeeBps: 1000,
+  endingBaseFeeBps: 25,
+  numberOfPeriod: 50,
+  priceMultiple: 100,
+  schedulerExpirationDuration: 86_400,
+});
+```
+
+**Notes**
+
+- The params type is a union keyed on `baseFeeMode`, so TypeScript requires
+  the fields of the chosen mode.
+- Throws `InvalidBaseFeeMode` for an unknown mode; other errors come from the
+  chosen builder.
+
+### fixedBaseFeeParameters
+
+**Function**
+
+```typescript
+fixedBaseFeeParameters(feeBps: number): BaseFeeConfigParameters
+```
+
+**Parameters**
+
+```typescript
+feeBps: number; // Integer in 1..=9900
+```
+
+**Returns**
+
+The `baseFeeParameter` for `BaseFeeMode.Fixed`.
+
+**Example**
+
+```typescript
+const baseFeeParameter = fixedBaseFeeParameters(25); // 0.25%
+```
+
+### timeSchedulerBaseFeeParameters
+
+A fee that starts at `startingBaseFeeBps` at the activation point and settles
+at about `endingBaseFeeBps` after `totalDuration`. Equivalent of the damm-v2
+SDK's `getFeeTimeSchedulerParams`.
+
+**Function**
+
+```typescript
+timeSchedulerBaseFeeParameters(params: TimeSchedulerBpsParams): BaseFeeConfigParameters
+```
+
+**Parameters**
+
+```typescript
+type TimeSchedulerBpsParams = {
+  baseFeeMode:
+    BaseFeeMode.TimeSchedulerLinear | BaseFeeMode.TimeSchedulerExponential;
+  startingBaseFeeBps: number; // Integer in 1..=9900
+  endingBaseFeeBps: number; // Integer in 1..=9900, below startingBaseFeeBps
+  numberOfPeriod: number; // Non-zero u16
+  totalDuration: number; // Slots or seconds, per the pool's activation type
+};
+```
+
+**Returns**
+
+The `baseFeeParameter` for the chosen time scheduler mode.
+
+**Example**
+
+```typescript
+const baseFeeParameter = timeSchedulerBaseFeeParameters({
+  baseFeeMode: BaseFeeMode.TimeSchedulerLinear,
+  startingBaseFeeBps: 5000, // 50%
+  endingBaseFeeBps: 100, // 1%
+  numberOfPeriod: 10,
+  totalDuration: 3600, // seconds on a timestamp-activated pool
+});
+```
+
+**Notes**
+
+- The starting fee must be above the ending fee; for a constant fee use
+  `fixedBaseFeeParameters`.
+- The period length is `floor(totalDuration / numberOfPeriod)`, so the fee
+  settles at or before `totalDuration`.
+- Linear reduction is floored, so the settled fee is at or above the ending
+  fee. Exponential `reductionFactor` is whole basis points, so the settled
+  fee is at or just above `endingBaseFeeBps`.
+- Throws `InvalidParameters` if `reductionFactor` rounds to zero (too many
+  periods for the fee range).
+
+### marketCapSchedulerBaseFeeParameters
+
+A fee that falls as the spot price rises above the initial price, settling at
+about `endingBaseFeeBps` at `priceMultiple` or after
+`schedulerExpirationDuration`, whichever comes first. Equivalent of the
+damm-v2 SDK's `getFeeMarketCapSchedulerParams`.
+
+**Function**
+
+```typescript
+marketCapSchedulerBaseFeeParameters(params: MarketCapSchedulerBpsParams): BaseFeeConfigParameters
+```
+
+**Parameters**
+
+```typescript
+type MarketCapSchedulerBpsParams = {
+  baseFeeMode:
+    | BaseFeeMode.MarketCapSchedulerLinear
+    | BaseFeeMode.MarketCapSchedulerExponential;
+  startingBaseFeeBps: number; // Integer in 1..=9900
+  endingBaseFeeBps: number; // Integer in 1..=9900, below startingBaseFeeBps
+  numberOfPeriod: number; // Non-zero u16
+  priceMultiple: number; // Spot-price multiple of the initial price at which the fee settles, > 1
+  schedulerExpirationDuration: number; // Slots or seconds after activation, per the pool's activation type
+};
+```
+
+**Returns**
+
+The `baseFeeParameter` for the chosen market cap scheduler mode.
+
+**Example**
+
+```typescript
+const baseFeeParameter = marketCapSchedulerBaseFeeParameters({
+  baseFeeMode: BaseFeeMode.MarketCapSchedulerLinear,
+  startingBaseFeeBps: 1000, // 10%
+  endingBaseFeeBps: 25, // 0.25%
+  numberOfPeriod: 50,
+  priceMultiple: 100,
+  schedulerExpirationDuration: 86_400,
+});
+```
+
+**Notes**
+
+- The starting fee must be above the ending fee; for a constant fee use
+  `fixedBaseFeeParameters`.
+- The sqrt-price step is `floor((sqrt(priceMultiple) - 1) * 10000 /
+numberOfPeriod)` bps, so the fee settles at or before `priceMultiple`.
+  Throws `InvalidParameters` if the step rounds to zero.
+- Reduction rounding is as for `timeSchedulerBaseFeeParameters`.
+
+### encodeFixedBaseFeeData
+
+**Function**
+
+```typescript
+encodeFixedBaseFeeData(cliffFeeNumerator): number[]
+```
+
+**Parameters**
+
+```typescript
+cliffFeeNumerator: BN | number; // The fee, over FEE_DENOMINATOR
+```
+
+**Returns**
+
+`data` for `BaseFeeMode.Fixed`.
+
+### encodeTimeSchedulerBaseFeeData
+
+A fee that starts at `cliffFeeNumerator` at the activation point and steps
+down every `periodFrequency` slots or seconds.
+
+**Function**
+
+```typescript
+encodeTimeSchedulerBaseFeeData(params: TimeSchedulerParams): number[]
+```
+
+**Parameters**
+
+```typescript
+type TimeSchedulerParams = {
+  cliffFeeNumerator: BN | number; // Fee at the activation point
+  periodFrequency: BN | number; // Period length, in slots or seconds per the activation type
+  reductionFactor: BN | number; // Linear: numerator removed per period; exponential: basis points removed per period
+  numberOfPeriod: number; // Periods until the fee settles
+};
+```
+
+**Returns**
+
+`data` for `BaseFeeMode.TimeSchedulerLinear` or
+`BaseFeeMode.TimeSchedulerExponential`.
+
+**Example**
+
+```typescript
+const baseFeeParameter = {
+  baseFeeMode: BaseFeeMode.TimeSchedulerLinear,
+  data: encodeTimeSchedulerBaseFeeData({
+    cliffFeeNumerator: 500_000_000, // 50%
+    periodFrequency: 60, // seconds on a timestamp-activated pool
+    reductionFactor: 49_000_000, // 4.9% per period
+    numberOfPeriod: 10, // settles at 1%
+  }),
+};
+```
+
+**Notes**
+
+- After `n` periods the fee is `cliffFeeNumerator - reductionFactor * n`
+  (linear) or `cliffFeeNumerator * (1 - reductionFactor / 10000)^n`
+  (exponential), with `n` capped at `numberOfPeriod`. Before the activation
+  point the settled fee applies.
+- Pool initialization rejects a zero `periodFrequency`, `reductionFactor`, or
+  `numberOfPeriod`.
+
+### encodeMarketCapSchedulerBaseFeeData
+
+A fee that starts at `cliffFeeNumerator` and steps down as the sqrt price
+rises above its initial value.
+
+**Function**
+
+```typescript
+encodeMarketCapSchedulerBaseFeeData(params: MarketCapSchedulerParams): number[]
+```
+
+**Parameters**
+
+```typescript
+type MarketCapSchedulerParams = {
+  cliffFeeNumerator: BN | number; // Fee at or below the initial price
+  reductionFactor: BN | number; // Linear: numerator removed per step; exponential: basis points removed per step
+  sqrtPriceStepBps: number; // Sqrt-price rise per step, in basis points of the initial sqrt price
+  schedulerExpirationDuration: number; // Slots or seconds after activation when the fee settles regardless of price
+  numberOfPeriod: number; // Steps until the fee settles
+};
+```
+
+**Returns**
+
+`data` for `BaseFeeMode.MarketCapSchedulerLinear` or
+`BaseFeeMode.MarketCapSchedulerExponential`.
+
+**Notes**
+
+- The step count is
+  `(sqrtPrice - initSqrtPrice) * 10000 / initSqrtPrice / sqrtPriceStepBps`,
+  capped at `numberOfPeriod`, and the fee per step follows the time
+  scheduler's formulas. Before activation and after
+  `activationPoint + schedulerExpirationDuration` the settled fee applies.
+- Pool initialization rejects a zero `reductionFactor`, `sqrtPriceStepBps`,
+  `schedulerExpirationDuration`, or `numberOfPeriod`.
+
+### getBaseFeeNumerator
+
+Evaluates a pool's base fee the way the program does.
+
+**Function**
+
+```typescript
+getBaseFeeNumerator(baseFee, currentPoint, activationPoint, initSqrtPrice, currentSqrtPrice): BN
+```
+
+**Parameters**
+
+```typescript
+baseFee: BaseFeeConfig; // poolState.feeConfig.baseFee
+currentPoint: BN; // Current slot or timestamp, per poolState.activationType
+activationPoint: BN; // poolState.activationPoint
+initSqrtPrice: BN; // poolState.initSqrtPrice
+currentSqrtPrice: BN; // poolState.sqrtPrice
+```
+
+**Returns**
+
+The base fee numerator over `FEE_DENOMINATOR`. A swap adds the dynamic fee,
+when enabled, and caps the total at `MAX_FEE_NUMERATOR`.
+
+**Example**
+
+```typescript
+const poolState = await client.state.fetchPool(pool);
+const clock = await readClock(connection);
+const currentPoint =
+  poolState.activationType === ActivationType.Slot
+    ? clock.slot
+    : clock.timestamp;
+const numerator = getBaseFeeNumerator(
+  poolState.feeConfig.baseFee,
+  currentPoint,
+  poolState.activationPoint,
+  poolState.initSqrtPrice,
+  poolState.sqrtPrice,
+);
+```
+
+**Notes**
+
+- Throws `InvalidBaseFeeMode` for an unknown mode.
+
+### openActivationParameters
+
+**Function**
+
+```typescript
+openActivationParameters(): PoolActivationInfoParameters
+```
+
+**Returns**
+
+An activation slot that allows swaps, deposits, and withdrawals from pool
+creation.
+
+### bondingCurveActivationParameters
+
+**Function**
+
+```typescript
+bondingCurveActivationParameters(params: BondingCurveActivationParams): PoolActivationInfoParameters
+```
+
+**Parameters**
+
+```typescript
+type BondingCurveActivationParams = {
+  targetIncreaseBps: BN | number; // Target sqrt price in basis points of the initial one; above 10000 (20000 doubles it)
+};
+```
+
+**Returns**
+
+An activation slot that allows swaps from creation, and deposits and
+withdrawals once a swap takes the sqrt price to
+`initSqrtPrice * targetIncreaseBps / 10000`. The slot stays open after that.
+
+**Example**
+
+```typescript
+const poolActivation = {
+  whitelistedSwap: PublicKey.default,
+  whitelistedAddLiquidity: creator.publicKey, // seeds the pool before the target
+  whitelistedRemoveLiquidity: PublicKey.default,
+  activations: [
+    openActivationParameters(),
+    bondingCurveActivationParameters({ targetIncreaseBps: 20_000 }),
+  ],
+};
+```
+
+**Notes**
+
+- Pool initialization requires a `whitelistedAddLiquidity` other than the
+  default key, since nobody else can deposit before the target, and a target
+  sqrt price no higher than that of `MAX_TICK_ID` aligned to the tick spacing.
+
+### timeBasedActivationParameters
+
+**Function**
+
+```typescript
+timeBasedActivationParameters(params: TimeBasedActivationParams): PoolActivationInfoParameters
+```
+
+**Parameters**
+
+```typescript
+type TimeBasedActivationParams = {
+  swapPoint: BN; // Slot or timestamp swaps open; must equal the pool's activationPoint
+  addLiquidityPoint: BN; // Slot or timestamp deposits open
+  removeLiquidityPoint: BN; // Slot or timestamp withdrawals open
+};
+```
+
+**Returns**
+
+An activation slot that opens each action at its point.
+
+**Example**
+
+```typescript
+// activationType: ActivationType.Timestamp, activationPoint: swapPoint
+const { timestamp } = await readClock(connection);
+const swapPoint = timestamp.addn(3_600);
+const activations = [
+  openActivationParameters(),
+  timeBasedActivationParameters({
+    swapPoint,
+    addLiquidityPoint: timestamp.addn(600),
+    removeLiquidityPoint: swapPoint,
+  }),
+];
+```
+
+**Notes**
+
+- Pool initialization requires each point between now and now plus
+  `MAX_TIME_BUFFER` seconds, or `MAX_SLOT_BUFFER` slots on a slot-activated
+  pool.
+- Throws `InvalidParameters` for a negative point or one above `2^40 - 1`.
+
 ## Dynamic Fee
 
 `getDynamicFeeParams(baseFeeBps, minDeltaTickForSignificantSwap, options?)` returns the `dynamicFeeParameter` for pool initialization. The variable fee stays within 20% of `baseFeeBps`. Filter, decay and reduction use `DYNAMIC_FEE_FILTER_PERIOD`, `DYNAMIC_FEE_DECAY_PERIOD` and `DYNAMIC_FEE_REDUCTION_FACTOR`.
@@ -534,10 +4613,60 @@ Without a `TimeBased` slot, pass `activationPoint: null`. A `BondingCurve` slot 
 | --- | --- | --- |
 | `baseFeeBps` | `number` | Integer in 0 to 10000. |
 | `minDeltaTickForSignificantSwap` | `number` | Non-zero `u16`. |
-| `options.maxPriceChangeBps` | `number` | Integer in 1 to 10000. Default 1500, set by `DYNAMIC_FEE_MAX_PRICE_CHANGE_BPS`. |
-| `options.maxVolatilityAccumulator` | `number` | Non-zero `u24`. Used instead of `maxPriceChangeBps`. |
+| `options.maxPriceChangeBps` | `number` | Integer in 1 to 10000 whose volatility cap and `variableFeeControl` both fit a `u24`. In practice at most 1748, with a lower bound that rises with `baseFeeBps` (7 at 25 bps, 111 at 10000 bps). Default 1500, set by `DYNAMIC_FEE_MAX_PRICE_CHANGE_BPS`. |
+| `options.maxVolatilityAccumulator` | `number` | Non-zero `u24`. Used instead of `maxPriceChangeBps`. A value too small for `baseFeeBps` throws because `variableFeeControl` no longer fits a `u24`. |
 
 Pass `null` as `dynamicFeeParameter` to disable the dynamic fee.
+
+`getDynamicFeeParams` returns the `dynamicFeeParameter` for pool
+initialization. The variable fee stays within 20% of `baseFeeBps`. The
+volatility cap defaults to a 15% price move
+(`DYNAMIC_FEE_MAX_PRICE_CHANGE_BPS`); filter, decay and reduction are
+`DYNAMIC_FEE_FILTER_PERIOD` (10 s), `DYNAMIC_FEE_DECAY_PERIOD` (120 s) and
+`DYNAMIC_FEE_REDUCTION_FACTOR` (5,000, 50%).
+
+### getDynamicFeeParams
+
+**Function**
+
+```typescript
+getDynamicFeeParams(
+  baseFeeBps: number,
+  minDeltaTickForSignificantSwap: number,
+  options?: DynamicFeeParamsOptions,
+): DynamicFeeParameters
+```
+
+**Parameters**
+
+```typescript
+baseFeeBps: number; // Integer in 0..=10000
+minDeltaTickForSignificantSwap: number; // Non-zero u16
+type DynamicFeeParamsOptions = {
+  maxPriceChangeBps?: number; // Integer in 1..=10000; default 1500
+  maxVolatilityAccumulator?: number; // Non-zero u24; used instead of maxPriceChangeBps
+};
+```
+
+**Returns**
+
+The `dynamicFeeParameter` for `poolFees`.
+
+**Example**
+
+```typescript
+const dynamicFeeParameter = getDynamicFeeParams(25, 1); // 0.25% base fee
+```
+
+**Notes**
+
+- `variableFeeControl` is the largest value whose fee at the volatility cap
+  is still within 20% of `baseFeeBps`.
+- When `maxVolatilityAccumulator` is set, `maxPriceChangeBps` is ignored.
+- Throws `InvalidParameters` when `baseFeeBps` is outside `0..=10000`,
+  `minDeltaTickForSignificantSwap` is not a non-zero u16, `maxPriceChangeBps`
+  is outside `1..=10000`, or the volatility cap or `variableFeeControl` does
+  not fit in a u24.
 
 ## Enums
 

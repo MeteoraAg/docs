@@ -36,7 +36,7 @@ llmsDescription: "First steps with the DLMM Pro TypeScript SDK @meteora-ag/dlmm-
   </Tab>
 </Tabs>
 
-The SDK uses `@solana/web3.js` 1.x and `bn.js` for amounts. `@solana/spl-token` is only needed if you read mints yourself, as the example below does.
+The SDK uses `@solana/web3.js` 1.x and `bn.js` for amounts. `@solana/spl-token` is only needed if you read mints yourself, as the example below does. To type check your code, also install `typescript`, `@types/bn.js` and `@types/node` as dev dependencies.
 
 ## Create a Client
 
@@ -52,7 +52,7 @@ One client covers every pool. Its services group the builders and readers:
 
 | Service | Use |
 | --- | --- |
-| `client.pool` | Quote and swap, create pools, tick arrays and oracles, claim partner fees |
+| `client.pool` | Quote and swap, create pools and tick arrays, grow the oracle, claim partner fees |
 | `client.position` | Open, fund, withdraw, claim, compound, lock, resize and close positions |
 | `client.limitOrder` | Open, cancel and close limit orders |
 | `client.reward` | Set up and fund reward slots, claim rewards |
@@ -156,6 +156,7 @@ Every builder returns `{ tx, ... }`, where `tx` is an unsigned `Transaction` wit
 - **Token accounts.** User token accounts default to the wallet's associated token accounts. A missing one is created in the same transaction, paid by the fee payer.
 - **Wrapped SOL.** When a wallet pays or receives SOL through its default token account, the builder wraps or unwraps it in the same transaction. An account you pass explicitly is used as is.
 - **Accounts the program needs.** `swap` takes its tick arrays from `quoteExactIn`, position builders derive theirs from the `tickRanges` you pass, and limit order builders resolve their own. The bitmap extension and Token 2022 transfer hook accounts are resolved when you leave them out.
+- **Compute budget.** Builders add no compute budget instructions. Opening or expanding a position with many ranges can need more than the default 200,000 compute units, so add `ComputeBudgetProgram.setComputeUnitLimit` to those transactions, and `setComputeUnitPrice` when you want a priority fee.
 - **Operator and admin instructions** are not wrapped. Build them with `client.program.methods.<instruction>(...)` if you need them.
 
 ## Errors
