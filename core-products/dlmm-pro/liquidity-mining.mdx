@@ -20,6 +20,19 @@ Each pool has two reward slots. Each slot has one reward mint, a vault, and a re
 
 Once a slot has a mint, the mint cannot be changed.
 
+The pool creator is the `creator` account recorded when the pool was created, which need not be the wallet that paid for it. Only the creator (for slot 0) or a Meteora operator can change a slot's reward authority; the authority cannot hand itself over. The tokens for an emission can come from a separate funder wallet that signs alongside the authority.
+
+### Slot Lifecycle
+
+1. **Initialize.** `initialize_reward` is signed by the pool creator for slot 0, or by an operator with the `InitializeReward` permission for either slot, and by a payer. It names the reward mint, an optional token badge and the reward authority, which can be any account and does not sign. The program creates the reward vault, a token account for the mint owned by the pool authority, and the payer covers its rent. It fails with `InvalidPoolType` if the pool has no `LiquidityMining` extension, `InvalidRewardIndex` for an index above 1, `InvalidRewardState` if the slot already has a mint, and `InvalidPermission` if the signer is neither.
+2. **Fund.** `set_reward_emission` is signed by the reward authority and by a funder. The funder's token account pays the whole emission into the vault. See [Funding an Emission](#funding-an-emission).
+3. **Accrue.** For every second between open time and end time, the reward is shared among the liquidity in range. Positions credit it on refresh and claim it with `claim_reward`.
+4. **Collect the unused part.** After the end time, the authority signs `withdraw_ineligible_rewards`. See [Ineligible Rewards](#ineligible-rewards).
+5. **Refund or hand over.** The authority funds the slot again, or the creator or an operator with `UpdateRewardAuthority` signs `update_reward_authority` with a new authority that differs from the current one. A slot without a mint fails with `RewardUninitialized`, and the same authority fails with `InvalidParameters`.
+
+A wrong reward mint or vault account fails with `InvalidRewardMint` or `InvalidRewardVault`, and a signer who is not the slot's authority fails with `InvalidPermission`. A wrong slot index fails with `InvalidRewardIndex`.
+
+
 ## Funding an Emission
 
 The reward authority starts an emission with a start time, an end time and a rate in reward atoms per second. The whole emission is paid into the vault upfront, so the authority passes a cap on what it is willing to pay, transfer fee included.
@@ -34,19 +47,58 @@ Reward times are always Unix timestamps, even on pools whose activation type is 
 
 A slot can be funded again once its previous emission has ended and any ineligible reward has been withdrawn.
 
+The full list of checks in `set_reward_emission`, each failing with `InvalidParameters` unless noted:
+
+- `emission_per_second` is above zero.
+- `open_time` is not in the past. Leave it unset to start now. A time that has already passed by the time the transaction runs is rejected, so give a little margin when you set it.
+- `open_time` is at most 30 days ahead, so at most `2,592,000` seconds.
+- `end_time` minus `open_time` is from `86,400` to `31,536,000` seconds. An `end_time` before `open_time` fails with `MathOverflow`.
+- The amount to pay, `⌈(end_time - open_time) × emission_per_second / 2^64⌉`, is above zero.
+- The funder's transfer, with any transfer fee, is at most `max_amount`, or the call fails with `ExceededSlippage`.
+- The previous emission is finished and its ineligible reward withdrawn, or the call fails with `InvalidRewardState`.
+
+A slot that has never been funded counts as finished. The program has no way to shorten or cancel an emission once it is set.
+
+Example with a reward token of 6 decimals: 1,000 tokens, which is `1,000,000,000` atoms, over 7 days, which is `604,800` seconds. The rate is `⌊1,000,000,000 × 2^64 / 604,800⌋ = 30,500,568,904,943,041,693,121`, about 1,653.44 atoms per second. The amount to pay is `⌈604,800 × 30,500,568,904,943,041,693,121 / 2^64⌉ = 1,000,000,000`, which rounds up. Funding rounds up and every credit rounds down, so the vault always holds at least what is owed. If the mint charges a 1% transfer fee, the vault must receive `1,000,000,000`, so the funder sends `1,010,101,011`, of which `10,101,011` is the fee, and `max_amount` must be at least `1,010,101,011`.
+
+
 ## How Rewards Accrue
 
 Every second of an emission, the reward emitted that second is shared among the liquidity in range at the pool's current price. The pool tracks this as reward growth per unit of liquidity, and each tick records the growth on its far side, so every range earns only for the time the price spent inside it.
 
 A position's rewards are credited to its slots when they are refreshed or their liquidity changes. A claim pays out what is credited, and the SDK's claim builder refreshes the slots you select first. Permanently locked and vesting liquidity earn rewards like unlocked liquidity. A delegate with the `ClaimReward` permission can claim on the owner's behalf; the reward always goes to the owner's associated token account.
 
+The pool's reward growth goes up by `⌊elapsed seconds × emission_per_second / active liquidity⌋` each time the pool is updated, which happens on every swap, deposit, withdrawal and refresh, and when an emission is set or ineligible reward is withdrawn. The elapsed time is measured from the last update, capped at the end time, and uses the liquidity the pool held at the start of that interval. A position's credit is `⌊slot liquidity × growth inside change / 2^64⌋`, and it stops at the 64-bit limit instead of failing.
+
+Example with a rate of 1,000 atoms per second over 86,400 seconds, funded as `86,400,000` atoms. Position P1 holds `1,000,000,000,000` liquidity from the start. Position P2 holds `3,000,000,000,000` and joins after 6 hours. The price leaves both ranges after 12 hours and returns after 15 hours:
+
+| Interval | Seconds | Active liquidity | Emitted | P1 earns | P2 earns | Ineligible |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 to 6 hours | 21,600 | `1,000,000,000,000` | 21,600,000 | 21,599,999 | 0 | 0 |
+| 6 to 12 hours | 21,600 | `4,000,000,000,000` | 21,600,000 | 5,399,999 | 16,199,999 | 0 |
+| 12 to 15 hours | 10,800 | 0 | 10,800,000 | 0 | 0 | 10,800,000 |
+| 15 to 24 hours | 32,400 | `4,000,000,000,000` | 32,400,000 | 8,099,999 | 24,299,999 | 0 |
+
+Credited over the whole period, P1 earns `35,099,999` and P2 earns `40,499,999`, and `10,800,000` is withdrawable as ineligible reward. The three add up to `86,399,998`, so 2 atoms remain in the vault from rounding down.
+
+`claim_reward` takes the reward `index` and a `min_amount` measured after any transfer fee, which fails with `ExceededSlippage`. It adds up the pending reward for that reward index across every range slot of the position and zeroes it. If the total is zero, nothing is sent. The pool needs the `LiquidityMining` extension, or the call fails with `InvalidPoolType`.
+
+
 ## Ineligible Rewards
 
 If no liquidity is in range, the reward emitted during that time has nobody to go to. The pool counts those seconds instead of losing the tokens. After the emission ends, the reward authority withdraws that amount with `withdraw_ineligible_rewards`, which also leaves the slot ready to be funded again.
 
+The amount is `⌊empty seconds × emission_per_second / 2^64⌋`. The call refreshes the pool's rewards first, so seconds since the last update are counted. It fails with `InvalidRewardState` unless an emission was set and has ended, and with `InvalidPermission` if the signer is not the reward authority. The receiver can be any token account of the reward mint, and `min_amount` is measured after any transfer fee. Seconds are reset to zero even when the amount rounds to zero.
+
+Funding again works like the first time. Rewards that positions have earned but not claimed stay in the vault and the pool's reward growth carries on from where it was, so earlier earnings are not lost. Nothing is emitted before the open time, so a slot funded for a future open time pays nothing until then.
+
+
 ## Reward Mints
 
 A reward mint goes through the same checks as a pool mint (see [Token 2022 Support](/core-products/dlmm-pro/token-2022-support)), with one difference for slots set up by the pool creator: the mint must not have a freeze authority unless it has a token badge. SOL and USDC are always accepted. Operator-managed slots may use mints with a freeze authority.
+
+A slot's cost to the payer is the reward vault, 2,039,280 lamports for a plain SPL Token account and more for a Token 2022 mint with extensions, and each tick and position on the pool is larger. See [Tick Array Rent](/core-products/dlmm-pro/ticks-and-liquidity#tick-array-rent) and [Opening and Expanding](/core-products/dlmm-pro/positions#opening-and-expanding). A pool with the extension is 352 bytes bigger, 176 bytes per slot.
+
 
 ## Related
 
@@ -54,7 +106,7 @@ A reward mint goes through the same checks as a pool mint (see [Token 2022 Suppo
   <Card title="Positions" href="/core-products/dlmm-pro/positions" icon="layer-group">
     Slots, refreshes and claiming.
   </Card>
-  <Card title="Formulas" href="/core-products/dlmm-pro/formulas#rewards" icon="calculator">
+  <Card title="Formulas" href="/core-products/dlmm-pro/formulas#rewards-funding" icon="calculator">
     Funding amounts and reward growth.
   </Card>
 </CardGroup>

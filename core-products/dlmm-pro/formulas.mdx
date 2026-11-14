@@ -29,6 +29,23 @@ P_{\text{UI}} = P \times 10^{\,\text{decimals}_X - \text{decimals}_Y}
 
 The current tick is the largest `i` with `P(i) ≤ P`, except that at a tick a swap has just crossed downward (or a swap buying X stopped on with asks left), the pool records the tick below. Usable ticks are multiples of the tick spacing `s`, so neighbouring usable ticks differ in price by a factor of `1.0001^s`.
 
+### Price Derivation and Example
+
+Each tick multiplies the price by `1.0001`, so it multiplies the square-root price by `1.0001^(1/2)`, about `1.00005`. Swap and liquidity math is linear in the square-root price, which is why the pool stores it. The program builds the square-root price of a tick with integer arithmetic and truncates it to Q64.64. Going back, `tickIdFromSqrtPrice` returns the tick `T` with `√P(T) ≤ √P < √P(T + 1)`.
+
+| Tick | Square-root price, Q64.64 | Price |
+| --- | --- | --- |
+| -100 | `18354745142194483561` | 0.99005033 |
+| -1 | `18445821805675392311` | 0.99990001 |
+| 0 | `18446744073709551616` | 1 |
+| 1 | `18447666387855959850` | 1.0001 |
+| 100 | `18539204128674405812` | 1.01004966 |
+| 105 | `18543839277322445255` | 1.01055479 |
+| 110 | `18548475584844557193` | 1.01106017 |
+
+Tick 0 is exactly `2^64`. The lowest tick, `-443636`, has the square-root price `4295048016` and the highest, `443636`, has `79226673515401279992447579055`.
+
+
 ## Liquidity and Token Amounts
 
 For a range `[P_l, P_u)` holding liquidity `L`, with the pool at price `P`:
@@ -47,7 +64,35 @@ Going the other way, the most liquidity two budgets can fund inside the range is
 L = \min\left( \frac{x \times \sqrt{P}\sqrt{P_u}}{\sqrt{P_u} - \sqrt{P}},\; \frac{y}{\sqrt{P} - \sqrt{P_l}} \right)
 ```
 
-Below the range only the X term applies, and above it only the Y term. A by-weight deposit gives each range `L = multiplier × weight`.
+Below the range only the X term applies, with `√P_l` in place of `√P`. Above it only the Y term applies, with `√P_u` in place of `√P`. `L` rounds down. A by-weight deposit gives each range `L = multiplier × weight`.
+
+### Amount Derivation and Example
+
+Inside a range the pool behaves like a constant-product pool with virtual reserves `L / √P` of token X and `L × √P` of token Y. Moving the price from `√P` up to `√P_u` sells `L × (1/√P - 1/√P_u)` of X, which is the table's X formula. Moving it down to `√P_l` buys `L × (√P - √P_l)` of Y. Outside the range only one token is held, so the other term is zero and the formula uses the range's own edges.
+
+With `L = 1,000,000,000,000`, the range `[100, 110)` and the price on tick 105, using the square-root prices from the table above:
+
+| | Exact | Deposit, rounded up | Withdraw, rounded down |
+| --- | --- | --- | --- |
+| Token X | `L × (√P_u - √P) / (√P × √P_u)` | 248,647,491 | 248,647,490 |
+| Token Y | `L × (√P - √P_l)` | 251,271,912 | 251,271,911 |
+
+Going the other way, with the price on tick 5 and the range `[0, 10)`, a budget of `1,000,000` X funds `L_x = ⌊1,000,000 × √P √P_u / (√P_u - √P)⌋ = 4,001,700,267` and a budget of `1,000,000` Y funds `L_y = ⌊1,000,000 / (√P - √P_l)⌋ = 3,999,700,017`. The deposit uses the smaller, `3,999,700,017`, and needs 999,501 X and 1,000,000 Y.
+
+### Imbalanced Deposit
+
+For a deposit into one range, each token with a cap gives a budget equal to the smaller of its cap and the wallet balance, taken after the transfer fee. The liquidity from that budget uses the range from the larger of `√P_l` and `√P` up to the larger of `√P_u` and `√P` for X, and from the smaller of `√P_l` and `√P` up to the smaller of `√P_u` and `√P` for Y. The deposit takes the smaller of the two liquidities, or the one liquidity if only one cap is given:
+
+```math
+L = \min(L_x, L_y)
+```
+
+With the price on tick 5, the range `[0, 10)` and a wallet of 1,000,000 X and 5,000,000 Y, `L_x = 4,001,700,267` is the smaller, so the deposit takes 1,000,000 X and 1,000,501 Y and leaves 3,999,499 Y in the wallet. For the range `[20, 30)`, entirely above the price, 1,000,000 X alone gives `L = 2,002,601,540`.
+
+### By-Weight Multiplier
+
+A by-weight deposit sets the liquidity of range `i` to `L_i = m × w_i`, with `w_i` from 1 to 255 and `m` a 128-bit integer, and fails if any product passes `2^127 - 1`. The program does not choose `m`. The SDK's `multiplierFromAmounts` finds the largest `m` whose exact, rounded-up deposit, transfer fee included, fits both budgets, by bisection, because the deposit grows with `m` but rounds per range. For the five stacked ranges of weight 1 from the horizontal Curve in [Positions](/core-products/dlmm-pro/positions#liquidity-shapes), and budgets of 1,000,000,000 X and 1,000,000,000 Y, `m = 160,099,998,960`. Each range gets that liquidity, and the deposit is 999,500,150 X and 1,000,000,000 Y, so Y limits it.
+
 
 ## Trading Fee
 
@@ -64,6 +109,11 @@ When the fee is taken from a whole amount `a` (the input, or the output, dependi
 ```
 
 When a step uses only part of the input, the program works back from the net amount `a_net` that the step fills: the gross input is `⌈a_net × 10^9 / (10^9 − f)⌉`, and the fee is the difference.
+
+With `f = 3,000,000` (0.30%), a gross amount of `1,000,001` has a fee of `⌈1,000,001 × 3,000,000 / 10^9⌉ = ⌈3,000.003⌉ = 3,001` and a net of `997,000`. Going back from a net of `997,000`, the gross is `⌈997,000 × 10^9 / 997,000,000⌉ = 1,000,000` and the fee is `3,000`. A gross of `1,000,000,000` has a fee of exactly `3,000,000`. The fee always rounds up, so the payer never pays less than the exact fee.
+
+The cap applies to the sum. With a base fee of 98.9% (`989,000,000`) and a dynamic fee of `5,000,000`, the sum is `994,000,000`, so the rate is `990,000,000`.
+
 
 ## Base Fee Schedules
 
@@ -91,6 +141,20 @@ n = \min\left( \left\lfloor \frac{(\sqrt{P} - \sqrt{P_0}) \times 10{,}000}{\sqrt
 ```
 
 Before activation and after `t_0 + expiration`, `n = N`. At or below the initial price, `n = 0` while the schedule is running.
+
+Examples with a cliff `c = 200,000,000` (20%) and `N = 10` periods:
+
+| Curve | Parameters | Period | Fee |
+| --- | --- | --- | --- |
+| Linear time scheduler | `r = 19,000,000`, `T = 60` seconds | 300 seconds after `t_0`, `n = 5` | `200,000,000 - 5 × 19,000,000 = 105,000,000`, 10.5% |
+| Linear time scheduler | The same | 600 seconds or more, `n = 10` | `200,000,000 - 10 × 19,000,000 = 10,000,000`, 1% |
+| Exponential time scheduler | `r = 2,588` bps | `n = 3` | `81,439,711` |
+| Exponential time scheduler | The same | `n = 10` | `10,008,848` |
+| Linear market cap scheduler | `r = 19,000,000`, `step = 1,000` bps | `√P = 1.414 × √P_0`, so `n = ⌊0.414 × 10,000 / 1,000⌋ = 4` | `200,000,000 - 4 × 19,000,000 = 124,000,000`, 12.4% |
+| Exponential market cap scheduler | `r = 2,588` bps, `step = 1,000` bps | The same `n = 4` | `60,363,114` |
+
+The exponential fee is `c × (1 - r / 10,000)^n`, computed as a Q64.64 power by repeated squaring and then truncated. The exact values are `81,439,711.7` for `n = 3` and `10,008,848.19` for `n = 10`, so in these examples the program's result is the exact value rounded down. The period counts floor in every case. With `r = 2,588` the settled fee `10,008,848` stays above the 1% ending fee of `10,000,000`, because the SDK picks the largest `r` whose settled fee does not fall below it.
+
 
 ## Dynamic Fee
 
@@ -122,6 +186,17 @@ Before each swap, with `elapsed` the time since the later of the last reference 
 
 The reference also resets if it is more than an hour old. After each swap, `v_a` is recomputed at the new price, and the swap counts as significant if it moved the price by at least `min_delta_tick_for_significant_swap`.
 
+The tick distance comes from `√(P_a / P_b) = 1.0001^(Δtick / 2)`, which is about `1 + Δtick / 20,000` for small moves. Solving for `Δtick` gives the formula above, and integer division floors it. The approximation is close for small moves and overstates large ones:
+
+| Price move | Exact ticks | Formula |
+| --- | --- | --- |
+| 1% | 99.51 | 99 |
+| 10% | 953.15 | 976 |
+| 50% | 4,054.85 | 4,494 |
+
+With `variable_fee_control = 238`, a price 1% above the reference gives `v_a = 99 × 10,000 = 990,000` and a surcharge of `⌈238 × 990,000² / 10^11⌉ = ⌈2,332.6⌉ = 2,333`. With 97 ticks of movement and `v_r = 2,995,000` carried over, `v_a = 97 × 10,000 + 2,995,000 = 3,965,000` and the surcharge is `⌈238 × 3,965,000² / 10^11⌉ = 37,417`. A `reduction_factor` of 5,000 halves the stored accumulator when the reference moves, so `5,990,000` becomes `v_r = 2,995,000`.
+
+
 ## Fee Split
 
 In each swap step, with `a_LP` the part of the step filled by LP liquidity and `a_LO` the part filled by limit orders (measured on the side the fee is taken from):
@@ -151,12 +226,27 @@ when the swap passes a referral account, and 0 otherwise. Then:
 
 and the protocol keeps `π_LP + π_LO − host − partner`.
 
+Worked example for step 1 of the swap in [Worked Swap](/core-products/dlmm-pro/ticks-and-liquidity#worked-swap), with a fee of 0.30% on the output. LP liquidity fills `a_LP = 4,987,272,070` X and the ask fills `a_LO = 5,000,000` X:
+
+| Quantity | Calculation | Result |
+| --- | --- | --- |
+| Step fee | `⌈4,992,272,070 × 3,000,000 / 10^9⌉` | 14,976,817 |
+| `fee_LP` | `⌈14,976,817 × 4,987,272,070 / 4,992,272,070⌉` | 14,961,817 |
+| `fee_LO` | `14,976,817 - 14,961,817` | 15,000 |
+| Protocol, LP part | `⌊14,961,817 × 1,000 / 10,000⌋` | 1,496,181 |
+| LPs | `14,961,817 - 1,496,181` | 13,465,636 |
+| Protocol, order part | `⌊15,000 × 5,000 / 10,000⌋` | 7,500 |
+| Makers | `15,000 - 7,500` | 7,500 |
+
+Step 2 adds an LP-only fee of 542,539, of which the protocol takes 54,253. So `π_LP = 1,496,181 + 54,253 = 1,550,434` and `π_LO = 7,500`. With a referral on a normal pool, the order part of the host base is `min(7,500, ⌊15,000 × 1,000 / 10,000⌋) = 1,500`, so `host = ⌊(1,550,434 + 1,500) × 2,000 / 10,000⌋ = 310,386`. With a partner fee of 2,000 bps, `partner = ⌊(1,557,934 - 310,386) × 2,000 / 10,000⌋ = 249,509`, and the protocol keeps `1,557,934 - 310,386 - 249,509 = 998,039`.
+
+
 ## LP Fees and Rewards per Position
 
-The pool tracks fees per unit of liquidity as a Q64.64 number. A swap step that pays `fee_LP` with active liquidity `L`:
+The pool keeps a running total, `g_global`, of the LP fees earned per unit of liquidity, stored as a Q64.64 number. Each swap step adds to it the fee that LPs keep from that step, which is `fee_LP` minus the protocol's share from [Fee Split](#fee-split), divided by the liquidity `L` that was active during the step:
 
 ```math
-g_{\text{global}} \mathrel{+}= \frac{\text{fee}_{LP} \times 2^{64}}{L}
+g_{\text{global}} \mathrel{+}= \frac{\left(\text{fee}_{LP} - \left\lfloor \frac{\text{fee}_{LP} \times p}{10{,}000} \right\rfloor\right) \times 2^{64}}{L}
 ```
 
 Each tick stores the growth on its far side, so the growth inside a range is `g_global − g_below(lower) − g_above(upper)`. A slot earns:
@@ -173,6 +263,9 @@ g_{\text{reward}} \mathrel{+}= \frac{\Delta t \times \text{emission\_per\_second
 
 `emission_per_second` is Q64.64. Seconds when `L = 0` are counted instead and become withdrawable as ineligible reward.
 
+A swap step that gives LPs a fee of `5,000,000` while `L = 1,000,000,000,000` is active raises `g_global` by `⌊5,000,000 × 2^64 / 10^12⌋ = 92,233,720,368,547`. A slot holding that liquidity, whose growth inside rose by the same amount, is credited `⌊10^12 × 92,233,720,368,547 / 2^64⌋ = 4,999,999`, one atom less than the fee. A reward at 1,000 atoms per second over 6 hours with `L = 10^12` raises the reward growth by `⌊21,600 × 1,000 × 2^64 / 10^12⌋ = 398,449,671,992,126`, which credits a slot of that liquidity `21,599,999` atoms. Fee credits add into 64-bit counters and fail on overflow. A reward credit that would exceed `2^64 - 1` is held at that value.
+
+
 ## Rewards Funding
 
 Funding an emission from `t_open` to `t_end` transfers, before the mint's transfer fee:
@@ -180,6 +273,9 @@ Funding an emission from `t_open` to `t_end` transfers, before the mint's transf
 ```math
 \text{amount} = \left\lceil \frac{(t_{\text{end}} - t_{\text{open}}) \times \text{emission\_per\_second}}{2^{64}} \right\rceil
 ```
+
+An emission of `1,000,000,000` atoms over 604,800 seconds uses `emission_per_second = ⌊10^9 × 2^64 / 604,800⌋ = 30,500,568,904,943,041,693,121`. The product `604,800 × 30,500,568,904,943,041,693,121` is just under `10^9 × 2^64`, so the amount is `⌈...⌉ = 1,000,000,000` while rounding down would give `999,999,999`. Withdrawing ineligible reward rounds down, as does every position credit, so funding is never less than what is paid out. In the example in [Liquidity Mining](/core-products/dlmm-pro/liquidity-mining#how-rewards-accrue), 10,800 empty seconds at 1,000 atoms per second give `⌊10,800 × 1,000 × 2^64 / 2^64⌋ = 10,800,000` atoms of ineligible reward.
+
 
 ## Limit Order Proceeds
 
@@ -192,6 +288,21 @@ An order filled for amount `a` at a tick with price `P` receives, rounded down:
 
 Within a batch, each order's filled amount rounds down: `filled = amount − ⌈amount × batch remaining / batch total⌉`.
 
+An ask of `5,000,000` X filled at tick 100, where `P = 1.0100496620928765688`, pays the maker `⌊5,000,000 × P⌋ = 5,050,248` Y, while the swapper pays `⌈5,000,000 × P⌉ = 5,050,249` Y. A bid that was filled for `5,050,249` Y pays `⌊5,050,249 / P⌋ = 5,000,000` X. Swappers round up, makers round down, and the pool keeps the remainder.
+
+For the batch rule, an order of `1,000,000` in a batch with `1,500,000` of `4,000,000` unfilled has `⌈1,000,000 × 1,500,000 / 4,000,000⌉ = 375,000` unfilled and `625,000` filled. For an order of `1,000,003`, the unfilled amount is `⌈375,001.125⌉ = 375,002` and the filled amount is `625,001`, so the canceller's unfilled share rounds up.
+
+### Maker Fee Share
+
+The maker fee collected on one side of a tick, `F`, is shared when each order is canceled. With `f_o` the filled amount of the canceling order and `f_total` the total filled amount at the tick that has not been canceled yet:
+
+```math
+\text{share} = \left\lfloor \frac{F \times f_o}{f_{\text{total}}} \right\rfloor, \qquad F \mathrel{-}= \text{share}, \quad f_{\text{total}} \mathrel{-}= f_o
+```
+
+With `F = 6,750`, `f_total = 4,500,000`, and orders filled by `1,000,000`, `3,000,000` and `500,000` canceling in that order, the shares are `⌊6,750 × 1,000,000 / 4,500,000⌋ = 1,500`, then `⌊5,250 × 3,000,000 / 3,500,000⌋ = 4,500`, then `⌊750 × 500,000 / 500,000⌋ = 750`. A referral gets `⌊share × 2,000 / 10,000⌋`, so 900 of the 4,500 share, and the owner gets 3,600.
+
+
 ## Vesting
 
 A vesting schedule with cliff point `t_c`, cliff share `b_c`, per-period share `b_p` and period length `T` (with `b_c + N × b_p = 10,000`) has released, at time `t ≥ t_c`:
@@ -201,3 +312,34 @@ A vesting schedule with cliff point `t_c`, cliff share `b_c`, per-period share `
 ```
 
 and nothing before `t_c`.
+
+With `b_c = 2,000`, `b_p = 2,000`, `N = 4`, `T = 604,800` seconds and a slot whose vesting plus released liquidity is `1,000,000,007`, the released liquidity is `⌊2,000 × 1,000,000,007 / 10,000⌋ = 200,000,001` at the cliff, `⌊4,000 × 1,000,000,007 / 10,000⌋ = 400,000,002` after one period, `600,000,004` after two, `800,000,005` after three and all `1,000,000,007` after four. The share is taken of the sum of the vesting and released liquidity, which stays fixed after the lock, and what is already released is subtracted, so each release is a difference of two rounded-down totals.
+
+## Tick Array Index and Bitmap Position
+
+A tick `i` with spacing `s` lives in tick array:
+
+```math
+\text{index} = \left\lfloor \frac{\lfloor i / s \rfloor}{128} \right\rfloor
+```
+
+Both divisions round toward negative infinity. For tick `-516` with `s = 4`, `⌊-516 / 4⌋ = -129` and `⌊-129 / 128⌋ = -2`. For tick `1000`, `⌊1000 / 4⌋ = 250` and `⌊250 / 128⌋ = 1`. Array `n` covers ticks `n × 128 × s` to `(n × 128 + 127) × s`.
+
+The inline bitmap bit of an index from `-512` to `511` is `index + 512`. Outside it, a positive index uses chunk `⌊index / 512⌋ - 1` and bit `index mod 512`, and a negative index with `m = -(index + 1)` uses chunk `⌊m / 512⌋ - 1` and bit `m mod 512`. Index `-1025` gives `m = 1024`, chunk `1`, bit `0`.
+
+## Time-Weighted Average Tick
+
+Every swap adds the tick before the swap, weighted by the seconds since the latest observation was last updated:
+
+```math
+c_{\text{new}} = c_{\text{old}} + (t - t_{\text{last}}) \times \text{tick}_{\text{before}}
+```
+
+The average tick between two observations and the geometric mean price are:
+
+```math
+\bar{\imath} = \frac{c_2 - c_1}{t_2 - t_1}, \qquad \bar{P} = 1.0001^{\bar{\imath}}
+```
+
+With `c_1 = 700` at `t_1 = 1007` and `c_2 = 3930` at `t_2 = 1031`, `ī = 3,230 / 24 = 134.58` and `P̄ = 1.0001^134.58 = 1.01355`. To average up to time 1036 with the current tick at 145, extend the latest observation first: `c = 3,930 + 5 × 145 = 4,655`, so `ī = (4,655 - 700) / (1036 - 1007) = 136.38` and `P̄ = 1.01373`.
+
