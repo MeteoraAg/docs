@@ -53,7 +53,7 @@ An order costs the rent of its account, which is 144 bytes plus 24 bytes per tic
 | 5 | 264 bytes | 2,728,320 |
 | 25 | 744 bytes | 6,069,120 |
 
-A 5 tick order on a pool without `LiquidityMining`, where the tick arrays exist, needs `2,728,320 + 5 × 1,113,600 = 8,296,320` lamports of rent, plus the NFT accounts. See [Tick Array Rent](/core-products/dlmm-pro/ticks-and-liquidity#tick-array-rent) for the tick figures.
+A 5 tick order on a pool without `LiquidityMining`, where the tick arrays exist, needs `2,728,320 + 5 × 1,113,600 = 8,296,320` lamports of rent, plus the NFT accounts. Lamport figures are at the current rent rate of 6,960 lamports per byte plus 128 bytes of account overhead. See [Tick Array Rent](/core-products/dlmm-pro/ticks-and-liquidity#tick-array-rent) for the tick figures.
 
 
 ### Relative Ticks
@@ -110,7 +110,7 @@ Limit orders earn a share of the trading fee on the volume they fill. In each st
 
 An order can name a referral wallet when it is opened. When the order is canceled, 20% of its fee share goes to the referral, but only if the canceller passes a token account owned by the referral and the referral is not the order's owner. Otherwise the owner keeps the whole fee share. The fee share is paid in the token the fee was taken in: token X for asks and token Y for bids on `OutputToken` pools, and token Y for both on `OnlyY` pools. The referral's token account must be for that token. See [Fees](/core-products/dlmm-pro/fees#where-the-fee-goes) for the full split.
 
-The maker share at a tick is pooled per side. When an order is canceled, it takes `⌊fee pool × order filled / total filled⌋`, and both the fee pool and the total filled shrink by what it took. In the example above, the two swaps charged makers 3,750 X on swap 1 and 3,000 X on swap 2, so the pool holds 6,750 X against 4,500,000 X filled. Each order filled by 1,000,000 (A), 3,000,000 (B) and 500,000 (C) takes in order:
+When an order is canceled, it takes `⌊fee pool × order filled / total filled⌋`, and both the fee pool and the total filled shrink by what it took. In the example above, the two swaps added 3,750 X and 3,000 X to the makers' fee pool, so the pool holds 6,750 X against 4,500,000 X filled. Each order filled by 1,000,000 (A), 3,000,000 (B) and 500,000 (C) takes in order:
 
 | Cancel order | Order filled | Fee pool before | Total filled before | Share |
 | --- | --- | --- | --- | --- |
@@ -118,9 +118,9 @@ The maker share at a tick is pooled per side. When an order is canceled, it take
 | B | 3,000,000 | 5,250 | 3,500,000 | 4,500 |
 | C | 500,000 | 750 | 500,000 | 750 |
 
-Orders placed later share fees from fills that happened before they existed, because the share depends only on the filled amount. If A cancels after swap 1 instead, its 625,000 filled out of 2,500,000 takes `⌊3,750 × 625,000 / 2,500,000⌋ = 937`.
+If A cancels after swap 1 instead, its 625,000 filled out of 2,500,000 takes `⌊3,750 × 625,000 / 2,500,000⌋ = 937`.
 
-The referral rule: the referral gets 20% of the order owner's fee share only if the order names a referral wallet, that wallet is not the order's owner, and the canceller passes a token account owned by the referral. The referral's 20% rounds down. With B's 4,500 X share, the referral gets `⌊4,500 × 2,000 / 10,000⌋ = 900` X and the owner 3,600 X. If any condition fails, the owner keeps all 4,500. The referral transfer can still fail after the checks pass, for example when the fee mint has a transfer hook and its accounts are missing, and then the whole cancel fails.
+The referral's 20% rounds down. With B's 4,500 X share, the referral gets `⌊4,500 × 2,000 / 10,000⌋ = 900` X and the owner 3,600 X. If any of the referral conditions above fails, the owner keeps all 4,500. The referral transfer can still fail after the checks pass, for example when the fee mint has a transfer hook and its accounts are missing, and then the whole cancel fails.
 
 
 ## Lifecycle

@@ -86,14 +86,14 @@ A dynamic-config or launch pool takes these settings. A static config pool takes
 | --- | --- | --- |
 | `pool_fees` | Base fee and optional dynamic fee | See [Fees](/core-products/dlmm-pro/fees#base-fee-parameters-and-limits) |
 | `tick_spacing` | Ticks between usable ticks | 1 to 256 |
-| `collect_fee_mode` | 0 `OutputToken` or 1 `OnlyY` | `OnlyY` needs token Y to be SOL, USDC or badged, or `InvalidTokenBadge` |
+| `collect_fee_mode` | 0 `OutputToken` or 1 `OnlyY` | `OnlyY` needs token Y to be SOL, USDC or badged, or `InvalidTokenBadge`. Any other value fails with `TypeCastFailed` |
 | `initial_sqrt_price` | Q64.64 square root of token Y per token X | From `4295048016` to `79226673515401279992447579055` |
 | `activation_type` | 0 slot or 1 timestamp | Any other value fails with `InvalidActivationType` |
 | `activation_point` | When fee schedulers start counting | Unset unless the pool has `ActivationAccess` |
 | `extensions` | Bitmask, 1 `LiquidityMining` and 2 `ActivationAccess` | At most 3 |
 | `pool_activation` | Whitelists and two activation slots | Required with `ActivationAccess`, otherwise unset |
 
-Mints must differ. Each mint is checked as described in [Token 2022 Support](/core-products/dlmm-pro/token-2022-support), and a dynamic config with `CreatePoolWithoutMintValidation` skips that check. The initial tick is the highest tick at or below the initial price. The activation point defaults to the current slot or time, and without `ActivationAccess` it must be unset.
+Mints must differ, or creation fails with the Anchor error `ConstraintRaw`. Each mint is checked as described in [Token 2022 Support](/core-products/dlmm-pro/token-2022-support), and a dynamic config with `CreatePoolWithoutMintValidation` skips that check. The initial tick is the highest tick at or below the initial price. The activation point defaults to the current slot or time, and without `ActivationAccess` it must be unset.
 
 ### Accounts Created with a Pool
 
@@ -109,7 +109,7 @@ The payer funds these accounts at creation:
 | Reserve for token X and for token Y | A token account for each mint, owned by the pool authority | 2,039,280 each for a plain SPL Token account |
 | Tick array bitmap extension, when passed | 808 bytes | 6,514,560 |
 
-The pool holds the price, tick, liquidity, fee state, protocol and partner fee balances and the inline tick array bitmap. The oracle starts with one observation. Each reserve holds the pool's tokens of one mint, and only the program can move them. Token accounts for Token 2022 mints can be larger and cost more. A pool of two plain SPL Token mints with no extensions and no bitmap extension needs `5,400,960 + 1,392,000 + 2 × 2,039,280 = 10,871,520` lamports. Tick arrays, positions and orders are created later by whoever uses the pool.
+The pool holds the price, tick, liquidity, fee state, protocol and partner fee balances and the inline tick array bitmap. The oracle starts with one observation. Each reserve holds the pool's tokens of one mint, and only the program can move them. Token accounts for Token 2022 mints can be larger and cost more. A pool of two plain SPL Token mints with no extensions and no bitmap extension needs `5,400,960 + 1,392,000 + 2 × 2,039,280 = 10,871,520` lamports. Tick arrays, positions and orders are created later by whoever uses the pool. Lamport figures are at the current rent rate of 6,960 lamports per byte plus 128 bytes of account overhead.
 
 
 ## Extensions
@@ -121,7 +121,7 @@ The pool holds the price, tick, liquidity, fee state, protocol and partner fee b
 
 Extensions are chosen at creation and cannot be added later. Limit orders need no extension.
 
-The pool stores one reward block with two slots for `LiquidityMining`, and one block with three wallets and two activation slots for `ActivationAccess`. Both extensions make the pool account bigger, as the table above shows.
+The pool stores one reward block with two slots for `LiquidityMining`, and one block with three wallets and two activation slots for `ActivationAccess`.
 
 
 ## Activation Rules
@@ -150,7 +150,7 @@ Combining `BondingCurve` and `TimeBased` gives a launch that opens trading at a 
 
 ### Activation Rules in Detail
 
-Each activation slot is 16 bytes: a mode byte and 15 bytes of data. The data for `Open` must be all zeros. For `BondingCurve` it is a reached flag that must be 0 at creation, six zero bytes and the 64-bit target in basis points. For `TimeBased` it is three 40-bit points, so each is below `1,099,511,627,775`. The SDK builds them with `openActivationParameters`, `bondingCurveActivationParameters` and `timeBasedActivationParameters`.
+Each activation slot is 16 bytes: a mode byte and 15 bytes of data. The data for `Open` must be all zeros. For `BondingCurve` it is a reached flag that must be 0 at creation, six zero bytes and the 64-bit target in basis points. For `TimeBased` it is three 40-bit points, so each is at most `1,099,511,627,775`. The SDK builds them with `openActivationParameters`, `bondingCurveActivationParameters` and `timeBasedActivationParameters`.
 
 Rules checked at creation:
 
@@ -203,8 +203,8 @@ The status is a number from 0 to 3. Bit 0 set disables swaps and bit 1 set disab
 | --- | --- |
 | Pool status | An operator with `SetPoolStatus` |
 | Partner fee bps, from 0 to 5,000 | An operator with `UpdatePartnerFee`, on a pool with a partner |
-| Reward slot 0 mint and authority | The pool creator, or an operator with `InitializeReward` and `UpdateRewardAuthority` |
-| Reward slot 1 mint and authority | An operator |
+| Reward slot 0: set the mint once, change the authority | The pool creator, or an operator with `InitializeReward` to set the mint and `UpdateRewardAuthority` to change the authority |
+| Reward slot 1: set the mint once, change the authority | An operator with `InitializeReward` to set the mint and `UpdateRewardAuthority` to change the authority |
 | Reward emissions | The slot's reward authority |
 | Oracle length, tick arrays, tick array bitmap extension | Anyone, paying the rent |
 

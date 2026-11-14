@@ -34,7 +34,7 @@ Before the activation point, schedulers charge their settled fee. See the [formu
 
 ### Base Fee Parameters and Limits
 
-All numerators are over `1,000,000,000`, so 1 bp is `100,000`. Every mode needs its highest fee at or below `990,000,000` (99%) and its lowest fee at or above `100,000` (0.01%), or pool creation fails with `InvalidParameters`.
+All numerators are over `1,000,000,000`, so 1 bp is `100,000`. Every mode needs its highest fee at or below `990,000,000` (99%) and its lowest fee at or above `100,000` (0.01%), or creating the config or pool fails with `InvalidParameters`.
 
 | Mode | Parameters | Limits |
 | --- | --- | --- |
@@ -42,7 +42,7 @@ All numerators are over `1,000,000,000`, so 1 bp is `100,000`. Every mode needs 
 | `TimeSchedulerLinear`, `TimeSchedulerExponential` | `cliff_fee_numerator`, `period_frequency` in slots or seconds, `reduction_factor`, `number_of_period` | `period_frequency`, `reduction_factor` and `number_of_period` above zero. `number_of_period` fits 16 bits. The fee after the last period is at least `100,000`. |
 | `MarketCapSchedulerLinear`, `MarketCapSchedulerExponential` | `cliff_fee_numerator`, `reduction_factor`, `sqrt_price_step_bps`, `scheduler_expiration_duration` in slots or seconds, `number_of_period` | `reduction_factor`, `sqrt_price_step_bps`, `scheduler_expiration_duration` and `number_of_period` above zero. The step and the duration fit 32 bits. The fee after the last period is at least `100,000`. |
 
-For a linear mode `reduction_factor` is a fee numerator taken off each period, and the cliff fee must be large enough that `cliff_fee_numerator - reduction_factor × number_of_period` stays at or above `100,000`. For an exponential mode it is in basis points, and each period multiplies the fee by `1 - reduction_factor / 10,000`. A factor of 10,000 or more fails validation.
+For a linear mode `reduction_factor` is a fee numerator taken off each period, and the cliff fee must be large enough that `cliff_fee_numerator - reduction_factor × number_of_period` stays at or above `100,000`. For an exponential mode it is in basis points, and each period multiplies the fee by `1 - reduction_factor / 10,000`. A factor of 10,000 or more fails with `MathOverflow`.
 
 ### Worked Schedules
 
@@ -115,7 +115,7 @@ With a 0.25% base fee, `getDynamicFeeParams(25, 10)` gives `max_volatility_accum
 | 15% | 1,447 | 14,470,000 | 498,327 | 0.2998% |
 | 25% | 2,360 | 14,470,000, capped | 498,327 | 0.2998% |
 
-Walk-through with those parameters, a 0.25% base fee, the reference set at time 1000 at the pool's price, and the square-root price after each swap at 1.004, 1.012, 1.030, 1.035 and 1.036 times the starting value:
+Walk-through with those parameters, a 0.25% base fee, the reference set at time 1000 at the pool's price, and the square-root price after each swap at 1.004, 1.012, 1.030, 1.035 and 1.036 times the starting value. Square-root prices are stored as integers and round down, so each of the first three moves measures one tick less than the exact ratio (79, 239 and 599 ticks):
 
 | Time | Seconds since the later of the reference and the last significant swap | Regime | Accumulator at fee time | Total fee numerator | Accumulator after the swap |
 | --- | --- | --- | --- | --- | --- |
@@ -211,11 +211,13 @@ The swap from [Worked Swap](/core-products/dlmm-pro/ticks-and-liquidity#worked-s
 | Normal | Yes | 2,000 | 13,953,922 | 7,500 | 310,386 | 249,509 | 998,039 |
 | Launch | No | None | 12,403,486 | 7,500 | 0 | 0 | 3,108,370 |
 | Launch | Yes | None | 12,403,486 | 7,500 | 620,774 | 0 | 2,487,596 |
-| Launch | Yes | 5,000 | 12,403,486 | 7,500 | 620,774 | 1,243,798 | 1,243,798 |
+| Normal | Yes | 5,000 | 13,953,922 | 7,500 | 310,386 | 623,774 | 623,774 |
+
+Rows with a partner fee apply to dynamic-config pools, the only pools that have a partner. A launch pool never has one.
 
 The protocol's gross share in the first normal row is `1,496,181 + 54,253` from the two LP parts and `7,500` from the order. With a referral, the host's 20% applies to `1,496,181 + 54,253 + 1,500`, where 1,500 is 10% of the 15,000 limit-order fee, not the 7,500 the protocol actually took. That gives `⌊1,551,934 × 0.2⌋ = 310,386`. The partner's share then applies to what is left after the host: `⌊1,247,548 × 0.2⌋ = 249,509`.
 
-Who collects each part: LPs with `claim_fee` on their position, makers when the order is canceled, the host in the swap itself, the pool partner with `claim_partner_fee` and Meteora with its protocol fee claim. `claim_partner_fee` takes `max_amount_x` and `max_amount_y`, caps on the accrued fee before any transfer fee, and `min_amount_x` and `min_amount_y`, minimums after it that fail with `ExceededSlippage`. It sends nothing and returns when both amounts are zero. The partner fee bps comes from the config at creation and an operator can change it to any value from 0 to 5,000 on a pool that has a partner.
+Who collects each part: LPs with `claim_fee` on their position, makers when the order is canceled, the host in the swap itself, the pool partner with `claim_partner_fee` and Meteora with its protocol fee claim. `claim_partner_fee` takes `max_amount_x` and `max_amount_y`, caps on the accrued fee before any transfer fee, and `min_amount_x` and `min_amount_y`, minimums after it that fail with `ExceededSlippage`. It sends nothing and returns when both amounts are zero. An operator can set the partner fee bps to any value from 0 to 5,000 on a pool that has a partner.
 
 
 ## Related

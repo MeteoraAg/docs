@@ -29,7 +29,7 @@ Creating a pool or a reward slot with a mint that needs a badge fails with `Unsu
 | `TransferFeeConfig` | Accepted | Reads the fee for the current epoch and accounts for it on every transfer. See [Transfer Fees](#transfer-fees). |
 | `MetadataPointer`, `TokenMetadata` | Accepted | Ignored |
 | `TransferHook` with no program and no authority | Accepted | No hook runs |
-| `TransferHook` with a program or an authority | Needs a badge | Runs the hook on every transfer, with the accounts you pass. See [Transfer Hooks](#transfer-hooks). |
+| `TransferHook` with a program or an authority | Needs a badge | Runs the hook on every transfer when a hook program is set, with the accounts you pass. With only an authority set, no hook runs until the authority sets a program. See [Transfer Hooks](#transfer-hooks). |
 | Any other extension, for example `PermanentDelegate`, `ConfidentialTransferMint`, `DefaultAccountState`, `NonTransferable`, `MintCloseAuthority` or `InterestBearingConfig` | Needs a badge | The program does not inspect or handle it. The badge records that Meteora reviewed the token. |
 | The native mint of Token 2022 | Never | Always fails with `UnsupportNativeMintToken2022`, even with a badge or a permissive config |
 
@@ -103,21 +103,21 @@ The remaining accounts start with the hook account slices, in the order given by
 
 A slice type the instruction does not accept fails with `InvalidRemainingAccountSlice`. Fewer accounts than the slice lengths add up to fails with `InsufficientRemainingAccounts`. A repeated type fails with `DuplicatedRemainingAccountTypes`. A mint with a hook program and no slice fails with `MissingRemainingAccountForTransferHook`, and a slice for a mint without a hook program fails with `NoTransferHookProgram`.
 
-Each slice holds the extra accounts of the hook's validation account for that transfer, which the SDK resolves with `getExtraAccountMetasForTransferHook`. The program adds the source, mint, destination and authority of the transfer itself. A swap with a referral that has a hook on the fee token fails if the referral slice is wrong, and you can leave the referral out to avoid it.
+Each slice holds everything a Token 2022 transfer of that mint needs after its source, mint, destination and authority: the extra accounts listed in the hook's validation account, the hook program and the validation account. The SDK's `getExtraAccountMetasForTransferHook` returns that list. The program adds the source, mint, destination and authority of the transfer itself. A swap with a referral that has a hook on the fee token fails if the referral slice is wrong, and you can leave the referral out to avoid it.
 
 
 ## Memos
 
 When the program sends tokens to an account that requires memos on incoming transfers, it adds the memo itself. Swaps, withdrawals, fee and reward claims, limit order cancels and partner fee claims all do this.
 
-The memo is added only when the destination token account is a Token 2022 account with required incoming memos switched on. It is added before the transfer and comes from the memo program, which payout instructions take as an account. Every transfer that leaves the pool can carry one: the swap output, the host fee, withdrawals, fee claims, reward claims, ineligible reward withdrawals, cancels and partner fee claims. Deposits and funding come from you and carry none.
+The memo is added only when the destination token account is a Token 2022 account with required incoming memos switched on. It is added before the transfer and comes from the memo program, which payout instructions take as an account. Every payout to a user, referral or partner can carry one: the swap output, the host fee, withdrawals, fee claims, reward claims, ineligible reward withdrawals, cancels and partner fee claims. The protocol fee claim adds none. Deposits and funding come from you and carry none.
 
 
 ## Position and Order NFTs
 
 Positions and limit orders are Token 2022 NFTs regardless of the pool's mints. The NFT lives in its owner's associated token account under the Token 2022 program.
 
-The NFT mint has 0 decimals and a supply of 1. It carries the `MetadataPointer`, `TokenMetadata` and `MintCloseAuthority` extensions. The token metadata name is `Meteora Pool` followed by the pool address, and the symbol is `MP` for positions and `ML` for limit orders. The pool authority holds the mint authority and the close authority, so the program can close the mint when the position or order closes. The pool account is the freeze authority, which makes every NFT of a pool easy to find. The NFT can be transferred or delegated like any token, and wallets need Token 2022 support to show it. The payer covers the mint and token account rent, and closing the position or order refunds it to the rent receiver.
+The NFT mint has 0 decimals and a supply of 1. It carries the `MetadataPointer`, `TokenMetadata` and `MintCloseAuthority` extensions. The token metadata name is `Meteora Pool: ` followed by the pool address, and the symbol is `MP` for positions and `ML` for limit orders. The pool authority holds the mint authority and the close authority, so the program can close the mint when the position or order closes. The pool account is the freeze authority, which makes every NFT of a pool easy to find. The NFT can be transferred or delegated like any token, and wallets need Token 2022 support to show it. The payer covers the mint and token account rent, and closing the position or order refunds it to the rent receiver.
 
 
 ## Related

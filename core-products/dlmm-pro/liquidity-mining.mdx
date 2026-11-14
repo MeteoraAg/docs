@@ -47,7 +47,7 @@ Reward times are always Unix timestamps, even on pools whose activation type is 
 
 A slot can be funded again once its previous emission has ended and any ineligible reward has been withdrawn.
 
-The full list of checks in `set_reward_emission`, each failing with `InvalidParameters` unless noted:
+`set_reward_emission` first requires the pool to have the extension (`InvalidPoolType`) and the slot to have a mint (`RewardUninitialized`). It then checks the emission, each check failing with `InvalidParameters` unless noted:
 
 - `emission_per_second` is above zero.
 - `open_time` is not in the past. Leave it unset to start now. A time that has already passed by the time the transaction runs is rejected, so give a little margin when you set it.
@@ -79,7 +79,7 @@ Example with a rate of 1,000 atoms per second over 86,400 seconds, funded as `86
 | 12 to 15 hours | 10,800 | 0 | 10,800,000 | 0 | 0 | 10,800,000 |
 | 15 to 24 hours | 32,400 | `4,000,000,000,000` | 32,400,000 | 8,099,999 | 24,299,999 | 0 |
 
-Credited over the whole period, P1 earns `35,099,999` and P2 earns `40,499,999`, and `10,800,000` is withdrawable as ineligible reward. The three add up to `86,399,998`, so 2 atoms remain in the vault from rounding down.
+Refreshed at the end of each interval, as in the table, P1 is credited `35,099,997` and P2 `40,499,998`, and `10,800,000` is withdrawable as ineligible reward. The three add up to `86,399,995`, so 5 atoms remain in the vault from rounding down. A position refreshed only once, at hour 24, is credited `35,099,999` (P1) or `40,499,999` (P2), because each credit rounds down once.
 
 `claim_reward` takes the reward `index` and a `min_amount` measured after any transfer fee, which fails with `ExceededSlippage`. It adds up the pending reward for that reward index across every range slot of the position and zeroes it. If the total is zero, nothing is sent. The pool needs the `LiquidityMining` extension, or the call fails with `InvalidPoolType`.
 
@@ -97,7 +97,7 @@ Funding again works like the first time. Rewards that positions have earned but 
 
 A reward mint goes through the same checks as a pool mint (see [Token 2022 Support](/core-products/dlmm-pro/token-2022-support)), with one difference for slots set up by the pool creator: the mint must not have a freeze authority unless it has a token badge. SOL and USDC are always accepted. Operator-managed slots may use mints with a freeze authority.
 
-A slot's cost to the payer is the reward vault, 2,039,280 lamports for a plain SPL Token account and more for a Token 2022 mint with extensions, and each tick and position on the pool is larger. See [Tick Array Rent](/core-products/dlmm-pro/ticks-and-liquidity#tick-array-rent) and [Opening and Expanding](/core-products/dlmm-pro/positions#opening-and-expanding). A pool with the extension is 352 bytes bigger, 176 bytes per slot.
+A slot's cost to the payer is the reward vault, 2,039,280 lamports at the current rent rate for a plain SPL Token account and more for a Token 2022 mint with extensions, and each tick and position on the pool is larger. See [Tick Array Rent](/core-products/dlmm-pro/ticks-and-liquidity#tick-array-rent) and [Opening and Expanding](/core-products/dlmm-pro/positions#opening-and-expanding). A pool with the extension is 352 bytes bigger, 176 bytes per slot.
 
 
 ## Related
