@@ -2,13 +2,71 @@
 title: "DLMM Pro Changelog"
 sidebarTitle: "Changelog"
 description: "Track DLMM Pro release notes, breaking changes and upgrade guidance for the dlmm_pro program, the TypeScript SDK and the Rust commons crate."
-llmsDescription: "Explains the DLMM Pro integration changelog for builders maintaining Meteora DLMM Pro integrations. Covers versioned release entries for the dlmm_pro program (dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n), the @meteora-ag/dlmm-pro-sdk TypeScript SDK and the dlmm-pro-commons Rust crate, PR links, breaking-change callouts and what swap routers, trading terminals and partners need to do for each release. Release 0.1.0 is the first version."
+llmsDescription: "Explains the DLMM Pro integration changelog for builders maintaining Meteora DLMM Pro integrations. Covers versioned release entries for the dlmm_pro program (dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n), the @meteora-ag/dlmm-pro-sdk TypeScript SDK and the dlmm-pro-commons Rust crate, PR links, breaking-change callouts and what swap routers, trading terminals and partners need to do for each release. Release 0.1.0 is the first version, followed by SDK and commons 0.1.1."
 rss: true
 ---
 
 <Tip>
   Track DLMM Pro releases here.
 </Tip>
+
+<Update
+  label="dlmm-pro-sdk 0.1.1"
+  description="Quote and Pool Creation Fixes"
+  rss="DLMM Pro SDK 0.1.1 and dlmm-pro-commons 0.1.1: swap quotes now match the program's fee split when a limit order fill rounds down to zero output, and the pool builders reject an OnlyY pool whose token Y needs a token badge that was not passed. The dlmm_pro program is unchanged at 0.1.0."
+>
+  ## Release Summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.1.0` (unchanged) | - |
+  | TypeScript SDK | `0.1.1` | [dlmm-pro-sdk #26](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/26) |
+  | Commons | `0.1.1` | [dlmm-pro-sdk #26](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/26) |
+
+  ## What We Shipped
+
+  - Swap quotes in the TypeScript SDK and the commons crate that match the program's fee split in every case
+  - Pool builders that reject an `OnlyY` pool the program would reject, before a transaction is built
+
+  ## What To Do
+
+  | Integrators | What To Do |
+  | --- | --- |
+  | Swap routers | Upgrade to `0.1.1` of the TypeScript SDK or the commons crate. A `0.1.0` quote can differ from `EvtSwap` by a few atoms in the limit order, protocol, host and partner fees when a swap step's limit order fill rounds down to zero output. The quoted input and output amounts are not affected. |
+  | Launchpads and pool creators | Upgrade to `0.1.1`. On an `OnlyY` pool whose token Y is not wrapped SOL or USDC, pass `tokenBadgeY`; the builders now throw `InvalidTokenBadge` when it is missing. |
+  | Rust integrators | Pin `dlmm-pro-commons` to commit `6c8ab97c3451f6801bce623a887e9add80b78d4e`. |
+
+  No function signatures changed, so `0.1.1` is a drop-in upgrade from `0.1.0`.
+
+  ## TypeScript SDK: `@meteora-ag/dlmm-pro-sdk` `0.1.1`
+
+  [SDK PR #26](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/26)
+
+  <Tip>
+    Production: [`@meteora-ag/dlmm-pro-sdk@0.1.1`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.1).
+  </Tip>
+
+  ### Fixed
+
+  - `quoteExactIn` now gives the protocol the whole limit order fee of a swap step whose limit order fill rounds down to zero output, as dlmm-pro 0.1.0 does.
+  - `initializePoolWithStaticConfig`, `initializePoolWithDynamicConfig` and `initializeLaunchPool` now throw `InvalidTokenBadge` for an `OnlyY` pool when token Y is not wrapped SOL or USDC and no `tokenBadgeY` is passed, instead of building a transaction the program rejects.
+
+  ### Changed
+
+  - Rebuilt the LiteSVM test fixture `tests/fixtures/dlmm_pro.so` from dlmm-pro 0.1.0.
+
+  ## Commons: `dlmm-pro-commons` `0.1.1`
+
+  [Commons PR #26](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/26), commit `6c8ab97c3451f6801bce623a887e9add80b78d4e`
+
+  ### Fixed
+
+  - `quote_exact_in()` now gives the protocol the whole limit order fee of a swap step whose limit order fill rounds down to zero output, as dlmm-pro 0.1.0 does.
+
+  ### Changed
+
+  - Pinned to dlmm-pro 0.1.0, the release deployed on mainnet. `math/` now matches it, which adds a zero check to `down_scale_ceil()`.
+</Update>
 
 <Update
   label="dlmm_pro 0.1.0"
@@ -39,7 +97,7 @@ rss: true
   | --- | --- |
   | Swap routers | Quote with `quote_exact_in` and `tick_arrays_for_swap` from `dlmm-pro-commons`, or `quoteExactIn` in the TypeScript SDK. Pass the tick arrays in traversal order, the bitmap extension when the pool has one, and any Token 2022 transfer hook accounts. |
   | Trading terminals | Index pools under the program ID. Pool accounts have a dynamic tail, so decode them with `DynamicPool` or `client.state.fetchPoolWithExtensions`, not a plain layout decode. |
-  | Partners | Install `@meteora-ag/dlmm-pro-sdk@0.1.0` and start from the [getting started guide](/developer-guides/dlmm-pro/typescript-sdk/getting-started). |
+  | Partners | Install `@meteora-ag/dlmm-pro-sdk` and start from the [getting started guide](/developer-guides/dlmm-pro/typescript-sdk/getting-started). |
 
   ## Program: `dlmm_pro` `0.1.0`
 
@@ -52,7 +110,7 @@ rss: true
   [SDK PR #16](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/16)
 
   <Tip>
-    Production: [`@meteora-ag/dlmm-pro-sdk@0.1.0`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.0).
+    Superseded by [`@meteora-ag/dlmm-pro-sdk@0.1.1`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.1). Use the latest release.
   </Tip>
 
   ### Added
