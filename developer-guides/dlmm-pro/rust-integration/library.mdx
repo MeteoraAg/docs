@@ -18,7 +18,7 @@ The crate is not published to crates.io. Depend on it from git, pinned to a comm
 dlmm-pro-commons = { git = "https://github.com/MeteoraAg/dlmm-pro-sdk", rev = "6c8ab97c3451f6801bce623a887e9add80b78d4e" }
 ```
 
-That commit is `dlmm-pro-commons` 0.1.1, built for DLMM Pro program 0.1.0. The repository has no release tags, so take the commit of the release you want from the [changelog](/developer-guides/dlmm-pro/changelog). The crate uses Anchor 1.x and the repository pins Rust 1.94.0. It re-exports `anchor_lang`, so use `dlmm_pro_commons::anchor_lang` to keep your Anchor version in step with the crate's.
+That commit is `dlmm-pro-commons` 0.1.1, built for DLMM Pro program 0.1.0. The repository has no release tags, so pin a commit. The [changelog](/developer-guides/dlmm-pro/changelog) gives the commit of each commons release. The crate uses Anchor 1.x and the repository pins Rust 1.94.0. It re-exports `anchor_lang`, so use `dlmm_pro_commons::anchor_lang` to keep your Anchor version in step with the crate's.
 
 ## Requirements
 
@@ -26,11 +26,11 @@ That commit is `dlmm-pro-commons` 0.1.1, built for DLMM Pro program 0.1.0. The r
 | --- | --- |
 | Rust | 1.90 or newer. The repository pins 1.94.0 in `rust-toolchain.toml`, with `rustfmt` and `clippy`. With the repository's `Cargo.lock`, `ruint` 1.20.0 requires Rust 1.90 and `anchor-lang` 1.1.2 requires Rust 1.89. The crate compiles with 1.94.0 and 1.91.1. |
 | Edition | 2021 |
-| Anchor | `anchor-lang` and `anchor-spl` 1.x. The workspace manifest asks for `"1.0.2"`, which Cargo reads as any 1.x from 1.0.2. The repository's lock file holds 1.1.2, and a fresh resolve of the git dependency picked 1.2.2 and compiled. |
+| Anchor | `anchor-lang` and `anchor-spl` 1.x. The workspace manifest asks for `"1.0.2"`, which Cargo reads as any 1.x from 1.0.2. The repository's lock file holds 1.1.2, and a fresh resolve picks the newest 1.x (1.2.2 when this page was written), which also compiles. |
 | Features | None. The crate defines no Cargo features. |
 | Target | Off-chain code, such as aggregators, quoting services, indexers and tests. For an on-chain program, generate bindings with `declare_program!` in your own crate. See [Rust CPI](/developer-guides/dlmm-pro/rust-integration/cpi#generated-bindings). |
 
-Cargo does not use the repository's `Cargo.lock` for a git dependency, so your own `Cargo.lock` decides the Anchor, `ruint` and `bytemuck` versions. Commit it. To hold the versions in the repository's lock file, run `cargo update -p anchor-spl --precise 1.1.2` and then `cargo update -p anchor-lang --precise 1.1.2`. Cargo refuses to downgrade `anchor-lang` alone while `anchor-spl` still needs the newer one.
+Cargo does not use the repository's `Cargo.lock` for a git dependency, so your own `Cargo.lock` decides the Anchor, `ruint` and `bytemuck` versions. Commit it. To hold Anchor at the version in the repository's lock file, run `cargo update -p anchor-spl --precise 1.1.2`, which also moves `anchor-lang` and the Anchor macro crates. Cargo refuses to downgrade `anchor-lang` alone while `anchor-spl` still needs the newer one. `ruint` and `bytemuck` are not affected.
 
 `rev` pins the exact commit. Change it only when you move to a newer release of the crate, because the crate's types follow the IDL of the program release it targets.
 
@@ -39,7 +39,7 @@ The crate depends on `anchor-lang`, `anchor-spl`, `bytemuck`, `ruint`, `num_enum
 | Type | Appears in | Where it comes from |
 | --- | --- | --- |
 | `TransferFee` | `get_epoch_transfer_fee` | `anchor_spl::token_2022::spl_token_2022::extension::transfer_fee::TransferFee`, so add `anchor-spl` |
-| `U320` | `get_liquidity_from_amount_x`, `get_liquidity_from_amount_y`, the `_unchecked` delta amount functions | `ruint::aliases::U320`, so add `ruint`. Convert with `u128::try_from` when the value fits. |
+| `U320`, `U256` | `get_liquidity_from_amount_x`, `get_liquidity_from_amount_y` and `get_delta_amount_x_unchecked` return `U320`. `get_delta_amount_y_unchecked` returns `U256`. | `ruint::aliases`, so add `ruint`. Convert with `u128::try_from` when the value fits. |
 | `AccountMeta`, `Instruction` | hook account lists, instruction builders | `dlmm_pro_commons::anchor_lang::solana_program::instruction` |
 
 ## What's in the Crate
@@ -481,7 +481,7 @@ pub fn read_position(
         .map(|address| DynamicTickArray::deserialize(&fetch(address), &pool.pool))
         .collect::<Result<Vec<_>>>()?;
 
-    // Amounts: what removing all liquidity of each slot would return, rounded down.
+    // Amounts: what each slot's total liquidity is worth at the current price, rounded down.
     let mut total = (0u64, 0u64);
     for position in position_array.positions.base_positions() {
         let (x, y) = get_amounts_from_liquidity(
@@ -536,7 +536,7 @@ pub fn read_position(
 }
 ```
 
-The amounts are what removing all liquidity of each slot would return, rounded down, before any Token 2022 transfer fee on the way out. They do not include pending fees or rewards. The claimable numbers assume every slot holding liquidity is refreshed first. `claim_fee` and `claim_reward` themselves pay only what has already been credited to the position, so send `refresh_fees_and_rewards` before the claim, as the program does not do it for you.
+The amounts are what each slot's total liquidity (unlocked, vesting and permanently locked) is worth at the pool's current price, rounded down, before any Token 2022 transfer fee. Only the unlocked part can be withdrawn. They do not include pending fees or rewards. The claimable numbers assume every slot holding liquidity is refreshed first. `claim_fee` and `claim_reward` themselves pay only what has already been credited to the position, so send `refresh_fees_and_rewards` before the claim, as the program does not do it for you.
 
 ### Listing Tick Arrays for a Position or Limit Order
 
@@ -637,11 +637,11 @@ pub fn sqrt_price_of_average_tick(average_tick: f64) -> u128 {
 }
 ```
 
-The stored cumulative tick is as of the observation's last update, not as of now, and a swap rewrites the newest slot in place until 15 seconds have passed since the slot was created. After that the next swap starts a slot. Slots that no swap has written yet have a zero timestamp, and a brand new oracle holds one empty observation until the first swap. `increase_oracle_length` grows the buffer, up to 500 observations. See [Oracle](/developer-guides/dlmm-pro/program/accounts#oracle).
+The stored cumulative tick is as of the observation's last update, not as of now, and a swap rewrites the newest slot in place until 15 seconds have passed since the slot was created. After that the next swap starts a slot. Slots that no swap has written yet have a zero timestamp, and a brand new oracle holds one empty observation until the first swap. A pool's oracle starts with one slot, so a time-weighted average needs `increase_oracle_length` first: until then the function above returns `None`. `increase_oracle_length` grows the buffer, up to 500 observations. See [Oracle](/developer-guides/dlmm-pro/program/accounts#oracle).
 
 ## Function Reference
 
-Every public item of the crate root is covered here. `Result<T>` in a signature is `anchor_lang::Result<T>`, so errors are `anchor_lang::error::Error`. A `PoolError` converts into it, carrying the same code and message the program returns. Amounts are token base units unless a row says otherwise. Prices are Q64.64 square roots: the price of a tick id is `1.0001^tick_id`, and a square root price is stored as `sqrt(price) * 2^64` in a `u128`. Fee numerators use `FEE_DENOMINATOR` (1,000,000,000) as the denominator.
+Every public item of the crate root is covered here. The step methods on `Pool`, `Tick`, `DynamicFeeConfig`, `VariableFee` and `TickArrayBitmapExtension` that `quote_exact_in` and `tick_arrays_for_swap` call are public but not listed. `Result<T>` in a signature is `anchor_lang::Result<T>`, so errors are `anchor_lang::error::Error`. A `PoolError` converts into it, carrying the same code and message the program returns. Amounts are token base units unless a row says otherwise. Prices are Q64.64 square roots: the price of a tick id is `1.0001^tick_id`, and a square root price is stored as `sqrt(price) * 2^64` in a `u128`. Fee numerators use `FEE_DENOMINATOR` (1,000,000,000) as the denominator.
 
 Signatures are shown as plain text because they omit bodies. Each one is the crate's exact signature at the pinned revision.
 
@@ -946,7 +946,7 @@ pub struct NextRewardInfo {
 }
 ```
 
-The steps inside `claimable_rewards`. `next_rewards_info` returns, for each reward slot, the global reward growth and the empty-liquidity seconds after a refresh at `current_timestamp`. A slot that is uninitialized, not yet open, or already finished at its `end_time` stays unchanged. When `liquidity` is 0 the elapsed seconds are counted as empty-liquidity seconds and growth does not move. `next_reward_growths_inside` is the reward counterpart of `next_fee_growths_inside`. `pending_rewards` returns the pending amount of each slot reward after adding what the growth since the checkpoint earns.
+The steps inside `claimable_rewards`. `next_rewards_info` returns, for each reward slot, the global reward growth after a refresh at `current_timestamp` and the empty-liquidity seconds that refresh adds to the slot's counter. A slot that is uninitialized, not yet open, or already finished at its `end_time` returns its stored growth and 0 seconds. When `liquidity` is 0 the elapsed seconds are counted as empty-liquidity seconds and growth does not move. `next_reward_growths_inside` is the reward counterpart of `next_fee_growths_inside`. `pending_rewards` returns the pending amount of each slot reward after adding what the growth since the checkpoint earns.
 
 ### Token 2022
 
@@ -1048,7 +1048,7 @@ Every `derive_*` helper returns only the address. Use `Pubkey::find_program_addr
 
 `ACCESS_REGISTRY_ID` is `regUFehW9oycnaV2auYyfqyYjKG1W1uLNT7rtUeemQr`, the program that owns `TokenBadge` accounts. The `seeds` module exposes each prefix as a constant (`POOL_PREFIX`, `TICK_ARRAY_PREFIX`, `EVENT_AUTHORITY_PREFIX` and the rest), and they are also exported at the crate root. `dlmm_pro::ID` is the program ID, and `dlmm_pro::ID_CONST` is the same address as a constant.
 
-Constants, with types as exported from the IDL:
+Constants. Most come from the IDL with their IDL types. `MIN_TICK_ID`, `MAX_TICK_ID`, `MAX_TICKS_PER_ARRAY`, `NUM_REWARDS`, `NUMBER_OF_ACTIVATION_MODES` and `MAX_REFERENCE_AGE` are defined by the crate:
 
 | Constant | Type | Value | Meaning |
 | --- | --- | --- | --- |
@@ -1106,7 +1106,7 @@ Methods on `Pool`:
 | `get_total_trading_fee_numerator(&self, current_point: u64) -> Result<u64>` | The base fee for `current_point` plus the dynamic fee at the stored volatility accumulator, capped at `MAX_FEE_NUMERATOR`. It does not decay the volatility to the current time. `quote_exact_in` does. |
 | `is_overflow_default_tick_array_bitmap(&self, tick_array_index: i32) -> bool` | `true` for an array index outside -512 to 511. |
 | `Pool::bitmap_range() -> (i32, i32)` | `(-512, 511)`. |
-| `get_non_zero_liquidity_next_index(&self, swap_for_y: bool, from_tick_index: i32, extension: Option<&TickArrayBitmapExtension>) -> Result<Option<i32>>` | The next tick array index with liquidity, starting at array index `from_tick_index` itself and moving down for `swap_for_y` or up otherwise. `None` when there is none. The parameter holds an array index despite its name. |
+| `get_non_zero_liquidity_next_index(&self, swap_for_y: bool, from_tick_index: i32, tick_array_bitmap_extension: Option<&TickArrayBitmapExtension>) -> Result<Option<i32>>` | The next tick array index with liquidity, starting at array index `from_tick_index` itself and moving down for `swap_for_y` or up otherwise. `None` when there is none. The parameter holds an array index despite its name. |
 
 Methods on `TickArray` and `TickArrayBitmapExtension`:
 
@@ -1147,7 +1147,7 @@ where
 
 `get_current_point` returns `clock.slot` for `ActivationType::Slot` (0) and `clock.unix_timestamp` for `ActivationType::Timestamp` (1), and `InvalidActivationType` for any other value. `get_activation_access` reads one activation slot by its mode (`ActivationMode::Open` 0, `BondingCurve` 1, `TimeBased` 2) and runs `f` on it, returning `InvalidActivationAccess` for an unknown mode. The `Activation` trait has `can_swap`, `can_add_liquidity` and `can_remove_liquidity`, each taking the current point. `Open` allows everything. `BondingCurve` allows swaps and allows adding and removing liquidity only once `is_reach_target` is 1. `TimeBased` allows each action from its `swap_point`, `add_liquidity_point` or `remove_liquidity_point`. The `PodAlignedActivation*` structs are the slot layouts.
 
-Fee split and curve math, all returning `Result`:
+Fee split and curve math. Each returns `Result` unless its signature shows otherwise:
 
 | Function | Meaning |
 | --- | --- |
