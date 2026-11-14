@@ -293,7 +293,7 @@ Use `isSupportExtension(pool.extensions, PoolExtension.LiquidityMining)` to test
 
 The tail holds the initialized ticks sorted by `tick_id`. A new tick array has no ticks, and the account grows or shrinks as positions and limit orders add or drop references to ticks. The tail starts at byte 64 of the account data and uses `Tick` (160 bytes) or `TickWithReward` (192 bytes) on LiquidityMining pools.
 
-One instruction can grow a tick array by at most 10,240 bytes. That is 64 new ticks (53 on LiquidityMining pools), or 63 when the instruction also creates the tick array. An `open_position` or `expand_position` that needs more new ticks in one array fails with `ReallocExceedMaxLengthPerInstruction`, so split the ranges across instructions.
+One instruction can grow a tick array by at most 10,240 bytes. That is 64 new ticks (53 on LiquidityMining pools), or 63 when the instruction also creates the tick array on a pool without LiquidityMining. An `open_position` or `expand_position` that needs more new ticks in one array fails with `ReallocExceedMaxLengthPerInstruction`, so split the ranges across instructions.
 
 ### Tick
 

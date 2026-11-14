@@ -77,7 +77,7 @@ A failed transaction log shows `custom program error: 0x1784`. Convert the hex v
 | `InvalidActivationAccess` | Swaps or adding liquidity are disabled by `pool_status`, or the pool's activation rules do not yet allow the swap, deposit or withdrawal for that wallet (the signer for swaps, the NFT owner for liquidity). | Wait for the activation point, or use the whitelisted wallet. |
 | `TickArrayBitmapExtensionAccountIsNotProvided` | Liquidity or limit orders touch a tick array outside indexes -512 to 511, or a pool is created with its initial tick outside that window, and the bitmap extension account is missing. A swap on a pool that has an extension fails with `BitmapExtensionAccountIsNotProvided` (6044) when its search leaves the inline bitmap and the extension is not passed. | Pass `deriveTickArrayBitmapExtension(pool)`, creating it first if needed. |
 | `InvalidLayoutVersion` | `expected_layout_version` differs from the position `layout_version`, which changes on `expand_position` and `remove_position`. | Read the position again and pass the current version, or `null`. |
-| `ReallocExceedMaxLengthPerInstruction` | One instruction adds more than 10,240 bytes to a tick array: more than 64 new ticks (53 on LiquidityMining pools), or 63 when it also creates the array. | Open the position with fewer ranges, then add the rest with `expand_position`. |
+| `ReallocExceedMaxLengthPerInstruction` | One instruction adds more than 10,240 bytes to a tick array: more than 64 new ticks (53 on LiquidityMining pools), or more than 63 when it also creates the array on a pool without LiquidityMining. | Open the position with fewer ranges, then add the rest with `expand_position`. |
 | `PositionAlreadyHadVesting` | The position already had a vesting schedule. A position can have one in its lifetime, even after it has fully released. | Lock from a different position. |
 | `PositionIsNotEmpty` | A slot to remove or close still has liquidity, pending fees or pending rewards. | Remove liquidity and claim fees and rewards first. |
 | `LimitOrderIsNotEmpty` | Closing a limit order that still has ticks that are not canceled. | Cancel every tick, then close. |
@@ -109,7 +109,7 @@ Every error below is returned by the program as an Anchor custom error. The numb
   - Pool creation: `initial_sqrt_price` is outside the square root price bounds. With a static config the price must also map to a tick id inside the tick id bounds.
   - Fee settings in pool creation and config creation: a base fee, or the lowest or highest fee of a scheduled base fee, outside 0.01 percent to 99 percent; a time scheduler with a zero `period_frequency`, `reduction_factor` or `number_of_period`; a market cap scheduler with a zero `reduction_factor`, `sqrt_price_step_bps`, `scheduler_expiration_duration` or `number_of_period`; non-zero padding bytes in `data`.
   - Dynamic fee settings: `max_volatility_accumulator` or `variable_fee_control` above 16777215, `filter_period` of 0 or not below `decay_period`, `decay_period` above 3600, `reduction_factor` of 0 or above 10000, `min_delta_tick_for_significant_swap` of 0, or a highest variable fee above 99 percent.
-  - ActivationAccess pools: `pool_activation` missing, the two activation modes not one of Open with Open, Open with BondingCurve, Open with TimeBased, or BondingCurve with TimeBased, or mode data that does not validate (non-zero padding; BondingCurve without a non-default `whitelisted_add_liquidity`, with `is_reach_target` set, with `target_increase_bps` of 10000 or less, or with a target price above the highest usable tick; TimeBased points in the past or more than 30 days ahead, or `activation_point` different from `swap_point`). Without a TimeBased slot, `activation_point` must be the current slot or timestamp. Pools without the extension must omit both `activation_point` and `pool_activation`.
+  - ActivationAccess pools: `pool_activation` missing, the two activation modes, in slot order, not one of Open then Open, Open then BondingCurve, Open then TimeBased, or BondingCurve then TimeBased, or mode data that does not validate (non-zero padding; BondingCurve without a non-default `whitelisted_add_liquidity`, with `is_reach_target` set, with `target_increase_bps` of 10000 or less, or with a target price above the highest usable tick; TimeBased points in the past or more than 30 days ahead, or `activation_point` different from `swap_point`). Without a TimeBased slot, `activation_point` must be the current slot or timestamp. Pools without the extension must omit both `activation_point` and `pool_activation`.
   - `create_dynamic_config`: `permission` above 1, `partner_fee_bps` above 5000, or `pool_creator_authority` equal to the default key.
   - `close_config`: both or neither of the static and dynamic config accounts are passed.
   - `set_pool_status`: `status` above 3, or equal to the current status. `update_partner_fee`: `partner_fee_bps` above 5000, or the pool has no partner.
@@ -190,7 +190,7 @@ Every error below is returned by the program as an Anchor custom error. The numb
   - Fix: Pass the tick arrays that hold the lower and upper tick of every selected slot, or every tick of the limit order.
 
 - `TickArrayBitmapExtensionAccountIsNotProvided` (6021)
-  - Liquidity changes, limit order calls or swaps that switch a tick array outside indexes -512 to 511 between empty and holding liquidity, with no bitmap extension account passed.
+  - Liquidity changes or limit order calls that switch a tick array outside indexes -512 to 511 between empty and holding liquidity, with no bitmap extension account passed. A swap in that situation fails with `BitmapExtensionAccountIsNotProvided` (6044) instead.
   - Pool creation with an initial tick whose tick array index is outside -512 to 511 and no bitmap extension account passed.
   - Fix: Pass `deriveTickArrayBitmapExtension(pool)`, creating it first with `initialize_tick_bitmap_extension` if needed.
 
@@ -199,9 +199,9 @@ Every error below is returned by the program as an Anchor custom error. The numb
   - Fix: Pass `deriveTickArrayBitmapExtension(pool)` on every swap of a pool that has one.
 
 - `ReallocExceedMaxLengthPerInstruction` (6009)
-  - `open_position`, `expand_position` or `open_limit_order` adds more than 64 new ticks to one tick array (more than 53 on LiquidityMining pools, where ticks are larger). One instruction can grow an account by at most 10,240 bytes.
+  - `open_position` or `expand_position` adds more than 64 new ticks to one tick array (more than 53 on LiquidityMining pools, where ticks are larger), or more than 63 when the instruction also creates the array on a pool without LiquidityMining. One instruction can grow an account by at most 10,240 bytes. `open_limit_order` stays below the limit because an order has at most 25 ticks.
   - The same check guards the growth of the position array and the oracle, but their size limits (45 slots, 500 observations) keep them below it.
-  - Fix: Open the position or order with fewer ticks, then add the rest in a later call.
+  - Fix: Open the position with fewer ranges, then add the rest with `expand_position`.
 
 - `UnmatchedTickIndex` (6008)
   - Defined in the IDL but not returned by any instruction in release 0.1.0.
@@ -388,12 +388,13 @@ Account constraints run before the instruction logic, so a wrong or missing acco
 | `ConstraintTokenMint` | 2014 | A token account has the wrong mint: `user_token_x` or `user_token_y` in the add liquidity instructions, `user_token` in `open_limit_order`, or the payer's token accounts in `initialize_launch_pool`. |
 | `ConstraintTokenOwner` | 2015 | The NFT token account is not owned by the signing `owner` in `close_position`, `close_limit_order` and the two delegate permission updates, or the payer's token accounts in `initialize_launch_pool` are owned by someone else. |
 | `ConstraintMintTokenProgram` | 2022 | In pool creation, a mint is not owned by the token program passed for it. |
-| `AccountDiscriminatorNotFound` | 3001 | An account passed as a tick array, pool or position has less than 8 bytes of data, such as an account that was never created. |
+| `AccountDiscriminatorNotFound` | 3001 | An account owned by the program is passed as a tick array, pool or position and holds fewer than 8 bytes. Rare in practice: an account that was never created fails with `AccountOwnedByWrongProgram` (3007), or with `AccountNotInitialized` (3012) when it is a token account or mint. |
 | `AccountDiscriminatorMismatch` | 3002 | An account passed as a tick array, pool or position holds a different account type. |
-| `AccountNotMutable` | 3006 | A tick array, pool or position that the program loads for writing is passed read-only. In `swap` every tick array must be writable. |
+| `AccountNotMutable` | 3006 | A tick array passed as a remaining account is read-only in an instruction that writes to it. In `swap` every tick array must be writable. A read-only pool or position fails with `ConstraintMut` instead. |
 | `AccountOwnedByWrongProgram` | 3007 | A tick array passed as a remaining account, or another account loaded by the program, is not owned by the expected program. |
 | `InvalidProgramId` | 3008 | A program account is not the expected program: a token program, the Token 2022 program, the system program, the memo program or the associated token program. |
-| `AccountNotSigner` | 3010 | An account the IDL marks as a signer did not sign: `user`, `signer`, `owner`, `payer`, `funder`, `authority`, or the new NFT mint keypair of `open_position` and `open_limit_order`. |
+| `AccountNotSigner` | 3010 | An account the IDL marks as a signer did not sign: `user`, `signer`, `owner`, `payer`, `funder`, `authority`, or `pool_creator_authority` in `initialize_pool_with_dynamic_config`. The new `nft_mint` of `open_position` and `open_limit_order` must also sign, but a missing signature there fails when the mint account is created and does not return this code. |
+| `AccountNotInitialized` | 3012 | A token account or mint the instruction reads does not exist, such as `user_token_in` or `user_token_out` in `swap`, `user_token_x` or `user_token_y` in the add liquidity instructions, `user_token` in `open_limit_order` or `user_token_account` in `claim_reward`. Create the token account first. |
 
 ## SDK Error Codes
 
@@ -410,17 +411,17 @@ See the [TypeScript SDK reference](/developer-guides/dlmm-pro/typescript-sdk/ref
 
 ### Errors the SDK Can Throw Before Sending
 
-The builders, the quote and the helpers throw `PoolError` for input they can check without reading program state. The codes below match the program's. They are raised from the arguments and from the accounts you pass in, not from live pool state, so an ordinary transaction can still fail with an error that is not on this list.
+The builders, the quote and the helpers throw `PoolError` for input they can check without reading program state. The codes below match the program's. Most are raised from the arguments and from the accounts you pass in, not from live pool state; `getClaimableFees` and `compoundFees` also read the position and its tick arrays. An ordinary transaction can still fail with an error that is not on this list.
 
 | Error | Thrown when |
 | --- | --- |
 | `InvalidParameters` | An argument is out of range or malformed, such as a tick spacing, basis point value, tick id, slot count, bitmap or padding. This is the most common one, and its message names the argument. |
-| `AmountIsZero` | `swap` or `quoteExactIn` gets an input of 0, or a deposit builder gets a maximum amount of 0. |
+| `AmountIsZero` | `swap` or `quoteExactIn` gets an input of 0, `addLiquidityImbalance` gets a maximum amount of 0, or `compoundFees` is called without maximum amounts on a position with no fees to claim. |
 | `LiquidityIsZero`, `LiquidityIsTooHigh` | A liquidity amount is 0 or above the largest signed 128-bit integer, in the liquidity helpers and the shape strategies. `quoteExactIn` also throws `LiquidityIsZero` when no tick array with liquidity exists in the swap direction. |
 | `InvalidActivationAccess` | `quoteExactIn` finds swaps disabled in the pool status or blocked by the activation rules for the swapper. |
-| `BitmapExtensionAccountIsNotProvided` | The quote traversal leaves the inline bitmap and no `bitmapExtension` was passed. |
+| `BitmapExtensionAccountIsNotProvided` | The quote traversal leaves the inline bitmap and no `bitmapExtension` was passed. `tickArraysForSwap` also throws it when the pool has a bitmap extension and `extensionState` is not passed. |
 | `InvalidTickArray` | The quote gets a tick array of another pool, or the traversal reaches an extension bitmap index outside the range the extension covers. |
-| `CannotFindTickFromId` | A position builder needs a tick that is not in the tick arrays supplied. |
+| `CannotFindTickFromId` | `getClaimableFees` or `compoundFees` cannot find a tick of the position in the tick arrays it fetched. |
 | `InvalidAccount` | The quote gets a bitmap extension of another pool, or a token account cannot be read. |
 | `InvalidPermission` | A permission value or flag is outside the defined bits (the delegate permission updates and the permission bitmask helpers), or `removePosition` is signed by a delegate with a `rentReceiver` other than the owner. |
 | `InvalidTokenBadge` | Pool creation with `CollectFeeMode.OnlyY` has no `tokenBadgeY` and token Y is not wrapped SOL or USDC. |
