@@ -1,0 +1,132 @@
+---
+title: "Token 2022 Support"
+sidebarTitle: "Token 2022 Support"
+description: "Which Token 2022 mints DLMM Pro accepts without review, when a token badge is needed, and how transfer fees, transfer hooks and memos are handled."
+llmsDescription: "Explains DLMM Pro Token 2022 support: SPL Token mints accepted, Token 2022 mints accepted without review when they only use TransferFeeConfig, MetadataPointer, TokenMetadata, or a TransferHook with no program and no authority, rejection of the Token 2022 native mint, token badges from the access registry program regUFehW9oycnaV2auYyfqyYjKG1W1uLNT7rtUeemQr with seeds token_badge and mint, UnsupportedMint and InvalidTokenBadge errors, the OnlyY quote token rule for SOL, USDC or badged mints, reward mint freeze authority rules, transfer-fee-included caps and transfer-fee-excluded minimums, transfer hook extra accounts in remaining accounts, memo transfers to accounts that require memos, and Token 2022 position and limit-order NFTs."
+---
+
+DLMM Pro pools accept SPL Token mints and Token 2022 mints. Most Token 2022 mints work without review; mints with extensions that change how transfers behave need a token badge first.
+
+## Mints That Work Without Review
+
+| Mint | Accepted |
+| --- | --- |
+| SPL Token | Yes |
+| Token 2022 with only `TransferFeeConfig`, `MetadataPointer` or `TokenMetadata` | Yes |
+| Token 2022 with a `TransferHook` extension whose program and authority are both unset | Yes |
+| Token 2022 with any other extension, or an active transfer hook | Needs a token badge |
+| The Token 2022 native mint | Never |
+
+Pool mints can keep a freeze authority. Reward mints set up by a pool creator cannot, unless they have a badge (see [Liquidity Mining](/core-products/dlmm-pro/liquidity-mining#reward-mints)).
+
+Creating a pool or a reward slot with a mint that needs a badge fails with `UnsupportedMint` if no badge is passed.
+
+### How Each Extension Is Treated
+
+| Extension | Without a badge | What the program does |
+| --- | --- | --- |
+| None, a legacy SPL Token mint | Accepted | Plain transfers, no fee, no hook, no memo |
+| `TransferFeeConfig` | Accepted | Reads the fee for the current epoch and accounts for it on every transfer. See [Transfer Fees](#transfer-fees). |
+| `MetadataPointer`, `TokenMetadata` | Accepted | Ignored |
+| `TransferHook` with no program and no authority | Accepted | No hook runs |
+| `TransferHook` with a program or an authority | Needs a badge | Runs the hook on every transfer when a hook program is set, with the accounts you pass. With only an authority set, no hook runs until the authority sets a program. See [Transfer Hooks](#transfer-hooks). |
+| Any other extension, for example `PermanentDelegate`, `ConfidentialTransferMint`, `DefaultAccountState`, `NonTransferable`, `MintCloseAuthority` or `InterestBearingConfig` | Needs a badge | The program does not inspect or handle it. The badge records that Meteora reviewed the token. |
+| The native mint of Token 2022 | Never | Always fails with `UnsupportNativeMintToken2022`, even with a badge or a permissive config |
+
+When you pass a badge, the program checks only that it is for that mint, and then accepts the mint without looking at its extensions or its freeze authority. Passing a badge for a mint that did not need one is fine. SOL (`So11111111111111111111111111111111111111112`) and USDC (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) skip the extension and freeze authority checks.
+
+### Badge Rules by Path
+
+| Path | Mint checks | Freeze authority |
+| --- | --- | --- |
+| Static config pool | Both mints checked as above. A badge is optional per mint. | Allowed |
+| Dynamic config pool | The same, unless the config has `CreatePoolWithoutMintValidation`, which skips everything except the native mint rule. | Allowed |
+| Launch pool | Both mints always checked. Nothing skips it. | Allowed |
+| Reward slot set up by a pool creator | The same checks | Rejected with `UnsupportedMint` unless the mint is SOL or USDC, or a badge is passed |
+| Reward slot set up by an operator | The same checks | Allowed |
+
+An `OnlyY` pool adds one rule to every path: token Y must be SOL, USDC or have a badge for that exact mint, or creation fails with `InvalidTokenBadge`.
+
+
+## Token Badges
+
+A token badge is an account in Meteora's access registry program (`regUFehW9oycnaV2auYyfqyYjKG1W1uLNT7rtUeemQr`), derived from the seeds `"token_badge"` and the mint. Meteora creates badges after reviewing a token. Pass the badge account when creating a pool or reward slot with that mint; a badge for a different mint fails with `InvalidTokenBadge`.
+
+To request a badge, complete the [Token 2022 Whitelist Request Form](https://forms.gle/59n3zDiGS2C6qMfd7) with the mint address, the extensions you need and that the pool is on DLMM Pro, then open a ticket in the [Meteora Discord](https://discord.gg/meteora).
+
+<Warning>
+  Do not include your launch date or time in the form or the ticket. Launch timing is not part of the review.
+</Warning>
+
+## Fee Token Rule
+
+A pool with the `OnlyY` collect fee mode earns every fee in token Y, so token Y must be SOL, USDC, or a mint with a token badge. This applies even to dynamic configs that skip the other mint checks.
+
+## Transfer Fees
+
+When a mint charges a transfer fee, the amount that leaves a wallet and the amount that arrives differ. DLMM Pro instructions are consistent about which side each amount is on:
+
+- **Caps** on what you pay (deposit maximums, the limit order `max_amount`, the reward funding `max_amount`) include the transfer fee. Per-tick order amounts are what the pool receives.
+- **Minimums** on what you receive (swap output, withdrawals, claims) are measured after the transfer fee.
+
+Swap quotes from the SDK and the Rust crate account for the transfer fee on both the input and the output.
+
+The program reads the mint's fee for the current epoch. Token 2022 mints record an older and a newer fee, and the newer one applies from the epoch it names. A fee is rounded up and capped at the mint's maximum fee. To work out what a sender must send for the pool to receive an amount, the program inverts the fee, and the SDK's `calculateTransferFeeIncludedAmount` and `calculateTransferFeeExcludedAmount` do the same.
+
+Examples with a mint that charges 1% (100 bps):
+
+| Action | Amounts |
+| --- | --- |
+| Deposit that must reach the pool as `1,000,000` | The sender pays `1,010,102`, of which `10,102` is the fee. `max_amount_x` must be at least `1,010,102`. With a maximum fee of 5,000 the sender pays `1,005,000`. |
+| Limit order with ticks of `1,000,000` and `2,000,000` | The pool must receive `3,000,000`, so the sender pays `3,030,304`. `max_amount` must cover it. |
+| Swap selling `1,000,000,000` of the fee token | The fee is `10,000,000`, the pool trades `990,000,000`, and the pool's own fee and price impact apply to that. The swapper receives `986,053,806` of token Y in a pool with `1,000,000,000,000` liquidity at price 1 and a 0.30% fee. |
+| Swap whose output token charges the fee, `996,003,996` before the transfer fee | The transfer fee is `9,960,040`, the swapper receives `986,043,956`, and `minimum_output_amount` is compared with that figure. |
+| Claim of `5,000,000` | The receiver gets `4,950,000`, and `min_amount_x` is compared with that. With a maximum fee of 5,000, a claim of `1,000,000` pays out `995,000`. |
+| Reward emission worth `1,000,000,000` | The funder sends `1,010,101,011`, and the vault receives `1,000,000,000`. |
+| One atom sent | The fee rounds up to 1, so the receiver gets 0. |
+
+The pool pays the full amount out of its reserve in every payout, so fees on swap output, host fees, partner fee claims, maker payouts and reward claims all come off the receiver's side. LP liquidity and fee accounting always use the amount the pool received, never the amount sent.
+
+
+## Transfer Hooks
+
+For a mint with a badged transfer hook, every transfer runs the hook program, which needs extra accounts. These go first in the instruction's remaining accounts, ahead of any tick arrays, as one slice per token role (token X, token Y, referral, reward). Pass a slice only for a mint that has a hook program. See [Remaining Accounts](/developer-guides/dlmm-pro/program/instructions#remaining-accounts). The TypeScript SDK resolves them for you when you leave them out. It resolves them as if the transfer amount were zero, so a hook whose accounts depend on the amount needs them passed explicitly.
+
+The remaining accounts start with the hook account slices, in the order given by `remaining_accounts_info`, followed by tick arrays. Each slice has an account type and a length of up to 255. The types are token X, token Y, referral and reward, and each can appear once. The type names the token, not the direction, so in a swap that sells X the input hook is the token X slice. The referral slice is for the token the host fee is paid in. Which types an instruction accepts:
+
+| Instruction | Slice types it accepts |
+| --- | --- |
+| `swap`, `cancel_limit_order` | X, Y and referral |
+| `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance`, `remove_liquidity`, `remove_liquidity_by_bps`, `claim_fee`, `claim_partner_fee` | X and Y |
+| `open_limit_order` | X for an ask, Y for a bid |
+| `claim_reward`, `set_reward_emission`, `withdraw_ineligible_rewards` | Reward |
+
+A slice type the instruction does not accept fails with `InvalidRemainingAccountSlice`. Fewer accounts than the slice lengths add up to fails with `InsufficientRemainingAccounts`. A repeated type fails with `DuplicatedRemainingAccountTypes`. A mint with a hook program and no slice fails with `MissingRemainingAccountForTransferHook`, and a slice for a mint without a hook program fails with `NoTransferHookProgram`.
+
+Each slice holds everything a Token 2022 transfer of that mint needs after its source, mint, destination and authority: the extra accounts listed in the hook's validation account, the hook program and the validation account. The SDK's `getExtraAccountMetasForTransferHook` returns that list. The program adds the source, mint, destination and authority of the transfer itself. A swap with a referral that has a hook on the fee token fails if the referral slice is wrong, and you can leave the referral out to avoid it.
+
+
+## Memos
+
+When the program sends tokens to an account that requires memos on incoming transfers, it adds the memo itself. Swaps, withdrawals, fee and reward claims, limit order cancels and partner fee claims all do this.
+
+The memo is added only when the destination token account is a Token 2022 account with required incoming memos switched on. It is added before the transfer and comes from the memo program, which payout instructions take as an account. Every payout to a user, referral or partner can carry one: the swap output, the host fee, withdrawals, fee claims, reward claims, ineligible reward withdrawals, cancels and partner fee claims. The protocol fee claim adds none. Deposits and funding come from you and carry none.
+
+
+## Position and Order NFTs
+
+Positions and limit orders are Token 2022 NFTs regardless of the pool's mints. The NFT lives in its owner's associated token account under the Token 2022 program.
+
+The NFT mint has 0 decimals and a supply of 1. It carries the `MetadataPointer`, `TokenMetadata` and `MintCloseAuthority` extensions. The token metadata name is `Meteora Pool: ` followed by the pool address, and the symbol is `MP` for positions and `ML` for limit orders. The pool authority holds the mint authority and the close authority, so the program can close the mint when the position or order closes. The pool account is the freeze authority, which makes every NFT of a pool easy to find. The NFT can be transferred or delegated like any token, and wallets need Token 2022 support to show it. The payer covers the mint and token account rent, and closing the position or order refunds it to the rent receiver.
+
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Pool Creation and Activation" href="/core-products/dlmm-pro/pool-creation-and-activation" icon="rocket">
+    Where badges are passed when creating a pool.
+  </Card>
+  <Card title="TypeScript SDK Reference" href="/developer-guides/dlmm-pro/typescript-sdk/reference" icon="code">
+    Transfer fee helpers and transfer hook resolution.
+  </Card>
+</CardGroup>

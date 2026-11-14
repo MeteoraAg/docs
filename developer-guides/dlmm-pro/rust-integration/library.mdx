@@ -1,0 +1,1197 @@
+---
+title: "DLMM Pro Rust Library"
+sidebarTitle: "Commons Library"
+description: "Use the dlmm-pro-commons Rust crate to parse DLMM Pro accounts, select tick arrays and quote exact-in swaps with the program's own math."
+llmsDescription: "Guide to dlmm-pro-commons, the Rust crate for DLMM Pro integrators and aggregators. Covers installing from git, declare_program!(dlmm_pro) types and the client accounts and args modules, why AccountDeserialize panics on accounts with a dynamic tail, DynamicPool, DynamicTickArray, DynamicPositionArray, DynamicLimitOrder and DynamicOracle parsers, deserialize_anchor_pod_account, tick_arrays_for_swap and quote_exact_in with QuoteExactInParams and QuoteExactInResult, snapshot semantics of the quote, swap remaining accounts order with transfer hook slices and tick arrays, remaining_accounts_from_hooks, Token 2022 transfer fee and transfer hook helpers, claimable_fees, claimable_rewards, get_amounts_from_liquidity, and PDA helpers. Also covers the Rust and Anchor requirements and how to pin the git revision, complete examples that fetch and parse every account type, build a swap instruction from a quote with and without transfer hooks, read a position's amounts, claimable fees and claimable rewards, list tick arrays for opening a position or a limit order, and read the oracle for a time-weighted average tick, and a function reference with signatures, parameters, return fields and errors for every item the crate exports, including the PDA seeds, constants, base fee and activation helpers, fee and curve math, and PoolError."
+---
+
+`dlmm-pro-commons` is a Rust crate for off-chain DLMM Pro integrations, aimed at aggregators and quoting services. It parses DLMM Pro accounts and quotes exact-in swaps with a port of the program's swap loop, including the dynamic fee, limit order fills and Token 2022 transfer fees.
+
+It has no RPC client and no instruction builders. You fetch accounts however you like and build instructions from the generated `dlmm_pro::client` types.
+
+## Installation
+
+The crate is not published to crates.io. Depend on it from git, pinned to a commit:
+
+```toml
+[dependencies]
+dlmm-pro-commons = { git = "https://github.com/MeteoraAg/dlmm-pro-sdk", rev = "6c8ab97c3451f6801bce623a887e9add80b78d4e" }
+```
+
+That commit is `dlmm-pro-commons` 0.1.1, built for DLMM Pro program 0.1.0. The repository has no release tags, so pin a commit. The [changelog](/developer-guides/dlmm-pro/changelog) gives the commit of each commons release. The crate uses Anchor 1.x and the repository pins Rust 1.94.0. It re-exports `anchor_lang`, so use `dlmm_pro_commons::anchor_lang` to keep your Anchor version in step with the crate's.
+
+## Requirements
+
+| Item | Requirement |
+| --- | --- |
+| Rust | 1.90 or newer. The repository pins 1.94.0 in `rust-toolchain.toml`, with `rustfmt` and `clippy`. With the repository's `Cargo.lock`, `ruint` 1.20.0 requires Rust 1.90 and `anchor-lang` 1.1.2 requires Rust 1.89. The crate compiles with 1.94.0 and 1.91.1. |
+| Edition | 2021 |
+| Anchor | `anchor-lang` and `anchor-spl` 1.x. The workspace manifest asks for `"1.0.2"`, which Cargo reads as any 1.x from 1.0.2. The repository's lock file holds 1.1.2, and a fresh resolve picks the newest 1.x (1.2.2 when this page was written), which also compiles. |
+| Features | None. The crate defines no Cargo features. |
+| Target | Off-chain code, such as aggregators, quoting services, indexers and tests. For an on-chain program, generate bindings with `declare_program!` in your own crate. See [Rust CPI](/developer-guides/dlmm-pro/rust-integration/cpi#generated-bindings). |
+
+Cargo does not use the repository's `Cargo.lock` for a git dependency, so your own `Cargo.lock` decides the Anchor, `ruint` and `bytemuck` versions. Commit it. To hold Anchor at the version in the repository's lock file, run `cargo update -p anchor-spl --precise 1.1.2`, which also moves `anchor-lang` and the Anchor macro crates. Cargo refuses to downgrade `anchor-lang` alone while `anchor-spl` still needs the newer one. `ruint` and `bytemuck` are not affected.
+
+`rev` pins the exact commit. Change it only when you move to a newer release of the crate, because the crate's types follow the IDL of the program release it targets.
+
+The crate depends on `anchor-lang`, `anchor-spl`, `bytemuck`, `ruint`, `num_enum`, `num-integer` and `spl-transfer-hook-interface`. It re-exports only `anchor_lang`, so a few types in the public signatures need a dependency of your own to name:
+
+| Type | Appears in | Where it comes from |
+| --- | --- | --- |
+| `TransferFee` | `get_epoch_transfer_fee` | `anchor_spl::token_2022::spl_token_2022::extension::transfer_fee::TransferFee`, so add `anchor-spl` |
+| `U320`, `U256` | `get_liquidity_from_amount_x`, `get_liquidity_from_amount_y` and `get_delta_amount_x_unchecked` return `U320`. `get_delta_amount_y_unchecked` returns `U256`. | `ruint::aliases`, so add `ruint`. Convert with `u128::try_from` when the value fits. |
+| `AccountMeta`, `Instruction` | hook account lists, instruction builders | `dlmm_pro_commons::anchor_lang::solana_program::instruction` |
+
+## What's in the Crate
+
+| Area | Items |
+| --- | --- |
+| Program types | `declare_program!(dlmm_pro)`: account and type structs, `dlmm_pro::ID`, and `dlmm_pro::client::{accounts, args}` for building instructions |
+| Account parsers | `DynamicPool`, `DynamicTickArray`, `DynamicPositionArray`, `DynamicLimitOrder`, `DynamicOracle`, `deserialize_anchor_pod_account` |
+| Swaps | `tick_arrays_for_swap`, `quote_exact_in`, `QuoteExactInParams`, `QuoteExactInResult` |
+| Positions and orders | `tick_arrays_for_tick_ids`, `get_amounts_from_liquidity`, `claimable_fees`, `claimable_rewards` |
+| Token 2022 | `calculate_transfer_fee_excluded_amount`, `calculate_transfer_fee_included_amount`, `get_extra_account_metas_for_transfer_hook`, `remaining_accounts_from_hooks` |
+| Addresses and constants | `derive_pool`, `derive_launch_pool`, `derive_tick_array`, `derive_tick_array_bitmap_extension`, `derive_position`, `derive_limit_order`, `derive_oracle`, `derive_reserve`, `derive_reward_vault` and the rest, program constants, `PoolError` |
+
+## Parsing Accounts
+
+Tick arrays, position arrays, limit orders, oracles and pools with extensions have a fixed header followed by a variable tail. The structs from `declare_program!` describe only the header, so their `AccountDeserialize` panics on these accounts. Use the `Dynamic*` parsers instead.
+
+Parse the pool first. Whether the pool has the `LiquidityMining` extension changes the layout of its ticks and positions, so the tick array and position array parsers take the parsed pool:
+
+```rust
+use dlmm_pro_commons::*;
+
+let pool = DynamicPool::deserialize(&pool_data)?;
+let tick_array = DynamicTickArray::deserialize(&tick_array_data, &pool.pool)?;
+let positions = DynamicPositionArray::deserialize(&position_array_data, &pool.pool)?;
+```
+
+`DynamicPool` also exposes the reward slots (`pool_reward`) and activation rules (`pool_activation`) when the pool has those extensions. Accounts without a tail, such as `TickArrayBitmapExtension` and the configs, parse with `deserialize_anchor_pod_account`.
+
+## Quoting a Swap
+
+`tick_arrays_for_swap` picks the tick arrays holding liquidity in the swap direction, in the order the swap instruction reads them. `quote_exact_in` then runs the swap over those parsed accounts.
+
+```rust
+use dlmm_pro_commons::anchor_lang::prelude::{Clock, Pubkey, Result};
+use dlmm_pro_commons::*;
+
+/// Quote selling `input_amount` of token X for token Y.
+/// `fetch` returns an account's data, from RPC or your own account cache.
+pub fn quote_sell_x(
+    pool_address: Pubkey,
+    input_amount: u64,
+    clock: &Clock,
+    fetch: impl Fn(&Pubkey) -> Vec<u8>,
+) -> Result<(QuoteExactInResult, Vec<Pubkey>)> {
+    let swap_for_y = true;
+    let pool = DynamicPool::deserialize(&fetch(&pool_address))?;
+
+    let extension = if pool.pool.is_bitmap_extension_initialized() {
+        let data = fetch(&derive_tick_array_bitmap_extension(pool_address));
+        Some(deserialize_anchor_pod_account::<TickArrayBitmapExtension>(&data)?)
+    } else {
+        None
+    };
+
+    // The swap's remaining accounts, in traversal order
+    let tick_array_addresses =
+        tick_arrays_for_swap(pool_address, &pool.pool, extension.as_ref(), swap_for_y, 3)?;
+    let tick_arrays = tick_array_addresses
+        .iter()
+        .map(|address| DynamicTickArray::deserialize(&fetch(address), &pool.pool))
+        .collect::<Result<Vec<_>>>()?;
+
+    let input_mint_data = fetch(&pool.pool.token_x_mint);
+    let output_mint_data = fetch(&pool.pool.token_y_mint);
+    let quote = quote_exact_in(QuoteExactInParams {
+        pool_address,
+        pool: &pool,
+        tick_arrays: &tick_arrays,
+        bitmap_extension: extension.as_ref(),
+        input_amount,
+        swap_for_y,
+        has_referral: false,
+        swapper: None,
+        clock,
+        input_mint_data: &input_mint_data,
+        output_mint_data: &output_mint_data,
+    })?;
+
+    Ok((quote, tick_array_addresses))
+}
+```
+
+Reading the result:
+
+| Field | Meaning |
+| --- | --- |
+| `amount_left` | Input the loaded tick arrays could not fill. The on-chain swap fails with `NotConsumingFullAmountIn` unless this is 0; load more arrays or quote less. |
+| `transfer_fee_excluded_out_amount` | What the swapper receives, after the output mint's transfer fee. The program compares this with `minimum_output_amount`. |
+| `consumed_in_amount`, `transfer_fee_in` | Input the pool takes, and the input mint's transfer fee. |
+| `mm_fee`, `limit_order_fee`, `protocol_fee`, `host_fee`, `partner_fee` | How the trading fee splits. |
+| `next_sqrt_price`, `next_tick_id`, `next_liquidity` | Pool state after the swap. |
+
+The quote is a snapshot. It does not write the oracle, fee growth, reward growth, activation state or the post-swap volatility, so reparse the accounts before quoting the next swap on the same pool. `swapper` only matters on pools with the `ActivationAccess` extension. `None` is conservative: before activation it fails rather than assume the swapper is whitelisted.
+
+## Building the Swap Instruction
+
+Use `dlmm_pro::client::accounts::Swap` and `dlmm_pro::client::args::Swap` to build the instruction. The fixed accounts include the pool authority (`pool_authority::ID`) and the event authority (`derive_event_authority()`). When `pool.is_bitmap_extension_initialized()`, pass the tick array bitmap extension too: a swap that searches past the inline bitmap without it fails with `BitmapExtensionAccountIsNotProvided`. The remaining accounts go in this order:
+
+1. Transfer hook accounts for each mint that has a hook, as slices described by the `remaining_accounts_info` argument. A swap accepts the `TransferHookX`, `TransferHookY` and `TransferHookReferral` slices. `remaining_accounts_from_hooks` builds both the slice list and the account list.
+2. The tick arrays from `tick_arrays_for_swap`, writable, in the same order you quoted with.
+
+`get_extra_account_metas_for_transfer_hook` is async. Give it the mint, the mint's data, a `TransferHookContext` with the transfer's source, destination, authority (`pool_authority::ID` for transfers out of the pool) and amount, and a callback that fetches account data. Mints without a transfer hook need no slice.
+
+## Positions and Limit Orders
+
+`tick_arrays_for_tick_ids` returns the tick arrays holding a set of ticks, sorted by index, which is the order the position and limit order instructions expect. `claimable_fees` and `claimable_rewards` preview what a claim would transfer once every slot holding liquidity has been refreshed with `refresh_fees_and_rewards`. The claim instructions themselves pay out only what is already credited.
+
+## Examples
+
+Each example is a complete function. They share one convention: `fetch` returns the data of an account address, from RPC or your own account cache, and the caller supplies the pool address. `Result` is `anchor_lang::Result`.
+
+### Fetching and Parsing Accounts
+
+Parse the pool first, because the pool decides how tick arrays and position arrays are laid out. A position array and a limit order live at addresses derived from their NFT mint (`derive_position`, `derive_limit_order`), a tick array at `derive_tick_array` of the pool and its index, and the oracle at `derive_oracle` of the pool. This example reads one of each account type the crate parses.
+
+```rust
+use dlmm_pro_commons::anchor_lang::prelude::{Pubkey, Result};
+use dlmm_pro_commons::*;
+
+/// `fetch` returns an account's data, from RPC or your own account cache.
+/// `static_config`, `dynamic_config` and `operator` are addresses you know,
+/// for example from `derive_static_config`, `derive_dynamic_config` and `derive_operator`.
+pub fn parse_everything(
+    pool_address: Pubkey,
+    position_address: Pubkey,
+    limit_order_address: Pubkey,
+    static_config: Pubkey,
+    dynamic_config: Pubkey,
+    operator: Pubkey,
+    fetch: impl Fn(&Pubkey) -> Vec<u8>,
+) -> Result<()> {
+    // Pool: header plus the extension tail. Parse it first.
+    let pool = DynamicPool::deserialize(&fetch(&pool_address))?;
+    println!(
+        "tick {} liquidity {}",
+        pool.pool.tick_current_id, pool.pool.liquidity
+    );
+    if let Some(reward) = &pool.pool_reward {
+        println!("reward 0 mint {}", reward.rewards[0].mint);
+    }
+    if let Some(activation) = &pool.pool_activation {
+        println!("whitelisted swapper {}", activation.whitelisted_swap);
+    }
+
+    // Tick array, position array: the pool selects the tail layout.
+    let tick_array_address = derive_tick_array(
+        pool_address,
+        TickArray::get_tick_index_from_tick_id(pool.pool.tick_current_id, pool.pool.tick_spacing)?,
+    );
+    let tick_array = DynamicTickArray::deserialize(&fetch(&tick_array_address), &pool.pool)?;
+    println!(
+        "{} ticks in array {}",
+        tick_array.ticks.base_ticks().len(),
+        tick_array.fixed.tick_index
+    );
+
+    let positions = DynamicPositionArray::deserialize(&fetch(&position_address), &pool.pool)?;
+    println!("{} range slots", positions.positions.base_positions().len());
+
+    // Limit order and oracle have no pool-dependent layout.
+    let limit_order = DynamicLimitOrder::deserialize(&fetch(&limit_order_address))?;
+    println!(
+        "{} limit order ticks, referral {}",
+        limit_order.orders.len(),
+        limit_order.fixed.referral
+    );
+    let oracle = DynamicOracle::deserialize(&fetch(&derive_oracle(pool_address)))?;
+    println!(
+        "{} observations, latest index {}",
+        oracle.observations.len(),
+        oracle.fixed.idx
+    );
+
+    // Accounts without a tail.
+    if pool.pool.is_bitmap_extension_initialized() {
+        let extension = deserialize_anchor_pod_account::<TickArrayBitmapExtension>(&fetch(
+            &derive_tick_array_bitmap_extension(pool_address),
+        ))?;
+        println!("bitmap extension of pool {}", extension.pool);
+    }
+    let static_config = deserialize_anchor_pod_account::<StaticConfig>(&fetch(&static_config))?;
+    let dynamic_config = deserialize_anchor_pod_account::<DynamicConfig>(&fetch(&dynamic_config))?;
+    let operator = deserialize_anchor_pod_account::<Operator>(&fetch(&operator))?;
+    println!(
+        "{:?} {:?} {:?}",
+        static_config.index, dynamic_config.pool_creator_authority, operator.whitelisted_address
+    );
+    Ok(())
+}
+```
+
+`DynamicPool::deserialize` fails with `InvalidAccount` when the data is shorter than the extension blocks the pool's `extensions` byte announces, and with Anchor's `AccountDiscriminatorMismatch` when the bytes belong to another account type. The same two errors apply to the other parsers.
+
+### Building a Swap Instruction From a Quote
+
+This function quotes an exact-in swap, resolves the transfer hook accounts of each token leg, and returns a `swap` instruction with its remaining accounts in the order the program reads them: hook accounts first, then the tick arrays of the quote. It works for mints with and without a transfer hook, because `get_extra_account_metas_for_transfer_hook` returns an empty list for a mint without one and `remaining_accounts_from_hooks` writes a slice only for each non-empty list.
+
+```rust
+use dlmm_pro_commons::anchor_lang::prelude::{Clock, Pubkey};
+use dlmm_pro_commons::anchor_lang::solana_program::instruction::Instruction;
+use dlmm_pro_commons::anchor_lang::{InstructionData, ToAccountMetas};
+use dlmm_pro_commons::dlmm_pro::client::{accounts, args};
+use dlmm_pro_commons::dlmm_pro::types::SwapParameters;
+use dlmm_pro_commons::*;
+
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+/// Build a `swap` instruction for selling `input_amount` of token X (`swap_for_y`)
+/// or token Y, with the tick arrays and hook accounts a quote needs.
+///
+/// `fetch` returns an account's data, or `None` when the account does not exist.
+/// `user_token_in` and `user_token_out` are the swapper's token accounts. Pass
+/// `referral` to share the host fee with a token account that holds the fee token.
+#[allow(clippy::too_many_arguments)]
+pub async fn build_swap_instruction(
+    pool_address: Pubkey,
+    user: Pubkey,
+    user_token_in: Pubkey,
+    user_token_out: Pubkey,
+    referral: Option<Pubkey>,
+    input_amount: u64,
+    slippage_bps: u64,
+    swap_for_y: bool,
+    clock: &Clock,
+    fetch: impl Fn(&Pubkey) -> Option<Vec<u8>>,
+) -> Result<Instruction, BoxError> {
+    let account = |address: &Pubkey| fetch(address).ok_or("account not found");
+
+    let pool = DynamicPool::deserialize(account(&pool_address)?.as_slice())?;
+    let extension = if pool.pool.is_bitmap_extension_initialized() {
+        let data = account(&derive_tick_array_bitmap_extension(pool_address))?;
+        Some(deserialize_anchor_pod_account::<TickArrayBitmapExtension>(
+            &data,
+        )?)
+    } else {
+        None
+    };
+
+    // Quote over the next three tick arrays with liquidity.
+    let tick_array_addresses =
+        tick_arrays_for_swap(pool_address, &pool.pool, extension.as_ref(), swap_for_y, 3)?;
+    let tick_arrays = tick_array_addresses
+        .iter()
+        .map(|address| {
+            Ok(DynamicTickArray::deserialize(
+                &account(address)?,
+                &pool.pool,
+            )?)
+        })
+        .collect::<Result<Vec<_>, BoxError>>()?;
+    let (mint_in, mint_out) = if swap_for_y {
+        (pool.pool.token_x_mint, pool.pool.token_y_mint)
+    } else {
+        (pool.pool.token_y_mint, pool.pool.token_x_mint)
+    };
+    let (mint_in_data, mint_out_data) = (account(&mint_in)?, account(&mint_out)?);
+    let quote = quote_exact_in(QuoteExactInParams {
+        pool_address,
+        pool: &pool,
+        tick_arrays: &tick_arrays,
+        bitmap_extension: extension.as_ref(),
+        input_amount,
+        swap_for_y,
+        has_referral: referral.is_some(),
+        swapper: Some(user),
+        clock,
+        input_mint_data: &mint_in_data,
+        output_mint_data: &mint_out_data,
+    })?;
+    if quote.amount_left != 0 {
+        return Err("not enough liquidity in the loaded tick arrays".into());
+    }
+
+    // Transfer hook accounts per leg. Each call returns an empty list for a mint
+    // without a hook. The authority of a transfer out of the pool is the pool authority.
+    let (reserve_x, reserve_y) = (pool.pool.reserve_x, pool.pool.reserve_y);
+    let (reserve_in, reserve_out) = if swap_for_y {
+        (reserve_x, reserve_y)
+    } else {
+        (reserve_y, reserve_x)
+    };
+    let fetch_for_hook = |address: Pubkey| {
+        let data = fetch(&address);
+        async move { Ok(data) }
+    };
+    let hook_in = get_extra_account_metas_for_transfer_hook(
+        mint_in,
+        &mint_in_data,
+        TransferHookContext {
+            source: user_token_in,
+            destination: reserve_in,
+            authority: user,
+            amount: input_amount,
+        },
+        fetch_for_hook,
+    )
+    .await?;
+    let hook_out = get_extra_account_metas_for_transfer_hook(
+        mint_out,
+        &mint_out_data,
+        TransferHookContext {
+            source: reserve_out,
+            destination: user_token_out,
+            authority: pool_authority::ID,
+            amount: quote.out_amount,
+        },
+        fetch_for_hook,
+    )
+    .await?;
+    let mut hooks = TransferHookAccounts::default();
+    if let Some(referral) = referral {
+        // The host fee leaves the reserve of the fee token for the referral account.
+        let fee_setting = pool.pool.get_fee_setting(swap_for_y, true)?;
+        let (fee_mint, fee_mint_data, fee_reserve) = if fee_setting.fees_on_input {
+            (mint_in, &mint_in_data, reserve_in)
+        } else {
+            (mint_out, &mint_out_data, reserve_out)
+        };
+        hooks.transfer_hook_referral = get_extra_account_metas_for_transfer_hook(
+            fee_mint,
+            fee_mint_data,
+            TransferHookContext {
+                source: fee_reserve,
+                destination: referral,
+                authority: pool_authority::ID,
+                amount: quote.host_fee,
+            },
+            fetch_for_hook,
+        )
+        .await?;
+    }
+    if swap_for_y {
+        hooks.transfer_hook_x = hook_in;
+        hooks.transfer_hook_y = hook_out;
+    } else {
+        hooks.transfer_hook_y = hook_in;
+        hooks.transfer_hook_x = hook_out;
+    }
+    let (remaining_accounts_info, mut remaining_accounts) = remaining_accounts_from_hooks(&hooks)?;
+    // Tick arrays follow the hook accounts, writable, in quote order.
+    remaining_accounts.extend(tick_array_addresses.iter().map(|address| {
+        dlmm_pro_commons::anchor_lang::solana_program::instruction::AccountMeta::new(
+            *address, false,
+        )
+    }));
+
+    let accounts = accounts::Swap {
+        pool: pool_address,
+        pool_authority: pool_authority::ID,
+        tick_array_bitmap_extension: extension
+            .is_some()
+            .then(|| derive_tick_array_bitmap_extension(pool_address)),
+        reserve_x,
+        reserve_y,
+        user_token_in,
+        user_token_out,
+        referral,
+        token_x_mint: pool.pool.token_x_mint,
+        token_y_mint: pool.pool.token_y_mint,
+        oracle: derive_oracle(pool_address),
+        user,
+        token_x_program: token_program_of(pool.pool.token_x_flag),
+        token_y_program: token_program_of(pool.pool.token_y_flag),
+        memo_program: anchor_memo_id(),
+        event_authority: derive_event_authority(),
+        program: dlmm_pro::ID,
+    };
+    let mut metas = accounts.to_account_metas(None);
+    metas.extend(remaining_accounts);
+
+    let minimum_output_amount = (u128::from(quote.transfer_fee_excluded_out_amount)
+        * u128::from(10_000 - slippage_bps)
+        / 10_000) as u64;
+    Ok(Instruction {
+        program_id: dlmm_pro::ID,
+        accounts: metas,
+        data: args::Swap {
+            parameters: SwapParameters {
+                input_amount,
+                minimum_output_amount,
+            },
+            remaining_accounts_info,
+        }
+        .data(),
+    })
+}
+
+fn token_program_of(flag: u8) -> Pubkey {
+    if flag == u8::from(TokenProgramFlags::TokenProgram2022) {
+        dlmm_pro_commons::anchor_lang::pubkey!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
+    } else {
+        dlmm_pro_commons::anchor_lang::pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+    }
+}
+
+fn anchor_memo_id() -> Pubkey {
+    dlmm_pro_commons::anchor_lang::pubkey!("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
+}
+```
+
+Points to check in this example:
+
+- The direction comes from the mint of `user_token_out`, as on-chain. The function derives `swap_for_y` from its argument and expects you to pass token accounts that match it.
+- The transfer out of the pool uses `pool_authority::ID` as the transfer authority. The transfer in uses the user.
+- The referral hook leg moves the host fee from the reserve of the fee token to the referral account. The fee token is the input mint when `fees_on_input` is true and the output mint otherwise. When the host fee is zero the program makes no transfer, and the slice is unused.
+- `slippage_bps` is applied to `transfer_fee_excluded_out_amount`, the amount the swapper receives after the output mint's transfer fee. That is the number the program compares with `minimum_output_amount`.
+- The instruction is not signed or sent. Add your compute budget instructions and the user's signature.
+
+### Reading a Position
+
+`get_amounts_from_liquidity` turns each range slot's liquidity into token amounts at the pool's current price. `claimable_fees` and `claimable_rewards` need the ticks at both ends of every slot, so the function fetches the tick arrays with `tick_arrays_for_tick_ids` and passes all their ticks.
+
+```rust
+use dlmm_pro_commons::anchor_lang::prelude::{Pubkey, Result};
+use dlmm_pro_commons::*;
+
+/// Token amounts, claimable fees and claimable rewards of one position array.
+///
+/// `fetch` returns an account's data. `now` is the cluster's Unix timestamp.
+pub fn read_position(
+    pool_address: Pubkey,
+    position_address: Pubkey,
+    now: u64,
+    fetch: impl Fn(&Pubkey) -> Vec<u8>,
+) -> Result<()> {
+    let pool = DynamicPool::deserialize(&fetch(&pool_address))?;
+    let position_array = DynamicPositionArray::deserialize(&fetch(&position_address), &pool.pool)?;
+
+    // Fetch the tick arrays that hold both endpoints of every range slot.
+    let tick_ids: Vec<i32> = position_array
+        .positions
+        .base_positions()
+        .iter()
+        .flat_map(|p| [p.tick_lower_id, p.tick_upper_id])
+        .collect();
+    let tick_arrays = tick_arrays_for_tick_ids(pool_address, &tick_ids, pool.pool.tick_spacing)?
+        .iter()
+        .map(|address| DynamicTickArray::deserialize(&fetch(address), &pool.pool))
+        .collect::<Result<Vec<_>>>()?;
+
+    // Amounts: what each slot's total liquidity is worth at the current price, rounded down.
+    let mut total = (0u64, 0u64);
+    for position in position_array.positions.base_positions() {
+        let (x, y) = get_amounts_from_liquidity(
+            position.total_liquidity()?,
+            position.tick_lower_id,
+            position.tick_upper_id,
+            pool.pool.tick_current_id,
+            pool.pool.sqrt_price,
+            false,
+        )?;
+        total = (total.0 + x, total.1 + y);
+    }
+    println!("position holds {} X and {} Y", total.0, total.1);
+
+    // Fees: what claim_fee transfers once every slot with liquidity is refreshed.
+    let ticks: Vec<Tick> = tick_arrays
+        .iter()
+        .flat_map(|t| t.ticks.base_ticks())
+        .collect();
+    let (fee_x, fee_y) = claimable_fees(
+        &pool.pool,
+        &position_array.positions.base_positions(),
+        &ticks,
+    )?;
+    println!("claimable fees: {} X and {} Y", fee_x, fee_y);
+
+    // Rewards exist only on pools with the LiquidityMining extension, whose
+    // position and tick layouts carry reward state.
+    if let (Some(pool_reward), Positions::WithReward(positions)) =
+        (&pool.pool_reward, &position_array.positions)
+    {
+        let ticks: Vec<TickWithReward> = tick_arrays
+            .iter()
+            .flat_map(|t| match &t.ticks {
+                Ticks::WithReward(ticks) => ticks.clone(),
+                Ticks::Base(_) => vec![],
+            })
+            .collect();
+        for reward_index in 0..NUM_REWARDS {
+            let amount = claimable_rewards(
+                &pool.pool,
+                pool_reward,
+                positions,
+                &ticks,
+                reward_index,
+                now,
+            )?;
+            println!("claimable reward {}: {}", reward_index, amount);
+        }
+    }
+    Ok(())
+}
+```
+
+The amounts are what each slot's total liquidity (unlocked, vesting and permanently locked) is worth at the pool's current price, rounded down, before any Token 2022 transfer fee. Only the unlocked part can be withdrawn. They do not include pending fees or rewards. The claimable numbers assume every slot holding liquidity is refreshed first. `claim_fee` and `claim_reward` themselves pay only what has already been credited to the position, so send `refresh_fees_and_rewards` before the claim, as the program does not do it for you.
+
+### Listing Tick Arrays for a Position or Limit Order
+
+`open_position` and `open_limit_order` create the tick arrays they need, so pass every address even when the account does not exist yet. For `open_position` and for an `open_limit_order` with absolute tick ids the instruction reads the accounts in ascending index order, which is the order `tick_arrays_for_tick_ids` returns. A limit order with `relative_tick` lands on the tick that is current when the transaction runs, so the list must cover every tick array that the accepted band can resolve to.
+
+```rust
+use std::collections::BTreeSet;
+
+use dlmm_pro_commons::anchor_lang::prelude::{Pubkey, Result};
+use dlmm_pro_commons::dlmm_pro::types::{RelativeTick, TickRange};
+use dlmm_pro_commons::*;
+
+/// Tick arrays for `open_position`: both endpoints of every range, ascending by index.
+/// The instruction creates the arrays that do not exist yet, so the accounts
+/// are passed writable whether or not they exist.
+pub fn tick_arrays_to_open_position(
+    pool_address: Pubkey,
+    tick_spacing: u16,
+    ranges: &[TickRange],
+) -> Result<Vec<Pubkey>> {
+    let tick_ids: Vec<i32> = ranges
+        .iter()
+        .flat_map(|range| [range.tick_lower_id, range.tick_upper_id])
+        .collect();
+    tick_arrays_for_tick_ids(pool_address, &tick_ids, tick_spacing)
+}
+
+/// Tick arrays for `open_limit_order` with absolute tick ids (`relative_tick` is `None`).
+pub fn tick_arrays_to_open_limit_order(
+    pool_address: Pubkey,
+    tick_spacing: u16,
+    tick_ids: &[i32],
+) -> Result<Vec<Pubkey>> {
+    tick_arrays_for_tick_ids(pool_address, tick_ids, tick_spacing)
+}
+
+/// Tick arrays for `open_limit_order` with `relative_tick` set. Each entry in
+/// `offsets` is a `TickLimitOrderAmount.id`, a number of tick spacings from the
+/// aligned current tick. The order lands wherever the pool's current tick is when
+/// the transaction runs, so list every array the accepted band can resolve to.
+pub fn tick_arrays_to_open_relative_limit_order(
+    pool_address: Pubkey,
+    tick_spacing: u16,
+    relative_tick: &RelativeTick,
+    offsets: &[i32],
+) -> Result<Vec<Pubkey>> {
+    let spacing = i32::from(tick_spacing);
+    let mut indexes = BTreeSet::new();
+    for offset in offsets {
+        let lowest = relative_tick.spacing_aligned_min_tick_id + offset * spacing;
+        let highest = relative_tick.spacing_aligned_max_tick_id + offset * spacing;
+        let first = TickArray::get_tick_index_from_tick_id(lowest.max(MIN_TICK_ID), tick_spacing)?;
+        let last = TickArray::get_tick_index_from_tick_id(highest.min(MAX_TICK_ID), tick_spacing)?;
+        indexes.extend(first..=last);
+    }
+    Ok(indexes
+        .into_iter()
+        .map(|index| derive_tick_array(pool_address, index))
+        .collect())
+}
+```
+
+`tick_arrays_to_open_relative_limit_order` mirrors the band the TypeScript SDK covers by default. Each entry in `offsets` is the `id` of a `TickLimitOrderAmount`, the number of tick spacings from the spacing-aligned current tick. For a relative order the accounts may be passed in any order, and they may include arrays beyond the ones the final ticks use.
+
+### Reading the Oracle for a Time-Weighted Average Tick
+
+The oracle stores a cumulative tick: on each swap the program extends it by the pool's tick id before the swap, multiplied by the seconds since the last update. The difference between two observations divided by the seconds between them is the average tick over that interval, and `get_sqrt_price_from_tick_id` turns a tick id into a square root price. The account is a ring buffer, and `fixed.idx` points at the newest slot.
+
+```rust
+use dlmm_pro_commons::anchor_lang::prelude::{Pubkey, Result};
+use dlmm_pro_commons::*;
+
+/// Time-weighted average tick over the observations the oracle still holds.
+/// Returns `None` until the oracle holds two observations at different times.
+pub fn twap_tick(pool_address: Pubkey, fetch: impl Fn(&Pubkey) -> Vec<u8>) -> Result<Option<f64>> {
+    let oracle = DynamicOracle::deserialize(&fetch(&derive_oracle(pool_address)))?;
+    let length = oracle.observations.len();
+    let latest = oracle.observations[usize::from(oracle.fixed.idx)];
+    // The ring buffer overwrites the oldest entry next, which is the one after `idx`.
+    let oldest = oracle.observations[(usize::from(oracle.fixed.idx) + 1) % length];
+    // Slots a swap has not reached yet have a zero timestamp.
+    let oldest = if oldest.is_empty() {
+        oracle.observations[0]
+    } else {
+        oldest
+    };
+    if oldest.is_empty() || latest.last_updated_timestamp <= oldest.last_updated_timestamp {
+        return Ok(None);
+    }
+    let ticks = latest.tick_cumulative.wrapping_sub(oldest.tick_cumulative);
+    let seconds = latest.last_updated_timestamp - oldest.last_updated_timestamp;
+    Ok(Some(ticks as f64 / seconds as f64))
+}
+
+/// The price a tick id stands for, as a Q64.64 square root price.
+pub fn sqrt_price_of_average_tick(average_tick: f64) -> u128 {
+    get_sqrt_price_from_tick_id(average_tick.round() as i32)
+}
+```
+
+The stored cumulative tick is as of the observation's last update, not as of now, and a swap rewrites the newest slot in place until 15 seconds have passed since the slot was created. After that the next swap starts a slot. Slots that no swap has written yet have a zero timestamp, and a brand new oracle holds one empty observation until the first swap. A pool's oracle starts with one slot, so a time-weighted average needs `increase_oracle_length` first: until then the function above returns `None`. `increase_oracle_length` grows the buffer, up to 500 observations. See [Oracle](/developer-guides/dlmm-pro/program/accounts#oracle).
+
+## Function Reference
+
+Every public item of the crate root is covered here. The step methods on `Pool`, `Tick`, `DynamicFeeConfig`, `VariableFee` and `TickArrayBitmapExtension` that `quote_exact_in` and `tick_arrays_for_swap` call are public but not listed. `Result<T>` in a signature is `anchor_lang::Result<T>`, so errors are `anchor_lang::error::Error`. A `PoolError` converts into it, carrying the same code and message the program returns. Amounts are token base units unless a row says otherwise. Prices are Q64.64 square roots: the price of a tick id is `1.0001^tick_id`, and a square root price is stored as `sqrt(price) * 2^64` in a `u128`. Fee numerators use `FEE_DENOMINATOR` (1,000,000,000) as the denominator.
+
+Signatures are shown as plain text because they omit bodies. Each one is the crate's exact signature at the pinned revision.
+
+| Area | Items |
+| --- | --- |
+| Account parsers | `DynamicPool`, `DynamicTickArray`, `Ticks`, `DynamicPositionArray`, `Positions`, `DynamicLimitOrder`, `DynamicOracle`, `deserialize_anchor_pod_account` |
+| Swaps | `tick_arrays_for_swap`, `quote_exact_in`, `QuoteExactInParams`, `QuoteExactInResult`, `validate_pool_can_swap` |
+| Positions and limit orders | `tick_arrays_for_tick_ids`, `get_amounts_from_liquidity`, `claimable_fees`, `pending_fees`, `next_fee_growths_inside`, `claimable_rewards`, `next_rewards_info`, `next_reward_growths_inside`, `pending_rewards`, `NextRewardInfo` |
+| Token 2022 | `get_epoch_transfer_fee`, `calculate_transfer_fee_excluded_amount`, `calculate_transfer_fee_included_amount`, `get_extra_account_metas_for_transfer_hook`, `TransferHookContext`, `TransferHookAccounts`, `remaining_accounts_from_hooks` |
+| Addresses and constants | every `derive_*` helper, `pool_authority`, `seeds`, `ACCESS_REGISTRY_ID`, constants |
+| State | pool, tick, position and oracle types, enums and methods |
+| Fees and activation | `get_base_fee_numerator`, `BaseFeeMode`, `get_current_point`, `ActivationType`, `ActivationMode`, `get_activation_access`, fee split and curve math |
+| Errors | `PoolError` |
+
+### Account Parsers
+
+All parsers take the raw account data, including the 8-byte discriminator, and return owned values. Header sizes are `POOL_INIT_SPACE` 640, `TICK_ARRAY_INIT_SPACE` 56, `POSITION_ARRAY_INIT_SPACE` 136, `LIMIT_ORDER_INIT_SPACE` 136 and `ORACLE_INIT_SPACE` 48. They do not check the account owner, which is your job when you read from RPC, and they do not check that the account belongs to a particular pool.
+
+Shared errors: the discriminator of another account type, or data that does not start with the expected one, returns Anchor's `AccountDiscriminatorMismatch` (3002). Data shorter than the header, a pool shorter than its extension blocks, or a tail whose length is not a whole number of elements returns `InvalidAccount` (6038). Bytes after the last expected segment of a pool, or after the header of a fixed account, are ignored.
+
+```text
+impl DynamicPool {
+    pub fn deserialize(account_data: &[u8]) -> Result<Self>
+}
+pub struct DynamicPool {
+    pub pool: Pool,
+    pub pool_reward: Option<PoolReward>,
+    pub pool_activation: Option<PoolActivation>,
+}
+```
+
+`DynamicPool` is `Copy`. `pool` is the 640-byte header (IDL `Pool`). `pool_reward` is the 352-byte reward block, present when the `extensions` byte has `LiquidityMining` (bit 0) set. `pool_activation` is the 128-byte activation block, present when `ActivationAccess` (bit 1) is set. The reward block comes first in the account when both are set.
+
+```text
+impl DynamicTickArray {
+    pub fn deserialize(account_data: &[u8], pool: &Pool) -> Result<Self>
+}
+pub struct DynamicTickArray {
+    pub fixed: TickArray,
+    pub ticks: Ticks,
+}
+pub enum Ticks {
+    Base(Vec<Tick>),
+    WithReward(Vec<TickWithReward>),
+}
+impl Ticks {
+    pub fn base_ticks(&self) -> Vec<Tick>
+}
+```
+
+`fixed` holds `pool` (the owning pool), `tick_index` (the array index) and padding. `ticks` is `WithReward` (192 bytes per tick) when `pool.is_support_liquidity_mining()` and `Base` (160 bytes per tick) otherwise, so pass the owning pool's header. The tail holds the ticks that have been initialized, at most 128, ordered by `tick_id` ascending. `base_ticks` returns a copy of the base `Tick` of every element, dropping reward growths.
+
+```text
+impl DynamicPositionArray {
+    pub fn deserialize(account_data: &[u8], pool: &Pool) -> Result<Self>
+}
+pub struct DynamicPositionArray {
+    pub fixed: PositionArray,
+    pub positions: Positions,
+}
+pub enum Positions {
+    Base(Vec<Position>),
+    WithReward(Vec<PositionWithReward>),
+}
+impl Positions {
+    pub fn base_positions(&self) -> Vec<Position>
+}
+```
+
+`fixed` holds `pool`, `nft_mint`, `delegate_permission`, `layout_version` and `vesting`. The tail has one element per range slot, 128 bytes (`Base`) or 192 bytes (`WithReward`), and the element index is the slot number that bit `i` of a bitmap selects.
+
+```text
+impl DynamicLimitOrder {
+    pub fn deserialize(account_data: &[u8]) -> Result<Self>
+}
+pub struct DynamicLimitOrder {
+    pub fixed: LimitOrder,
+    pub orders: Vec<LimitOrderData>,
+}
+```
+
+`fixed` holds `pool`, `nft_mint`, `referral` and `delegate_permission`. `orders` has one 24-byte `LimitOrderData` per tick of the order, with its `amount`, `age`, `tick_id` and side.
+
+```text
+impl DynamicOracle {
+    pub fn deserialize(account_data: &[u8]) -> Result<Self>
+}
+pub struct DynamicOracle {
+    pub fixed: Oracle,
+    pub observations: Vec<Observation>,
+}
+```
+
+`fixed.idx` is the index of the newest observation and `fixed.last_observation_created_timestamp` is when that slot was started. `observations` is the whole ring buffer, 16 bytes per slot. A slot with a zero `last_updated_timestamp` has never been written (`Observation::is_empty`).
+
+```text
+pub fn deserialize_anchor_pod_account<T: AnyBitPattern + Discriminator>(
+    account_data: &[u8],
+) -> Result<T>
+```
+
+Parses an account that has no tail: `TickArrayBitmapExtension` (800 bytes), `StaticConfig` (120), `DynamicConfig` (80) and `Operator` (48). It checks the discriminator of `T` and reads exactly the size of `T` after it. Do not use it for pools with extensions, tick arrays, position arrays, limit orders or oracles, because it would read only the header and ignore the tail. `AnyBitPattern` is `bytemuck`'s trait and every IDL account type implements it.
+
+### Swap Planning and Quotes
+
+```text
+pub fn tick_arrays_for_swap(
+    pool_address: Pubkey,
+    pool: &Pool,
+    extension: Option<&TickArrayBitmapExtension>,
+    swap_for_y: bool,
+    max_tick_arrays: usize,
+) -> Result<Vec<Pubkey>>
+```
+
+| Parameter | Meaning |
+| --- | --- |
+| `pool_address` | The pool account address. Used only to derive the tick array addresses. |
+| `pool` | The pool header. The search starts at the tick array holding `pool.tick_current_id` and uses `pool.tick_array_bitmap`. |
+| `extension` | The parsed bitmap extension. Pass it when `pool.is_bitmap_extension_initialized()`. |
+| `swap_for_y` | `true` sells X for Y and walks to lower indexes. `false` walks to higher indexes. |
+| `max_tick_arrays` | Most arrays to return. 0 returns an empty list. |
+
+Returns the addresses of up to `max_tick_arrays` tick arrays that hold liquidity, in the order `swap` traverses them: descending index for `swap_for_y`, ascending otherwise. The first one is the current tick's array when it holds liquidity. It returns fewer, down to none, when the bitmap has no more liquidity in that direction. It reads no account data besides the pool header and the extension, so an array that holds only limit orders counts as liquidity. Errors: `BitmapExtensionAccountIsNotProvided` (6044) when the search leaves the inline bitmap (array indexes -512 to 511) and the pool has an extension but you passed `None`, plus arithmetic errors.
+
+Pass the same arrays, in the same order, as the remaining accounts of `swap`, after any hook accounts.
+
+```text
+pub fn quote_exact_in(params: QuoteExactInParams<'_>) -> Result<QuoteExactInResult>
+```
+
+Quotes an exact-in swap with the program's swap loop: the same traversal, the base fee and the dynamic fee, market making liquidity and in-tick limit orders, the fee split and Token 2022 transfer fees. It does not mutate its inputs and does not return the program's account writes, so parse fresh account data before quoting the next swap on the same pool.
+
+```text
+pub struct QuoteExactInParams<'a> {
+    pub pool_address: Pubkey,
+    pub pool: &'a DynamicPool,
+    pub tick_arrays: &'a [DynamicTickArray],
+    pub bitmap_extension: Option<&'a TickArrayBitmapExtension>,
+    pub input_amount: u64,
+    pub swap_for_y: bool,
+    pub has_referral: bool,
+    pub swapper: Option<Pubkey>,
+    pub clock: &'a Clock,
+    pub input_mint_data: &'a [u8],
+    pub output_mint_data: &'a [u8],
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `pool_address` | The pool account address. Tick arrays and the bitmap extension must belong to it. |
+| `pool` | The parsed pool, with the activation block when it has one. |
+| `tick_arrays` | Parsed tick arrays in traversal order, as `tick_arrays_for_swap` returns them. An array whose index is not the next one the traversal expects is skipped. An array of another pool at the expected index fails with `InvalidTickArray`. |
+| `bitmap_extension` | The parsed extension, or `None`. |
+| `input_amount` | Amount the swapper sends, before the input mint's transfer fee. Must be above zero. |
+| `swap_for_y` | `true` sells X for Y. |
+| `has_referral` | The swap will pass a referral account. It changes only how the protocol fee splits, not what the swapper receives. |
+| `swapper` | The wallet that signs the swap. Used only for the whitelist of the `ActivationAccess` extension. `None` is conservative: before activation the quote fails instead of assuming the swapper is whitelisted. |
+| `clock` | Supplies the epoch for transfer fees, the timestamp for the dynamic fee, and the slot or timestamp for activation and scheduled base fees. Fetch it from the `Clock` sysvar or build it. |
+| `input_mint_data` | Raw data of the input mint account, legacy SPL or Token 2022. |
+| `output_mint_data` | Raw data of the output mint account. |
+
+```text
+pub struct QuoteExactInResult {
+    pub consumed_in_amount: u64,
+    pub amount_left: u64,
+    pub out_amount: u64,
+    pub transfer_fee_excluded_out_amount: u64,
+    pub transfer_fee_in: u64,
+    pub transfer_fee_out: u64,
+    pub mm_fee: u64,
+    pub limit_order_fee: u64,
+    pub protocol_fee: u64,
+    pub host_fee: u64,
+    pub partner_fee: u64,
+    pub next_sqrt_price: u128,
+    pub next_tick_id: i32,
+    pub next_liquidity: u128,
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `consumed_in_amount` | Input the pool takes, after `transfer_fee_in`. |
+| `amount_left` | Input the supplied tick arrays could not fill, also after `transfer_fee_in`. The on-chain swap fails with `NotConsumingFullAmountIn` unless this is 0. The quote still returns `Ok` when it is not 0. |
+| `out_amount` | Output the pool sends, before `transfer_fee_out`. |
+| `transfer_fee_excluded_out_amount` | What the swapper receives, equal to `EvtSwap.amount_out`. The program compares it with `minimum_output_amount`. |
+| `transfer_fee_in` | Input mint transfer fee on `input_amount`, as `EvtSwap.transfer_fee_in`. |
+| `transfer_fee_out` | Output mint transfer fee on `out_amount`, as `EvtSwap.transfer_fee_out`. |
+| `mm_fee` | Trading fee that goes to market maker liquidity, after the protocol's share of it. |
+| `limit_order_fee` | Trading fee that goes to limit orders that filled, after the protocol's share of it. |
+| `protocol_fee` | Protocol fee, after the host share and the partner share. |
+| `host_fee` | Host share of the protocol fee, paid to the referral account. Zero without a referral. |
+| `partner_fee` | Partner share of the protocol fee. Zero on a pool without a partner. |
+| `next_sqrt_price`, `next_tick_id`, `next_liquidity` | The pool's price, current tick and active liquidity after the swap. |
+
+Errors: `AmountIsZero` for a zero input, `InvalidAccount` when the extension belongs to another pool or a mint cannot be parsed, `InvalidActivationType`, `InvalidActivationAccess` when swaps are disabled or the activation rules block the swapper, `LiquidityIsZero` when no tick array in the swap direction holds liquidity, `InvalidTickArray`, `BitmapExtensionAccountIsNotProvided`, `TypeCastFailed` for a negative clock timestamp, and `MathOverflow`. The quote does not write the oracle, fee growth, reward growth, activation state or the post-swap volatility. Scheduled base fees and the dynamic fee move with the clock, so the on-chain result can differ slightly from a quote taken earlier. Set `minimum_output_amount` below `transfer_fee_excluded_out_amount`.
+
+```text
+pub fn validate_pool_can_swap(
+    pool: &DynamicPool,
+    swapper: Option<&Pubkey>,
+    current_point: u64,
+) -> Result<()>
+```
+
+The activation check `quote_exact_in` runs, on its own. It returns `InvalidActivationAccess` when swaps are disabled in `pool_status`, or when an activation slot of the `ActivationAccess` extension still blocks the swap and `swapper` is not the `whitelisted_swap` address. `current_point` is the slot or Unix timestamp that `get_current_point` returns for the pool's `activation_type`.
+
+### Positions and Limit Orders
+
+```text
+pub fn tick_arrays_for_tick_ids(
+    pool: Pubkey,
+    tick_ids: &[i32],
+    tick_spacing: u16,
+) -> Result<Vec<Pubkey>>
+```
+
+Returns the tick array addresses that hold `tick_ids`, deduplicated and sorted ascending by array index. `pool` is the pool address, and `tick_spacing` is `pool.tick_spacing`. For a position pass both endpoints of every range, and for a limit order pass the tick id of every tick. It returns an empty list for no ticks and `InvalidParameters` (6037) for a tick spacing of 0. It does not check that a tick id is usable (inside the tick bounds and a multiple of the spacing), and the program rejects ids that are not.
+
+```text
+pub fn get_amounts_from_liquidity(
+    liquidity: u128,
+    tick_lower_id: i32,
+    tick_upper_id: i32,
+    tick_current_id: i32,
+    current_sqrt_price: u128,
+    round_up: bool,
+) -> Result<(u64, u64)>
+```
+
+Returns `(amount_x, amount_y)` that `liquidity` represents in the range `[tick_lower_id, tick_upper_id)` at the current price. Below the range (`tick_current_id < tick_lower_id`) the amount is all X. At or above the upper tick it is all Y. Inside it, X is priced from the current price to the upper tick and Y from the lower tick to the current price. `liquidity` is an unscaled integer, such as `Position::total_liquidity()` for the value a slot holds. `tick_current_id` and `current_sqrt_price` come from the pool. `round_up` is `true` for what a deposit costs and `false` for what a withdrawal returns. For example, liquidity 1,000,000,000 over ticks -100 to 100 at tick 0 is 4,987,272 of each token rounded down and 4,987,273 rounded up. Errors: `TypeCastFailed` when an amount exceeds `u64::MAX`, and `MathOverflow`. It ignores fees, rewards, transfer fees and vesting.
+
+```text
+pub fn claimable_fees(
+    pool: &Pool,
+    positions: &[Position],
+    ticks: &[Tick],
+) -> Result<(u64, u64)>
+```
+
+Returns `(fee_x, fee_y)` that `claim_fee` would transfer once every slot in `positions` that holds liquidity has been refreshed, summed over the slots. For a slot with liquidity it is `fee_pending + liquidity * (fee_growth_inside - checkpoint) >> 64`, with the fee growth inside the range taken from `pool.fee_growth_global_*` and the two end ticks. A slot without liquidity contributes only its stored pending fees. `ticks` must contain the two end ticks of every slot with liquidity, found by `tick_id`, otherwise it returns `CannotFindTickFromId` (6016). Growth counters wrap at 2^128 as on-chain, and sums use checked arithmetic (`MathOverflow`).
+
+```text
+pub fn pending_fees(
+    position: &Position,
+    fee_growth_inside_x: u128,
+    fee_growth_inside_y: u128,
+) -> Result<(u64, u64)>
+
+pub fn next_fee_growths_inside(
+    tick_current_id: i32,
+    tick_lower: &Tick,
+    tick_lower_id: i32,
+    tick_upper: &Tick,
+    tick_upper_id: i32,
+    fee_growth_global_x: u128,
+    fee_growth_global_y: u128,
+) -> (u128, u128)
+```
+
+The two steps inside `claimable_fees`. `next_fee_growths_inside` returns the Q64.64 fee growth per unit of liquidity accrued inside a tick range: global growth minus the growth below the lower tick minus the growth above the upper tick. An uninitialized tick (`liquidity_gross` of 0) counts all growth as below it for the lower tick and none as above it for the upper tick. `pending_fees` returns what a refresh would leave pending on one slot: the stored pending amount plus `total_liquidity * (growth_inside - checkpoint) >> 64`.
+
+```text
+pub fn claimable_rewards(
+    pool: &Pool,
+    pool_reward: &PoolReward,
+    positions: &[PositionWithReward],
+    ticks: &[TickWithReward],
+    reward_index: usize,
+    current_timestamp: u64,
+) -> Result<u64>
+```
+
+Returns what `claim_reward(reward_index)` would transfer once every slot holding liquidity is refreshed at `current_timestamp`, summed over the slots. `pool_reward` is the reward block of the parsed pool, `reward_index` is 0 or 1, and `current_timestamp` is the Unix time in seconds. Rewards accrue to the pool from the slot's `last_update_time` to `current_timestamp`, capped at its `end_time`, using the pool's current liquidity. `ticks` must contain both end ticks of every slot with liquidity. Errors: `InvalidRewardIndex` (6014) for an index of 2 or more, `CannotFindTickFromId`, and `MathOverflow`. Pending amounts per slot saturate at `u64::MAX`.
+
+```text
+pub fn next_rewards_info(
+    pool_reward: &PoolReward,
+    liquidity: u128,
+    current_timestamp: u64,
+) -> Result<[NextRewardInfo; NUM_REWARDS]>
+
+pub fn next_reward_growths_inside(
+    tick_current_id: i32,
+    tick_lower: &TickWithReward,
+    tick_lower_id: i32,
+    tick_upper: &TickWithReward,
+    tick_upper_id: i32,
+    reward_infos: &[NextRewardInfo; NUM_REWARDS],
+) -> [u128; NUM_REWARDS]
+
+pub fn pending_rewards(
+    position: &PositionWithReward,
+    reward_growths_inside: &[u128; NUM_REWARDS],
+) -> Result<[u64; NUM_REWARDS]>
+
+pub struct NextRewardInfo {
+    pub reward_growth_global: u128,
+    pub cumulative_seconds_with_empty_liquidity_reward: u64,
+}
+```
+
+The steps inside `claimable_rewards`. `next_rewards_info` returns, for each reward slot, the global reward growth after a refresh at `current_timestamp` and the empty-liquidity seconds that refresh adds to the slot's counter. A slot that is uninitialized, not yet open, or already finished at its `end_time` returns its stored growth and 0 seconds. When `liquidity` is 0 the elapsed seconds are counted as empty-liquidity seconds and growth does not move. `next_reward_growths_inside` is the reward counterpart of `next_fee_growths_inside`. `pending_rewards` returns the pending amount of each slot reward after adding what the growth since the checkpoint earns.
+
+### Token 2022
+
+```text
+pub fn get_epoch_transfer_fee(mint_data: &[u8], epoch: u64) -> Result<Option<TransferFee>>
+
+pub fn calculate_transfer_fee_excluded_amount(
+    mint_data: &[u8],
+    epoch: u64,
+    transfer_fee_included_amount: u64,
+) -> Result<TransferFeeExcludedAmount>
+
+pub fn calculate_transfer_fee_included_amount(
+    mint_data: &[u8],
+    epoch: u64,
+    transfer_fee_excluded_amount: u64,
+) -> Result<TransferFeeIncludedAmount>
+
+pub struct TransferFeeExcludedAmount { pub amount: u64, pub transfer_fee: u64 }
+pub struct TransferFeeIncludedAmount { pub amount: u64, pub transfer_fee: u64 }
+```
+
+`mint_data` is the raw mint account, and `epoch` is the current epoch (`Clock::epoch`), which selects the older or newer fee schedule of the mint's `TransferFeeConfig`. A legacy SPL mint, or a Token 2022 mint without a transfer fee extension, has no fee: `get_epoch_transfer_fee` returns `None` and the other two return the amount unchanged with a fee of 0. Mint data that cannot be parsed returns `InvalidAccount`.
+
+| Function | Behavior |
+| --- | --- |
+| `calculate_transfer_fee_excluded_amount` | `amount` is what the recipient receives after the fee, `transfer_fee` the fee withheld from `transfer_fee_included_amount`. The fee is Token 2022's, rounded up and capped at the schedule's maximum fee. |
+| `calculate_transfer_fee_included_amount` | `amount` is what the sender must send so that the recipient gets `transfer_fee_excluded_amount`. A zero input returns zero. At a 100% fee rate it uses the maximum fee. It recomputes the fee on the result and returns `MathOverflow` if the two disagree. |
+
+```text
+pub struct TransferHookContext {
+    pub source: Pubkey,
+    pub destination: Pubkey,
+    pub authority: Pubkey,
+    pub amount: u64,
+}
+
+pub async fn get_extra_account_metas_for_transfer_hook<F, Fut>(
+    mint: Pubkey,
+    mint_data: &[u8],
+    context: TransferHookContext,
+    fetch_account_data: F,
+) -> std::result::Result<Vec<AccountMeta>, AccountFetchError>
+where
+    F: Fn(Pubkey) -> Fut,
+    Fut: Future<Output = AccountDataResult>,
+```
+
+Resolves the accounts that one transfer of `mint` needs when the mint has a transfer hook. It returns an empty list for a legacy SPL mint and for a Token 2022 mint without a hook, so you can call it for every leg.
+
+| Argument | Meaning |
+| --- | --- |
+| `mint` | The mint being transferred. |
+| `mint_data` | Raw data of the mint. It supplies the hook program and the decimals. |
+| `context.source` | Token account the tokens leave. |
+| `context.destination` | Token account the tokens enter. |
+| `context.authority` | The transfer authority: the user for transfers into the pool, `pool_authority::ID` for transfers out of it. |
+| `context.amount` | The transfer amount, for hooks whose extra accounts depend on it. |
+| `fetch_account_data` | Your account reader: given an address, a future that returns the account data, or `None` when the account does not exist. Its errors are returned unchanged. |
+
+The result lists the hook's extra accounts as the hook program declares them, including the hook program and its validation account, with the signer and writable flags from the hook's account list. The four standard transfer accounts (source, mint, destination, authority) are removed because the program already passes them. Put the list into the `TransferHookAccounts` field of the leg it belongs to.
+
+```text
+pub struct TransferHookAccounts {
+    pub transfer_hook_x: Vec<AccountMeta>,
+    pub transfer_hook_y: Vec<AccountMeta>,
+    pub transfer_hook_referral: Vec<AccountMeta>,
+    pub transfer_hook_reward: Vec<AccountMeta>,
+}
+
+pub fn remaining_accounts_from_hooks(
+    hooks: &TransferHookAccounts,
+) -> Result<(RemainingAccountsInfo, Vec<AccountMeta>)>
+```
+
+`TransferHookAccounts` implements `Default`, `Clone` and `Debug`. `remaining_accounts_from_hooks` writes one `RemainingAccountsSlice` per non-empty list, in the fixed order X, Y, referral, reward, and concatenates the accounts in the same order. It returns the `RemainingAccountsInfo` argument and the account list. Fill only the lists the target instruction accepts: `swap` accepts X, Y and referral, `add_liquidity` and `remove_liquidity` (and their variants) and `claim_fee` accept X and Y, `claim_reward` accepts reward, `open_limit_order` accepts X for an ask and Y for a bid, and `cancel_limit_order` accepts X, Y and referral. The program rejects a slice type the instruction does not accept with `InvalidRemainingAccountSlice`, so the helper does not enforce it for you. A list longer than 255 accounts returns `InvalidRemainingAccountSlice`. Tick arrays go after these accounts and are not described by a slice. `AccountsType`, `RemainingAccountsInfo` and `RemainingAccountsSlice` are re-exported from the generated types.
+
+### Addresses and Constants
+
+Every `derive_*` helper returns only the address. Use `Pubkey::find_program_address` with the same seeds when you need the bump. All derive from the DLMM Pro program ID unless the table says otherwise. Seeds are byte strings followed by the listed account keys. Integers are little-endian.
+
+| Function | Seeds | Notes |
+| --- | --- | --- |
+| `derive_event_authority()` | `"__event_authority"` | The Anchor event CPI authority. |
+| `derive_operator(whitelisted_address)` | `"operator"`, address | |
+| `derive_static_config(index: u64)` | `"s_config"`, index as 8 bytes | |
+| `derive_dynamic_config(pool_creator_authority, index: u64)` | `"d_config"`, authority, index as 8 bytes | |
+| `derive_pool(config, token_x_mint, token_y_mint)` | `"pool"`, config, larger mint, smaller mint | `config` is a static or dynamic config address. The mints are ordered by their bytes, so argument order does not matter. |
+| `derive_launch_pool(token_x_mint, token_y_mint)` | `"l_pool"`, larger mint, smaller mint | |
+| `derive_oracle(pool)` | `"oracle"`, pool | |
+| `derive_reserve(mint, pool)` | `"reserve"`, mint, pool | The pool's token account for `mint`. |
+| `derive_tick_array_bitmap_extension(pool)` | `"bitmap"`, pool | |
+| `derive_tick_array(pool, tick_array_index: i32)` | `"tick_array"`, pool, index as 4 bytes | The index is the array index, not a tick id. |
+| `derive_position(nft_mint)` | `"position"`, nft mint | |
+| `derive_limit_order(nft_mint)` | `"limit_order"`, nft mint | |
+| `derive_reward_vault(pool, reward_index: u8)` | `"reward"`, pool, index as 1 byte | |
+| `derive_token_badge(token_mint)` | `"token_badge"`, mint | Under `ACCESS_REGISTRY_ID`, not the DLMM Pro program. |
+| `pool_authority::ID` | `"pool_auth"` | A constant. `pool_authority::BUMP` is its bump. It owns every reserve and vault and is the transfer authority for transfers out of them. |
+
+`ACCESS_REGISTRY_ID` is `regUFehW9oycnaV2auYyfqyYjKG1W1uLNT7rtUeemQr`, the program that owns `TokenBadge` accounts. The `seeds` module exposes each prefix as a constant (`POOL_PREFIX`, `TICK_ARRAY_PREFIX`, `EVENT_AUTHORITY_PREFIX` and the rest), and they are also exported at the crate root. `dlmm_pro::ID` is the program ID, and `dlmm_pro::ID_CONST` is the same address as a constant.
+
+Constants. Most come from the IDL with their IDL types. `MIN_TICK_ID`, `MAX_TICK_ID`, `MAX_TICKS_PER_ARRAY`, `NUM_REWARDS`, `NUMBER_OF_ACTIVATION_MODES` and `MAX_REFERENCE_AGE` are defined by the crate:
+
+| Constant | Type | Value | Meaning |
+| --- | --- | --- | --- |
+| `MIN_TICK_ID`, `MAX_TICK_ID` | `i32` | -443636, 443636 | Tick id bounds. `1.0001^tick_id` reaches 2^-64 and 2^64 there. |
+| `MIN_SQRT_PRICE`, `MAX_SQRT_PRICE` | `u128` | 4295048016, 79226673515401279992447579055 | Square root price bounds. |
+| `MAX_TICK_SPACING` | `u16` | 256 | Largest tick spacing. |
+| `MAX_TICKS_PER_ARRAY` | `usize` | 128 | Ticks in one tick array. `MAX_TICKS_PER_ARRAY_U64` is the IDL `u64` value. |
+| `BITMAP_SIZE` | `i32` | 512 | The inline bitmap covers tick array indexes -512 to 511. |
+| `POSITION_MAX_RANGE_U64` | `u64` | 45 | Range slots in a position. |
+| `LIMIT_ORDER_MAX_TICK_U64` | `u64` | 25 | Ticks in a limit order. |
+| `NUM_REWARDS` | `usize` | 2 | Reward slots. `NUM_REWARDS_U64` is the IDL `u64` value. |
+| `NUMBER_OF_ACTIVATION_MODES` | `usize` | 2 | Activation slots in the activation block. |
+| `MAX_REFERENCE_AGE` | `u64` | 3600 | Seconds after which dynamic fee references reset. |
+| `MIN_REWARD_DURATION`, `MAX_REWARD_DURATION`, `MAX_REWARD_START_DELAY` | `u64` | 86400, 31536000, 2592000 | Reward window limits, in seconds. |
+| `FEE_DENOMINATOR` | `u64` | 1000000000 | Denominator of fee numerators. |
+| `MIN_FEE_NUMERATOR`, `MAX_FEE_NUMERATOR` | `u64` | 100000, 990000000 | Fee numerator bounds. |
+| `MAX_BASIS_POINT` | `u16` | 10000 | Denominator of basis point values. |
+| `MM_PROTOCOL_FEE_BPS`, `MM_LAUNCH_POOL_PROTOCOL_FEE_BPS` | `u16` | 1000, 2000 | Protocol share of the market maker fee, on other pools and on launch pools. |
+| `LIMIT_ORDER_PROTOCOL_FEE_BPS`, `LIMIT_ORDER_REFERRAL_FEE_BPS` | `u16` | 5000, 2000 | Protocol share and referral share of a limit order fee. |
+| `HOST_FEE_BPS` | `u16` | 2000 | Host share of the protocol fee on a swap. |
+| `MAX_PARTNER_FEE_BPS` | `u16` | 5000 | Largest partner share of the protocol fee. |
+
+The `*_INIT_SPACE` constants are the byte sizes after the discriminator: `POOL_INIT_SPACE` 640, `TICK_ARRAY_INIT_SPACE` 56, `ORACLE_INIT_SPACE` 48, `LIMIT_ORDER_INIT_SPACE` 136, `POSITION_ARRAY_INIT_SPACE` 136, `TICK_ARRAY_BITMAP_EXTENSION_INIT_SPACE` 800, `STATIC_CONFIG_INIT_SPACE` 120, `DYNAMIC_CONFIG_INIT_SPACE` 80, `OPERATOR_INIT_SPACE` 48, `TICK_INIT_SPACE` 160, `TICK_WITH_REWARD_INIT_SPACE` 192, `POSITION_INIT_SPACE` 128, `POSITION_WITH_REWARD_INIT_SPACE` 192, `POOL_REWARD_INIT_SPACE` 352, `POOL_REWARD_INFO_INIT_SPACE` 176, `POOL_ACTIVATION_INIT_SPACE` 128, `POOL_ACTIVATION_INFO_INIT_SPACE` 16, `LIMIT_ORDER_DATA_INIT_SPACE` 24 and `OBSERVATION_INIT_SPACE` 16.
+
+### State Types and Pool Methods
+
+`Pool`, `TickArray`, `PositionArray`, `LimitOrder`, `Oracle`, `TickArrayBitmapExtension`, `StaticConfig`, `DynamicConfig` and `Operator` are the IDL account headers. `TokenBadge`, `BaseFeeConfig`, `DynamicFeeConfig`, `FeeConfig`, `PoolPartner`, `PositionVesting` and `VariableFee` are IDL types. Their fields are listed on [Program Accounts](/developer-guides/dlmm-pro/program/accounts). The crate adds the types that live in the dynamic tails:
+
+| Type | Fields or role |
+| --- | --- |
+| `Tick` | Price, liquidity and fee growth of one tick, plus its limit order state. 160 bytes. |
+| `TickWithReward` | `inner: Tick` and `reward_growths_outside: [u128; 2]`. 192 bytes. |
+| `Position` | One range slot: `unlocked_liquidity`, `permanent_locked_liquidity`, `vesting_liquidity`, `released_vesting_liquidity`, fee checkpoints and pending fees, `tick_lower_id` and `tick_upper_id`. 128 bytes. |
+| `PositionWithReward` | `inner: Position` and `rewards: [PositionRewardInfo; 2]` with a growth checkpoint and a pending amount each. 192 bytes. |
+| `PoolReward`, `PoolRewardInfo` | The two reward slots of a pool with LiquidityMining. |
+| `PoolActivation`, `PoolActivationInfo` | The whitelisted addresses and the two activation slots. |
+| `Observation` | `last_updated_timestamp: u64` and `tick_cumulative: i64`. |
+| `LimitOrderData` | `amount`, `age`, `tick_id` and the ask flag of one limit order tick. |
+| `Z16`, `Z32`, `Z40`, `Z64` | Little-endian integers stored without alignment, convertible with `u16::from`, `u32::from` and `u64::from`. `Z40` is a 5-byte integer. |
+
+Enums, all `#[repr(u8)]` with the numbering the program stores: `CollectFeeMode` (`OutputToken` 0, `OnlyY` 1), `PoolType` (`Static` 0, `Dynamic` 1, `LaunchPool` 2), `PoolExtension` (`LiquidityMining` 0, `ActivationAccess` 1, a bit position), `PoolStatus` (`Swap` 0, `AddLiquidity` 1, a bit position), `TokenProgramFlags` (`TokenProgram` 0, `TokenProgram2022` 1), `PositionDelegatePermission` (`AddLiquidity` 0, `RemoveLiquidity` 1, `ClaimFee` 2, `ClaimReward` 3, `UpdatePositionRange` 4, bit positions) and `LimitOrderDelegatePermission` (`CancelLimitOrder` 0). Each converts to and from `u8` with `u8::from` and `try_from`.
+
+Methods on `Pool`:
+
+| Method | Returns |
+| --- | --- |
+| `is_support_liquidity_mining(&self) -> bool` | `true` when the extensions byte has LiquidityMining set. |
+| `is_support_activation_access(&self) -> bool` | `true` when it has ActivationAccess set. |
+| `is_bitmap_extension_initialized(&self) -> bool` | `true` when the pool's bitmap extension account exists. |
+| `has_partner(&self) -> bool` | `true` when `pool_partner.partner` is not the default key. |
+| `is_launch_pool(&self) -> bool` | `true` for `PoolType::LaunchPool`. |
+| `mm_protocol_fee_bps(&self) -> u16` | `MM_LAUNCH_POOL_PROTOCOL_FEE_BPS` on a launch pool, `MM_PROTOCOL_FEE_BPS` otherwise. |
+| `get_fee_setting(&self, swap_for_y: bool, has_referral: bool) -> Result<FeeSetting>` | Where the fee is taken (`fees_on_input`, `fees_on_token_x`), the protocol shares and the partner share for a swap direction. `TypeCastFailed` for an invalid `collect_fee_mode`. |
+| `is_enable_status(&self, status: PoolStatus) -> bool` | `true` when that action is not disabled. A set bit in `pool_status` disables it. |
+| `get_total_trading_fee_numerator(&self, current_point: u64) -> Result<u64>` | The base fee for `current_point` plus the dynamic fee at the stored volatility accumulator, capped at `MAX_FEE_NUMERATOR`. It does not decay the volatility to the current time. `quote_exact_in` does. |
+| `is_overflow_default_tick_array_bitmap(&self, tick_array_index: i32) -> bool` | `true` for an array index outside -512 to 511. |
+| `Pool::bitmap_range() -> (i32, i32)` | `(-512, 511)`. |
+| `get_non_zero_liquidity_next_index(&self, swap_for_y: bool, from_tick_index: i32, tick_array_bitmap_extension: Option<&TickArrayBitmapExtension>) -> Result<Option<i32>>` | The next tick array index with liquidity, starting at array index `from_tick_index` itself and moving down for `swap_for_y` or up otherwise. `None` when there is none. The parameter holds an array index despite its name. |
+
+Methods on `TickArray` and `TickArrayBitmapExtension`:
+
+| Method | Returns |
+| --- | --- |
+| `TickArray::get_tick_index_from_tick_id(tick_id: i32, tick_spacing: u16) -> Result<i32>` | The index of the array that holds `tick_id`: the tick id divided by the spacing and by 128, rounded down. With spacing 1, ticks 0 to 127 are in array 0 and -128 to -1 in array -1. |
+| `TickArray::get_min_max_tick_id_from_tick_index(tick_index: i32, tick_spacing: u16) -> Result<(i32, i32)>` | The lowest and highest usable tick id of an array. |
+| `TickArray::is_usable_tick_id(tick_id: i32, tick_spacing: u16) -> bool` | `true` when the id is within the tick bounds and a multiple of the spacing. |
+| `TickArrayBitmapExtension::bit(&self, tick_array_index: i32) -> Result<bool>` | Whether that array holds liquidity. `InvalidTickArray` for an index inside the inline range or beyond the extension. |
+| `TickArrayBitmapExtension::bitmap_range() -> (i32, i32)` | `(-3584, 3583)`, the array indexes the extension covers. |
+
+Methods on the tail types: `Position::total_liquidity(&self) -> Result<u128>` (permanent locked plus unlocked plus vesting), `Observation::is_empty(&self) -> bool`, `LimitOrderData::is_empty(&self) -> bool` (no amount and no age), `LimitOrderData::is_ask(&self) -> bool`, `PoolRewardInfo::is_initialized(&self) -> bool` (the mint is not the default key) and `Tick::is_non_zero_liquidity(&self) -> bool` (liquidity, or an open or processing limit order amount). `Tick` also has the swap step functions `get_swap_result_exact_in`, `get_filled_amount_result_exact_in`, `apply_swap_result` and `cross_update`, with the result types `SwapStepResult` and `FilledAmountResult`. They are the building blocks of `quote_exact_in`, they operate on one tick at a time, and an integration should call `quote_exact_in` instead.
+
+### Fees, Activation and Math
+
+```text
+pub fn get_base_fee_numerator(
+    base_fee: &BaseFeeConfig,
+    current_point: u64,
+    activation_point: u64,
+    init_sqrt_price: u128,
+    current_sqrt_price: u128,
+) -> Result<u64>
+```
+
+The base fee numerator of a pool at a point in time, from its `fee_config.base_fee` (`base_fee_mode` and 31 bytes of data). `current_point` is a slot or timestamp that matches the pool's `activation_type`, and `activation_point`, `init_sqrt_price` and the current `sqrt_price` come from the pool. `BaseFeeMode` selects the formula: `Fixed` returns the cliff fee, the time schedulers (`TimeSchedulerLinear`, `TimeSchedulerExponential`) reduce it per `period_frequency` since activation, and the market cap schedulers (`MarketCapSchedulerLinear`, `MarketCapSchedulerExponential`) reduce it per step of price increase above `init_sqrt_price`. An unknown mode returns `InvalidBaseFeeMode`. The handler types (`PodAlignedFixedFee`, `PodAlignedFeeTimeScheduler`, `PodAlignedFeeMarketCapScheduler`, the `FeeTimeScheduler*` and `FeeMarketCapScheduler*` wrappers and the `BaseFeeHandler` trait) are the per-mode layouts and formulas behind it. `get_fee_in_period(cliff_fee_numerator: u64, reduction_factor: u64, passed_period: u16) -> Result<u64>` is the exponential step: `cliff * (1 - reduction_factor / 10000)^passed_period`.
+
+```text
+pub fn get_current_point(activation_type: u8, clock: &Clock) -> Result<u64>
+
+pub fn get_activation_access<F>(
+    pool_activation_info: &PoolActivationInfo,
+    f: F,
+) -> Result<bool>
+where
+    F: Fn(&dyn Activation) -> Result<bool>,
+```
+
+`get_current_point` returns `clock.slot` for `ActivationType::Slot` (0) and `clock.unix_timestamp` for `ActivationType::Timestamp` (1), and `InvalidActivationType` for any other value. `get_activation_access` reads one activation slot by its mode (`ActivationMode::Open` 0, `BondingCurve` 1, `TimeBased` 2) and runs `f` on it, returning `InvalidActivationAccess` for an unknown mode. The `Activation` trait has `can_swap`, `can_add_liquidity` and `can_remove_liquidity`, each taking the current point. `Open` allows everything. `BondingCurve` allows swaps and allows adding and removing liquidity only once `is_reach_target` is 1. `TimeBased` allows each action from its `swap_point`, `add_liquidity_point` or `remove_liquidity_point`. The `PodAlignedActivation*` structs are the slot layouts.
+
+Fee split and curve math. Each returns `Result` unless its signature shows otherwise:
+
+| Function | Meaning |
+| --- | --- |
+| `calculate_shared_amounts(amount: u64, numerator: u64, denominator: u64, rounding: Rounding) -> Result<(u64, u64)>` | Splits `amount` into `amount * numerator / denominator` and the rest. `Rounding::Up` rounds the first part up. A zero numerator returns `(0, amount)`. |
+| `get_excluded_fee_amount(trade_fee_numerator: u64, included_fee_amount: u64) -> Result<(u64, u64)>` | Returns the amount after the trading fee and the fee, with the fee rounded up. |
+| `get_included_fee_amount(trade_fee_numerator: u64, excluded_fee_amount: u64) -> Result<(u64, u64)>` | The inverse: the amount to send so that `excluded_fee_amount` remains, rounded up, and the fee. |
+| `split_fees(trading_fee: u64, fee_setting: &FeeSetting, filled_amount_result: &FilledAmountResult) -> Result<SplitFees>` | Splits a swap step's fee into `mm_fee`, `limit_order_fee` and the protocol fee on each. |
+| `get_delta_amount_x(lower_sqrt_price: u128, upper_sqrt_price: u128, liquidity: u128, round: Rounding) -> Result<u64>` | Token X between two prices: `liquidity * (1/lower - 1/upper)`. |
+| `get_delta_amount_y(lower_sqrt_price: u128, upper_sqrt_price: u128, liquidity: u128, round: Rounding) -> Result<u64>` | Token Y between two prices: `liquidity * (upper - lower)`. |
+| `get_delta_amount_x_unchecked`, `get_delta_amount_y_unchecked` | The same without the `u64` cast: `U320` for X and `U256` for Y. |
+| `get_next_sqrt_price_from_input(sqrt_price: u128, liquidity: u128, amount_in: u64, swap_for_y: bool) -> Result<u128>` | The price after an input within one tick's liquidity. The result is rounded up for an X input and down for a Y input. |
+| `get_liquidity_from_amount_x(lower_sqrt_price: u128, upper_sqrt_price: u128, amount_x: u64) -> Result<Option<U320>>`, `get_liquidity_from_amount_y(...)` | The liquidity that `amount_x` or `amount_y` buys in a range. `None` when the upper price is not above the lower price. |
+| `get_sqrt_price_from_tick_id(tick_id: i32) -> u128` | The square root price of a tick id. |
+| `tick_id_from_sqrt_price(sqrt_price: u128) -> Result<i32>` | The tick id whose price range holds `sqrt_price`. `InvalidParameters` outside `MIN_SQRT_PRICE` and `MAX_SQRT_PRICE`. |
+| `add_liquidity_delta(liquidity: u128, delta: i128) -> Result<u128>` | Applies a signed liquidity change with checked arithmetic. |
+| `is_support_extension(extension_bytes: u8, extension: PoolExtension) -> bool` | Tests a bit of the pool's `extensions` byte. |
+
+`Rounding` is `Up` or `Down`. The `SafeMath` trait adds `safe_add`, `safe_sub`, `safe_mul`, `safe_div` and `safe_rem` that return `PoolError::MathOverflow` instead of wrapping, for the integer types and `ruint` types the crate uses. `SafeCast` and `try_cast` convert with `PoolError::TypeCastFailed` on overflow. `down_scale_ceil` shifts a `ruint` value right and rounds up. `FeeSetting` and `SplitFees` are the plain structs `get_fee_setting` and `split_fees` return.
+
+### `PoolError`
+
+`PoolError` is the program's error enum, with the same names, codes and messages as the IDL: 51 variants from `MathOverflow` (6000) to `InvalidLayoutVersion` (6050). See [Program Errors](/developer-guides/dlmm-pro/program/errors) for the full table. The crate returns these variants:
+
+| Error | Returned by |
+| --- | --- |
+| `InvalidAccount` (6038) | The parsers on short or malformed data, the transfer fee functions on unparsable mint data, `quote_exact_in` for an extension of another pool. |
+| `InvalidTickArray` (6015) | `quote_exact_in` for a tick array of another pool, `TickArrayBitmapExtension::bit` for an index outside the extension. |
+| `InvalidParameters` (6037) | `tick_arrays_for_tick_ids` for a tick spacing of 0, `tick_id_from_sqrt_price` outside the price bounds. |
+| `InvalidActivationAccess` (6040), `InvalidActivationType` (6035) | `quote_exact_in`, `validate_pool_can_swap`, `get_current_point`, `get_activation_access`. |
+| `BitmapExtensionAccountIsNotProvided` (6044) | `tick_arrays_for_swap` and `quote_exact_in` when the search needs the extension. |
+| `CannotFindTickFromId` (6016) | `claimable_fees`, `claimable_rewards` when `ticks` lacks an end tick. |
+| `InvalidRewardIndex` (6014) | `claimable_rewards` for an index of 2 or more. |
+| `InvalidRemainingAccountSlice` (6012) | `remaining_accounts_from_hooks` for a list above 255 accounts. |
+| `LiquidityIsZero` (6023), `AmountIsZero` (6039) | `quote_exact_in`. |
+| `InvalidBaseFeeMode` (6036) | `get_base_fee_numerator`. |
+| `MathOverflow` (6000), `TypeCastFailed` (6001) | Any function that does arithmetic. |
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Program Accounts" icon="table-cells" iconType="solid" href="/developer-guides/dlmm-pro/program/accounts">
+    Account layouts, PDA seeds and dynamic tails.
+  </Card>
+  <Card title="Commons README" icon="github" iconType="solid" href="https://github.com/MeteoraAg/dlmm-pro-sdk/tree/main/commons">
+    Crate source, tests and notes.
+  </Card>
+</CardGroup>

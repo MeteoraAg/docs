@@ -1,0 +1,3254 @@
+---
+title: "DLMM Pro TS SDK Examples"
+sidebarTitle: "Examples"
+description: "Complete TypeScript scripts for DLMM Pro: create a launch pool, open a shaped position, claim and compound fees, close a position, place limit orders, run a reward campaign and schedule a launch."
+llmsDescription: "End-to-end DLMM Pro TypeScript SDK examples with @meteora-ag/dlmm-pro-sdk: initializeLaunchPool with fixedBaseFeeParameters, getDynamicFeeParams, OnlyY fee collection and an initial price from a UI price; openPosition and addLiquidityByWeight with a horizontal Curve shape from buildLiquidityShape and multiplierFromAmounts; getClaimableFees, claimFee and compoundFees; removeLiquidityByBps, claimReward and closePosition; a relative Bid-Ask limit order ladder with limitOrderTicksFromShape and relativeTickFromSlippage, cancelLimitOrder and closeLimitOrder; initializeReward and setRewardEmission with calculateRewardAmount; and a timed launch pool with timeSchedulerBaseFeeParameters, ActivationAccess and timeBasedActivationParameters. Further examples cover initializePoolWithStaticConfig and initializePoolWithDynamicConfig, reading a position with getAmountsFromLiquidity and getClaimableFees, addLiquidity with getLiquidityFromAmounts, addLiquidityImbalance, removeLiquidity and removeLiquidityByBps, expandPosition and removePosition with expectedLayoutVersion, lockPermanentPosition and lockVestingPosition, position and limit order delegates, finding positions and limit orders with getProgramAccounts, absolute tick limit orders with a referral, fill state from decodeLimitOrderData, swaps with a referral and with wrapped SOL, the pure quoteExactIn with tickArraysForSwap, account subscriptions with decodePoolExtensionsFromData and decodeTicksFromData, claimReward, updateRewardAuthority and withdrawIneligibleRewards, increaseOracleLength and a time-weighted average price, claimPartnerFee, compute budget and priority fees, versioned transactions with an address lookup table, and PoolError handling."
+---
+
+Each example is a complete script. They read settings from environment variables:
+
+| Variable | Value |
+| --- | --- |
+| `RPC_URL` | A mainnet or devnet RPC endpoint. On devnet, use wrapped SOL as `tokenYMint` in the first example: its USDC mint exists only on mainnet. |
+| `WALLET_SECRET_KEY` | The signer's secret key as a JSON byte array |
+| `POOL_ADDRESS` | The DLMM Pro pool to act on |
+| `POSITION_NFT` | A position's NFT mint, for the fee and close examples |
+| `TOKEN_X_MINT` | Your token's mint, for the two launch pool examples |
+| `INITIAL_TICK` | The starting tick of the scheduled launch |
+| `REWARD_MINT` | The reward token's mint, for the reward example |
+| `COMPOUND` | Set it to compound instead of claim in the fee example |
+| `TOKEN_Y_MINT` | Token Y of a new pool, for the static and dynamic config examples |
+| `CONFIG_INDEX` | The static or dynamic config index, default 0 |
+| `UI_PRICE` | The starting price of a static config pool, in token Y per token X |
+| `AUTHORITY_SECRET_KEY` | The secret key of a pool creator authority or reward authority, as a JSON byte array |
+| `DELEGATE_SECRET_KEY` | The delegate's secret key, as a JSON byte array |
+| `LIMIT_ORDER_NFT` | A limit order's NFT mint |
+| `REFERRAL_ADDRESS` | A referral wallet |
+| `WALLET_ADDRESS` | A wallet to look up positions and limit orders for |
+
+All amounts are in atoms (the token's smallest unit). The scripts use top-level `await`, so run them as ES modules: save each one with an `.mts` extension (or set `"type": "module"` in your `package.json`) and run it with `npx tsx script.mts`.
+
+Examples that read other variables list them in their introduction.
+
+## Create a Launch Pool
+
+A launch pool needs no config and anyone can create one, as long as the payer holds some of both tokens. This one charges a fixed 0.8% plus a dynamic fee, collects fees in USDC only, and turns on liquidity mining.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  ActivationType,
+  CollectFeeMode,
+  DlmmProClient,
+  PoolExtension,
+  encodePoolExtensions,
+  fixedBaseFeeParameters,
+  getDynamicFeeParams,
+  getSqrtPriceFromTickId,
+  type InitializePoolWithDynamicParameters,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const creator = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const tokenXMint = new PublicKey(process.env.TOKEN_X_MINT!); // e.g. your token, 9 decimals
+const tokenYMint = new PublicKey(
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+); // USDC, 6 decimals
+
+// Start at 0.05 USDC per token. Prices are in atoms, so scale by 10^(6 - 9).
+const uiPrice = 0.05;
+const atomPrice = uiPrice * 10 ** (6 - 9);
+const tickSpacing = 80;
+const tick =
+  Math.round(Math.log(atomPrice) / Math.log(1.0001) / tickSpacing) *
+  tickSpacing;
+
+const parameters: InitializePoolWithDynamicParameters = {
+  poolFees: {
+    baseFeeParameter: fixedBaseFeeParameters(80), // 0.8%
+    dynamicFeeParameter: getDynamicFeeParams(80, tickSpacing),
+  },
+  tickSpacing,
+  collectFeeMode: CollectFeeMode.OnlyY, // earn fees in USDC only
+  initialSqrtPrice: getSqrtPriceFromTickId(tick),
+  activationType: ActivationType.Timestamp,
+  activationPoint: null,
+  extensions: encodePoolExtensions([PoolExtension.LiquidityMining]),
+  poolActivation: null,
+};
+
+const { tx, pool } = await client.pool.initializeLaunchPool({
+  tokenXMint,
+  tokenYMint,
+  creator: creator.publicKey,
+  payer: creator.publicKey,
+  parameters,
+});
+await sendAndConfirmTransaction(connection, tx, [creator]);
+console.log("launch pool", pool.toBase58());
+```
+
+The script rounds the starting tick to a multiple of the tick spacing so the price starts on a usable tick. The program does not require this; any price within the bounds works. A pool can only be created once per pair this way; [Pool Creation and Activation](/core-products/dlmm-pro/pool-creation-and-activation) covers static and dynamic configs.
+
+## Create a Pool From a Static Config
+
+A static config fixes a pool's tick spacing, base fee schedule, dynamic fee, fee token, activation type and extensions, so a pool needs only the config, the two mints and a starting price. This script creates a pool from a published config. Both mints and the config must already exist. The payer funds the rent of the pool, its oracle and its two reserve accounts and signs. The config's pool creator authority signs too when it is not the default key. Published configs use the default key, so any wallet can create a pool from one, and the script stops on a restricted config.
+
+[Pool Fee Configs](/developer-guides/dlmm-pro/pool-fee-configs) lists every published config and the formula that turns a choice of tier, fee schedule, variant and extension into an index. Index 0 has tick spacing 1, a fixed 0.01% base fee, fees in the output token, the dynamic fee on and no extension. On a config whose fee token is `OnlyY`, token Y must be wrapped SOL, USDC or a mint with a token badge, see [Fee Token Rule](/core-products/dlmm-pro/token-2022-support#fee-token-rule).
+
+The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `TOKEN_X_MINT`, `TOKEN_Y_MINT`, `UI_PRICE` (the price of one whole token X in whole token Y) and, optionally, `CONFIG_INDEX` (default 0).
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { getMint } from "@solana/spl-token";
+import {
+  DlmmProClient,
+  MAX_TICK_ID,
+  MIN_TICK_ID,
+  deriveStaticConfig,
+  getSqrtPriceFromTickId,
+  tickUiPrice,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const creator = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const tokenXMint = new PublicKey(process.env.TOKEN_X_MINT!);
+const tokenYMint = new PublicKey(process.env.TOKEN_Y_MINT!);
+const configIndex = Number(process.env.CONFIG_INDEX ?? 0);
+const uiPrice = Number(process.env.UI_PRICE!); // token Y per token X
+
+// 1. Read the config and check that anyone may create pools from it
+const config = deriveStaticConfig(configIndex);
+const staticConfig = await client.state.fetchStaticConfig(config);
+if (!staticConfig.poolCreatorAuthority.equals(PublicKey.default)) {
+  throw new Error("This config is restricted to its pool creator authority");
+}
+console.log(
+  `config ${configIndex}: tick spacing ${staticConfig.tickSpacing}, ` +
+    `fee collected in ${staticConfig.collectFeeMode === 1 ? "token Y" : "the output token"}`,
+);
+
+// 2. Turn the UI price into a starting tick. The pool prices atoms of Y per
+// atom of X, so scale by 10^(decimalsY - decimalsX).
+const mintProgram = async (mint: PublicKey) =>
+  (await connection.getAccountInfo(mint))!.owner;
+const [mintX, mintY] = await Promise.all([
+  getMint(connection, tokenXMint, "confirmed", await mintProgram(tokenXMint)),
+  getMint(connection, tokenYMint, "confirmed", await mintProgram(tokenYMint)),
+]);
+const atomPrice = uiPrice * 10 ** (mintY.decimals - mintX.decimals);
+const { tickSpacing } = staticConfig;
+const tick =
+  Math.round(Math.log(atomPrice) / Math.log(1.0001) / tickSpacing) *
+  tickSpacing;
+if (tick < MIN_TICK_ID || tick > MAX_TICK_ID) {
+  throw new Error(`Price ${uiPrice} is outside the supported range`);
+}
+console.log(
+  `start at tick ${tick}, ~${tickUiPrice(tick, mintX.decimals, mintY.decimals).toFixed(6)} Y per X`,
+);
+
+// 3. Create the pool. The creator is recorded on the pool; the payer funds the accounts.
+const { tx, pool } = await client.pool.initializePoolWithStaticConfig({
+  config,
+  tokenXMint,
+  tokenYMint,
+  creator: creator.publicKey,
+  payer: creator.publicKey,
+  initialSqrtPrice: getSqrtPriceFromTickId(tick),
+});
+await sendAndConfirmTransaction(connection, tx, [creator]);
+console.log("pool", pool.toBase58());
+```
+
+The pool prices atoms of Y per atom of X, so the script scales the UI price by `10 ** (decimalsY - decimalsX)`, takes the logarithm in base 1.0001 to get a tick and rounds it to a multiple of the config's tick spacing. `getSqrtPriceFromTickId` turns that tick into `initialSqrtPrice`, a square root price in Q64.64. The pool starts at the price of that tick, which is within one tick spacing of the price you asked for. With tick spacing 1 each tick is 0.01% apart. `tickUiPrice` prints the price the pool will start at.
+
+`getSqrtPriceFromTickId` throws a `PoolError` for `InvalidParameters` when the tick is not an integer or lies outside `MIN_TICK_ID` to `MAX_TICK_ID`. The script checks the bounds first so that its own message can name the price that caused it. SDK versions before 0.1.2 did not check: a tick beyond 524,287 wrapped, so tick 621729 returned the price of tick 97441, which is in range, and the pool would have started at the wrong price. Use 0.1.2 or newer.
+
+You choose which mint is token X. The pool address comes from the config and the two mints in either order, so a config allows one pool per pair, and `UI_PRICE` is always token Y per token X. Swapping the mints means passing the inverse price.
+
+What to expect on-chain:
+
+- One transaction creates the pool, its oracle with one observation and a reserve token account for each mint. When the starting tick is outside the inline bitmap, which covers tick array indexes -512 to 511, the builder also passes the bitmap extension account and the program creates it.
+- The pool has no tick arrays and no liquidity. Quotes and swaps fail with `LiquidityIsZero` until someone opens a position and deposits, as in the position examples above.
+- A static config pool has no activation delay and no partner. It accepts deposits and swaps as soon as it exists.
+
+Errors you are likely to hit:
+
+- `Account not found` with an address: the config does not exist on this cluster. `fetchStaticConfig` throws it for an index that was never created.
+- A failed simulation with `custom program error: 0x0` and a log line saying the account is already in use: a pool for this config and pair exists. This is a system program error, not a `PoolErrorCode`. Creating the same pair with the mints swapped fails the same way.
+- `InvalidTokenBadge`: the config collects fees in token Y, and token Y is not wrapped SOL or USDC. The builder throws it as a `PoolError`, and the program uses the same code (6005). Pass `tokenBadgeY: deriveTokenBadge(tokenYMint)` for a mint that has a badge.
+- `UnsupportedMint` (6006): a Token 2022 mint has an extension other than transfer fee, metadata or a transfer hook without program or authority, and no `tokenBadgeX` or `tokenBadgeY` was passed.
+- `InvalidPoolCreatorAuthority` (6046): the config is restricted and its authority did not sign.
+
+Other configs change the pool without changing the script. A larger tick spacing makes the start price coarser. A scheduled fee starts counting when the pool is created. A config with the `LiquidityMining` extension creates a pool with two reward slots. Token 2022 mints work without changes: the builder reads each mint's token program.
+
+## Create a Pool From a Dynamic Config
+
+A dynamic config does not fix the pool's settings. It authorizes one wallet, its pool creator authority, to create pools with settings passed in the instruction, and it makes that wallet the pool's partner. Meteora creates dynamic configs, see [Dynamic Configs](/developer-guides/dlmm-pro/pool-fee-configs#dynamic-configs), so you are normally given an index for your authority wallet.
+
+The config at `deriveDynamicConfig(authority, index)` and both mints must already exist. Two wallets sign: the payer, who funds the new accounts, and the pool creator authority, which must sign every creation from the config. They can be the same wallet. The script reads `RPC_URL`, `WALLET_SECRET_KEY` (the payer, recorded as the pool creator), `AUTHORITY_SECRET_KEY`, `TOKEN_X_MINT`, `TOKEN_Y_MINT`, `INITIAL_TICK` (as in the scheduled launch below) and, optionally, `CONFIG_INDEX` (default 0).
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  ActivationType,
+  CollectFeeMode,
+  DlmmProClient,
+  deriveDynamicConfig,
+  encodePoolExtensions,
+  fixedBaseFeeParameters,
+  getDynamicFeeParams,
+  getSqrtPriceFromTickId,
+  type InitializePoolWithDynamicParameters,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const payer = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+// The config's pool creator authority. It must sign, and it becomes the pool's partner.
+const authority = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.AUTHORITY_SECRET_KEY!)),
+);
+const tokenXMint = new PublicKey(process.env.TOKEN_X_MINT!);
+const tokenYMint = new PublicKey(process.env.TOKEN_Y_MINT!);
+const configIndex = Number(process.env.CONFIG_INDEX ?? 0);
+const initialTick = Number(process.env.INITIAL_TICK!);
+
+const config = deriveDynamicConfig(authority.publicKey, configIndex);
+const dynamicConfig = await client.state.fetchDynamicConfig(config);
+console.log(
+  `config ${configIndex}: partner share ${dynamicConfig.partnerFeeBps} bps of the protocol fee`,
+);
+
+const tickSpacing = 10;
+const parameters: InitializePoolWithDynamicParameters = {
+  poolFees: {
+    baseFeeParameter: fixedBaseFeeParameters(30), // 0.3%
+    dynamicFeeParameter: getDynamicFeeParams(30, tickSpacing),
+  },
+  tickSpacing,
+  collectFeeMode: CollectFeeMode.OutputToken,
+  initialSqrtPrice: getSqrtPriceFromTickId(initialTick),
+  activationType: ActivationType.Timestamp,
+  activationPoint: null, // open at creation
+  extensions: encodePoolExtensions([]),
+  poolActivation: null,
+};
+
+const { tx, pool } = await client.pool.initializePoolWithDynamicConfig({
+  config,
+  poolCreatorAuthority: authority.publicKey,
+  tokenXMint,
+  tokenYMint,
+  creator: payer.publicKey,
+  payer: payer.publicKey,
+  parameters,
+});
+await sendAndConfirmTransaction(connection, tx, [payer, authority]);
+console.log("pool", pool.toBase58());
+```
+
+The parameters are the `InitializePoolWithDynamicParameters` that `initializeLaunchPool` takes in the examples above: fee schedule, dynamic fee, tick spacing, fee token, starting price, activation type and point, extensions and activation rules. This pool has a fixed 0.3% fee, tick spacing 10 and fees in the output token, and it opens at creation because `activationPoint` is `null`. Get `INITIAL_TICK` from a price with the tick computation in the static config example.
+
+What to expect on-chain:
+
+- The pool has type Dynamic. Its partner is the pool creator authority, and `pool.partnerFeeBps` is the share of the protocol fee set by the config.
+- Swaps accrue the partner's share on the pool. [Claim Partner Fees](#claim-partner-fees) pays it out.
+- As with a static config pool, there is no liquidity until someone deposits.
+
+Errors you are likely to hit:
+
+- `Account not found`: the config does not exist for this authority and index. A different authority derives a different config address.
+- `Signature verification failed` with `Missing signature for public key`: web3.js throws this before anything is sent when the authority's keypair is not among the signers.
+- `PoolError`: the builder rejects invalid parameters before sending. An `activationPoint` or `poolActivation` without the `ActivationAccess` extension gives `InvalidParameters`, and fee settings outside their limits are rejected too.
+- `InvalidTokenBadge` and `UnsupportedMint`: the same token rules as for static configs. A config whose permission has the `CreatePoolWithoutMintValidation` bit skips the token badge and Token 2022 extension checks for its pools, but not the fee token rule.
+- A failed simulation with `custom program error: 0x0` and an account already in use: a pool for this config and pair exists.
+
+Pass any other fee schedule with `timeSchedulerBaseFeeParameters` or `marketCapSchedulerBaseFeeParameters`, or add `ActivationAccess` with activation rules, exactly as in the launch pool examples. The config only adds the authority and the partner share.
+
+An operator creates the config itself. The SDK does not wrap operator instructions, so this script calls the program through `client.program.methods`. The signer needs an `Operator` account with the `CreateConfigKey` permission, and `permission` is a bitmask of `DynamicConfigPermission`. You cannot run it without an operator wallet, so on the Meteora deployment you receive a config instead. It is useful for a local program or your own deployment. The script reads `RPC_URL`, `OPERATOR_SECRET_KEY`, `AUTHORITY_ADDRESS` and `CONFIG_INDEX` (optional, default 0).
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  deriveDynamicConfig,
+  deriveOperator,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+// A wallet with an Operator account that holds the CreateConfigKey permission
+const operator = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.OPERATOR_SECRET_KEY!)),
+);
+const poolCreatorAuthority = new PublicKey(process.env.AUTHORITY_ADDRESS!);
+const index = new BN(process.env.CONFIG_INDEX ?? 0);
+
+const tx = await client.program.methods
+  .createDynamicConfig(index, {
+    permission: new BN(0), // bit 0 skips the token badge checks for the config's pools
+    partnerFeeBps: 2_000, // 20% of the protocol fee goes to the partner
+  })
+  .accountsPartial({
+    config: deriveDynamicConfig(poolCreatorAuthority, index),
+    operator: deriveOperator(operator.publicKey),
+    signer: operator.publicKey,
+    payer: operator.publicKey,
+    poolCreatorAuthority,
+  })
+  .transaction();
+await sendAndConfirmTransaction(connection, tx, [operator]);
+```
+
+## Open a Position With a Curve Shape
+
+Build the shape first: its ranges become the position's slots, and the by-weight deposit funds them in one transaction. `multiplierFromAmounts` finds the largest deposit that fits both budgets, including Token 2022 transfer fees.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { getMint } from "@solana/spl-token";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  LiquidityLayout,
+  StrategyType,
+  buildLiquidityShape,
+  encodeAddLiquidityByWeight,
+  getTokenProgram,
+  multiplierFromAmounts,
+  readClock,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+
+const poolState = await client.state.fetchPool(pool);
+const { tickSpacing, tickCurrentId, sqrtPrice } = poolState;
+const aligned = Math.floor(tickCurrentId / tickSpacing) * tickSpacing;
+
+// A Curve over 20 tick spacings on each side of the price, stacked into few ranges
+const shape = buildLiquidityShape({
+  strategy: StrategyType.Curve,
+  minTickId: aligned - 20 * tickSpacing,
+  maxTickId: aligned + 20 * tickSpacing,
+  tickSpacing,
+  currentTickId: tickCurrentId,
+  layout: LiquidityLayout.Horizontal,
+});
+
+// 1. Mint the position NFT with one slot per range
+const nft = Keypair.generate();
+const opened = await client.position.openPosition({
+  pool,
+  owner: owner.publicKey,
+  payer: owner.publicKey,
+  nftMint: nft.publicKey,
+  tickRanges: shape.ranges,
+});
+await sendAndConfirmTransaction(connection, opened.tx, [owner, nft]);
+
+// 2. Size the deposit to the budget, transfer fees included
+const amountX = new BN(1_000_000_000);
+const amountY = new BN(100_000_000);
+const [mintX, mintY] = await Promise.all([
+  getMint(
+    connection,
+    poolState.tokenXMint,
+    "confirmed",
+    getTokenProgram(poolState.tokenXFlag),
+  ),
+  getMint(
+    connection,
+    poolState.tokenYMint,
+    "confirmed",
+    getTokenProgram(poolState.tokenYFlag),
+  ),
+]);
+const { epoch } = await readClock(connection);
+const multiplier = multiplierFromAmounts({
+  ranges: shape.ranges,
+  tickSpacing,
+  currentTickId: tickCurrentId,
+  currentSqrtPrice: sqrtPrice,
+  amountX,
+  amountY,
+  mintX,
+  mintY,
+  epoch,
+});
+
+// 3. Deposit multiplier x weight into every slot
+const added = await client.position.addLiquidityByWeight({
+  pool,
+  nftMint: nft.publicKey,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  tickRanges: shape.ranges,
+  parameters: encodeAddLiquidityByWeight({
+    ranges: shape.ranges,
+    maxAmountX: amountX,
+    maxAmountY: amountY,
+    multiplier,
+  }),
+});
+await sendAndConfirmTransaction(connection, added.tx, [owner]);
+console.log("position NFT", nft.publicKey.toBase58());
+```
+
+A Curve over 41 tick spacings stacks into 21 ranges with the horizontal layout. Pass `maxRanges` to `buildLiquidityShape` if you want to leave slots free for later.
+
+## Read a Position
+
+This script prints what a position holds: every slot with its range, liquidity, token amounts, claimable fees and pending rewards. Nothing is signed. It reads `RPC_URL`, `POOL_ADDRESS` and `POSITION_NFT`.
+
+```typescript
+import { Connection, PublicKey } from "@solana/web3.js";
+import {
+  DlmmProClient,
+  PoolExtension,
+  derivePosition,
+  getAmountsFromLiquidity,
+  isSupportExtension,
+  positionTotalLiquidity,
+  type DecodedPositionWithReward,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+
+const { pool: poolState, extensions } =
+  await client.state.fetchPoolWithExtensions(pool);
+const withReward = isSupportExtension(
+  poolState.extensions,
+  PoolExtension.LiquidityMining,
+);
+const { positionArray, positions } =
+  await client.state.fetchPositionArrayWithPositions(derivePosition(nftMint), {
+    withReward,
+  });
+if (!positionArray.pool.equals(pool))
+  throw new Error("Position is in another pool");
+
+// Fees a claim would pay right now, per slot and in total
+const claimable = await client.position.getClaimableFees({ pool, nftMint });
+
+console.log(
+  `layout version ${positionArray.layoutVersion}, ${positions.length} slots, pool tick ${poolState.tickCurrentId}`,
+);
+for (const [index, slot] of positions.entries()) {
+  // Everything the slot holds in the pool: unlocked, vesting and permanently locked
+  const liquidity = positionTotalLiquidity(slot);
+  const { amountX, amountY } = getAmountsFromLiquidity({
+    tickCurrentId: poolState.tickCurrentId,
+    tickLowerId: slot.tickLowerId,
+    tickUpperId: slot.tickUpperId,
+    currentSqrtPrice: poolState.sqrtPrice,
+    liquidity,
+  });
+  const fees = claimable.slots[index];
+  console.log(
+    `slot ${index} [${slot.tickLowerId}, ${slot.tickUpperId}): ` +
+      `liquidity ${liquidity} (unlocked ${slot.unlockedLiquidity}), ` +
+      `${amountX} X + ${amountY} Y, claimable fees ${fees.feeX} X + ${fees.feeY} Y`,
+  );
+  // Reward amounts are those the slot had when it was last refreshed
+  const rewards = withReward ? (slot as DecodedPositionWithReward).rewards : [];
+  rewards.forEach((reward, rewardIndex) => {
+    const mint = extensions.rewards?.[rewardIndex]?.mint;
+    if (
+      !mint ||
+      mint.equals(PublicKey.default) ||
+      reward.pendingAmount.isZero()
+    )
+      return;
+    console.log(
+      `  reward ${rewardIndex} (${mint.toBase58()}): ${reward.pendingAmount} pending`,
+    );
+  });
+}
+console.log(
+  `total claimable fees ${claimable.feeX} X, ${claimable.feeY} Y (before Token 2022 transfer fees)`,
+);
+```
+
+How to read the output:
+
+- A position is a `PositionArray` account with one slot per range. `positionTotalLiquidity` adds the slot's unlocked, vesting and permanently locked liquidity.
+- `getAmountsFromLiquidity` converts liquidity into token amounts at the pool's current price. A slot whose upper tick is at or below the current tick holds only token Y, a slot above the current tick holds only token X, and a slot that spans it holds both. The amounts round up, as a deposit does. Pass a negative `liquidity` to round down, as a withdrawal does.
+- `getClaimableFees` computes what a claim would pay right now from the current pool and tick state, per slot and in total, before any Token 2022 transfer fee. It sends nothing and does not need a refresh first. Pass `bitmap` to choose which slots are brought up to date in the calculation. Slots outside it still count with the fees already credited to them.
+- Rewards are different. A slot stores `pendingAmount` for each reward slot as of its last refresh, and the SDK has no estimate of what has accrued since. To bring the figure current, send `refreshFeesAndRewards` (any claim refreshes first) and read again.
+- `withReward` must match the pool's `LiquidityMining` bit, as the script does. A mismatch usually throws `Account data length does not align to PositionArray element size`. When the byte lengths happen to line up it does not throw and returns wrong values.
+
+Errors you are likely to hit: `Account not found` for an NFT that is not a position, and the script's own error when the position belongs to another pool.
+
+## Deposit With Explicit Liquidity
+
+`addLiquidity` funds chosen slots of an existing position with liquidity amounts you compute, where `addLiquidityByWeight` in the curve example derives them from a shape. Use it to top up slots by an exact amount of liquidity or to copy another position's amounts. `getLiquidityFromAmounts` finds the most liquidity a slot can take within a token budget at the current price.
+
+The position and its slots must already exist, and the wallet must hold the tokens. The owner signs, or a delegate with the `AddLiquidity` permission. Missing token accounts are created, and SOL is wrapped for you. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS`, `POSITION_NFT`, `BUDGET_X` and `BUDGET_Y` (atoms each slot may take of each token) and, optionally, `SLOT_INDEXES` (slot numbers, comma separated and ascending, default 0).
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  PoolExtension,
+  derivePosition,
+  getLiquidityFromAmounts,
+  isSupportExtension,
+  liquidityBitmap,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+// Slots to fund, each with the same budget in atoms
+const slotIndexes = (process.env.SLOT_INDEXES ?? "0").split(",").map(Number);
+const budgetX = new BN(process.env.BUDGET_X!);
+const budgetY = new BN(process.env.BUDGET_Y!);
+
+const poolState = await client.state.fetchPool(pool);
+const { positionArray, positions } =
+  await client.state.fetchPositionArrayWithPositions(derivePosition(nftMint), {
+    withReward: isSupportExtension(
+      poolState.extensions,
+      PoolExtension.LiquidityMining,
+    ),
+  });
+
+// Liquidity each slot can take at the current price within its budget.
+// The result is in the same order as `slotIndexes`, which must be ascending.
+const liquidities = slotIndexes.map((index) =>
+  getLiquidityFromAmounts({
+    maxTokenX: budgetX,
+    maxTokenY: budgetY,
+    tickLowerId: positions[index].tickLowerId,
+    tickUpperId: positions[index].tickUpperId,
+    tickCurrentId: poolState.tickCurrentId,
+    currentSqrtPrice: poolState.sqrtPrice,
+  }),
+);
+
+const { tx } = await client.position.addLiquidity({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  tickRanges: slotIndexes.map((index) => ({
+    tickLowerId: positions[index].tickLowerId,
+    tickUpperId: positions[index].tickUpperId,
+  })),
+  parameters: {
+    // Caps on what the wallet pays in total, Token 2022 transfer fee included
+    maxAmountX: budgetX.muln(slotIndexes.length),
+    maxAmountY: budgetY.muln(slotIndexes.length),
+    expectedLayoutVersion: positionArray.layoutVersion,
+    bitmap: liquidityBitmap(slotIndexes),
+    liquidities,
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+console.log(
+  "added",
+  liquidities.map((liquidity) => liquidity.toString()),
+);
+```
+
+`bitmap` selects slots, where bit `i` is slot `i`, and `liquidities` holds one amount for each selected slot in ascending slot order. `tickRanges` lists the ranges of the selected slots so the builder can find their tick arrays, and `expectedLayoutVersion` makes the transaction fail if a delegate has added or removed slots since you read the position.
+
+What to expect on-chain:
+
+- Each slot takes liquidity from the wallet in the ratio the current price sets. A slot above the price takes only token X, a slot below it only token Y, and a slot that spans it takes both. The deposits round up, and `maxAmountX` and `maxAmountY` cap the total across all selected slots.
+- The same budget buys different liquidity in different slots, because liquidity per token depends on the width and position of the range. The script prints the liquidity added to each slot.
+
+Errors you are likely to hit:
+
+- `ExceededSlippage`: the deposits plus any transfer fee are above `maxAmountX` or `maxAmountY`. The price moving between the read and the landing changes what a spanning slot needs. Leave headroom in the caps, or use the imbalanced deposit with a price band.
+- `PoolError` with `LiquidityIsZero`: the budget funds no liquidity, for example a zero budget of the one token a slot needs. The builder also throws it for a zero entry in `liquidities`.
+- `PoolError` with `InvalidParameters`: `liquidities` does not have one entry for each bit of `bitmap`.
+- `InvalidLayoutVersion`: the position changed since you read `layoutVersion`. Read it again, or pass `null` to skip the check.
+- `InvalidActivationAccess`: deposits are not open yet for this wallet on a pool with activation rules.
+
+For a Token 2022 mint with a transfer fee, pass `getLiquidityFromAmounts` the amount the pool receives, `calculateTransferFeeExcludedAmount`, and keep the fee-inclusive amounts in `maxAmountX` and `maxAmountY`.
+
+## Deposit One Side or an Imbalanced Amount
+
+`addLiquidityImbalance` deposits into one slot from whatever the wallet holds: the program works out the liquidity from the amounts and the current price. It takes at most each cap, never more than the wallet holds, and when both sides are given it uses the smaller of the two liquidities, so the leftover of the richer token stays in the wallet. This is how `compoundFees` deposits.
+
+The slot must exist. The owner signs, or a delegate with `AddLiquidity`. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS`, `POSITION_NFT`, optionally `SLOT_INDEX` (default 0) and the caps `MAX_AMOUNT_X` and `MAX_AMOUNT_Y` in atoms. An empty or missing cap skips that side.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  PoolExtension,
+  derivePosition,
+  isSupportExtension,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+const index = Number(process.env.SLOT_INDEX ?? 0);
+// Caps in atoms. An empty variable skips that side.
+const maxAmountX = process.env.MAX_AMOUNT_X
+  ? new BN(process.env.MAX_AMOUNT_X)
+  : null;
+const maxAmountY = process.env.MAX_AMOUNT_Y
+  ? new BN(process.env.MAX_AMOUNT_Y)
+  : null;
+
+const poolState = await client.state.fetchPool(pool);
+const { positionArray, positions } =
+  await client.state.fetchPositionArrayWithPositions(derivePosition(nftMint), {
+    withReward: isSupportExtension(
+      poolState.extensions,
+      PoolExtension.LiquidityMining,
+    ),
+  });
+const slot = positions[index];
+console.log(
+  `slot ${index} spans ${slot.tickLowerId} to ${slot.tickUpperId}, pool tick ${poolState.tickCurrentId}`,
+);
+
+const { tx } = await client.position.addLiquidityImbalance({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  tickRanges: [
+    { tickLowerId: slot.tickLowerId, tickUpperId: slot.tickUpperId },
+  ],
+  parameters: {
+    maxAmountX,
+    maxAmountY,
+    slippage: {
+      // Fail if the price has left this band by the time the deposit lands
+      sqrtPriceSlippage: {
+        minSqrtPrice: poolState.sqrtPrice.muln(995).divn(1_000),
+        maxSqrtPrice: poolState.sqrtPrice.muln(1_005).divn(1_000),
+      },
+      minLiquidity: null,
+    },
+    expectedLayoutVersion: positionArray.layoutVersion,
+    index,
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+`sqrtPriceSlippage` fails the transaction if the pool price has left the band when it lands. `minLiquidity` fails it if less than that liquidity would be minted from the caps. Either can be `null`.
+
+A single-sided deposit works only when the slot needs just that token at the current price. Pass `MAX_AMOUNT_X` alone for a slot above the current tick, or `MAX_AMOUNT_Y` alone for a slot below it. For a slot that spans the price, pass both.
+
+Errors you are likely to hit:
+
+- `ExceededSlippage` when you skip a side the slot needs: a slot that spans the price needs both tokens, so a deposit with only X fails. It also fails when the price is outside `sqrtPriceSlippage` or the minted liquidity is below `minLiquidity`.
+- `AmountIsZero` when the only side you pass is a token the slot does not take, for example X alone into a slot below the price. The builder also throws `AmountIsZero` as a `PoolError` for a cap of 0.
+- `PoolError` with `InvalidParameters` when both caps are `null`.
+- `InvalidLayoutVersion` when `expectedLayoutVersion` is stale.
+
+To compound fees in one transaction instead, use `compoundFees` from the fee example.
+
+## Withdraw Part of a Position
+
+A partial withdrawal leaves the position open. `removeLiquidity` takes liquidity amounts you choose for the slots in a bitmap. `removeLiquidityByBps` takes a share in basis points of the unlocked liquidity of each selected slot, or of every slot when `bitmap` is `null`. The script does one of each. Withdrawing everything and closing is in the earlier example.
+
+The owner signs, or a delegate with the `RemoveLiquidity` permission. Tokens go to the owner's associated token accounts by default, created when missing. A delegate cannot choose another account. When a side of the pool is wrapped SOL, the builder unwraps it in the same transaction if the owner signs. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `POSITION_NFT`. The script assumes the position has at least two slots, each with unlocked liquidity.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  PoolExtension,
+  derivePosition,
+  isSupportExtension,
+  liquidityBitmap,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+
+const poolState = await client.state.fetchPool(pool);
+const read = async () =>
+  client.state.fetchPositionArrayWithPositions(derivePosition(nftMint), {
+    withReward: isSupportExtension(
+      poolState.extensions,
+      PoolExtension.LiquidityMining,
+    ),
+  });
+const accounts = {
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+};
+
+// 1. Take half of the unlocked liquidity out of slots 0 and 1
+let { positionArray, positions } = await read();
+const slots = [0, 1];
+const half = await client.position.removeLiquidity({
+  ...accounts,
+  tickRanges: slots.map((index) => ({
+    tickLowerId: positions[index].tickLowerId,
+    tickUpperId: positions[index].tickUpperId,
+  })),
+  parameters: {
+    minAmountX: new BN(0),
+    minAmountY: new BN(0),
+    expectedLayoutVersion: positionArray.layoutVersion,
+    bitmap: liquidityBitmap(slots),
+    liquidities: slots.map((index) =>
+      positions[index].unlockedLiquidity.divn(2),
+    ),
+  },
+});
+await sendAndConfirmTransaction(connection, half.tx, [owner]);
+
+// 2. Take 25% of what is left in every slot
+({ positionArray, positions } = await read());
+const quarter = await client.position.removeLiquidityByBps({
+  ...accounts,
+  tickRanges: positions.map(({ tickLowerId, tickUpperId }) => ({
+    tickLowerId,
+    tickUpperId,
+  })),
+  parameters: {
+    minAmountX: new BN(0),
+    minAmountY: new BN(0),
+    expectedLayoutVersion: positionArray.layoutVersion,
+    bps: 2_500,
+    bitmap: null,
+  },
+});
+await sendAndConfirmTransaction(connection, quarter.tx, [owner]);
+```
+
+The second call reads the position again because the first call changed the liquidity. `removeLiquidityByBps` refreshes the vesting schedule first, so liquidity that has vested counts as unlocked. Permanently locked liquidity is never withdrawn, and the slots stay in the position when they are empty. Fees and rewards already earned stay claimable, and the liquidity left in the position keeps earning.
+
+Errors you are likely to hit:
+
+- `MathOverflow`: a `liquidities` entry is more than the slot's unlocked liquidity.
+- `ExceededSlippage`: the tokens received, after any transfer fee, are below `minAmountX` or `minAmountY`. Set the minimums from `getAmountsFromLiquidity` with a negative liquidity, minus your tolerance.
+- `InvalidParameters`: `removeLiquidityByBps` finds no unlocked liquidity to take, for example after a 100% permanent lock.
+- `InvalidLayoutVersion`: slots were added or removed since you read `layoutVersion`.
+- `PoolError` with `InvalidParameters`: `bps` outside 1 to 10,000 or `liquidities` that does not match the bitmap.
+
+## Resize a Position
+
+A position can grow and shrink after it is opened. `expandPosition` appends empty slots, and `removePosition` deletes empty slots. Both bump the position's `layoutVersion`, and every bitmap or slot index you computed before is then stale. This script appends two slots below the price and then removes them again.
+
+The owner signs, or a delegate with the `UpdatePositionRange` permission, who must name the owner as `rentReceiver` when removing. The payer of `expandPosition` funds the larger account and any new tick arrays. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `POSITION_NFT`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  DlmmProClient,
+  PoolExtension,
+  derivePosition,
+  isSupportExtension,
+  liquidityBitmap,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+
+const poolState = await client.state.fetchPool(pool);
+const { tickSpacing, tickCurrentId } = poolState;
+const position = derivePosition(nftMint);
+const read = () =>
+  client.state.fetchPositionArrayWithPositions(position, {
+    withReward: isSupportExtension(
+      poolState.extensions,
+      PoolExtension.LiquidityMining,
+    ),
+  });
+
+// 1. Append two empty slots below the price. New slots go to the end.
+const aligned = Math.floor(tickCurrentId / tickSpacing) * tickSpacing;
+const newRanges = [
+  {
+    tickLowerId: aligned - 30 * tickSpacing,
+    tickUpperId: aligned - 25 * tickSpacing,
+  },
+  {
+    tickLowerId: aligned - 25 * tickSpacing,
+    tickUpperId: aligned - 20 * tickSpacing,
+  },
+];
+const expanded = await client.position.expandPosition({
+  pool,
+  signer: owner.publicKey,
+  payer: owner.publicKey,
+  nftMint,
+  owner: owner.publicKey,
+  tickRanges: newRanges,
+});
+await sendAndConfirmTransaction(connection, expanded.tx, [owner]);
+
+// 2. Read the position again: the layout version moved, so any bitmap built
+// before the expansion is stale.
+const { positionArray, positions } = await read();
+console.log(
+  `layout version ${positionArray.layoutVersion}, ${positions.length} slots`,
+);
+const first = positions.length - newRanges.length;
+const slotIndexes = newRanges.map((_, offset) => first + offset);
+
+// 3. Remove those slots again. They hold nothing, so the position array
+// shrinks. The rent of the removed slots, and of ticks no other position or
+// order uses, goes to the receiver.
+const removed = await client.position.removePosition({
+  pool,
+  signer: owner.publicKey,
+  nftMint,
+  owner: owner.publicKey,
+  rentReceiver: owner.publicKey,
+  tickRanges: newRanges,
+  parameters: {
+    expectedLayoutVersion: positionArray.layoutVersion,
+    bitmap: liquidityBitmap(slotIndexes),
+  },
+});
+await sendAndConfirmTransaction(connection, removed.tx, [owner]);
+
+const after = await read();
+console.log(
+  `layout version ${after.positionArray.layoutVersion}, ${after.positions.length} slots`,
+);
+```
+
+The rules:
+
+- New slots go to the end, so existing slot numbers do not change when you expand. A position has at most 45 slots.
+- A removed slot must be empty: no liquidity, no pending fees and no pending rewards. At least one slot must stay.
+- The remaining slots keep their order and shift down to fill the gaps, so after a removal the slot numbers of everything above the removed slots drop. Read the position again before you build another bitmap.
+- `tickRanges` for `removePosition` must be exactly the ranges of the slots in `bitmap`. The tick arrays they use are passed so the program can free ticks that nothing else references.
+- `expectedLayoutVersion` makes the transaction fail with `InvalidLayoutVersion` if the layout changed since you read it. Pass `null` to skip the check.
+
+Errors you are likely to hit:
+
+- `PositionIsNotEmpty`: a slot you are removing still holds liquidity, fees or rewards. Withdraw and claim first.
+- `InvalidParameters`: the position would exceed 45 slots, or the removal would leave no slot.
+- `InvalidLayoutVersion`: another transaction resized the position first.
+- `InvalidPermission`: a delegate lacks `UpdatePositionRange`, or removes slots with a rent receiver other than the owner.
+
+## Lock Liquidity Permanently
+
+A permanent lock moves a share of every slot's unlocked liquidity into permanently locked liquidity. That liquidity can never be withdrawn, and it keeps earning fees and rewards. Only the owner can lock. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS`, `POSITION_NFT` and, optionally, `LOCK_BPS` (default 10,000, which locks everything).
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  DlmmProClient,
+  PoolExtension,
+  derivePosition,
+  isSupportExtension,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+const bps = Number(process.env.LOCK_BPS ?? 10_000); // 10,000 locks everything
+
+const poolState = await client.state.fetchPool(pool);
+const position = derivePosition(nftMint);
+const read = () =>
+  client.state.fetchPositionArrayWithPositions(position, {
+    withReward: isSupportExtension(
+      poolState.extensions,
+      PoolExtension.LiquidityMining,
+    ),
+  });
+
+const { positionArray } = await read();
+const { tx } = await client.position.lockPermanentPosition({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  bps,
+  expectedLayoutVersion: positionArray.layoutVersion,
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+
+const { positions } = await read();
+positions.forEach((slot, index) =>
+  console.log(
+    `slot ${index}: unlocked ${slot.unlockedLiquidity}, permanently locked ${slot.permanentLockedLiquidity}`,
+  ),
+);
+```
+
+The share applies to each slot separately and rounds down, so locking 5,000 bps of an odd amount leaves the extra atom unlocked. The program first releases any vesting that is due. Fees stay claimable after a lock, and a position with permanently locked liquidity cannot be closed. See [Locks](/core-products/dlmm-pro/positions#locks).
+
+Errors you are likely to hit:
+
+- `LiquidityIsZero`: no slot has unlocked liquidity to move, for example locking a second time at 100%.
+- `PoolError` with `InvalidParameters`: `bps` outside 1 to 10,000.
+- `InvalidLayoutVersion`: the layout changed since you read it.
+- `PositionIsNotEmpty` when you later try to close the position: locked liquidity counts as liquidity.
+
+## Lock Liquidity With a Vesting Schedule
+
+A vesting lock moves a share of each slot's unlocked liquidity into a schedule: some of it is released at a cliff and the rest in equal steps. Released liquidity becomes unlocked and can be withdrawn. A position can have one schedule in its lifetime, and only the owner can lock. The script locks 80% of every slot, with 20% of that released after a one day cliff and then 10% every week for 8 weeks. It reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `POSITION_NFT`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  ActivationType,
+  DlmmProClient,
+  MS_PER_SLOT,
+  PoolExtension,
+  derivePosition,
+  isSupportExtension,
+  readClock,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+
+const poolState = await client.state.fetchPool(pool);
+const { positionArray } = await client.state.fetchPositionArrayWithPositions(
+  derivePosition(nftMint),
+  {
+    withReward: isSupportExtension(
+      poolState.extensions,
+      PoolExtension.LiquidityMining,
+    ),
+  },
+);
+
+// Vesting points use the pool's activation type: seconds, or slots
+const clock = await readClock(connection);
+const now =
+  poolState.activationType === ActivationType.Slot
+    ? clock.slot
+    : clock.timestamp;
+const day = new BN(
+  poolState.activationType === ActivationType.Slot
+    ? (86_400 * 1_000) / MS_PER_SLOT
+    : 86_400,
+);
+
+// Lock 80% of every slot: 20% of it opens after a one day cliff, then 10%
+// every week for 8 weeks
+const { tx } = await client.position.lockVestingPosition({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  parameters: {
+    cliffPoint: now.add(day),
+    cliffUnlockBps: 2_000,
+    bpsPerPeriod: 1_000,
+    periodFrequency: day.muln(7),
+    numberOfPeriod: 8,
+    bps: 8_000,
+    expectedLayoutVersion: positionArray.layoutVersion,
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+```
+
+The cliff and the period length use the pool's activation type, which is seconds for `Timestamp` and slots for `Slot`, so the script reads the current point and the length of a day in the right unit. On a `Slot` pool the script converts with `MS_PER_SLOT`, the program's nominal 250 ms slot. Real slot times differ, so the wall-clock dates are approximate. Measure the cluster with `getRecentPerformanceSamples` if the dates matter. `cliffUnlockBps + bpsPerPeriod * numberOfPeriod` must equal 10,000. Pass `cliffPoint: null` to start the cliff now, and a `cliffUnlockBps` of 10,000 with zero periods for a single release at the cliff.
+
+Errors you are likely to hit:
+
+- `PoolError` with `InvalidParameters` from the builder: the shares do not add to 10,000, only some of the three period values are set, a period value is out of range, or `bps` is outside 1 to 10,000. The program checks the cliff and the total duration as well.
+- `PositionAlreadyHadVesting`: the position had a schedule before, even one that has fully released. Lock from another position.
+- `LiquidityIsZero`: no slot has unlocked liquidity to move.
+- `InvalidLayoutVersion`: the layout changed since you read it.
+
+[Locks](/core-products/dlmm-pro/positions#locks) has the release formula and a worked schedule.
+
+## Check Vesting Progress
+
+The account does not release vesting by itself. Liquidity moves from vesting to unlocked when something touches the slot: a refresh, a deposit, a withdrawal or a permanent lock. To read how much has been released, refresh every slot that holds liquidity, then read the position. The script prints the schedule and, for each slot, the released and still vesting liquidity with what the released part is worth at the current price. The owner signs the refresh, or a delegate that is approved on the NFT. It reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `POSITION_NFT`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  DlmmProClient,
+  PoolExtension,
+  derivePosition,
+  getAmountsFromLiquidity,
+  isSupportExtension,
+  liquidityBitmap,
+  positionTotalLiquidity,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+
+const poolState = await client.state.fetchPool(pool);
+const position = derivePosition(nftMint);
+const read = () =>
+  client.state.fetchPositionArrayWithPositions(position, {
+    withReward: isSupportExtension(
+      poolState.extensions,
+      PoolExtension.LiquidityMining,
+    ),
+  });
+
+// The account only shows a release once an instruction refreshes the slots,
+// so refresh every slot that holds liquidity first
+const before = await read();
+const funded = before.positions
+  .map((slot, index) => ({ slot, index }))
+  .filter(({ slot }) => !positionTotalLiquidity(slot).isZero());
+const refreshed = await client.position.refreshFeesAndRewards({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  bitmap: liquidityBitmap(funded.map(({ index }) => index)),
+  tickRanges: funded.map(({ slot }) => ({
+    tickLowerId: slot.tickLowerId,
+    tickUpperId: slot.tickUpperId,
+  })),
+});
+await sendAndConfirmTransaction(connection, refreshed.tx, [owner]);
+
+const { positionArray, positions } = await read();
+const { vesting } = positionArray;
+console.log(
+  `cliff ${vesting.cliffPoint}, every ${vesting.periodFrequency} for ${vesting.numberOfPeriod} periods`,
+);
+for (const [index, slot] of positions.entries()) {
+  if (slot.vestingLiquidity.add(slot.releasedVestingLiquidity).isZero())
+    continue;
+  const { amountX, amountY } = getAmountsFromLiquidity({
+    tickCurrentId: poolState.tickCurrentId,
+    tickLowerId: slot.tickLowerId,
+    tickUpperId: slot.tickUpperId,
+    currentSqrtPrice: poolState.sqrtPrice,
+    liquidity: slot.releasedVestingLiquidity,
+  });
+  console.log(
+    `slot ${index}: released ${slot.releasedVestingLiquidity}, still vesting ${slot.vestingLiquidity}, released is worth ${amountX} X and ${amountY} Y`,
+  );
+}
+```
+
+Before the cliff nothing is released, and the refresh changes nothing. After it, `releasedVestingLiquidity` grows by the schedule and `unlockedLiquidity` grows with it. The refresh needs the ranges of every selected slot that holds liquidity, which is why the script filters on total liquidity. A slot without liquidity is skipped. The same refresh brings accrued fees and rewards up to date.
+
+## Delegate a Position
+
+A delegate can manage a position without owning the NFT. Delegation takes two things on the NFT and the position: a Token 2022 `approve` of amount 0 on the NFT account, and a permission bitmask on the position. The script runs three steps and needs both wallets. The owner approves and grants `ClaimFee`, the delegate claims the fees to the owner, and the owner revokes. In real use the owner and the delegate sign separately.
+
+The position must have fees to claim. The script reads `RPC_URL`, `WALLET_SECRET_KEY` (the owner), `DELEGATE_SECRET_KEY`, `POOL_ADDRESS` and `POSITION_NFT`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  createApproveInstruction,
+  createRevokeInstruction,
+} from "@solana/spl-token";
+import {
+  DlmmProClient,
+  PositionDelegatePermission,
+  findNftAccount,
+  positionDelegatePermissionMask,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const delegate = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.DELEGATE_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+const nftAccount = findNftAccount(nftMint, owner.publicKey);
+
+// 1. Owner: approve the delegate on the NFT with an amount of 0, and grant
+// the permission to claim fees, in one transaction
+const { tx: grant } = await client.position.updatePositionDelegatePermission({
+  nftMint,
+  owner: owner.publicKey,
+  permission: positionDelegatePermissionMask([
+    PositionDelegatePermission.ClaimFee,
+  ]),
+});
+grant.add(
+  createApproveInstruction(
+    nftAccount,
+    delegate.publicKey,
+    owner.publicKey,
+    0n,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+  ),
+);
+await sendAndConfirmTransaction(connection, grant, [owner]);
+
+// 2. Delegate: claim. The delegate signs and pays the fee; the tokens go to
+// the owner's associated token accounts.
+const poolState = await client.state.fetchPool(pool);
+const claimable = await client.position.getClaimableFees({ pool, nftMint });
+const { tx: claim } = await client.position.claimFee({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: delegate.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  bitmap: claimable.bitmap,
+  tickRanges: claimable.tickRanges,
+});
+await sendAndConfirmTransaction(connection, claim, [delegate]);
+console.log("claimed", claimable.feeX.toString(), claimable.feeY.toString());
+
+// 3. Owner: revoke the delegate and clear the permission
+const { tx: revoke } = await client.position.updatePositionDelegatePermission({
+  nftMint,
+  owner: owner.publicKey,
+  permission: 0,
+});
+revoke.add(
+  createRevokeInstruction(
+    nftAccount,
+    owner.publicKey,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+  ),
+);
+await sendAndConfirmTransaction(connection, revoke, [owner]);
+```
+
+What to expect on-chain:
+
+- The approve and the permission update can share a transaction, and only the owner signs it.
+- The delegate signs and pays the fee for the claim, but the tokens go to the owner's associated token accounts, which the builder creates when missing. The delegate does not receive anything.
+- A delegate can also add or remove liquidity, claim rewards and resize the position when the matching permission bit is set, see [Delegates](/core-products/dlmm-pro/positions#delegates). It can never lock, close the position or change permissions. Combine bits with `positionDelegatePermissionMask`.
+
+Permissions live on the position, not on the delegate. Revoking the Token 2022 approval removes the delegate but leaves the permission set, so the script clears it as well.
+
+Errors you are likely to hit:
+
+- `InvalidAuthority`: the signer is not the owner and the NFT account has no approval for it.
+- `InvalidPermission`: the delegate is approved but the permission bit for the instruction is not set.
+- `DelegatedAmountNonZero`: the approval was made with an amount above 0. Approve again with 0.
+- `IncorrectATA`: a delegate passed `userTokenX` or `userTokenY` that are not the owner's associated token accounts. Leave them out.
+
+## Claim or Compound Fees
+
+`getClaimableFees` refreshes nothing on-chain; it computes what a claim would pay right now and returns the slot bitmap and ranges to pass to `claimFee`. `compoundFees` claims and deposits into one slot in the same transaction. The deposit is an imbalanced deposit, so for a slot that holds both tokens it adds as much as the slot's current token ratio allows, and anything that does not fit stays in the wallet.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+
+const poolState = await client.state.fetchPool(pool);
+const accounts = {
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+};
+
+// What claimFee would pay right now, across every slot
+const claimable = await client.position.getClaimableFees({ pool, nftMint });
+console.log("fees", claimable.feeX.toString(), claimable.feeY.toString());
+
+if (process.env.COMPOUND) {
+  // Claim and deposit the fees back into slot 0 in one transaction
+  const { tx } = await client.position.compoundFees({ ...accounts, index: 0 });
+  await sendAndConfirmTransaction(connection, tx, [owner]);
+} else {
+  const { tx } = await client.position.claimFee({
+    ...accounts,
+    bitmap: claimable.bitmap,
+    tickRanges: claimable.tickRanges,
+  });
+  await sendAndConfirmTransaction(connection, tx, [owner]);
+}
+```
+
+If the target slot needs both tokens at the current price and the position only earned one of them, the program rejects the compound deposit with `ExceededSlippage`. Pass `maxAmountX` or `maxAmountY` to top it up from the wallet. On an `OnlyY` pool, such as the launch pool above, fees are always token Y, so a slot that spans the current price always needs a `maxAmountX` top-up. With nothing to claim, `compoundFees` throws `AmountIsZero`.
+
+## Withdraw Everything and Close a Position
+
+A position can only be closed when every slot is empty: no liquidity, no unclaimed fees and no unclaimed rewards.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  PoolExtension,
+  derivePosition,
+  isSupportExtension,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+
+const poolState = await client.state.fetchPool(pool);
+const { positionArray, positions } =
+  await client.state.fetchPositionArrayWithPositions(derivePosition(nftMint), {
+    withReward: isSupportExtension(
+      poolState.extensions,
+      PoolExtension.LiquidityMining,
+    ),
+  });
+const tickRanges = positions.map(({ tickLowerId, tickUpperId }) => ({
+  tickLowerId,
+  tickUpperId,
+}));
+
+// 1. Withdraw all unlocked liquidity from every slot
+const removed = await client.position.removeLiquidityByBps({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  tickRanges,
+  parameters: {
+    minAmountX: new BN(0),
+    minAmountY: new BN(0),
+    expectedLayoutVersion: positionArray.layoutVersion,
+    bps: 10_000,
+    bitmap: null,
+  },
+});
+await sendAndConfirmTransaction(connection, removed.tx, [owner]);
+
+// 2. Claim what the slots earned
+const claimable = await client.position.getClaimableFees({ pool, nftMint });
+const claimed = await client.position.claimFee({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  bitmap: claimable.bitmap,
+  tickRanges: claimable.tickRanges,
+});
+await sendAndConfirmTransaction(connection, claimed.tx, [owner]);
+
+// 3. On liquidity mining pools, claim every reward slot too
+const { extensions } = await client.state.fetchPoolWithExtensions(pool);
+for (const [rewardIndex, reward] of (extensions.rewards ?? []).entries()) {
+  if (reward.mint.equals(PublicKey.default)) continue;
+  const { tx } = await client.reward.claimReward({
+    pool,
+    nftMint,
+    owner: owner.publicKey,
+    signer: owner.publicKey,
+    rewardMint: reward.mint,
+    rewardIndex,
+    bitmap: claimable.bitmap,
+    tickRanges: claimable.tickRanges,
+  });
+  await sendAndConfirmTransaction(connection, tx, [owner]);
+}
+
+// 4. Burn the NFT and reclaim rent
+const closed = await client.position.closePosition({
+  pool,
+  owner: owner.publicKey,
+  nftMint,
+  rentReceiver: owner.publicKey,
+  tickRanges,
+});
+await sendAndConfirmTransaction(connection, closed.tx, [owner]);
+```
+
+Permanently locked liquidity can never be withdrawn, so a position holding any cannot be closed. Vesting liquidity becomes withdrawable as it vests, so a position with a vesting lock can be closed once the schedule has finished.
+
+## Find Positions and Limit Orders
+
+There is no index of positions by owner, so you read the wallet's NFTs. Position and limit order NFTs are Token 2022 mints with 0 decimals, and each one has a program account at a PDA of the mint. The script lists a wallet's positions and limit orders from its token accounts, then lists every position and limit order of a pool with `getProgramAccounts`. It reads `RPC_URL`, `POOL_ADDRESS` and `WALLET_ADDRESS`. Nothing is signed.
+
+```typescript
+import { Connection, PublicKey } from "@solana/web3.js";
+import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
+import {
+  DLMM_PRO_PROGRAM_ID,
+  DlmmProClient,
+  deriveLimitOrder,
+  derivePosition,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const wallet = new PublicKey(process.env.WALLET_ADDRESS!);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+
+// 1. A wallet's positions and limit orders. Their NFTs are Token 2022 mints
+// with 0 decimals, so look at the wallet's Token 2022 accounts holding 1 token.
+const { value: tokenAccounts } = await connection.getParsedTokenAccountsByOwner(
+  wallet,
+  { programId: TOKEN_2022_PROGRAM_ID },
+);
+const nftMints = tokenAccounts
+  .map(({ account }) => account.data.parsed.info)
+  .filter(
+    (info) =>
+      info.tokenAmount.decimals === 0 && info.tokenAmount.amount === "1",
+  )
+  .map((info) => new PublicKey(info.mint));
+
+// A mint is a position or a limit order if the matching PDA exists and the program owns it
+async function owned(addresses: PublicKey[]) {
+  // getMultipleAccountsInfo accepts at most 100 addresses per call
+  const infos: Awaited<ReturnType<typeof connection.getMultipleAccountsInfo>> =
+    [];
+  for (let i = 0; i < addresses.length; i += 100) {
+    infos.push(
+      ...(await connection.getMultipleAccountsInfo(addresses.slice(i, i + 100))),
+    );
+  }
+  return infos.map((info) => !!info && info.owner.equals(DLMM_PRO_PROGRAM_ID));
+}
+const isPosition = await owned(nftMints.map((mint) => derivePosition(mint)));
+const isLimitOrder = await owned(
+  nftMints.map((mint) => deriveLimitOrder(mint)),
+);
+console.log(
+  "wallet positions",
+  nftMints.filter((_, i) => isPosition[i]).map((mint) => mint.toBase58()),
+);
+console.log(
+  "wallet limit orders",
+  nftMints.filter((_, i) => isLimitOrder[i]).map((mint) => mint.toBase58()),
+);
+
+// 2. Every position and limit order of a pool, found by account discriminator
+// and pool address. The discriminators are base58 of PositionArray
+// (bf7fb653f015fda0) and LimitOrder (89b7d45b731d8de3). The pool sits at
+// offset 8 and the NFT mint at offset 40, so slice out only the mint.
+async function nftMintsOfPool(discriminator: string) {
+  const accounts = await connection.getProgramAccounts(DLMM_PRO_PROGRAM_ID, {
+    filters: [
+      { memcmp: { offset: 0, bytes: discriminator } },
+      { memcmp: { offset: 8, bytes: pool.toBase58() } },
+    ],
+    dataSlice: { offset: 40, length: 32 },
+  });
+  return accounts.map(({ account }) => new PublicKey(account.data));
+}
+const positionMints = await nftMintsOfPool("Z2nBUmDHMZH");
+const limitOrderMints = await nftMintsOfPool("Q33CbEEDKoY");
+console.log(
+  `pool has ${positionMints.length} positions, ${limitOrderMints.length} limit orders`,
+);
+
+// Read one of them in full
+if (positionMints.length > 0) {
+  const array = await client.state.fetchPositionArray(
+    derivePosition(positionMints[0]),
+  );
+  console.log(
+    "first position",
+    positionMints[0].toBase58(),
+    "layout version",
+    array.layoutVersion,
+  );
+}
+```
+
+For a wallet, the script takes the Token 2022 accounts that hold exactly 1 token of a 0-decimal mint, then checks which of those mints have a program-owned account at `derivePosition(mint)` or `deriveLimitOrder(mint)`. A wallet that only holds a delegation does not own the NFT, so it does not appear.
+
+For a pool, the filters are the account discriminator at offset 0 and the pool at offset 8, and `dataSlice` returns only the NFT mint at offset 40. The discriminators are `bf7fb653f015fda0` for `PositionArray` and `89b7d45b731d8de3` for `LimitOrder`, and the script passes them in base58. The offsets are in [Finding Accounts](/developer-guides/dlmm-pro/program/accounts#finding-accounts). To list the limit orders that name a referral, filter on offset 72 as well.
+
+Some public RPC endpoints limit or disable `getProgramAccounts`, so use your own endpoint for a pool scan.
+
+## Place a Limit Order Ladder
+
+This places five bids below the price, sized by a Bid-Ask shape so the deepest bids are the largest. The order is relative, so if the price moves more than two tick spacings before it lands, it fails instead of resting at the wrong prices.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  StrategyType,
+  buildLiquidityShape,
+  limitOrderTicksFromShape,
+  relativeTickFromSlippage,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+
+const poolState = await client.state.fetchPool(pool);
+const { tickSpacing, tickCurrentId } = poolState;
+const aligned = Math.floor(tickCurrentId / tickSpacing) * tickSpacing;
+
+// Five bids below the price, larger the further down they sit
+const shape = buildLiquidityShape({
+  strategy: StrategyType.BidAsk,
+  minTickId: aligned - 5 * tickSpacing,
+  maxTickId: aligned - tickSpacing,
+  tickSpacing,
+  currentTickId: tickCurrentId,
+});
+const bid = limitOrderTicksFromShape({
+  shape,
+  side: "bid",
+  totalAmount: new BN(500_000_000), // token Y, before transfer fee
+  relative: true,
+});
+
+const nft = Keypair.generate();
+const opened = await client.limitOrder.openLimitOrder({
+  pool,
+  nftMint: nft.publicKey,
+  owner: owner.publicKey,
+  payer: owner.publicKey,
+  tokenMint: poolState.tokenYMint, // bids pay in token Y
+  parameters: {
+    isAskSide: false,
+    maxAmount: bid.amount, // add the transfer fee if token Y has one
+    // Reject the order if the price moves more than two tick spacings first
+    relativeTick: relativeTickFromSlippage({
+      currentTickId: tickCurrentId,
+      tickSpacing,
+      slippageTicks: 2 * tickSpacing,
+    }),
+    ticks: bid.ticks,
+  },
+});
+await sendAndConfirmTransaction(connection, opened.tx, [owner, nft]);
+
+// Later: cancel every tick to collect proceeds, unfilled amounts and fees
+const canceled = await client.limitOrder.cancelLimitOrder({
+  pool,
+  nftMint: nft.publicKey,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+});
+await sendAndConfirmTransaction(connection, canceled.tx, [owner]);
+
+// Then burn the NFT and reclaim rent
+const closed = await client.limitOrder.closeLimitOrder({
+  pool,
+  nftMint: nft.publicKey,
+  owner: owner.publicKey,
+  rentReceiver: owner.publicKey,
+});
+await sendAndConfirmTransaction(connection, closed.tx, [owner]);
+```
+
+Canceling collects everything an order holds: the unfilled amount, the token received from fills and the order's fee share. Cancel some ticks with `tickIds` to keep the rest of the order resting.
+
+## Place Limit Orders at Absolute Ticks
+
+The ladder above uses relative ticks, which follow the price. Absolute ticks name tick IDs outright, so the order rests at exactly those prices. The cost is that nothing protects the order from a price that moves before it lands. A bid must sit at or below the current tick and an ask above it, and the program rejects the order with `InvalidParameters` when it does not. For an order that should tolerate price movement, keep `relativeTick`.
+
+This script places three bids, or three asks with `SIDE=ask`, on consecutive ticks next to the price. The owner and the new NFT mint sign. It reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS`, `AMOUNT_PER_TICK` (atoms of the deposit token on each tick), optionally `SIDE` and optionally `REFERRAL_ADDRESS`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import { DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const isAsk = process.env.SIDE === "ask"; // default: bid
+const amountPerTick = new BN(process.env.AMOUNT_PER_TICK!); // atoms of the deposit token
+const referral = process.env.REFERRAL_ADDRESS
+  ? new PublicKey(process.env.REFERRAL_ADDRESS)
+  : null;
+
+const poolState = await client.state.fetchPool(pool);
+const { tickSpacing, tickCurrentId } = poolState;
+const aligned = Math.floor(tickCurrentId / tickSpacing) * tickSpacing;
+
+// Absolute tick ids, ascending, each a multiple of the tick spacing.
+// A bid (deposits token Y) sits at or below the current tick; an ask
+// (deposits token X) sits above it.
+const tickIds = isAsk
+  ? [1, 2, 3].map((step) => aligned + step * tickSpacing)
+  : [-2, -1, 0].map((step) => aligned + step * tickSpacing);
+const ticks = tickIds.map((id) => ({ id, amount: amountPerTick }));
+
+const nft = Keypair.generate();
+const { tx } = await client.limitOrder.openLimitOrder({
+  pool,
+  nftMint: nft.publicKey,
+  owner: owner.publicKey,
+  payer: owner.publicKey,
+  tokenMint: isAsk ? poolState.tokenXMint : poolState.tokenYMint,
+  referral,
+  parameters: {
+    isAskSide: isAsk,
+    maxAmount: amountPerTick.muln(ticks.length), // add the transfer fee if the mint has one
+    relativeTick: null, // null makes the tick ids absolute
+    ticks,
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [owner, nft]);
+console.log(
+  "limit order NFT",
+  nft.publicKey.toBase58(),
+  "ticks",
+  tickIds.join(", "),
+);
+```
+
+The rules:
+
+- A bid deposits token Y, an ask deposits token X. `maxAmount` caps the total deposit including any Token 2022 transfer fee, so add the fee if the mint has one.
+- `ticks` has 1 to 25 entries (`LIMIT_ORDER_MAX_TICK`), strictly ascending by `id`, each a multiple of the tick spacing and each with a non-zero amount. The builder checks all of this and throws `PoolError` with `InvalidParameters`.
+- A tick holds one side at a time. An order on a tick that still has unfilled orders of the other side fails with `InvalidParameters`.
+- The order stores `referral`. When the order is canceled, that wallet earns 20% (`LIMIT_ORDER_REFERRAL_FEE_BPS`) of the order's fee share, paid in the fee token, if the canceler passes the referral's token account. An order whose referral is its owner pays no referral fee, and there is nothing to pay until the order has been filled. The next examples cancel orders.
+
+Errors you are likely to hit:
+
+- `InvalidParameters`: a bid above the current tick or an ask at or below it when the transaction lands, or ticks that are not on the tick spacing, not ascending or empty.
+- `ExceededSlippage`: the deposit plus its Token 2022 transfer fee is above `maxAmount`, or, with `relativeTick`, the price has left the band.
+- `TickArrayBitmapExtensionAccountIsNotProvided`: a tick lies outside tick array indexes -512 to 511 and the extension account is missing. The builder passes it for you when the pool has one.
+
+## Read Limit Order Fill State
+
+An order does not tell you how much of it has filled. The state lives on its ticks. Each tick has a batch counter, `orderAge`, and an order records the counter it was placed at. The gap says how far the tick has got: 0 means the order is still resting, 1 means the tick is being filled and the order has its share of what is left, and 2 or more means the order is fully filled. See [How Orders Fill](/core-products/dlmm-pro/limit-orders#how-orders-fill). The script reads the order and the ticks it sits on and prints one line per tick. It reads `RPC_URL`, `POOL_ADDRESS` and `LIMIT_ORDER_NFT`. Nothing is signed.
+
+```typescript
+import { Connection, PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  PoolExtension,
+  deriveLimitOrder,
+  isSupportExtension,
+  tickArraysForTickIds,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.LIMIT_ORDER_NFT!);
+
+const poolState = await client.state.fetchPool(pool);
+const orders = (
+  await client.state.decodeLimitOrderData(deriveLimitOrder(nftMint))
+).filter((order) => !order.amount.isZero()); // canceled ticks have amount 0
+
+// Each tick keeps a batch counter, `orderAge`. An order records the counter
+// it was placed at, so the gap says how far the tick got.
+const tickArrays = await client.state.fetchTickArraysWithTicks(
+  tickArraysForTickIds(
+    pool,
+    orders.map((order) => order.tickId),
+    poolState.tickSpacing,
+  ),
+  {
+    withReward: isSupportExtension(
+      poolState.extensions,
+      PoolExtension.LiquidityMining,
+    ),
+  },
+);
+const ticks = new Map(
+  tickArrays.flatMap(({ ticks }) =>
+    ticks.map((tick) => [tick.tickId, tick] as const),
+  ),
+);
+
+for (const order of orders) {
+  const tick = ticks.get(order.tickId)!;
+  const gap = tick.orderAge.sub(order.age);
+  const side = order.isAsk ? "ask" : "bid";
+  if (gap.isZero()) {
+    console.log(`${side} at ${order.tickId}: resting, nothing filled yet`);
+  } else if (gap.eqn(1)) {
+    // The tick is being filled: this order gets its share of what is left to fill
+    const unfilled = order.amount
+      .mul(tick.processedOrderRemainingAmount)
+      .add(tick.totalProcessingOrderAmount.subn(1))
+      .div(tick.totalProcessingOrderAmount);
+    console.log(
+      unfilled.isZero()
+        ? `${side} at ${order.tickId}: filled, ${order.amount} atoms`
+        : `${side} at ${order.tickId}: partly filled, about ${order.amount.sub(unfilled)} of ${order.amount} filled`,
+    );
+  } else {
+    console.log(
+      `${side} at ${order.tickId}: fully filled, ${order.amount} atoms`,
+    );
+  }
+}
+```
+
+For a tick in the middle of being filled, the unfilled part of the order is its amount times `processedOrderRemainingAmount` over `totalProcessingOrderAmount`, rounded up, and the rest is filled. The amounts are in the deposit token: token Y for a bid, token X for an ask. They are what the order put in, not what it has earned. The proceeds in the other token are worked out at the tick's price when the order is canceled.
+
+Canceled ticks stay in the order with amount 0 and the script skips them. A tick's counter resets to 0 when it has no orders left, so comparing it with a canceled order's age would be meaningless.
+
+## Cancel Part of a Limit Order
+
+`cancelLimitOrder` cancels every tick of an order by default, as in the ladder. Pass `tickIds` to cancel only some ticks and leave the rest resting. Canceling a tick pays the unfilled deposit, the proceeds of what filled and the tick's share of the order's fee, to the owner's associated token accounts. The owner signs, or a delegate with the `CancelLimitOrder` permission.
+
+This script cancels the ticks in `TICK_IDS` and pays the referral when the order has one. It reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS`, `LIMIT_ORDER_NFT` and `TICK_IDS` (tick IDs of the order, comma separated and strictly ascending).
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import {
+  CollectFeeMode,
+  DlmmProClient,
+  deriveLimitOrder,
+  getTokenProgram,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.LIMIT_ORDER_NFT!);
+// Ticks to cancel, strictly ascending
+const tickIds = process.env.TICK_IDS!.split(",").map(Number);
+
+const poolState = await client.state.fetchPool(pool);
+const limitOrder = deriveLimitOrder(nftMint);
+const { referral } = await client.state.fetchLimitOrder(limitOrder);
+const orders = await client.state.decodeLimitOrderData(limitOrder);
+
+// The referral wallet earns a share of the order's fee when it cancels, paid
+// in the fee token: token Y, or on an OutputToken pool the token a fill pays out.
+// Pass its token account to pay it; leave it out and the owner keeps the whole fee.
+let referralToken: PublicKey | null = null;
+if (!referral.equals(PublicKey.default) && !referral.equals(owner.publicKey)) {
+  const isAsk = orders.some(
+    (order) => tickIds.includes(order.tickId) && order.isAsk === 1,
+  );
+  const feeIsX =
+    isAsk && poolState.collectFeeMode === CollectFeeMode.OutputToken;
+  const [feeMint, feeFlag] = feeIsX
+    ? [poolState.tokenXMint, poolState.tokenXFlag]
+    : [poolState.tokenYMint, poolState.tokenYFlag];
+  const ata = getAssociatedTokenAddressSync(
+    feeMint,
+    referral,
+    true,
+    getTokenProgram(feeFlag),
+  );
+  if (await connection.getAccountInfo(ata)) referralToken = ata;
+}
+
+const { tx } = await client.limitOrder.cancelLimitOrder({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  tickIds,
+  referralToken,
+});
+await sendAndConfirmTransaction(connection, tx, [owner]);
+console.log(
+  "canceled",
+  tickIds.join(", "),
+  "referral paid:",
+  referralToken !== null,
+);
+```
+
+The referral is paid only when you pass its token account. The fee token is token Y on an `OnlyY` pool. On an `OutputToken` pool it is the token a fill pays out: token Y for a bid and token X for an ask. The referral gets 20% of the order's fee share and the owner the rest. Leave `referralToken` out and the owner keeps the whole fee, because the program pays the referral only when the canceler passes its account. The token account must belong to the referral wallet, or no referral fee is paid. The script passes it only when the account exists, because the builder throws `InvalidAccount` for a missing one.
+
+Errors you are likely to hit:
+
+- `CancelNonEmptyLimitOrder`: a tick you named is already canceled. The name is the opposite of what it checks.
+- `CannotFindLimitOrderByTickId`: a tick ID that is not part of the order.
+- `LimitOrderIsNotEmpty`: `closeLimitOrder` while some ticks are still not canceled. Cancel them all first.
+- `PoolError` with `InvalidParameters`: `tickIds` empty, not strictly ascending or not integers.
+- `ExceededSlippage`: the amount received after transfer fees is below `minAmountX` or `minAmountY`.
+
+## Delegate a Limit Order
+
+A delegate for a limit order can cancel its ticks and nothing else. The setup is the same as for a position: a Token 2022 `approve` of amount 0 on the order's NFT account, and a permission on the order. The script grants `CancelLimitOrder` and has the delegate cancel every tick. The deposit and the proceeds go to the owner's associated token accounts, and the owner still has to close the order. It reads `RPC_URL`, `WALLET_SECRET_KEY` (the owner), `DELEGATE_SECRET_KEY`, `POOL_ADDRESS` and `LIMIT_ORDER_NFT`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  createApproveInstruction,
+} from "@solana/spl-token";
+import {
+  DlmmProClient,
+  LimitOrderDelegatePermission,
+  findNftAccount,
+  limitOrderDelegatePermissionMask,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const delegate = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.DELEGATE_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.LIMIT_ORDER_NFT!);
+
+// 1. Owner: approve the delegate with an amount of 0 and allow it to cancel
+const { tx: grant } =
+  await client.limitOrder.updateLimitOrderDelegatePermission({
+    nftMint,
+    owner: owner.publicKey,
+    permission: limitOrderDelegatePermissionMask([
+      LimitOrderDelegatePermission.CancelLimitOrder,
+    ]),
+  });
+grant.add(
+  createApproveInstruction(
+    findNftAccount(nftMint, owner.publicKey),
+    delegate.publicKey,
+    owner.publicKey,
+    0n,
+    [],
+    TOKEN_2022_PROGRAM_ID,
+  ),
+);
+await sendAndConfirmTransaction(connection, grant, [owner]);
+
+// 2. Delegate: cancel every tick. The delegate signs and pays the fee; the
+// deposit and proceeds go to the owner's associated token accounts.
+const poolState = await client.state.fetchPool(pool);
+const { tx: cancel } = await client.limitOrder.cancelLimitOrder({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: delegate.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+});
+await sendAndConfirmTransaction(connection, cancel, [delegate]);
+```
+
+The permission is stored on the order, so it survives a revoke. Clear it with `permission: 0` and revoke the approval with `createRevokeInstruction` when you remove a delegate, as in [Delegate a Position](#delegate-a-position). See [Delegates](/core-products/dlmm-pro/limit-orders#delegates).
+
+Errors you are likely to hit are the same as for a position delegate: `InvalidAuthority` without the approval, `InvalidPermission` without the bit, `DelegatedAmountNonZero` for an approval above 0 and `IncorrectATA` for a payout to any account but the owner's associated token account.
+
+## Run a Reward Campaign
+
+The pool must have been created with the `LiquidityMining` extension. The pool creator sets up slot 0, and the reward authority funds the whole emission upfront. Unless it has a token badge (passed as `tokenBadge`), the reward mint cannot have a freeze authority, and wrapped SOL and USDC are always accepted. See [Reward Mints](/core-products/dlmm-pro/liquidity-mining#reward-mints).
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  CREATOR_REWARD_INDEX,
+  DlmmProClient,
+  Rounding,
+  calculateRewardAmount,
+  readClock,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const creator = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!); // created with the LiquidityMining extension
+const rewardMint = new PublicKey(process.env.REWARD_MINT!);
+
+// 1. Set up slot 0 with the reward mint, with the creator as reward authority
+const initialized = await client.reward.initializeReward({
+  pool,
+  rewardMint,
+  rewardAuthority: creator.publicKey,
+  creator: creator.publicKey,
+  payer: creator.publicKey,
+});
+await sendAndConfirmTransaction(connection, initialized.tx, [creator]);
+
+// 2. Stream 1,000 tokens (6 decimals) over 7 days, starting in 10 minutes
+const { timestamp } = await readClock(connection);
+const openTime = timestamp.addn(600);
+const endTime = openTime.addn(7 * 86_400);
+const total = new BN(1_000_000_000);
+const emissionPerSecond = total.shln(64).div(endTime.sub(openTime)); // Q64.64
+const funded = await client.reward.setRewardEmission({
+  pool,
+  rewardMint,
+  funder: creator.publicKey,
+  authority: creator.publicKey,
+  parameters: {
+    index: CREATOR_REWARD_INDEX,
+    openTime,
+    endTime,
+    emissionPerSecond,
+    // Add the transfer fee here if the reward mint has one
+    maxAmount: calculateRewardAmount(
+      endTime.sub(openTime),
+      emissionPerSecond,
+      Rounding.Up,
+    ),
+  },
+});
+await sendAndConfirmTransaction(connection, funded.tx, [creator]);
+```
+
+LPs claim with `client.reward.claimReward`. After the emission ends, the authority calls `withdrawIneligibleRewards` to recover anything emitted while no liquidity was in range, and can then fund the slot again.
+
+## Claim Rewards for a Position
+
+A position earns rewards for every reward slot that has an emission while its slots hold liquidity in range. This script claims every reward slot that is set up. The claim refreshes the selected slots first, so it passes the same bitmap and ranges that the fee claim uses. The owner signs, or a delegate with the `ClaimReward` permission, and the rewards go to the owner's associated token account for each reward mint. It reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `POSITION_NFT`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!);
+
+const { extensions } = await client.state.fetchPoolWithExtensions(pool);
+
+// The claim refreshes the slots it selects, so pass the same bitmap and
+// ranges the fee claim uses: every slot that holds liquidity
+const { bitmap, tickRanges } = await client.position.getClaimableFees({
+  pool,
+  nftMint,
+});
+
+for (const [rewardIndex, reward] of (extensions.rewards ?? []).entries()) {
+  if (reward.mint.equals(PublicKey.default)) continue; // slot not set up
+  const { tx } = await client.reward.claimReward({
+    pool,
+    nftMint,
+    owner: owner.publicKey,
+    signer: owner.publicKey,
+    rewardMint: reward.mint,
+    rewardIndex,
+    bitmap,
+    tickRanges,
+  });
+  await sendAndConfirmTransaction(connection, tx, [owner]);
+  console.log("claimed reward slot", rewardIndex);
+}
+```
+
+One transaction claims one reward slot, because each has its own mint and vault. A claim with nothing accrued sends nothing. The bitmap only chooses which slots are refreshed before the claim. The claim pays the pending reward of every slot, so a smaller `bitmap` does not leave rewards unclaimed: slots outside it pay what they were credited at their last refresh. Set `minAmount` to fail with `ExceededSlippage` if the amount received, after any transfer fee, is lower.
+
+Errors you are likely to hit:
+
+- Anchor `AccountNotInitialized` (3012, `custom program error: 0xbc4`): the reward vault for `rewardIndex` does not exist, because the slot has not been set up or the pool has no `LiquidityMining` extension. The script skips slots that are not set up.
+- `InvalidRewardMint`: `rewardMint` is not the mint of that slot.
+- `InvalidPermission` or `InvalidAuthority` for a delegate without the approval or the bit.
+
+## Hand Over the Reward Authority
+
+The reward authority of slot 0 funds the emission, and it is the only wallet that can set a new emission or withdraw ineligible rewards. The pool creator sets it when initializing the slot and can re-assign it afterwards, whoever the current authority is. This is how a creator hands a campaign to a treasury or a program-controlled wallet. The creator signs. The script reads `RPC_URL`, `WALLET_SECRET_KEY` (the creator), `POOL_ADDRESS` and `NEW_REWARD_AUTHORITY`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { CREATOR_REWARD_INDEX, DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const creator = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const newAuthority = new PublicKey(process.env.NEW_REWARD_AUTHORITY!);
+
+const { extensions } = await client.state.fetchPoolWithExtensions(pool);
+const reward = extensions.rewards![CREATOR_REWARD_INDEX];
+console.log("current authority", reward.authority.toBase58());
+
+// The pool creator can re-assign slot 0, whoever the current authority is
+const { tx } = await client.reward.updateRewardAuthority({
+  pool,
+  creator: creator.publicKey,
+  newAuthority,
+});
+await sendAndConfirmTransaction(connection, tx, [creator]);
+
+const after = await client.state.fetchPoolWithExtensions(pool);
+console.log(
+  "new authority",
+  after.extensions.rewards![CREATOR_REWARD_INDEX].authority.toBase58(),
+);
+```
+
+Only slot 0 is the creator's, which `CREATOR_REWARD_INDEX` names. The other slot is managed by operators. After the change the old authority gets `InvalidPermission` from `setRewardEmission` and `withdrawIneligibleRewards`.
+
+Errors you are likely to hit:
+
+- `RewardUninitialized`: the slot has not been set up with `initializeReward`.
+- `InvalidParameters`: the new authority is already the authority.
+- `MissingOperatorAccount`: the signer is not the pool creator recorded on the pool. The builder passes no operator account, and only an operator with `UpdateRewardAuthority` could sign instead.
+- `InvalidPoolType`: the pool has no `LiquidityMining` extension.
+
+## Withdraw Ineligible Rewards and Fund the Next Period
+
+When no liquidity is in range, the reward emitted in that time has no one to go to. The pool keeps count instead of losing it. After the emission ends, the reward authority withdraws that amount and can fund the slot again. See [Ineligible Rewards](/core-products/dlmm-pro/liquidity-mining#ineligible-rewards). The reward authority signs both steps and, in this script, also funds the next period from its own token account. It reads `RPC_URL`, `AUTHORITY_SECRET_KEY` and `POOL_ADDRESS`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  CREATOR_REWARD_INDEX,
+  DlmmProClient,
+  Rounding,
+  calculateRewardAmount,
+  readClock,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+// The reward authority of slot 0, which also funds the next period here
+const authority = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.AUTHORITY_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const rewardIndex = CREATOR_REWARD_INDEX;
+
+const { extensions } = await client.state.fetchPoolWithExtensions(pool);
+const reward = extensions.rewards![rewardIndex];
+const clock = await readClock(connection);
+if (clock.timestamp.lt(reward.endTime)) {
+  throw new Error(`The period ends at ${reward.endTime}; wait for it`);
+}
+
+// 1. Recover what was emitted while no liquidity was in range. This works
+// only once the period has ended, and pays the authority's own token account.
+const withdrawn = await client.reward.withdrawIneligibleRewards({
+  pool,
+  rewardMint: reward.mint,
+  authority: authority.publicKey,
+  rewardIndex,
+});
+await sendAndConfirmTransaction(connection, withdrawn.tx, [authority]);
+
+// 2. Fund the next period: 500 tokens (6 decimals) over 14 days, starting in one minute
+const openTime = clock.timestamp.addn(60);
+const endTime = openTime.addn(14 * 86_400);
+const emissionPerSecond = new BN(500_000_000)
+  .shln(64)
+  .div(endTime.sub(openTime));
+const funded = await client.reward.setRewardEmission({
+  pool,
+  rewardMint: reward.mint,
+  funder: authority.publicKey,
+  authority: authority.publicKey,
+  parameters: {
+    index: rewardIndex,
+    openTime,
+    endTime,
+    emissionPerSecond,
+    maxAmount: calculateRewardAmount(
+      endTime.sub(openTime),
+      emissionPerSecond,
+      Rounding.Up,
+    ),
+  },
+});
+await sendAndConfirmTransaction(connection, funded.tx, [authority]);
+console.log("next period ends at", endTime.toString());
+```
+
+The withdrawal pays the authority's associated token account for the reward mint, created when missing. It can go to any token account of the mint with `receiverTokenAccount`, which need not belong to the wallet that funded the emission. Funding a new period works like the first one in [Run a Reward Campaign](#run-a-reward-campaign): the new `openTime` has to be now or later and at most 30 days ahead, and the period between 1 and 365 days (`MIN_REWARD_DURATION`, `MAX_REWARD_DURATION` and `MAX_REWARD_START_DELAY`). Rewards that positions earned but have not claimed stay in the vault.
+
+Errors you are likely to hit:
+
+- `InvalidRewardState`: `withdrawIneligibleRewards` before an emission was set or before it ended, or `setRewardEmission` while the current emission is still running, or after it ended but before the ineligible rewards were withdrawn. The script stops early with its own error when the period has not ended.
+- `InvalidPermission`: the signer is not the slot's reward authority.
+- `InvalidRewardMint`: `rewardMint` is not the slot's mint. The script reads the mint from the pool.
+- `InvalidParameters`: an `openTime` in the past or too far ahead, a duration outside the limits, or an `emissionPerSecond` of 0.
+- `ExceededSlippage`: the funding with its transfer fee is above `maxAmount`, or the withdrawal after a transfer fee is below `minAmount`.
+
+## Schedule a Launch
+
+This launch pool opens for trading in one hour. The creator, as the whitelisted depositor, can add liquidity straight away; everyone else can deposit, withdraw and swap from the swap point. The fee starts at 50% and decays to 1% over the first 30 minutes of trading.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  ActivationType,
+  BaseFeeMode,
+  CollectFeeMode,
+  DlmmProClient,
+  PoolExtension,
+  encodePoolExtensions,
+  getDynamicFeeParams,
+  getSqrtPriceFromTickId,
+  openActivationParameters,
+  readClock,
+  timeBasedActivationParameters,
+  timeSchedulerBaseFeeParameters,
+  type InitializePoolWithDynamicParameters,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const creator = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const tokenXMint = new PublicKey(process.env.TOKEN_X_MINT!);
+const tokenYMint = new PublicKey("So11111111111111111111111111111111111111112");
+const tickSpacing = 100;
+const initialTick = Number(process.env.INITIAL_TICK!); // usually a multiple of tickSpacing
+
+// The creator can deposit at once; everyone else trades and deposits in an hour
+const { timestamp } = await readClock(connection);
+const swapPoint = timestamp.addn(3_600);
+
+const parameters: InitializePoolWithDynamicParameters = {
+  poolFees: {
+    // 50% at open, falling to 1% over the first 30 minutes of trading
+    baseFeeParameter: timeSchedulerBaseFeeParameters({
+      baseFeeMode: BaseFeeMode.TimeSchedulerExponential,
+      startingBaseFeeBps: 5_000,
+      endingBaseFeeBps: 100,
+      numberOfPeriod: 30,
+      totalDuration: 1_800,
+    }),
+    dynamicFeeParameter: getDynamicFeeParams(100, tickSpacing),
+  },
+  tickSpacing,
+  collectFeeMode: CollectFeeMode.OnlyY,
+  initialSqrtPrice: getSqrtPriceFromTickId(initialTick),
+  activationType: ActivationType.Timestamp,
+  activationPoint: swapPoint,
+  extensions: encodePoolExtensions([PoolExtension.ActivationAccess]),
+  poolActivation: {
+    whitelistedSwap: PublicKey.default,
+    whitelistedAddLiquidity: creator.publicKey,
+    whitelistedRemoveLiquidity: PublicKey.default,
+    activations: [
+      openActivationParameters(),
+      timeBasedActivationParameters({
+        swapPoint,
+        addLiquidityPoint: swapPoint,
+        removeLiquidityPoint: swapPoint,
+      }),
+    ],
+  },
+};
+
+const { tx, pool } = await client.pool.initializeLaunchPool({
+  tokenXMint,
+  tokenYMint,
+  creator: creator.publicKey,
+  payer: creator.publicKey,
+  parameters,
+});
+await sendAndConfirmTransaction(connection, tx, [creator]);
+console.log("launch pool", pool.toBase58(), "opens at", swapPoint.toString());
+```
+
+Fee schedulers count from the activation point, which must equal the time-based swap point. Every activation point has to be within 30 days of pool creation.
+
+## Swap With a Referral
+
+A swap can pay a referral account a share of the protocol fee. The referral account is a token account that must hold the token the fee is taken in, which is token Y on an `OnlyY` pool and otherwise the output token of the swap. It can be any token account, including the swapper's own. The host fee is 20% of the protocol fee (`HOST_FEE_BPS`), and it comes out of the protocol's share, so the swapper receives the same amount with or without a referral. The swapper signs. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS`, `REFERRAL_ADDRESS` (a wallet), `INPUT_AMOUNT` (atoms of the input token) and, optionally, `SWAP_FOR_Y` (`false` to sell token Y).
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  createAssociatedTokenAccountIdempotentInstruction,
+  getAssociatedTokenAddressSync,
+} from "@solana/spl-token";
+import BN from "bn.js";
+import { DlmmProClient, getTokenProgram } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const user = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const referralWallet = new PublicKey(process.env.REFERRAL_ADDRESS!);
+const swapForY = process.env.SWAP_FOR_Y !== "false";
+const inputAmount = new BN(process.env.INPUT_AMOUNT!); // atoms of the input token
+
+const poolState = await client.state.fetchPool(pool);
+
+// hasReferral changes the fee split, so quote with it set
+const { quote, tickArrays, tickArrayBitmapExtension } =
+  await client.pool.quoteExactIn({
+    pool,
+    inputAmount,
+    swapForY,
+    hasReferral: true,
+    swapper: user.publicKey,
+  });
+if (!quote.amountLeft.isZero())
+  throw new Error("Not enough liquidity for this input");
+
+// The referral account must hold the token the fee is taken in
+const [feeMint, feeFlag] = quote.feesOnTokenX
+  ? [poolState.tokenXMint, poolState.tokenXFlag]
+  : [poolState.tokenYMint, poolState.tokenYFlag];
+const feeProgram = getTokenProgram(feeFlag);
+const referral = getAssociatedTokenAddressSync(
+  feeMint,
+  referralWallet,
+  true,
+  feeProgram,
+);
+
+// The builder reads the referral account, so it must exist. Create it first
+// when the referral wallet has none for the fee token.
+if (!(await connection.getAccountInfo(referral))) {
+  const create = new Transaction().add(
+    createAssociatedTokenAccountIdempotentInstruction(
+      user.publicKey,
+      referral,
+      referralWallet,
+      feeMint,
+      feeProgram,
+    ),
+  );
+  await sendAndConfirmTransaction(connection, create, [user]);
+}
+
+const { tx } = await client.pool.swap({
+  pool,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  user: user.publicKey,
+  swapForY,
+  tickArrays,
+  tickArrayBitmapExtension,
+  referral,
+  parameters: {
+    inputAmount,
+    minimumOutputAmount: quote.transferFeeExcludedOutAmount
+      .muln(9_950)
+      .divn(10_000),
+  },
+});
+await sendAndConfirmTransaction(connection, tx, [user]);
+console.log(
+  `referral ${referralWallet.toBase58()} earns ${quote.hostFee} atoms of ${feeMint.toBase58()}`,
+);
+```
+
+Quote with `hasReferral: true` so `quote.hostFee` is the referral's amount and `quote.feesOnTokenX` says which token it is paid in. `hostFee` is what the swap sends to the referral account, in the fee token.
+
+The builder reads the referral account to find its mint, so the account has to exist. The script creates the referral wallet's associated token account in a separate transaction when it is missing, paid by the swapper. If the referral account is the wrong mint, the swap fails inside the token program (`custom program error: 0x3`) whenever the host fee is above zero. A swap too small to produce a host fee passes the token check, which makes a wrong account easy to miss in testing.
+
+Errors you are likely to hit:
+
+- `PoolError` with `InvalidAccount`: the referral account does not exist.
+- `custom program error: 0x3` from the token program: the referral account holds another mint than the fee token.
+- `NotConsumingFullAmountIn`, `ExceededSlippage` and `LiquidityIsZero` as for any swap, see [Getting Started](/developer-guides/dlmm-pro/typescript-sdk/getting-started#troubleshooting).
+
+## Swap With Wrapped SOL
+
+When one side of a pool is wrapped SOL and the swapper uses its default token account, the builder handles the wrapping. For a sale that receives SOL, it creates the wallet's wrapped SOL account for the output and closes it after the swap, so the proceeds arrive as SOL. For a purchase paid in SOL, it tops the wrapped SOL account up to the input amount before the swap and closes the account after. The swapper signs. The script sells some of the token and then buys some back, and reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` (a pool with wrapped SOL as one side), `TOKEN_AMOUNT` (atoms of the other token to sell) and `SOL_AMOUNT` (lamports to spend).
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { NATIVE_MINT } from "@solana/spl-token";
+import BN from "bn.js";
+import { DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const user = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!); // a pool with wrapped SOL as one side
+const tokenAmount = new BN(process.env.TOKEN_AMOUNT!); // atoms of the other token
+const solAmount = new BN(process.env.SOL_AMOUNT!); // lamports
+
+const poolState = await client.state.fetchPool(pool);
+const solIsY = poolState.tokenYMint.equals(NATIVE_MINT);
+const swapParams = {
+  pool,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  user: user.publicKey,
+};
+
+async function swapOnce(swapForY: boolean, inputAmount: BN) {
+  const { quote, tickArrays, tickArrayBitmapExtension } =
+    await client.pool.quoteExactIn({
+      pool,
+      inputAmount,
+      swapForY,
+      swapper: user.publicKey,
+    });
+  if (!quote.amountLeft.isZero())
+    throw new Error("Not enough liquidity for this input");
+  const { tx } = await client.pool.swap({
+    ...swapParams,
+    swapForY,
+    tickArrays,
+    tickArrayBitmapExtension,
+    parameters: {
+      inputAmount,
+      minimumOutputAmount: quote.transferFeeExcludedOutAmount
+        .muln(9_950)
+        .divn(10_000),
+    },
+  });
+  await sendAndConfirmTransaction(connection, tx, [user]);
+  return quote.transferFeeExcludedOutAmount;
+}
+
+// SOL out: sell the token. The builder creates the wallet's wrapped SOL
+// account for the output, and closes it after, so the proceeds arrive as SOL.
+const before = await connection.getBalance(user.publicKey);
+const received = await swapOnce(solIsY, tokenAmount);
+const after = await connection.getBalance(user.publicKey);
+console.log(
+  `sold for ${received} lamports, wallet balance changed by ${after - before}`,
+);
+
+// SOL in: buy the token. The builder wraps exactly the input into the
+// wallet's wrapped SOL account, and closes the account after the swap.
+await swapOnce(!solIsY, solAmount);
+console.log("bought with", solAmount.toString(), "lamports");
+```
+
+What to expect on-chain:
+
+- The wallet's SOL balance changes by the swap amount and the transaction fee. No wrapped SOL account is left behind.
+- Closing the account returns everything in it to the wallet, including wrapped SOL that was in the associated account before the swap. The builder only tops up what is missing, but the close takes the whole balance.
+- An account you pass as `userTokenIn` or `userTokenOut` is used as it is, with no wrapping or closing.
+
+## Quote From Cached Accounts
+
+`client.pool.quoteExactIn` reads the pool, tick arrays, mints and clock on every call. When you quote often, for example a ladder of sizes or a router comparing routes, read the accounts once and call the pure `quoteExactIn` export, which runs the program's swap math over what you hold. The swapper signs the swap. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `UNIT_AMOUNT` (atoms of token X in one step of the ladder). The balance comparison assumes token Y is not wrapped SOL, because the builder closes the wrapped SOL account after the swap.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  getAssociatedTokenAddressSync,
+  getMint,
+  unpackAccount,
+} from "@solana/spl-token";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  deriveTickArrayBitmapExtension,
+  getTokenProgram,
+  quoteExactIn,
+  readClock,
+  tickArraysForSwap,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const user = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const swapForY = true; // sell token X
+const unit = new BN(process.env.UNIT_AMOUNT!); // atoms in one step of the ladder
+
+// Read everything a swap quote needs, once
+async function loadAccounts() {
+  const { pool: poolState, extensions } =
+    await client.state.fetchPoolWithExtensions(pool);
+  const bitmapExtension =
+    poolState.isBitmapExtensionInitialized === 1
+      ? await client.state.fetchTickArrayBitmapExtension(
+          deriveTickArrayBitmapExtension(pool),
+        )
+      : null;
+  const selection = tickArraysForSwap({
+    pool,
+    poolState,
+    extensionState: bitmapExtension,
+    swapForY,
+    maxTickArrays: 5,
+  });
+  const loaded = await client.state.fetchTickArraysWithTicks(
+    selection.tickArrays,
+    { withReward: extensions.rewards !== undefined },
+  );
+  const [mintX, mintY, clock] = await Promise.all([
+    getMint(
+      connection,
+      poolState.tokenXMint,
+      "confirmed",
+      getTokenProgram(poolState.tokenXFlag),
+    ),
+    getMint(
+      connection,
+      poolState.tokenYMint,
+      "confirmed",
+      getTokenProgram(poolState.tokenYFlag),
+    ),
+    readClock(connection),
+  ]);
+  return {
+    poolState,
+    extensions,
+    bitmapExtension,
+    selection,
+    loaded,
+    mintX,
+    mintY,
+    clock,
+  };
+}
+type Accounts = Awaited<ReturnType<typeof loadAccounts>>;
+
+// Quote from memory. Nothing is fetched here.
+function quoteFrom(accounts: Accounts, inputAmount: BN) {
+  return quoteExactIn({
+    poolAddress: pool,
+    pool: accounts.poolState,
+    poolActivation: accounts.extensions.activation ?? null,
+    tickArrays: accounts.loaded.map(({ tickArray, ticks }) => ({
+      pool: tickArray.pool,
+      tickIndex: tickArray.tickIndex,
+      ticks,
+    })),
+    bitmapExtension: accounts.bitmapExtension,
+    inputAmount,
+    swapForY,
+    hasReferral: false,
+    swapper: user.publicKey,
+    currentSlot: accounts.clock.slot,
+    currentTimestamp: accounts.clock.timestamp,
+    epoch: accounts.clock.epoch,
+    inputMint: accounts.mintX,
+    outputMint: accounts.mintY,
+  });
+}
+
+// 1. One read, many quotes
+let accounts = await loadAccounts();
+for (const steps of [1, 10, 100]) {
+  const quote = quoteFrom(accounts, unit.muln(steps));
+  console.log(
+    `${steps} units: out ${quote.transferFeeExcludedOutAmount}, ` +
+      `tick ${accounts.poolState.tickCurrentId} -> ${quote.nextTickId}, ` +
+      `left ${quote.amountLeft}, arrays touched ${quote.consumedTickArrayIndexes.length}`,
+  );
+}
+
+// 2. Swap the 10 unit quote with the arrays it was computed from
+const inputAmount = unit.muln(10);
+const quote = quoteFrom(accounts, inputAmount);
+if (!quote.amountLeft.isZero())
+  throw new Error("Not enough liquidity for this input");
+const { tx } = await client.pool.swap({
+  pool,
+  tokenXMint: accounts.poolState.tokenXMint,
+  tokenYMint: accounts.poolState.tokenYMint,
+  user: user.publicKey,
+  swapForY,
+  tickArrays: accounts.selection.tickArrays,
+  tickArrayBitmapExtension: accounts.selection.requiresBitmapExtension
+    ? deriveTickArrayBitmapExtension(pool)
+    : null,
+  parameters: {
+    inputAmount,
+    minimumOutputAmount: quote.transferFeeExcludedOutAmount
+      .muln(9_950)
+      .divn(10_000),
+  },
+});
+const outAccount = getAssociatedTokenAddressSync(
+  accounts.poolState.tokenYMint,
+  user.publicKey,
+  true,
+  getTokenProgram(accounts.poolState.tokenYFlag),
+);
+const readOut = async () => {
+  const info = await connection.getAccountInfo(outAccount, "confirmed");
+  return info ? unpackAccount(outAccount, info, info.owner).amount : 0n;
+};
+const outBefore = await readOut();
+await sendAndConfirmTransaction(connection, tx, [user]);
+console.log(
+  `quoted ${quote.transferFeeExcludedOutAmount}, received ${(await readOut()) - outBefore}`,
+);
+
+// 3. The swap changed the pool and its ticks, so the copy is stale. Read it again.
+accounts = await loadAccounts();
+console.log(
+  `after the swap: tick ${accounts.poolState.tickCurrentId}, ` +
+    `next 10 units give ${quoteFrom(accounts, inputAmount).transferFeeExcludedOutAmount}`,
+);
+```
+
+What to expect:
+
+- The first loop prints three quotes from one set of reads. An `amountLeft` above zero, which a size larger than the loaded liquidity gives, means the tick arrays ran out: a swap of that size would fail with `NotConsumingFullAmountIn`. Load more arrays with `maxTickArrays` or quote a smaller size.
+- With `amountLeft` at zero the quote equals what the swap pays against the same accounts and clock: the script prints the quoted and the received amounts, and they match when nothing else touched the pool and the fee did not change in between.
+- A quote does not modify the copy it reads, so the copy keeps quoting as of the moment it was read. Read the accounts again after a swap, or after any other transaction that touches the pool, as the script does in step 3.
+
+The clock matters. Dynamic and scheduled fees depend on the time, so the quote uses the slot and timestamp you pass. A copy read some time ago quotes at that time. Read the clock again with `readClock` when you quote later. A Token 2022 mint on either side must be passed as an unpacked `Mint`, as the script does with `getMint` for both. The pure quote throws `InvalidParameters` without it, and `BitmapExtensionAccountIsNotProvided` when the traversal leaves the inline bitmap and the pool's extension was not passed.
+
+For the list of tick arrays, `tickArraysForSwap` returns them in traversal order and says whether the bitmap extension is needed. To keep a copy current without polling, see [Subscribe to Pool Changes](#subscribe-to-pool-changes).
+
+## Subscribe to Pool Changes
+
+A quoting service can keep its copy of the pool and its tick arrays current from account subscriptions instead of polling. This script starts from a read, then subscribes to the pool and to the tick arrays a sell of token X would cross, decodes each update and prints the new state. Nothing is signed. It reads `RPC_URL` and `POOL_ADDRESS`. The connection opens a websocket for the subscriptions, so the endpoint must support one, or you can set `wsEndpoint` on the connection.
+
+```typescript
+import { Connection, PublicKey } from "@solana/web3.js";
+import {
+  DlmmProClient,
+  PoolExtension,
+  decodePoolExtensionsFromData,
+  decodeTicksFromData,
+  deriveTickArrayBitmapExtension,
+  isSupportExtension,
+  tickArraysForSwap,
+  tickUiPrice,
+  type DecodedTick,
+  type Pool,
+  type QuoteTickArray,
+  type TickArray,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+
+// Start from a read, then keep the copy current from the subscriptions
+let { pool: poolState, extensions } =
+  await client.state.fetchPoolWithExtensions(pool);
+const withReward = isSupportExtension(
+  poolState.extensions,
+  PoolExtension.LiquidityMining,
+);
+const bitmapExtension =
+  poolState.isBitmapExtensionInitialized === 1
+    ? await client.state.fetchTickArrayBitmapExtension(
+        deriveTickArrayBitmapExtension(pool),
+      )
+    : null;
+const selection = tickArraysForSwap({
+  pool,
+  poolState,
+  extensionState: bitmapExtension,
+  swapForY: true,
+  maxTickArrays: 5,
+});
+const tickArrays = new Map<string, QuoteTickArray>();
+const [decimalsX, decimalsY] = [9, 6]; // read them from the mints in real use
+
+function report() {
+  const price = tickUiPrice(poolState.tickCurrentId, decimalsX, decimalsY);
+  const rewards = (extensions.rewards ?? []).filter(
+    (reward) => !reward.mint.equals(PublicKey.default),
+  );
+  console.log(
+    `tick ${poolState.tickCurrentId}, ~${price.toFixed(6)} Y per X, ` +
+      `liquidity ${poolState.liquidity}, ${tickArrays.size} tick arrays cached, ` +
+      `${rewards.length} reward slots in use`,
+  );
+}
+
+// 1. The pool account: decode the fixed part and the extension tail
+connection.onAccountChange(
+  pool,
+  (info) => {
+    poolState = client.program.coder.accounts.decode<Pool>("pool", info.data);
+    extensions = decodePoolExtensionsFromData(info.data);
+    report();
+  },
+  "confirmed",
+);
+
+// 2. The tick arrays a sell would cross: decode the ticks of each update
+for (const address of selection.tickArrays) {
+  const apply = (data: Buffer) => {
+    const header = client.program.coder.accounts.decode<TickArray>(
+      "tickArray",
+      data,
+    );
+    tickArrays.set(address.toBase58(), {
+      pool: header.pool,
+      tickIndex: header.tickIndex,
+      ticks: decodeTicksFromData(data, withReward) as DecodedTick[],
+    });
+  };
+  const initial = await connection.getAccountInfo(address, "confirmed");
+  if (initial) apply(initial.data);
+  connection.onAccountChange(
+    address,
+    (info) => {
+      apply(info.data);
+      report();
+    },
+    "confirmed",
+  );
+}
+report();
+```
+
+How the decoding works:
+
+- The pool account has a fixed part and a tail for its extensions. `client.program.coder.accounts.decode` reads the fixed part, and `decodePoolExtensionsFromData` reads the tail: reward slots with the `LiquidityMining` extension and activation rules with `ActivationAccess`.
+- A tick array has a header and a list of ticks. The coder decodes the header, and `decodeTicksFromData` decodes the ticks. Its second argument must match the pool's `LiquidityMining` bit, because pools with rewards use larger ticks.
+- Each entry of the `tickArrays` map has the shape the pure `quoteExactIn` takes, so the values, in the order of `selection.tickArrays`, feed the quote in [Quote From Cached Accounts](#quote-from-cached-accounts).
+
+Things to handle in a real service:
+
+- The tick arrays a swap crosses change as the price moves. Re-run `tickArraysForSwap` when the pool's tick moves into a new array and subscribe to the new ones. Do the same for the buy direction.
+- A pool with a bitmap extension needs that account too, and `isBitmapExtensionInitialized` on the pool tells you.
+- Read the clock with `readClock` when you quote, as in the previous example.
+- Remove subscriptions with `connection.removeAccountChangeListener` using the id each `onAccountChange` call returns.
+
+## Grow the Oracle and Read a Time-Weighted Average Price
+
+A new pool has an oracle with one observation, so it holds only the latest point. To keep history for time-weighted prices, grow it. Anyone can do it and pays the rent of the added observations, up to 500 in total (`MAX_OBSERVATION_LENGTH`). The payer signs. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and, optionally, `LENGTH_TO_ADD` (default 100).
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  DlmmProClient,
+  MAX_OBSERVATION_LENGTH,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const payer = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const lengthToAdd = Number(process.env.LENGTH_TO_ADD ?? 100);
+
+// Anyone can grow the oracle; the payer funds the extra rent
+const { tx, oracle } = await client.pool.increaseOracleLength({
+  pool,
+  payer: payer.publicKey,
+  lengthToAdd,
+});
+await sendAndConfirmTransaction(connection, tx, [payer]);
+
+const observations = await client.state.decodeObservations(oracle);
+console.log(
+  `oracle holds ${observations.length} of at most ${MAX_OBSERVATION_LENGTH} observations`,
+);
+```
+
+Only swaps write to the oracle. Each swap adds the time since the last update, multiplied by the pool's tick before the swap, to the cumulative tick. A swap at least 15 seconds after the latest observation was created starts a new observation. A swap sooner updates the latest one in place. An observation with timestamp 0 is an empty slot, and the buffer is a ring, so the order of slots is not the order of time.
+
+The average tick over an interval is the difference of two cumulative ticks divided by the seconds between them. The script below takes the newest observation that is at least `WINDOW_SECONDS` old as the start, and extends the latest cumulative tick to now at the pool's current tick, which is how the program would accumulate it. That gives an average up to the present, not only up to the last swap. It reads `RPC_URL`, `POOL_ADDRESS` and, optionally, `WINDOW_SECONDS` (default 3,600).
+
+```typescript
+import { Connection, PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  deriveOracle,
+  readClock,
+  tickUiPrice,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const windowSeconds = new BN(process.env.WINDOW_SECONDS ?? 3_600);
+const [decimalsX, decimalsY] = [9, 6]; // read them from the mints in real use
+
+const oracleAddress = deriveOracle(pool);
+const [poolState, oracle, observations, clock] = await Promise.all([
+  client.state.fetchPool(pool),
+  client.state.fetchOracle(oracleAddress),
+  client.state.decodeObservations(oracleAddress),
+  readClock(connection),
+]);
+
+// Empty slots have timestamp 0. The ring buffer wraps, so sort by time.
+const filled = observations
+  .filter((observation) => !observation.lastUpdatedTimestamp.isZero())
+  .sort((a, b) => a.lastUpdatedTimestamp.cmp(b.lastUpdatedTimestamp));
+if (filled.length < 2)
+  throw new Error("The oracle needs two observations; wait for more swaps");
+
+// The latest observation is the one at `idx`. Only swaps move the oracle, so
+// carry its cumulative tick forward to now at the pool's current tick, which
+// is how the program accumulates it.
+const latest = observations[oracle.idx];
+const elapsed = clock.timestamp.sub(latest.lastUpdatedTimestamp);
+const cumulativeNow = latest.tickCumulative.add(
+  elapsed.muln(poolState.tickCurrentId),
+);
+
+// Start from the newest observation that is at least `windowSeconds` old,
+// or the oldest one kept if none is that old
+const target = clock.timestamp.sub(windowSeconds);
+const start =
+  [...filled]
+    .reverse()
+    .find((observation) => observation.lastUpdatedTimestamp.lte(target)) ??
+  filled[0];
+
+const seconds = clock.timestamp.sub(start.lastUpdatedTimestamp);
+const twapTick = cumulativeNow
+  .sub(start.tickCumulative)
+  .div(seconds)
+  .toNumber();
+console.log(
+  `${seconds} seconds: average tick ${twapTick}, ` +
+    `~${tickUiPrice(twapTick, decimalsX, decimalsY).toFixed(6)} Y per X ` +
+    `(spot tick ${poolState.tickCurrentId})`,
+);
+```
+
+The average tick is an integer, and `tickUiPrice` turns it into a price of token Y per token X in UI units. An average of ticks is a geometric average of prices, see [Time-Weighted Average Tick](/core-products/dlmm-pro/formulas#time-weighted-average-tick). If the window is longer than the history, the script uses the oldest observation, and the seconds it prints are the span it really used.
+
+Errors you are likely to hit:
+
+- `PoolError` with `InvalidParameters` from `increaseOracleLength` for a length of 0. The program rejects a new length above 500 with `InvalidParameters` as well.
+- The script's own error when the oracle holds fewer than two observations: only swaps create them, at least 15 seconds apart, and a new oracle needs a first swap to start.
+
+Growing the oracle does not erase observations. The program reorders the ring so that the new slots follow the newest observation.
+
+## Claim Partner Fees
+
+The pool creator authority of a dynamic config is the partner of the pools created from it, and it earns a share of the protocol fee on every swap (`partnerFeeBps` of the config, at most 50%). The share accrues on the pool in the token the fee is taken in. Static config and launch pools have no partner. The partner claims what has accrued with `claimPartnerFee`, and the tokens go to the partner's associated token accounts, created when missing. Only the partner can sign. The script reads `RPC_URL`, `PARTNER_SECRET_KEY` and `POOL_ADDRESS`.
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import { DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const partner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.PARTNER_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+
+const poolState = await client.state.fetchPool(pool);
+const { pendingFeeX, pendingFeeY } = poolState.poolPartner;
+if (!poolState.poolPartner.partner.equals(partner.publicKey)) {
+  throw new Error("This wallet is not the pool's partner");
+}
+console.log(`pending ${pendingFeeX} X and ${pendingFeeY} Y`);
+
+// The caps are before any Token 2022 transfer fee. The tokens go to the
+// partner's associated token accounts, which are created when missing.
+const { tx } = await client.pool.claimPartnerFee({
+  pool,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  signer: partner.publicKey,
+  maxAmountX: pendingFeeX,
+  maxAmountY: pendingFeeY,
+});
+await sendAndConfirmTransaction(connection, tx, [partner]);
+```
+
+`maxAmountX` and `maxAmountY` cap the claim before any Token 2022 transfer fee, and the program pays the smaller of the cap and what has accrued, so passing the pending amounts claims everything. Use `minAmountX` and `minAmountY` to require a minimum after the transfer fee. With nothing accrued the instruction succeeds and sends nothing.
+
+Errors you are likely to hit:
+
+- `InvalidAuthority`: the signer is not the pool's partner. The script checks first and throws its own error.
+- `ExceededSlippage`: the amount received after a transfer fee is below `minAmountX` or `minAmountY`.
+
+The operator can change `partnerFeeBps` on a pool later, see [Dynamic Configs](/developer-guides/dlmm-pro/pool-fee-configs#dynamic-configs).
+
+## Read Events From a Transaction
+
+Builders return transactions, not results, so the amounts a swap, deposit or claim actually moved are in the events the program emits. Most events are delivered as inner instructions, and two are written to the log, so one decoder has to read both. [Reading Events](/developer-guides/dlmm-pro/program/events#reading-events) has the complete script, and the same page lists every event with its fields. Pass the signature that `sendAndConfirmTransaction` returns. For example `EvtSwap` gives the amounts in and out, the fees and the referral amount of a swap, and `EvtClaimFee` the fees a claim paid.
+
+## Set a Compute Budget and Priority Fee
+
+Builders add no compute budget instructions, so a transaction runs with the default limit of 200,000 compute units for its instruction and no priority fee. This script opens a position with one range for each of the 41 tick spacings from 20 below the price to 20 above it, measures the builder's transaction with a simulation, and then adds a compute unit limit and a unit price ahead of the builder's instructions. The owner and the new NFT mint sign. It reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and, optionally, `PRIORITY_MICRO_LAMPORTS` (the price of a compute unit in micro-lamports, default 5,000).
+
+```typescript
+import {
+  ComputeBudgetProgram,
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import {
+  DlmmProClient,
+  LiquidityLayout,
+  StrategyType,
+  buildLiquidityShape,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const microLamportsPerUnit = Number(
+  process.env.PRIORITY_MICRO_LAMPORTS ?? 5_000,
+);
+
+const { tickSpacing, tickCurrentId } = await client.state.fetchPool(pool);
+const aligned = Math.floor(tickCurrentId / tickSpacing) * tickSpacing;
+const shape = buildLiquidityShape({
+  strategy: StrategyType.Curve,
+  minTickId: aligned - 20 * tickSpacing,
+  maxTickId: aligned + 20 * tickSpacing,
+  tickSpacing,
+  currentTickId: tickCurrentId,
+  layout: LiquidityLayout.Vertical, // one range per tick spacing
+});
+
+const nft = Keypair.generate();
+const { tx } = await client.position.openPosition({
+  pool,
+  owner: owner.publicKey,
+  payer: owner.publicKey,
+  nftMint: nft.publicKey,
+  tickRanges: shape.ranges,
+});
+
+// 1. Measure: simulate the builder's transaction as it is
+const simulation = await connection.simulateTransaction(tx, [owner, nft]);
+if (simulation.value.err) throw new Error(JSON.stringify(simulation.value.err));
+const used = simulation.value.unitsConsumed!;
+console.log(`${shape.ranges.length} ranges use ${used} compute units`);
+
+// 2. Set a limit with 20% headroom and a priority fee, ahead of the builder's instructions
+tx.instructions.unshift(
+  ComputeBudgetProgram.setComputeUnitLimit({ units: Math.ceil(used * 1.2) }),
+  ComputeBudgetProgram.setComputeUnitPrice({
+    microLamports: microLamportsPerUnit,
+  }),
+);
+await sendAndConfirmTransaction(connection, tx, [owner, nft]);
+console.log("position NFT", nft.publicKey.toBase58());
+```
+
+The simulation signs with the keypairs and reports `unitsConsumed`. The script sets the limit 20% above it. A tighter limit also lowers the priority fee: the fee is the unit price times the limit you request, not the units used, so a limit of 100,000 at 5,000 micro-lamports costs 500 lamports on top of the base fee and 200,000 costs 1,000. A limit that is too low fails the transaction when the program runs out of units, so keep headroom, and measure again when the position gets more ranges.
+
+Put the budget instructions first. A builder's instruction list is plain `tx.instructions`, so `unshift` puts them ahead of it, and anything the builder prepends, such as token account creation or SOL wrapping, runs after them. Positions with many ranges, and any transaction that creates tick arrays, are the ones to measure. A position that adds many new ticks to one tick array can also fail with `ReallocExceedMaxLengthPerInstruction`: one instruction can grow a tick array by at most 10,240 bytes, which is 64 new ticks, or 53 on `LiquidityMining` pools. Open it with fewer ranges and add the rest with `expandPosition`. The simulation runs under the default limit of 200,000 compute units, so it cannot measure a transaction that needs more. For those, simulate with `ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 })` in place, then replace it with the measured limit.
+
+## Send a Versioned Transaction With a Lookup Table
+
+A legacy transaction is limited to 1,232 bytes, and every account costs 32 of them. A position spread over many tick arrays touches a tick array per range end, so a withdrawal from a wide position on a fine tick spacing can exceed the limit. A versioned transaction can read most of those accounts from an address lookup table instead, at about one byte each.
+
+This script takes an existing position that spans many tick arrays, builds the withdrawal of all its slots with the builder, and prints the legacy size. It then creates a lookup table holding the accounts the instructions use, waits for the table to activate and sends the same instructions as a v0 message that reads the table. The owner signs everything. It reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `POSITION_NFT`.
+
+```typescript
+import {
+  AddressLookupTableAccount,
+  AddressLookupTableProgram,
+  ComputeBudgetProgram,
+  Connection,
+  Keypair,
+  PublicKey,
+  TransactionInstruction,
+  TransactionMessage,
+  VersionedTransaction,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DlmmProClient,
+  PoolExtension,
+  derivePosition,
+  isSupportExtension,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const owner = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+const nftMint = new PublicKey(process.env.POSITION_NFT!); // a position spanning many tick arrays
+
+// 1. Build the withdrawal of every slot with the builder
+const poolState = await client.state.fetchPool(pool);
+const { positionArray, positions } =
+  await client.state.fetchPositionArrayWithPositions(derivePosition(nftMint), {
+    withReward: isSupportExtension(
+      poolState.extensions,
+      PoolExtension.LiquidityMining,
+    ),
+  });
+const { tx } = await client.position.removeLiquidityByBps({
+  pool,
+  nftMint,
+  owner: owner.publicKey,
+  signer: owner.publicKey,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  tickRanges: positions.map(({ tickLowerId, tickUpperId }) => ({
+    tickLowerId,
+    tickUpperId,
+  })),
+  parameters: {
+    minAmountX: new BN(0),
+    minAmountY: new BN(0),
+    expectedLayoutVersion: positionArray.layoutVersion,
+    bps: 10_000,
+    bitmap: null,
+  },
+});
+tx.instructions.unshift(
+  ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+);
+
+// A legacy transaction is 1 byte of signature count, 64 bytes per signature and the message
+tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+const legacyMessage = tx.compileMessage();
+const legacySize =
+  1 +
+  64 * legacyMessage.header.numRequiredSignatures +
+  legacyMessage.serialize().length;
+console.log(
+  `legacy transaction: ${legacyMessage.accountKeys.length} accounts, ${legacySize} bytes of 1232`,
+);
+
+// 2. An address lookup table holding every account the instructions use,
+// except signers and programs, which stay in the message itself
+const addresses = [
+  ...new Set(
+    tx.instructions.flatMap((ix) =>
+      ix.keys
+        .filter((key) => !key.isSigner)
+        .map((key) => key.pubkey.toBase58()),
+    ),
+  ),
+].map((address) => new PublicKey(address));
+
+async function sendV0(
+  instructions: TransactionInstruction[],
+  lookupTables: AddressLookupTableAccount[] = [],
+) {
+  const { blockhash, lastValidBlockHeight } =
+    await connection.getLatestBlockhash();
+  const message = new TransactionMessage({
+    payerKey: owner.publicKey,
+    recentBlockhash: blockhash,
+    instructions,
+  }).compileToV0Message(lookupTables);
+  const versioned = new VersionedTransaction(message);
+  versioned.sign([owner]);
+  console.log("versioned transaction:", versioned.serialize().length, "bytes");
+  const signature = await connection.sendTransaction(versioned);
+  const { value } = await connection.confirmTransaction(
+    { signature, blockhash, lastValidBlockHeight },
+    "confirmed",
+  );
+  if (value.err) {
+    throw new Error(
+      `Transaction ${signature} failed: ${JSON.stringify(value.err)}`,
+    );
+  }
+}
+
+const [createIx, lookupTableAddress] =
+  AddressLookupTableProgram.createLookupTable({
+    authority: owner.publicKey,
+    payer: owner.publicKey,
+    recentSlot: await connection.getSlot("finalized"),
+  });
+await sendV0([createIx]);
+for (let i = 0; i < addresses.length; i += 20) {
+  await sendV0([
+    AddressLookupTableProgram.extendLookupTable({
+      lookupTable: lookupTableAddress,
+      authority: owner.publicKey,
+      payer: owner.publicKey,
+      addresses: addresses.slice(i, i + 20),
+    }),
+  ]);
+}
+
+// 3. Addresses added to a table are usable from the next slot. Wait for it, then read the table.
+const extendedAt = await connection.getSlot("confirmed");
+while ((await connection.getSlot("confirmed")) <= extendedAt) {
+  await new Promise((resolve) => setTimeout(resolve, 500));
+}
+const { value: lookupTable } =
+  await connection.getAddressLookupTable(lookupTableAddress);
+if (!lookupTable) throw new Error("Lookup table not found");
+
+// 4. Send the builder's instructions as a v0 message that reads accounts from the table
+await sendV0(tx.instructions, [lookupTable]);
+```
+
+How it works:
+
+- `createLookupTable` takes a recent slot of the cluster, which is why the script reads a finalized slot. The table is a new account owned by the wallet, and `extendLookupTable` fills it. A transaction that adds addresses is itself limited in size, so the script adds 20 at a time.
+- Signers and program IDs stay in the message itself, so the script leaves signers out of the table, and the compiler keeps the programs static.
+- The script waits for the slot to advance past the one that extended the table before it reads the table and sends.
+- `connection.sendTransaction` takes a `VersionedTransaction`, which you sign with `sign`, and `getAddressLookupTable` returns the account that `compileToV0Message` needs.
+
+The table is an account that stays on-chain and holds rent, so reuse it for further transactions on the same position. `deactivateLookupTable` and `closeLookupTable` retire it. Compute budget instructions go into the message like any other.
+
+## Handle Errors
+
+Two kinds of failure reach your code, and both use the program's error numbering. A builder throws `PoolError` before anything is sent, when an argument is invalid. A transaction that the program rejects fails at simulation or on-chain, and web3.js throws `SendTransactionError` with the program's logs. The `code` of a `PoolError` and the custom error number of a failed transaction use the same numbers, and `PoolErrorCode` maps a number to its name in both directions.
+
+The script triggers one of each and prints the error name. The swapper signs. It reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `HUGE_INPUT_AMOUNT` (an input larger than the pool's liquidity within one tick array).
+
+```typescript
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  SendTransactionError,
+  sendAndConfirmTransaction,
+  type TransactionError,
+} from "@solana/web3.js";
+import BN from "bn.js";
+import {
+  DLMM_PRO_PROGRAM_ID,
+  DlmmProClient,
+  PoolError,
+  PoolErrorCode,
+} from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection(process.env.RPC_URL!, "confirmed");
+const client = new DlmmProClient(connection);
+const user = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.WALLET_SECRET_KEY!)),
+);
+const pool = new PublicKey(process.env.POOL_ADDRESS!);
+
+// Name of the program error behind a failure, or undefined if it is not one
+async function dlmmProErrorName(error: unknown): Promise<string | undefined> {
+  // Thrown by a builder before anything is sent
+  if (error instanceof PoolError) return PoolErrorCode[error.code];
+  // Thrown when the node rejects the transaction or it fails on-chain.
+  // The program's log line carries the code in hex.
+  if (error instanceof SendTransactionError) {
+    let logs: string[];
+    try {
+      logs = await error.getLogs(connection);
+    } catch {
+      // No logs on the error and no signature to look them up with
+      return undefined;
+    }
+    const pattern = new RegExp(
+      `Program ${DLMM_PRO_PROGRAM_ID.toBase58()} failed: custom program error: 0x([0-9a-f]+)`,
+    );
+    const hex = logs.map((line) => pattern.exec(line)?.[1]).find(Boolean);
+    return hex ? PoolErrorCode[parseInt(hex, 16)] : undefined;
+  }
+  return undefined;
+}
+
+// The error of a landed transaction, from getTransaction(...).meta.err
+type InstructionErrorShape = {
+  InstructionError?: [number, { Custom?: number } | string];
+};
+function instructionErrorName(
+  err: TransactionError | null,
+): string | undefined {
+  const detail = (err as InstructionErrorShape | null)?.InstructionError?.[1];
+  return typeof detail === "object" && detail.Custom !== undefined
+    ? PoolErrorCode[detail.Custom]
+    : undefined;
+}
+
+const poolState = await client.state.fetchPool(pool);
+const swapAccounts = {
+  pool,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  user: user.publicKey,
+  swapForY: true,
+};
+
+// 1. A builder rejects a zero input before sending anything
+try {
+  await client.pool.swap({
+    ...swapAccounts,
+    tickArrays: [],
+    parameters: { inputAmount: new BN(0), minimumOutputAmount: new BN(0) },
+  });
+} catch (error) {
+  console.log(
+    "builder:",
+    await dlmmProErrorName(error),
+    (error as Error).message,
+  );
+}
+
+// 2. A transaction the program rejects: a swap whose tick arrays run out of
+// liquidity. Quote with one tick array only, then send the swap anyway.
+const inputAmount = new BN(process.env.HUGE_INPUT_AMOUNT!);
+const { quote, tickArrays, tickArrayBitmapExtension } =
+  await client.pool.quoteExactIn({
+    pool,
+    inputAmount,
+    swapForY: true,
+    maxTickArrays: 1,
+  });
+console.log("amount left unswapped:", quote.amountLeft.toString());
+if (quote.amountLeft.isZero()) {
+  throw new Error("HUGE_INPUT_AMOUNT fits in the loaded tick arrays; raise it");
+}
+const { tx } = await client.pool.swap({
+  ...swapAccounts,
+  tickArrays,
+  tickArrayBitmapExtension,
+  parameters: { inputAmount, minimumOutputAmount: new BN(0) },
+});
+try {
+  await sendAndConfirmTransaction(connection, tx, [user]);
+} catch (error) {
+  console.log("transaction:", await dlmmProErrorName(error));
+}
+
+// 3. The same mapping for the error object of a landed transaction
+console.log(
+  "landed:",
+  instructionErrorName({ InstructionError: [0, { Custom: 6020 }] }),
+);
+```
+
+Mapping a failed transaction:
+
+- The program logs `Program <id> failed: custom program error: 0x...` for the error it returned. The script matches the DLMM Pro program ID so that an error of another program, such as the token program in a transfer, is not read as one of ours. `parseInt(hex, 16)` gives the number.
+- `error.getLogs(connection)` returns the logs of a `SendTransactionError`, from the error itself when they are already there and by signature otherwise.
+- A landed transaction reports the error as `InstructionError: [index, { Custom: number }]` in the `err` of its status or of `getTransaction(...).meta`, and `PoolErrorCode[number]` gives the name.
+- An error with no code in the 6000 range comes from another program, such as `custom program error: 0x0` from the system program for an account that already exists, or from Anchor's account checks inside the program, such as 3012 (`0xbc4`) for an account that does not exist yet. `PoolErrorCode` has no name for either.
+
+[Program Errors](/developer-guides/dlmm-pro/program/errors) lists every code with its usual cause. A swap that fails with `NotConsumingFullAmountIn` is the usual first one: quote again with `maxTickArrays` raised or a smaller input, and always check `quote.amountLeft`.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="SDK Reference" icon="code" iconType="solid" href="/developer-guides/dlmm-pro/typescript-sdk/reference">
+    Every service method and helper, with signers and defaults.
+  </Card>
+  <Card title="Positions" icon="layer-group" iconType="solid" href="/core-products/dlmm-pro/positions">
+    How slots, shapes, locks and delegates work.
+  </Card>
+</CardGroup>

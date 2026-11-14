@@ -1,0 +1,447 @@
+---
+title: "DLMM Pro Program Errors"
+sidebarTitle: "Errors"
+description: "All 51 DLMM Pro error codes with names and messages, a reference of what raises each error and how to fix it, and the common causes integrators hit when a transaction fails."
+llmsDescription: "Reference for the DLMM Pro program errors (codes 6000 to 6050, release 0.1.0) taken from the IDL. Lists every error code, name and message, explains how to decode custom program error hex values, the matching PoolErrorCode numbering in the TypeScript SDK, a per-error reference with every distinct cause and fix grouped by area (math and parameters, swap, pool creation and configs, tick arrays and bitmap, positions and liquidity, locks and vesting, limit orders, rewards, tokens and Token 2022, permissions and operators, accounts), the Anchor framework errors this program can return, the errors the TypeScript SDK throws before sending, how to map a hex custom program error to a name, and common causes for NotConsumingFullAmountIn, ExceededSlippage, LiquidityIsZero, InvalidActivationAccess, TickArrayBitmapExtensionAccountIsNotProvided, InvalidLayoutVersion, PositionIsNotEmpty, LimitOrderIsNotEmpty, UnsupportedMint, InvalidTokenBadge, IncorrectATA and InvalidParameters."
+---
+
+The program returns Anchor custom errors, numbered from 6000.
+
+<Tip>
+A failed transaction log shows `custom program error: 0x1784`. Convert the hex value to decimal to find the error: `0x1784` is `6020`, `NotConsumingFullAmountIn`.
+</Tip>
+
+## Error Codes
+
+| Code | Name | Message |
+| --- | --- | --- |
+| 6000 | `MathOverflow` | Math operation overflow |
+| 6001 | `TypeCastFailed` | Type cast error |
+| 6002 | `InvalidAdmin` | Invalid admin |
+| 6003 | `InvalidPermission` | Invalid permission |
+| 6004 | `UnsupportNativeMintToken2022` | Unsupported native mint token2022 |
+| 6005 | `InvalidTokenBadge` | Invalid token badge |
+| 6006 | `UnsupportedMint` | Unsupported mint |
+| 6007 | `InvalidTokenOwnerProof` | Invalid token owner proof |
+| 6008 | `UnmatchedTickIndex` | Tick index is unmatched |
+| 6009 | `ReallocExceedMaxLengthPerInstruction` | Realloc exceed max length per instruction |
+| 6010 | `TickIdIsOutOfBound` | Tick id is out of bound |
+| 6011 | `InsufficientRemainingAccounts` | Insufficient remaining accounts |
+| 6012 | `InvalidRemainingAccountSlice` | Invalid remaining account slice |
+| 6013 | `DuplicatedRemainingAccountTypes` | Duplicated remaining account types |
+| 6014 | `InvalidRewardIndex` | Invalid reward index |
+| 6015 | `InvalidTickArray` | Invalid tick array |
+| 6016 | `CannotFindTickFromId` | Cannot find tick from id |
+| 6017 | `MissingRemainingAccountForTransferHook` | Missing remaining account for transfer hook |
+| 6018 | `NoTransferHookProgram` | Remaining account was passed for transfer hook but there's no hook program |
+| 6019 | `ExceededSlippage` | Exceeded slippage tolerance |
+| 6020 | `NotConsumingFullAmountIn` | Not consuming full amount in |
+| 6021 | `TickArrayBitmapExtensionAccountIsNotProvided` | TickArray bitmap extension account is not provided |
+| 6022 | `LiquidityIsTooHigh` | Liquidity is too high |
+| 6023 | `LiquidityIsZero` | Liquidity is zero |
+| 6024 | `UndeterminedError` | Undetermined error |
+| 6025 | `CannotFindLimitOrderByTickId` | Cannot find limit order by tick id |
+| 6026 | `CancelNonEmptyLimitOrder` | Cancel on empty limit order |
+| 6027 | `InvalidPoolType` | Invalid pool type |
+| 6028 | `MissingOperatorAccount` | Missing operator account |
+| 6029 | `RewardUninitialized` | Reward not initialized |
+| 6030 | `InvalidRewardMint` | Invalid reward mint |
+| 6031 | `InvalidRewardVault` | Invalid reward vault |
+| 6032 | `IdenticalFunder` | Identical funder |
+| 6033 | `PositionIsNotEmpty` | Position is not empty |
+| 6034 | `LimitOrderIsNotEmpty` | Limit order is not empty |
+| 6035 | `InvalidActivationType` | Invalid activation type |
+| 6036 | `InvalidBaseFeeMode` | Invalid base fee mode |
+| 6037 | `InvalidParameters` | Invalid parameters |
+| 6038 | `InvalidAccount` | Invalid account in instruction |
+| 6039 | `AmountIsZero` | Amount is zero |
+| 6040 | `InvalidActivationAccess` | Invalid activation access |
+| 6041 | `InvalidRewardState` | Invalid reward state |
+| 6042 | `PositionAlreadyHadVesting` | Position already had vesting |
+| 6043 | `InsufficientLiquidity` | Liquidity is insufficient |
+| 6044 | `BitmapExtensionAccountIsNotProvided` | Bitmap extension account is not provided |
+| 6045 | `CannotModifyAccount` | Cannot modify account |
+| 6046 | `InvalidPoolCreatorAuthority` | Invalid pool creator authority |
+| 6047 | `InvalidAuthority` | Invalid authority |
+| 6048 | `DelegatedAmountNonZero` | Delegated amount is not zero |
+| 6049 | `IncorrectATA` | Incorrect ATA |
+| 6050 | `InvalidLayoutVersion` | Position layout version mismatch |
+
+## Common Causes
+
+| Error | Cause | Fix |
+| --- | --- | --- |
+| `NotConsumingFullAmountIn` | The swap did not consume all of `input_amount`, because the tick arrays passed ran out of liquidity (the quote has `amountLeft` above zero). | Raise `maxTickArrays` in the quote or lower `inputAmount`, then pass the quote tick arrays. |
+| `ExceededSlippage` | A swap output, withdrawal or claim is below its minimum, a deposit plus transfer fee is above its maximum, an imbalanced deposit moved past its price or liquidity bound, or the current tick moved outside a `relative_tick` order's min and max before it landed. | Re-quote and widen the bound. |
+| `LiquidityIsZero` | A swap found no initialized tick array with liquidity in its direction, or a liquidity amount in an add, remove or lock instruction is zero. | Check pool liquidity in the swap direction and pass non-zero amounts. |
+| `InvalidActivationAccess` | Swaps or adding liquidity are disabled by `pool_status`, or the pool's activation rules do not yet allow the swap, deposit or withdrawal for that wallet (the signer for swaps, the NFT owner for liquidity). | Wait for the activation point, or use the whitelisted wallet. |
+| `TickArrayBitmapExtensionAccountIsNotProvided` | Liquidity or limit orders touch a tick array outside indexes -512 to 511, or a pool is created with its initial tick outside that window, and the bitmap extension account is missing. A swap on a pool that has an extension fails with `BitmapExtensionAccountIsNotProvided` (6044) when its search leaves the inline bitmap and the extension is not passed. | Pass `deriveTickArrayBitmapExtension(pool)`, creating it first if needed. |
+| `InvalidLayoutVersion` | `expected_layout_version` differs from the position `layout_version`, which changes on `expand_position` and `remove_position`. | Read the position again and pass the current version, or `null`. |
+| `ReallocExceedMaxLengthPerInstruction` | One instruction adds more than 10,240 bytes to a tick array: more than 64 new ticks (53 on LiquidityMining pools), or more than 63 when it also creates the array on a pool without LiquidityMining. | Open the position with fewer ranges, then add the rest with `expand_position`. |
+| `PositionAlreadyHadVesting` | The position already had a vesting schedule. A position can have one in its lifetime, even after it has fully released. | Lock from a different position. |
+| `PositionIsNotEmpty` | A slot to remove or close still has liquidity, pending fees or pending rewards. | Remove liquidity and claim fees and rewards first. |
+| `LimitOrderIsNotEmpty` | Closing a limit order that still has ticks that are not canceled. | Cancel every tick, then close. |
+| `UnsupportedMint` | A Token 2022 mint has an extension other than transfer fee, metadata or a transfer hook without program or authority, or a reward mint set up by the pool creator has a freeze authority, and no token badge was passed. | Pass a token badge from the access registry. |
+| `InvalidTokenBadge` | A token badge does not match the mint, or a `CollectFeeMode.OnlyY` pool has a token Y that needs a badge and none was passed. | Pass `deriveTokenBadge(mint)` for the right mint. |
+| `IncorrectATA` | A delegate signed an instruction that pays tokens to an account other than the owner associated token account. | Pay into the owner associated token account, or sign as the owner. |
+| `InvalidParameters` | An argument is out of range, such as a price outside the sqrt price bounds, no ranges or more than 45, `bps` outside 1 to 10000, or an oracle above 500 observations. | Check the argument against the constants in the Accounts page. |
+
+## Error Reference
+
+Every error below is returned by the program as an Anchor custom error. The numbers match the table above. Each entry lists the instructions and conditions that raise it, as of release 0.1.0, and how to fix it. Errors that no instruction returns in this release are marked as such. The Anchor framework errors that account constraints can return are in [Anchor Framework Errors](#anchor-framework-errors).
+
+### Math and Parameters
+
+- `MathOverflow` (6000)
+  - A checked calculation overflows, underflows or divides by zero. This covers fixed-point price math, liquidity and fee math, and Token 2022 transfer fee math (an amount plus its transfer fee that does not fit in `u64`).
+  - `remove_liquidity` asks for more liquidity from a range slot than the slot holds unlocked. The program has an `InsufficientLiquidity` error, but release 0.1.0 never returns it, and this one fires instead.
+  - `add_liquidity_by_weight` has a `multiplier` times a weight that does not fit in `u128`.
+  - `set_reward_emission` has `end_time` below the open time.
+  - Fix: Check amounts against the position state before sending, and use smaller `multiplier` values and liquidity amounts.
+
+- `TypeCastFailed` (6001)
+  - A byte that must be an enum value is out of range. `collect_fee_mode` must be 0 or 1 in `initialize_pool_with_dynamic_config`, `initialize_launch_pool` and `create_static_config`, and `activation_type` must be 0 or 1 in `create_static_config`.
+  - A value does not fit its target type during a calculation, such as the liquidity derived by `add_liquidity_imbalance` exceeding `u128` or a scheduled base fee result exceeding `u64`.
+  - Fix: Send valid enum values and keep prices, liquidity and amounts inside the documented ranges.
+
+- `InvalidParameters` (6037)
+  - Pool creation (`initialize_pool_with_dynamic_config`, `initialize_launch_pool`) and `create_static_config`: `tick_spacing` is 0 or above 256, or `extensions` has a bit other than the two defined. `create_static_config` also rejects the ActivationAccess bit.
+  - Pool creation: `initial_sqrt_price` is outside the square root price bounds. With a static config the price must also map to a tick id inside the tick id bounds.
+  - Fee settings in pool creation and config creation: a base fee, or the lowest or highest fee of a scheduled base fee, outside 0.01 percent to 99 percent; a time scheduler with a zero `period_frequency`, `reduction_factor` or `number_of_period`; a market cap scheduler with a zero `reduction_factor`, `sqrt_price_step_bps`, `scheduler_expiration_duration` or `number_of_period`; non-zero padding bytes in `data`.
+  - Dynamic fee settings: `max_volatility_accumulator` or `variable_fee_control` above 16777215, `filter_period` of 0 or not below `decay_period`, `decay_period` above 3600, `reduction_factor` of 0 or above 10000, `min_delta_tick_for_significant_swap` of 0, or a highest variable fee above 99 percent.
+  - ActivationAccess pools: `pool_activation` missing, the two activation modes, in slot order, not one of Open then Open, Open then BondingCurve, Open then TimeBased, or BondingCurve then TimeBased, or mode data that does not validate (non-zero padding; BondingCurve without a non-default `whitelisted_add_liquidity`, with `is_reach_target` set, with `target_increase_bps` of 10000 or less, or with a target price above the highest usable tick; TimeBased points in the past or more than 30 days ahead, or `activation_point` different from `swap_point`). Without a TimeBased slot, `activation_point` must be the current slot or timestamp. Pools without the extension must omit both `activation_point` and `pool_activation`.
+  - `create_dynamic_config`: `permission` above 1, `partner_fee_bps` above 5000, or `pool_creator_authority` equal to the default key.
+  - `close_config`: both or neither of the static and dynamic config accounts are passed.
+  - `set_pool_status`: `status` above 3, or equal to the current status. `update_partner_fee`: `partner_fee_bps` above 5000, or the pool has no partner.
+  - `initialize_tick_array`: the index covers no usable tick id inside the tick id bounds. `increase_oracle_length`: `length_to_add` is 0 or the new length would exceed 500.
+  - `open_position` and `expand_position`: `tick_ranges` is empty, the position would exceed 45 range slots, a range has `tick_lower_id` not below `tick_upper_id`, or an id is out of bounds or not a multiple of the tick spacing.
+  - `add_liquidity`, `add_liquidity_by_weight` and `remove_liquidity`: `liquidities` is empty, the number of set bits in `bitmap` differs from its length, or a bit selects a slot beyond the position's slot count.
+  - `add_liquidity_imbalance`: neither `max_amount_x` nor `max_amount_y` is set, `index` is not a slot of the position, or `sqrt_price_slippage` has a minimum below the lowest price, a maximum above the highest price or a minimum above the maximum.
+  - `remove_liquidity_by_bps`: `bps` is 0 or above 10000, `bitmap` selects no slot or a slot beyond the slot count, or every selected slot rounds down to zero liquidity so there is nothing to withdraw.
+  - `remove_position`: `bitmap` selects no slot, a slot beyond the slot count, or every slot of the position.
+  - `refresh_fees_and_rewards`: `bitmap` selects no slot or a slot beyond the slot count.
+  - `lock_permanent_position` and `lock_vesting_position`: `bps` is 0 or above 10000. `lock_vesting_position` also rejects a `cliff_point` in the past, a schedule with neither a cliff unlock nor periods, a schedule that sets some but not all of `period_frequency`, `bps_per_period` and `number_of_period`, a total release (`cliff_unlock_bps` plus `bps_per_period` times `number_of_period`) other than 10000, and a schedule that ends more than 10 years ahead.
+  - `open_limit_order`: `ticks` is empty or has more than 25 entries, an amount is 0, tick ids are not strictly ascending or not usable, `relative_tick` bounds are not multiples of the tick spacing or the minimum is above the maximum, an ask order's lowest tick is not above the current tick id, a bid order's highest tick is above the current tick id, or the tick already holds pending orders on the other side.
+  - `cancel_limit_order`: `tick_ids` is empty or not strictly ascending.
+  - `set_reward_emission`: `emission_per_second` is 0, `open_time` is in the past or more than 30 days ahead, the window is shorter than 1 day or longer than 1 year, or the total reward rounds to 0. `update_reward_authority`: the new authority equals the current one.
+  - Fix: Check each argument against the constants on the [Accounts](/developer-guides/dlmm-pro/program/accounts) page. The TypeScript SDK builders reject most of these arguments before sending and name the argument in the message.
+
+- `AmountIsZero` (6039)
+  - `swap` with an `input_amount` of 0.
+  - `add_liquidity_imbalance` with a `max_amount_x` or `max_amount_y` of 0, or with amounts that add no liquidity because the slot's range has no room for the token side provided at the current price (token X into a range below the price, token Y into a range above it).
+  - Fix: Pass non-zero amounts and, for an imbalanced deposit, provide the token the range holds at the current price.
+
+- `UndeterminedError` (6024)
+  - An internal consistency check fails: a tick array has no free tick slot while ticks are added, a limit order's age is ahead of its tick, a position's vesting state cannot be read, or a fee period does not fit its type.
+  - Fix: No argument controls these checks. Report the transaction with the pool and account addresses.
+
+### Swap
+
+- `ExceededSlippage` (6019)
+  - `swap`: the output after the output mint's Token 2022 transfer fee is below `minimum_output_amount`.
+  - `remove_liquidity`, `remove_liquidity_by_bps`, `claim_fee`, `claim_reward`, `claim_partner_fee`, `claim_protocol_fee2`, `withdraw_ineligible_rewards` and `cancel_limit_order`: the amount received after transfer fee is below the minimum argument (`min_amount_x`, `min_amount_y`, `min_amount`). A minimum of 0 skips the check.
+  - `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance`, `open_limit_order` and `set_reward_emission`: the amount to pay, transfer fee included, is above the maximum argument (`max_amount_x`, `max_amount_y`, `max_amount`).
+  - `add_liquidity_imbalance`: the pool price is outside `sqrt_price_slippage`, or the liquidity derived from the maximum amounts is below `min_liquidity`.
+  - `open_limit_order` with `relative_tick`: the current tick id, aligned to the tick spacing, is outside the minimum and maximum tick ids.
+  - Fix: Quote again and widen the bound, or send the transaction sooner.
+
+- `NotConsumingFullAmountIn` (6020)
+  - `swap` is exact-in, and the tick arrays passed ran out of liquidity before the whole `input_amount` was used. The pool may hold liquidity in further tick arrays that were not passed or were passed out of swap direction order.
+  - Fix: Pass the tick arrays of a quote whose `amountLeft` is zero, in swap direction order, or lower the input amount.
+
+- `InvalidActivationAccess` (6040)
+  - `swap`: swaps are disabled in `pool_status` (bit 0), or the pool has activation rules and the signer is not the whitelisted swap address while an activation slot does not yet allow swaps.
+  - `open_position`, `expand_position`, `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance` and `open_limit_order`: adding liquidity is disabled in `pool_status` (bit 1), or the activation rules do not yet allow it. The address checked is the NFT owner, or the `owner` account for the two open instructions.
+  - `remove_liquidity`, `remove_liquidity_by_bps`, `remove_position` and `cancel_limit_order`: the activation rules do not yet allow removing liquidity for the NFT owner. `pool_status` cannot block removal.
+  - Pool creation with the ActivationAccess extension: an `activation_mode` byte other than 0, 1 or 2.
+  - Fix: Wait for the activation point, or use the whitelisted wallet.
+
+### Pool Creation and Configs
+
+- `InvalidActivationType` (6035)
+  - `initialize_pool_with_dynamic_config` or `initialize_launch_pool` with an `activation_type` other than 0 (Slot) or 1 (Timestamp).
+  - Fix: Use 0 or 1.
+
+- `InvalidBaseFeeMode` (6036)
+  - `base_fee_mode` in the fee settings of `initialize_pool_with_dynamic_config`, `initialize_launch_pool` or `create_static_config` is not 0 to 4.
+  - Fix: Use one of the five modes: 0 Fixed, 1 TimeSchedulerLinear, 2 TimeSchedulerExponential, 3 MarketCapSchedulerLinear, 4 MarketCapSchedulerExponential.
+
+- `InvalidPoolCreatorAuthority` (6046)
+  - Pool creation with a config whose `pool_creator_authority` differs from the `pool_creator_authority` account passed.
+  - `initialize_pool_with_static_config` with a non-public config (authority is not the default key) and the `pool_creator_authority` account did not sign.
+  - Fix: Pass the config's pool creator authority, and have it sign unless the config is public.
+
+- `InvalidTokenOwnerProof` (6007)
+  - `initialize_launch_pool` with a `user_token_x` or `user_token_y` balance of 0. The payer must hold both tokens.
+  - Fix: Fund the payer's token accounts for both mints before creating the launch pool.
+
+### Tick Arrays and Bitmap
+
+- `InvalidTickArray` (6015)
+  - Any instruction that takes tick arrays: a tick array account passed belongs to a different pool.
+  - `open_position`, `expand_position`, `open_limit_order`, `remove_position`, `close_position` and `close_limit_order`: fewer tick array accounts than the ticks need, accounts out of ascending index order (`open_limit_order` with `relative_tick` accepts any order), an address that is not the tick array for the index expected at that position, or an existing array whose stored pool or index does not match.
+  - Fix: Derive each tick array with `deriveTickArray(pool, index)` and pass them in the order the [Instructions](/developer-guides/dlmm-pro/program/instructions#remaining-accounts) page lists.
+
+- `CannotFindTickFromId` (6016)
+  - `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance`, `remove_liquidity` and `remove_liquidity_by_bps`: none of the tick arrays passed holds the lower or upper tick of a selected slot.
+  - `refresh_fees_and_rewards`: the same, for the slots in `bitmap`.
+  - `cancel_limit_order`: none of the tick arrays passed holds a listed tick.
+  - `remove_position`, `close_position` and `close_limit_order`: a tick array passed does not hold a tick being released.
+  - Fix: Pass the tick arrays that hold the lower and upper tick of every selected slot, or every tick of the limit order.
+
+- `TickArrayBitmapExtensionAccountIsNotProvided` (6021)
+  - Liquidity changes or limit order calls that switch a tick array outside indexes -512 to 511 between empty and holding liquidity, with no bitmap extension account passed. A swap in that situation fails with `BitmapExtensionAccountIsNotProvided` (6044) instead.
+  - Pool creation with an initial tick whose tick array index is outside -512 to 511 and no bitmap extension account passed.
+  - Fix: Pass `deriveTickArrayBitmapExtension(pool)`, creating it first with `initialize_tick_bitmap_extension` if needed.
+
+- `BitmapExtensionAccountIsNotProvided` (6044)
+  - `swap` on a pool that has a bitmap extension: the search for the next tick array with liquidity leaves the inline bitmap and the extension account is not passed.
+  - Fix: Pass `deriveTickArrayBitmapExtension(pool)` on every swap of a pool that has one.
+
+- `ReallocExceedMaxLengthPerInstruction` (6009)
+  - `open_position` or `expand_position` adds more than 64 new ticks to one tick array (more than 53 on LiquidityMining pools, where ticks are larger), or more than 63 when the instruction also creates the array on a pool without LiquidityMining. One instruction can grow an account by at most 10,240 bytes. `open_limit_order` stays below the limit because an order has at most 25 ticks.
+  - The same check guards the growth of the position array and the oracle, but their size limits (45 slots, 500 observations) keep them below it.
+  - Fix: Open the position with fewer ranges, then add the rest with `expand_position`.
+
+- `UnmatchedTickIndex` (6008)
+  - Defined in the IDL but not returned by any instruction in release 0.1.0.
+  - Fix: Nothing to fix.
+
+- `TickIdIsOutOfBound` (6010)
+  - Defined in the IDL but not returned by any instruction in release 0.1.0.
+  - Fix: Nothing to fix. Tick ids outside the bounds are rejected with `InvalidParameters`.
+
+- `CannotModifyAccount` (6045)
+  - An account resize that is meant to shrink would grow the account. The instructions in this release only shrink accounts to a smaller size, so integrators should not see this error.
+  - Fix: Report the transaction if it appears.
+
+### Positions and Liquidity
+
+- `LiquidityIsZero` (6023)
+  - `swap`: no tick array with liquidity exists in the swap direction from the current tick.
+  - `add_liquidity`, `add_liquidity_by_weight`, `remove_liquidity`: an entry of `liquidities` is 0 (including a weight of 0). `add_liquidity_imbalance`: the liquidity derived from the amounts is 0.
+  - `lock_permanent_position`, `lock_vesting_position`: no range slot has unlocked liquidity to lock.
+  - Fix: Check pool liquidity in the swap direction, and pass non-zero liquidity amounts on positions that hold unlocked liquidity.
+
+- `LiquidityIsTooHigh` (6022)
+  - `add_liquidity`, `add_liquidity_by_weight`, `remove_liquidity`: an entry of `liquidities` is above the largest signed 128-bit integer.
+  - Adding liquidity would push the total liquidity of a tick above the per-tick cap, which is the largest `u128` divided by the number of usable ticks at the pool's tick spacing.
+  - Fix: Add less liquidity per range.
+
+- `InsufficientLiquidity` (6043)
+  - Defined in the IDL but not returned by any instruction in release 0.1.0.
+  - Fix: Nothing to fix. Removing more than a slot holds fails with `MathOverflow`.
+
+- `PositionIsNotEmpty` (6033)
+  - `close_position`: a range slot still has liquidity (unlocked, locked or vesting), pending fees, or pending rewards on a LiquidityMining pool.
+  - `remove_position`: a selected slot is not empty in the same way.
+  - Fix: Remove liquidity, then claim fees and rewards, before closing the position or removing the slot. Permanently locked liquidity cannot be removed, so such a position cannot be closed.
+
+- `InvalidLayoutVersion` (6050)
+  - `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance`, `remove_liquidity`, `remove_liquidity_by_bps`, `remove_position`, `lock_permanent_position` or `lock_vesting_position` with an `expected_layout_version` that differs from the position's `layout_version`. The version changes on every `expand_position` and `remove_position`.
+  - Fix: Read the position again and pass the current version, or pass `None`.
+
+### Locks and Vesting
+
+Locking also fails with `InvalidParameters` for a bad `bps` or schedule, `LiquidityIsZero` when there is no unlocked liquidity, and `InvalidLayoutVersion` for a stale layout version. Only the NFT owner can lock, so a delegate signing `lock_permanent_position` or `lock_vesting_position` is stopped by an Anchor constraint (see [Anchor Framework Errors](#anchor-framework-errors)).
+
+- `PositionAlreadyHadVesting` (6042)
+  - `lock_vesting_position` on a position that already has a vesting schedule. A position can have one in its lifetime, even after the schedule has fully released.
+  - Fix: Lock from a different position.
+
+### Limit Orders
+
+- `CannotFindLimitOrderByTickId` (6025)
+  - `cancel_limit_order` lists a tick id that is not one of the ticks of the limit order.
+  - Fix: Use the tick ids stored on the limit order.
+
+- `CancelNonEmptyLimitOrder` (6026)
+  - `cancel_limit_order` lists a tick that was already canceled. The message reads "Cancel on empty limit order", which describes the tick being empty.
+  - Fix: Read the limit order and cancel only ticks that still hold an order.
+
+- `LimitOrderIsNotEmpty` (6034)
+  - `close_limit_order` while at least one tick of the order is not canceled.
+  - Fix: Cancel every tick, then close.
+
+### Rewards
+
+All reward instructions work on pools with the LiquidityMining extension and a reward index of 0 or 1.
+
+- `InvalidRewardIndex` (6014)
+  - `claim_reward`, `initialize_reward`, `set_reward_emission`, `update_reward_authority` or `withdraw_ineligible_rewards` with an index of 2 or above.
+  - Fix: Use reward index 0 or 1.
+
+- `RewardUninitialized` (6029)
+  - `claim_reward`, `set_reward_emission`, `update_reward_authority` or `withdraw_ineligible_rewards` on a reward slot that has no mint yet.
+  - Fix: Call `initialize_reward` for the slot first.
+
+- `InvalidRewardMint` (6030)
+  - `claim_reward`, `set_reward_emission` or `withdraw_ineligible_rewards` with a `reward_mint` that differs from the mint stored in the slot.
+  - Fix: Pass the mint of the slot.
+
+- `InvalidRewardVault` (6031)
+  - `claim_reward`, `set_reward_emission` or `withdraw_ineligible_rewards` with a `reward_vault` that differs from the vault stored in the slot.
+  - Fix: Pass `deriveRewardVault(pool, index)`.
+
+- `InvalidRewardState` (6041)
+  - `initialize_reward` on a slot that is already initialized.
+  - `set_reward_emission` while the previous emission is still running, or after it ended but the reward emitted during empty liquidity has not been withdrawn.
+  - `withdraw_ineligible_rewards` before an emission has ended, or on a slot that never had an emission.
+  - Fix: Wait for the emission to end and call `withdraw_ineligible_rewards` before setting a new emission.
+
+- `InvalidPoolType` (6027)
+  - `claim_reward`, `initialize_reward`, `set_reward_emission`, `update_reward_authority` or `withdraw_ineligible_rewards` on a pool without the LiquidityMining extension.
+  - Fix: Use a pool created with the LiquidityMining extension.
+
+- `IdenticalFunder` (6032)
+  - Defined in the IDL but not returned by any instruction in release 0.1.0.
+  - Fix: Nothing to fix.
+
+### Tokens and Token 2022
+
+- `UnsupportNativeMintToken2022` (6004)
+  - Pool creation with the Token 2022 native mint as token X or token Y, or `initialize_reward` with it as the reward mint. This check applies even when a config skips other mint checks.
+  - Fix: Use wrapped SOL from the Token program instead.
+
+- `InvalidTokenBadge` (6005)
+  - A token badge account is passed whose stored mint is not the mint it is meant for, in pool creation or `initialize_reward`.
+  - `CollectFeeMode.OnlyY` pool creation where token Y is not wrapped SOL or USDC and no badge, or a badge for another mint, is passed as `token_badge_y`.
+  - Fix: Pass `deriveTokenBadge(mint)` for the right mint.
+
+- `UnsupportedMint` (6006)
+  - No token badge is passed and the mint is not wrapped SOL or USDC, and it is a Token 2022 mint with an extension other than transfer fee, metadata pointer or token metadata, or with a transfer hook that has a program or authority set.
+  - No token badge is passed and a reward mint set up by the pool creator (slot 0) has a freeze authority.
+  - Fix: Pass a token badge from the access registry, or use a mint without the extension.
+
+- `MissingRemainingAccountForTransferHook` (6017)
+  - A transfer in the instruction involves a mint with a transfer hook program and the matching transfer hook slice of `remaining_accounts_info` is missing or has no accounts.
+  - Fix: Pass the extra accounts of the hook program in a slice of the type for that leg. The SDK builders resolve them.
+
+- `NoTransferHookProgram` (6018)
+  - A transfer hook slice with accounts is passed for a mint that has no transfer hook program.
+  - Fix: Leave the slice out, or pass an empty list, for mints without a hook.
+
+- `InsufficientRemainingAccounts` (6011)
+  - The lengths in `remaining_accounts_info` add up to more accounts than the instruction received.
+  - `open_limit_order` with `relative_tick`: a tick array needed by one of the order's ticks is not among the remaining accounts.
+  - Fix: Pass every account the slices declare, followed by the tick arrays.
+
+- `InvalidRemainingAccountSlice` (6012)
+  - A slice has an `accounts_type` that the instruction does not accept. `swap` and `cancel_limit_order` accept `TransferHookX`, `TransferHookY` and `TransferHookReferral`. `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance`, `remove_liquidity`, `remove_liquidity_by_bps`, `claim_fee`, `claim_partner_fee` and `claim_protocol_fee2` accept `TransferHookX` and `TransferHookY`. `claim_reward`, `set_reward_emission` and `withdraw_ineligible_rewards` accept `TransferHookReward`. `open_limit_order` accepts `TransferHookX` for an ask order and `TransferHookY` for a bid order.
+  - Fix: Use only the slice types the instruction accepts.
+
+- `DuplicatedRemainingAccountTypes` (6013)
+  - Two slices in `remaining_accounts_info` have the same `accounts_type`.
+  - Fix: Use each slice type at most once.
+
+- `IncorrectATA` (6049)
+  - A delegate signed `remove_liquidity`, `remove_liquidity_by_bps`, `claim_fee`, `claim_reward` or `cancel_limit_order` and a destination token account is not the owner's associated token account for that mint and token program.
+  - Fix: Pay into the owner's associated token account, or sign as the owner.
+
+### Permissions and Operators
+
+- `InvalidAdmin` (6002)
+  - `create_operator_account` or `close_operator_account` signed by an address that is not the program admin.
+  - Fix: These instructions are for the program admin only.
+
+- `InvalidPermission` (6003)
+  - `create_static_config`, `create_dynamic_config`, `close_config`, `set_pool_status`, `update_partner_fee`: the operator account is not for the signer, or its permissions do not include the one the instruction needs.
+  - `create_operator_account`: `permission` is 0 or has a bit beyond the six defined operator permissions.
+  - `update_position_delegate_permission` or `update_limit_order_delegate_permission`: `permission` has a bit beyond those defined (bits 0 to 4 for positions, bit 0 for limit orders).
+  - A delegate calls an instruction for which the NFT's permission bitmask does not grant the permission (AddLiquidity, RemoveLiquidity, ClaimFee, ClaimReward, UpdatePositionRange or CancelLimitOrder).
+  - `remove_position` signed by a delegate whose `rent_receiver` is not the NFT owner.
+  - `initialize_reward`: an operator account is passed but is not for the signer or lacks InitializeReward, or no operator is passed and the signer is not the pool creator initializing slot 0.
+  - `update_reward_authority`: the signer is neither the pool creator for slot 0 nor an operator for the signer with UpdateRewardAuthority.
+  - `set_reward_emission` or `withdraw_ineligible_rewards`: the signing authority is not the authority of the slot.
+  - Fix: Sign with the right account and check the operator or delegate permission bits.
+
+- `InvalidAuthority` (6047)
+  - A position or limit order instruction signed by an address that is neither the NFT owner nor the delegate approved on the NFT token account.
+  - `claim_partner_fee` signed by an address that is not the pool's partner.
+  - Fix: Sign as the NFT owner, an approved delegate, or the pool partner.
+
+- `MissingOperatorAccount` (6028)
+  - `update_reward_authority` signed by an address that is not the pool creator of slot 0, with no `operator` account passed.
+  - Fix: Pass the operator account of the signer.
+
+- `DelegatedAmountNonZero` (6048)
+  - A delegate acts on an NFT token account whose approval is for an amount above 0.
+  - Fix: Approve the delegate with an amount of 0 (Token 2022 `approve`).
+
+### Accounts
+
+- `InvalidAccount` (6038)
+  - `claim_protocol_fee2` with a receiver token account whose mint is neither of the pool's mints, or which is not owned by the token program of that mint. The TypeScript SDK also throws it from `quoteExactIn` for a bitmap extension of another pool.
+  - Fix: Pass a token account of one of the pool's mints under the matching token program.
+
+### Anchor Framework Errors
+
+Account constraints run before the instruction logic, so a wrong or missing account fails with an Anchor framework error instead of a program error. These are the ones this program can return. In the log, the line that starts with `Program log: AnchorError` gives the error name and number, and for constraint errors it also names the account from the IDL that failed.
+
+| Error | Code | Raised when |
+| --- | --- | --- |
+| `ConstraintMut` | 2000 | An account the IDL marks as writable is passed read-only, such as the pool, position, reserves, user token accounts, oracle or bitmap extension. |
+| `ConstraintHasOne` | 2001 | An account does not match the address stored on the account that links to it: `reserve_x`, `reserve_y`, `token_x_mint` and `token_y_mint` against the pool, `position`, `limit_order`, `oracle` and `tick_array_bitmap_extension` whose stored pool is not the pool passed, an `nft_mint` that is not the position's or limit order's, or an `open_limit_order` reserve or mint that does not match the order's side. |
+| `ConstraintRaw` | 2003 | The `nft_account` does not hold the position or limit order NFT (wrong mint or an amount other than 1), the signer of `lock_permanent_position` or `lock_vesting_position` is not the owner of the NFT account, or the two mints of a new pool are the same. |
+| `ConstraintSeeds` | 2006 | An address is not the PDA its seeds produce: `event_authority`, `tick_array` in `initialize_tick_array`, or an account being created at an address other than the derived one (pool, reserves, oracle, bitmap extension, position, limit order, configs, reward vault). |
+| `ConstraintAddress` | 2012 | `pool_authority` is not the program's pool authority, or the `signer` of `claim_protocol_fee2` is not the protocol fee authority. |
+| `ConstraintTokenMint` | 2014 | A token account has the wrong mint: `user_token_x` or `user_token_y` in the add liquidity instructions, `user_token` in `open_limit_order`, or the payer's token accounts in `initialize_launch_pool`. |
+| `ConstraintTokenOwner` | 2015 | The NFT token account is not owned by the signing `owner` in `close_position`, `close_limit_order` and the two delegate permission updates, or the payer's token accounts in `initialize_launch_pool` are owned by someone else. |
+| `ConstraintMintTokenProgram` | 2022 | In pool creation, a mint is not owned by the token program passed for it. |
+| `AccountDiscriminatorNotFound` | 3001 | An account owned by the program is passed as a tick array, pool or position and holds fewer than 8 bytes. Rare in practice: an account that was never created fails with `AccountOwnedByWrongProgram` (3007), or with `AccountNotInitialized` (3012) when it is a token account or mint. |
+| `AccountDiscriminatorMismatch` | 3002 | An account passed as a tick array, pool or position holds a different account type. |
+| `AccountNotMutable` | 3006 | A tick array passed as a remaining account is read-only in an instruction that writes to it. In `swap` every tick array must be writable. A read-only pool or position fails with `ConstraintMut` instead. |
+| `AccountOwnedByWrongProgram` | 3007 | A tick array passed as a remaining account, or another account loaded by the program, is not owned by the expected program. |
+| `InvalidProgramId` | 3008 | A program account is not the expected program: a token program, the Token 2022 program, the system program, the memo program or the associated token program. |
+| `AccountNotSigner` | 3010 | An account the IDL marks as a signer did not sign: `user`, `signer`, `owner`, `payer`, `funder`, `authority`, or `pool_creator_authority` in `initialize_pool_with_dynamic_config`. The new `nft_mint` of `open_position` and `open_limit_order` must also sign, but a missing signature there fails when the mint account is created and does not return this code. |
+| `AccountNotInitialized` | 3012 | A token account or mint the instruction reads does not exist, such as `user_token_in` or `user_token_out` in `swap`, `user_token_x` or `user_token_y` in the add liquidity instructions, `user_token` in `open_limit_order` or `user_token_account` in `claim_reward`. Create the token account first. |
+
+## SDK Error Codes
+
+The TypeScript SDK exports `PoolErrorCode` with the same numbering, so the custom code of a failed transaction maps to the same name. `PoolError` is thrown for inputs the builders reject before sending, and its `message` names the argument that failed.
+
+```typescript
+import { PoolErrorCode } from "@meteora-ag/dlmm-pro-sdk";
+
+// A failed transaction's InstructionError: [0, { Custom: 6020 }]
+console.log(PoolErrorCode[6020]); // "NotConsumingFullAmountIn"
+```
+
+See the [TypeScript SDK reference](/developer-guides/dlmm-pro/typescript-sdk/reference) for the full list of builders that throw it.
+
+### Errors the SDK Can Throw Before Sending
+
+The builders, the quote and the helpers throw `PoolError` for input they can check without reading program state. The codes below match the program's. Most are raised from the arguments and from the accounts you pass in, not from live pool state; `getClaimableFees` and `compoundFees` also read the position and its tick arrays. An ordinary transaction can still fail with an error that is not on this list.
+
+| Error | Thrown when |
+| --- | --- |
+| `InvalidParameters` | An argument is out of range or malformed, such as a tick spacing, basis point value, tick id, slot count, bitmap or padding. This is the most common one, and its message names the argument. |
+| `AmountIsZero` | `swap` or `quoteExactIn` gets an input of 0, `addLiquidityImbalance` gets a maximum amount of 0, or `compoundFees` is called without maximum amounts on a position with no fees to claim. |
+| `LiquidityIsZero`, `LiquidityIsTooHigh` | A liquidity amount is 0 or above the largest signed 128-bit integer, in the liquidity helpers and the shape strategies. `quoteExactIn` also throws `LiquidityIsZero` when no tick array with liquidity exists in the swap direction. |
+| `InvalidActivationAccess` | `quoteExactIn` finds swaps disabled in the pool status or blocked by the activation rules for the swapper. |
+| `BitmapExtensionAccountIsNotProvided` | The quote traversal leaves the inline bitmap and no `bitmapExtension` was passed. `tickArraysForSwap` also throws it when the pool has a bitmap extension and `extensionState` is not passed. |
+| `InvalidTickArray` | The quote gets a tick array of another pool, or the traversal reaches an extension bitmap index outside the range the extension covers. |
+| `CannotFindTickFromId` | `getClaimableFees` or `compoundFees` cannot find a tick of the position in the tick arrays it fetched. |
+| `InvalidAccount` | The quote gets a bitmap extension of another pool, or a token account cannot be read. |
+| `InvalidPermission` | A permission value or flag is outside the defined bits (the delegate permission updates and the permission bitmask helpers), or `removePosition` is signed by a delegate with a `rentReceiver` other than the owner. |
+| `InvalidTokenBadge` | Pool creation with `CollectFeeMode.OnlyY` has no `tokenBadgeY` and token Y is not wrapped SOL or USDC. |
+| `InvalidActivationType`, `InvalidBaseFeeMode` | An enum value is out of range in pool or fee settings. |
+| `InvalidRemainingAccountSlice` | A transfer hook leg has more than 255 accounts. |
+| `InvalidRewardIndex` | A reward address derivation gets an index other than 0 or 1. |
+| `MathOverflow`, `TypeCastFailed` | A calculation overflows or a value does not fit its type. |
+
+Some failures are plain `Error`s, not `PoolError`s: a missing account, an account that does not decode, or a missing sysvar or mint during a fetch. `ExceededSlippage` and `NotConsumingFullAmountIn` only come from the program, because they depend on pool state when the transaction lands.
+
+### Mapping a Failed Transaction to a Name
+
+A failed transaction shows the program error in two forms. The log reads `custom program error: 0x1784`, and the transaction error reads `InstructionError: [0, { Custom: 6020 }]`. They are the same number, once in hex and once in decimal. Program errors run from 6000 (`0x1770`) to 6050 (`0x17a2`), so subtract 6000 to get the position in the [Error Codes](#error-codes) table, or look the decimal value up in `PoolErrorCode`. A code below 6000 is not a program error: 2000 to 2999 (`0x7d0` to `0xbb7`) are Anchor constraint errors and 3000 to 3999 (`0xbb8` to `0xf9f`) are Anchor account errors, listed in [Anchor Framework Errors](#anchor-framework-errors).
+
+```typescript
+import { PoolErrorCode } from "@meteora-ag/dlmm-pro-sdk";
+
+// "custom program error: 0x1784"
+const code = parseInt("0x1784", 16); // 6020
+if (code >= 6000 && code <= 6050) {
+  console.log(PoolErrorCode[code]); // "NotConsumingFullAmountIn"
+}
+```
