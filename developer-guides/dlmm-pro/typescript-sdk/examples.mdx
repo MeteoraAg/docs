@@ -179,7 +179,7 @@ console.log("pool", pool.toBase58());
 
 The pool prices atoms of Y per atom of X, so the script scales the UI price by `10 ** (decimalsY - decimalsX)`, takes the logarithm in base 1.0001 to get a tick and rounds it to a multiple of the config's tick spacing. `getSqrtPriceFromTickId` turns that tick into `initialSqrtPrice`, a square root price in Q64.64. The pool starts at the price of that tick, which is within one tick spacing of the price you asked for. With tick spacing 1 each tick is 0.01% apart. `tickUiPrice` prints the price the pool will start at.
 
-Check the tick against `MIN_TICK_ID` and `MAX_TICK_ID`, as the script does. `getSqrtPriceFromTickId` does not check bounds. Tick 443637 returns a price above `MAX_SQRT_PRICE`, which the builder rejects with a `PoolError` for `InvalidParameters`. A tick beyond 524,287 wraps instead: tick 621729 returns the price of tick 97441, which is in range, so nothing rejects it and the pool would start at the wrong price.
+`getSqrtPriceFromTickId` throws a `PoolError` for `InvalidParameters` when the tick is not an integer or lies outside `MIN_TICK_ID` to `MAX_TICK_ID`. The script checks the bounds first so that its own message can name the price that caused it. SDK versions before 0.1.2 did not check: a tick beyond 524,287 wrapped, so tick 621729 returned the price of tick 97441, which is in range, and the pool would have started at the wrong price. Use 0.1.2 or newer.
 
 You choose which mint is token X. The pool address comes from the config and the two mints in either order, so a config allows one pool per pair, and `UI_PRICE` is always token Y per token X. Swapping the mints means passing the inverse price.
 

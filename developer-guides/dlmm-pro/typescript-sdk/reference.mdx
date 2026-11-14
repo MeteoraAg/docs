@@ -2,7 +2,7 @@
 title: "DLMM Pro TS SDK Reference"
 sidebarTitle: "Reference"
 description: "Look up every @meteora-ag/dlmm-pro-sdk export: DlmmProClient services, pure helpers, program IDs, enums, constants and errors."
-llmsDescription: "Reference for the DLMM Pro TypeScript SDK @meteora-ag/dlmm-pro-sdk 0.1.1. Covers dependencies, program IDs, DlmmProClient and its pool, position, limitOrder, reward and state services, builder conventions (token accounts, wrapped SOL, transfer hooks, signers), position slots and bitmaps, limit orders, quoteExactIn, tickArraysForSwap, transfer fee helpers, liquidity shapes, tick helpers, PDA helpers, account codecs, base fee and activation builders, dynamic fee parameters, enums, constants, PoolError and PoolErrorCode."
+llmsDescription: "Reference for the DLMM Pro TypeScript SDK @meteora-ag/dlmm-pro-sdk 0.1.2. Covers dependencies, program IDs, DlmmProClient and its pool, position, limitOrder, reward and state services, builder conventions (token accounts, wrapped SOL, transfer hooks, signers), position slots and bitmaps, limit orders, quoteExactIn, tickArraysForSwap, transfer fee helpers, liquidity shapes, tick helpers, PDA helpers, account codecs, base fee and activation builders, dynamic fee parameters, enums, constants, PoolError and PoolErrorCode."
 ---
 
 The package exports `DlmmProClient` plus pure helpers for quoting, liquidity shapes, ticks, PDAs, fees and activation. Every builder returns an unsigned transaction with the fee payer set and no recent blockhash. You sign it and send it.
@@ -3647,7 +3647,7 @@ Tick `i` has price `1.0001^i` (token Y per token X, in atoms), stored as a Q64.6
 
 | Function | Use |
 | --- | --- |
-| `getSqrtPriceFromTickId(tickId)` | Q64.64 sqrt price of a tick. |
+| `getSqrtPriceFromTickId(tickId)` | Q64.64 sqrt price of a tick. Throws `InvalidParameters` for a tick outside the tick bounds. |
 | `tickIdFromSqrtPrice(sqrtPrice)` | Tick `T` with `getSqrtPriceFromTickId(T) <= sqrtPrice < getSqrtPriceFromTickId(T + 1)`. |
 | `tickIndexFromId(tickId, tickSpacing)` | Index of the tick array holding a tick. |
 | `isUsableTickId(tickId, tickSpacing)` | Whether a tick is a multiple of the spacing within the tick bounds. |
@@ -3672,7 +3672,7 @@ getSqrtPriceFromTickId(tickId): BN
 **Parameters**
 
 ```typescript
-tickId: number; // Tick id
+tickId: number; // Tick id, an integer in MIN_TICK_ID..=MAX_TICK_ID
 ```
 
 **Returns**
@@ -3684,6 +3684,11 @@ The tick's Q64.64 sqrt price, `sqrt(1.0001^tickId) * 2^64`.
 ```typescript
 const initialSqrtPrice = getSqrtPriceFromTickId(0); // price 1
 ```
+
+**Notes**
+
+- Throws `InvalidParameters` for a tick id that is not an integer or lies
+  outside `MIN_TICK_ID..=MAX_TICK_ID`.
 
 ### tickIdFromSqrtPrice
 

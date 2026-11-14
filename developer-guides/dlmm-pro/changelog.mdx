@@ -2,13 +2,52 @@
 title: "DLMM Pro Changelog"
 sidebarTitle: "Changelog"
 description: "Track DLMM Pro release notes, breaking changes and upgrade guidance for the dlmm_pro program, the TypeScript SDK and the Rust commons crate."
-llmsDescription: "Explains the DLMM Pro integration changelog for builders maintaining Meteora DLMM Pro integrations. Covers versioned release entries for the dlmm_pro program (dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n), the @meteora-ag/dlmm-pro-sdk TypeScript SDK and the dlmm-pro-commons Rust crate, PR links, breaking-change callouts and what swap routers, trading terminals and partners need to do for each release. Release 0.1.0 is the first version, followed by SDK and commons 0.1.1."
+llmsDescription: "Explains the DLMM Pro integration changelog for builders maintaining Meteora DLMM Pro integrations. Covers versioned release entries for the dlmm_pro program (dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n), the @meteora-ag/dlmm-pro-sdk TypeScript SDK and the dlmm-pro-commons Rust crate, PR links, breaking-change callouts and what swap routers, trading terminals and partners need to do for each release. Release 0.1.0 is the first version, followed by SDK and commons 0.1.1 and SDK 0.1.2."
 rss: true
 ---
 
 <Tip>
   Track DLMM Pro releases here.
 </Tip>
+
+<Update
+  label="dlmm-pro-sdk 0.1.2"
+  description="Tick Id Bounds Check"
+  rss="DLMM Pro SDK 0.1.2: getSqrtPriceFromTickId now rejects a tick id outside the tick bounds instead of returning the price of a different tick. The dlmm_pro program and dlmm-pro-commons are unchanged."
+>
+  ## Release Summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.1.0` (unchanged) | - |
+  | TypeScript SDK | `0.1.2` | [dlmm-pro-sdk #27](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/27) |
+  | Commons | `0.1.1` (unchanged) | - |
+
+  ## What We Shipped
+
+  - A bounds check in `getSqrtPriceFromTickId`, so a pool cannot be created at the price of the wrong tick by mistake
+
+  ## What To Do
+
+  | Integrators | What To Do |
+  | --- | --- |
+  | Pool creators and launchpads | Upgrade to `0.1.2` if you compute `initialSqrtPrice` with `getSqrtPriceFromTickId`. In `0.1.1` and earlier a tick id beyond 524,287 in either direction returned the price of another tick (524288 gave the price of tick 0), and a pool created from it started at the wrong price. |
+  | Everyone else | Upgrade when convenient. A call with a tick id inside `MIN_TICK_ID` to `MAX_TICK_ID` returns the same value as before. |
+
+  The only behaviour change is that `getSqrtPriceFromTickId` throws `InvalidParameters` for a tick id that is not an integer or lies outside `MIN_TICK_ID` to `MAX_TICK_ID` (-443636 to 443636). No function signatures changed.
+
+  ## TypeScript SDK: `@meteora-ag/dlmm-pro-sdk` `0.1.2`
+
+  [SDK PR #27](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/27)
+
+  <Tip>
+    Production: [`@meteora-ag/dlmm-pro-sdk@0.1.2`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.2).
+  </Tip>
+
+  ### Fixed
+
+  - `getSqrtPriceFromTickId` now throws `InvalidParameters` for a tick id outside `MIN_TICK_ID..=MAX_TICK_ID`, instead of returning the sqrt price of a different tick.
+</Update>
 
 <Update
   label="dlmm-pro-sdk 0.1.1"
@@ -43,7 +82,7 @@ rss: true
   [SDK PR #26](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/26)
 
   <Tip>
-    Production: [`@meteora-ag/dlmm-pro-sdk@0.1.1`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.1).
+    Superseded by [`@meteora-ag/dlmm-pro-sdk@0.1.2`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.2). Use the latest release.
   </Tip>
 
   ### Fixed
@@ -110,7 +149,7 @@ rss: true
   [SDK PR #16](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/16)
 
   <Tip>
-    Superseded by [`@meteora-ag/dlmm-pro-sdk@0.1.1`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.1). Use the latest release.
+    Superseded by [`@meteora-ag/dlmm-pro-sdk@0.1.2`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.2). Use the latest release.
   </Tip>
 
   ### Added
