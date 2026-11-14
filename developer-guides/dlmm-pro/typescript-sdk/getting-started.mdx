@@ -70,6 +70,7 @@ This `tsconfig.json` type-checks every script on these pages with TypeScript 7.0
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "types": ["node"],
     "noEmit": true
   }
 }
@@ -79,7 +80,7 @@ This `tsconfig.json` type-checks every script on these pages with TypeScript 7.0
 - Top-level `await` compiled with the target set to `ES2022` and to `ES2020`.
 - `skipLibCheck` is needed. Without it `tsc` reports an error inside the declarations of `@solana/buffer-layout`, a dependency of web3.js, that has nothing to do with your code.
 - The scripts type-check without `esModuleInterop`, but the SDK's own configuration sets it and `import BN from "bn.js"` is written with it in mind.
-- `process.env` needs `@types/node` to be installed.
+- `process.env` needs `@types/node` installed and `"types": ["node"]` in the tsconfig.
 - The scripts use top-level `await`, so they must run as ES modules. A `.ts` file in a CommonJS package fails under `tsx` with `Top-level await is currently not supported with the "cjs" output format`. Rename it to `.mts` or set `"type": "module"` in `package.json`.
 
 ## CommonJS and ESM
@@ -99,7 +100,7 @@ const { DlmmProClient } = require("@meteora-ag/dlmm-pro-sdk");
 TypeScript types depend on how you resolve modules:
 
 - With `module` set to `CommonJS` and `moduleResolution` set to `Bundler`, a `.cts` file can import the package normally.
-- With `moduleResolution` set to `Node16` or `NodeNext`, a CommonJS TypeScript file that imports the package fails with `TS1479`. The package declares `"type": "module"` and has one set of type declarations, which TypeScript reads as an ES module, so it refuses the `require` call it would emit. Import the package from an `.mts` file instead, switch to `Bundler`, or use a dynamic `import()`, which type-checks under `Node16` and runs.
+- With `module` and `moduleResolution` set to `Node16`, a CommonJS TypeScript file that imports the package fails with `TS1479`. The package declares `"type": "module"` and has one set of type declarations, which TypeScript reads as an ES module, so it refuses the `require` call it would emit. Import the package from an `.mts` file instead, switch to `NodeNext` or `Bundler`, or use a dynamic `import()`, which type-checks under `Node16` (with the same `types` setting as above, because it reads `process.env`) and runs.
 
 ```typescript
 // A .cts file compiled with module and moduleResolution set to Node16
@@ -137,7 +138,7 @@ The program ID is the same on mainnet and devnet, so the same client works on bo
 
 ## Fund a Devnet Wallet and Find a Pool
 
-The program has the same address on devnet and mainnet, so the same code works on both. To try the SDK without real funds, point `RPC_URL` at devnet, `https://api.devnet.solana.com`, and use a throwaway wallet. This script creates one and prints its address and a `WALLET_SECRET_KEY` line for your shell.
+To try the SDK without real funds, point `RPC_URL` at devnet, `https://api.devnet.solana.com`, and use a throwaway wallet. This script creates one and prints its address and a `WALLET_SECRET_KEY` line for your shell.
 
 ```typescript
 import { Keypair } from "@solana/web3.js";
@@ -188,7 +189,7 @@ for (const { pubkey } of accounts) {
 
 Set `POOL_ADDRESS` to one of the printed addresses. A few things decide whether the quote and swap script works against it:
 
-- Devnet tokens are test tokens. The script sells one whole token X, so you need a balance of the pool's token X, or pick a pool with wrapped SOL on one side and use the [wrapped SOL example](/developer-guides/dlmm-pro/typescript-sdk/examples#swap-with-wrapped-sol), which pays with SOL.
+- Devnet tokens are test tokens. The script sells one whole token X, so you need a balance of the pool's token X, or pick a pool whose token X is wrapped SOL: the builder wraps the SOL this script sells. The second half of the [wrapped SOL example](/developer-guides/dlmm-pro/typescript-sdk/examples#swap-with-wrapped-sol) shows a purchase paid in SOL.
 - Liquidity is thin on many test pools. When one whole token X is more than the pool can take, the script stops with `Not enough liquidity for this input`. Lower `inputAmount`.
 - `extensions` is a bitmask: 1 is `LiquidityMining` and 2 is `ActivationAccess`. A pool with activation rules can reject swaps until its activation point with `InvalidActivationAccess`.
 
@@ -386,7 +387,7 @@ These are the failures people hit first, as they appear and what to check. See [
 | `SyntaxError: "undefined" is not valid JSON`, or `Unexpected token` | `WALLET_SECRET_KEY` is unset or is not a JSON array. | Export it as the JSON array of bytes, as the wallet script prints it. |
 | `Error: bad secret key size` | The array in `WALLET_SECRET_KEY` is not 64 bytes. | Use the full secret key, not the public key or a seed. |
 | `Top-level await is currently not supported with the "cjs" output format` | The script is a `.ts` file in a CommonJS package. | Rename it to `.mts`, or set `"type": "module"`. |
-| `TS1479` on the import of the package | A CommonJS TypeScript file with `Node16` or `NodeNext` resolution. | See [CommonJS and ESM](#commonjs-and-esm). |
+| `TS1479` on the import of the package | A CommonJS TypeScript file compiled with `Node16`. | See [CommonJS and ESM](#commonjs-and-esm). |
 | `failed to get info about account ...: TypeError: fetch failed` | The RPC endpoint cannot be reached. | Check `RPC_URL` and your network. |
 | `Account not found: <address>` | The address does not exist on the cluster `RPC_URL` points at. A devnet pool address on a mainnet endpoint gives this. | Use the matching cluster. |
 | `Account <address> is not owned by dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n` | The address exists but is not a DLMM Pro account, for example a token mint. | Use a pool address. |

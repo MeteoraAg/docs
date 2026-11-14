@@ -290,7 +290,7 @@ Errors you are likely to hit:
 
 Pass any other fee schedule with `timeSchedulerBaseFeeParameters` or `marketCapSchedulerBaseFeeParameters`, or add `ActivationAccess` with activation rules, exactly as in the launch pool examples. The config only adds the authority and the partner share.
 
-An operator creates the config itself. The SDK does not wrap operator instructions, so this script calls the program through `client.program.methods`. The signer needs an `Operator` account with the `CreateConfigKey` permission, and `permission` is a bitmask of `DynamicConfigPermission`. You cannot run it without an operator wallet, so on the Meteora deployment you receive a config instead. It is useful for a local program or your own deployment.
+An operator creates the config itself. The SDK does not wrap operator instructions, so this script calls the program through `client.program.methods`. The signer needs an `Operator` account with the `CreateConfigKey` permission, and `permission` is a bitmask of `DynamicConfigPermission`. You cannot run it without an operator wallet, so on the Meteora deployment you receive a config instead. It is useful for a local program or your own deployment. The script reads `RPC_URL`, `OPERATOR_SECRET_KEY`, `AUTHORITY_ADDRESS` and `CONFIG_INDEX` (optional, default 0).
 
 ```typescript
 import {
@@ -519,9 +519,9 @@ How to read the output:
 
 - A position is a `PositionArray` account with one slot per range. `positionTotalLiquidity` adds the slot's unlocked, vesting and permanently locked liquidity.
 - `getAmountsFromLiquidity` converts liquidity into token amounts at the pool's current price. A slot whose upper tick is at or below the current tick holds only token Y, a slot above the current tick holds only token X, and a slot that spans it holds both. The amounts round up, as a deposit does. Pass a negative `liquidity` to round down, as a withdrawal does.
-- `getClaimableFees` computes what a claim would pay right now from the current pool and tick state, per slot and in total, before any Token 2022 transfer fee. It sends nothing and does not need a refresh first. Pass `bitmap` to limit it to some slots.
+- `getClaimableFees` computes what a claim would pay right now from the current pool and tick state, per slot and in total, before any Token 2022 transfer fee. It sends nothing and does not need a refresh first. Pass `bitmap` to choose which slots are brought up to date in the calculation. Slots outside it still count with the fees already credited to them.
 - Rewards are different. A slot stores `pendingAmount` for each reward slot as of its last refresh, and the SDK has no estimate of what has accrued since. To bring the figure current, send `refreshFeesAndRewards` (any claim refreshes first) and read again.
-- `withReward` must match the pool's `LiquidityMining` bit, as the script does. A mismatch does not throw. It misreads the slot boundaries and returns wrong values.
+- `withReward` must match the pool's `LiquidityMining` bit, as the script does. A mismatch usually throws `Account data length does not align to PositionArray element size`. When the byte lengths happen to line up it does not throw and returns wrong values.
 
 Errors you are likely to hit: `Account not found` for an NFT that is not a position, and the script's own error when the position belongs to another pool.
 
@@ -721,7 +721,7 @@ To compound fees in one transaction instead, use `compoundFees` from the fee exa
 
 A partial withdrawal leaves the position open. `removeLiquidity` takes liquidity amounts you choose for the slots in a bitmap. `removeLiquidityByBps` takes a share in basis points of the unlocked liquidity of each selected slot, or of every slot when `bitmap` is `null`. The script does one of each. Withdrawing everything and closing is in the earlier example.
 
-The owner signs, or a delegate with the `RemoveLiquidity` permission. Tokens always go to the owner's associated token accounts, which are created when missing. When a side of the pool is wrapped SOL, the builder unwraps it in the same transaction if the owner signs. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `POSITION_NFT`.
+The owner signs, or a delegate with the `RemoveLiquidity` permission. Tokens go to the owner's associated token accounts by default, created when missing. A delegate cannot choose another account. When a side of the pool is wrapped SOL, the builder unwraps it in the same transaction if the owner signs. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `POSITION_NFT`. The script assumes the position has at least two slots, each with unlocked liquidity.
 
 ```typescript
 import {
@@ -804,7 +804,7 @@ const quarter = await client.position.removeLiquidityByBps({
 await sendAndConfirmTransaction(connection, quarter.tx, [owner]);
 ```
 
-The second call reads the position again because the first call changed the liquidity. `removeLiquidityByBps` refreshes the vesting schedule first, so liquidity that has vested counts as unlocked. Permanently locked liquidity is never withdrawn, and the slots stay in the position when they are empty. Fees stay claimable and rewards keep accruing until you claim them.
+The second call reads the position again because the first call changed the liquidity. `removeLiquidityByBps` refreshes the vesting schedule first, so liquidity that has vested counts as unlocked. Permanently locked liquidity is never withdrawn, and the slots stay in the position when they are empty. Fees and rewards already earned stay claimable, and the liquidity left in the position keeps earning.
 
 Errors you are likely to hit:
 
@@ -1059,7 +1059,7 @@ const { tx } = await client.position.lockVestingPosition({
 await sendAndConfirmTransaction(connection, tx, [owner]);
 ```
 
-The cliff and the period length use the pool's activation type, which is seconds for `Timestamp` and slots for `Slot`, so the script reads the current point and the length of a day in the right unit. `cliffUnlockBps + bpsPerPeriod * numberOfPeriod` must equal 10,000. Pass `cliffPoint: null` to start the cliff now, and a `cliffUnlockBps` of 10,000 with zero periods for a single release at the cliff.
+The cliff and the period length use the pool's activation type, which is seconds for `Timestamp` and slots for `Slot`, so the script reads the current point and the length of a day in the right unit. On a `Slot` pool the script converts with `MS_PER_SLOT`, the program's nominal 250 ms slot. Real slot times differ, so the wall-clock dates are approximate. Measure the cluster with `getRecentPerformanceSamples` if the dates matter. `cliffUnlockBps + bpsPerPeriod * numberOfPeriod` must equal 10,000. Pass `cliffPoint: null` to start the cliff now, and a `cliffUnlockBps` of 10,000 with zero periods for a single release at the cliff.
 
 Errors you are likely to hit:
 
@@ -1447,7 +1447,14 @@ const nftMints = tokenAccounts
 
 // A mint is a position or a limit order if the matching PDA exists and the program owns it
 async function owned(addresses: PublicKey[]) {
-  const infos = await connection.getMultipleAccountsInfo(addresses);
+  // getMultipleAccountsInfo accepts at most 100 addresses per call
+  const infos: Awaited<ReturnType<typeof connection.getMultipleAccountsInfo>> =
+    [];
+  for (let i = 0; i < addresses.length; i += 100) {
+    infos.push(
+      ...(await connection.getMultipleAccountsInfo(addresses.slice(i, i + 100))),
+    );
+  }
   return infos.map((info) => !!info && info.owner.equals(DLMM_PRO_PROGRAM_ID));
 }
 const isPosition = await owned(nftMints.map((mint) => derivePosition(mint)));
@@ -1667,7 +1674,7 @@ The rules:
 Errors you are likely to hit:
 
 - `InvalidParameters`: a bid above the current tick or an ask at or below it when the transaction lands, or ticks that are not on the tick spacing, not ascending or empty.
-- `ExceededSlippage`: only with `relativeTick`, when the price has left the band.
+- `ExceededSlippage`: the deposit plus its Token 2022 transfer fee is above `maxAmount`, or, with `relativeTick`, the price has left the band.
 - `TickArrayBitmapExtensionAccountIsNotProvided`: a tick lies outside tick array indexes -512 to 511 and the extension account is missing. The builder passes it for you when the pool has one.
 
 ## Read Limit Order Fill State
@@ -2018,14 +2025,13 @@ for (const [rewardIndex, reward] of (extensions.rewards ?? []).entries()) {
 }
 ```
 
-One transaction claims one reward slot, because each has its own mint and vault. A claim with nothing accrued sends nothing. To claim only some slots, pass a smaller `bitmap` and the ranges of those slots. Set `minAmount` to fail with `ExceededSlippage` if the amount received, after any transfer fee, is lower.
+One transaction claims one reward slot, because each has its own mint and vault. A claim with nothing accrued sends nothing. The bitmap only chooses which slots are refreshed before the claim. The claim pays the pending reward of every slot, so a smaller `bitmap` does not leave rewards unclaimed: slots outside it pay what they were credited at their last refresh. Set `minAmount` to fail with `ExceededSlippage` if the amount received, after any transfer fee, is lower.
 
 Errors you are likely to hit:
 
-- `RewardUninitialized`: the slot at `rewardIndex` has not been set up.
+- Anchor `AccountNotInitialized` (3012, `custom program error: 0xbc4`): the reward vault for `rewardIndex` does not exist, because the slot has not been set up or the pool has no `LiquidityMining` extension. The script skips slots that are not set up.
 - `InvalidRewardMint`: `rewardMint` is not the mint of that slot.
 - `InvalidPermission` or `InvalidAuthority` for a delegate without the approval or the bit.
-- `InvalidPoolType`: the pool has no `LiquidityMining` extension.
 
 ## Hand Over the Reward Authority
 
@@ -2122,7 +2128,7 @@ const withdrawn = await client.reward.withdrawIneligibleRewards({
 });
 await sendAndConfirmTransaction(connection, withdrawn.tx, [authority]);
 
-// 2. Fund the next period: 500 tokens (6 decimals) over 14 days, starting now
+// 2. Fund the next period: 500 tokens (6 decimals) over 14 days, starting in one minute
 const openTime = clock.timestamp.addn(60);
 const endTime = openTime.addn(14 * 86_400);
 const emissionPerSecond = new BN(500_000_000)
@@ -2153,10 +2159,10 @@ The withdrawal pays the authority's associated token account for the reward mint
 
 Errors you are likely to hit:
 
-- `InvalidRewardState`: `withdrawIneligibleRewards` before an emission was set or before it ended, or `setRewardEmission` while the current emission is still running. The script stops early with its own error when the period has not ended.
+- `InvalidRewardState`: `withdrawIneligibleRewards` before an emission was set or before it ended, or `setRewardEmission` while the current emission is still running, or after it ended but before the ineligible rewards were withdrawn. The script stops early with its own error when the period has not ended.
 - `InvalidPermission`: the signer is not the slot's reward authority.
 - `InvalidRewardMint`: `rewardMint` is not the slot's mint. The script reads the mint from the pool.
-- `InvalidParameters`: an `openTime` in the past or too far ahead, a duration outside the limits or an emission that rounds to zero tokens.
+- `InvalidParameters`: an `openTime` in the past or too far ahead, a duration outside the limits, or an `emissionPerSecond` of 0.
 - `ExceededSlippage`: the funding with its transfer fee is above `maxAmount`, or the withdrawal after a transfer fee is below `minAmount`.
 
 ## Schedule a Launch
@@ -2430,7 +2436,7 @@ What to expect on-chain:
 
 ## Quote From Cached Accounts
 
-`client.pool.quoteExactIn` reads the pool, tick arrays, mints and clock on every call. When you quote often, for example a ladder of sizes or a router comparing routes, read the accounts once and call the pure `quoteExactIn` export, which runs the program's swap math over what you hold. The swapper signs the swap. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `UNIT_AMOUNT` (atoms of token X in one step of the ladder).
+`client.pool.quoteExactIn` reads the pool, tick arrays, mints and clock on every call. When you quote often, for example a ladder of sizes or a router comparing routes, read the accounts once and call the pure `quoteExactIn` export, which runs the program's swap math over what you hold. The swapper signs the swap. The script reads `RPC_URL`, `WALLET_SECRET_KEY`, `POOL_ADDRESS` and `UNIT_AMOUNT` (atoms of token X in one step of the ladder). The balance comparison assumes token Y is not wrapped SOL, because the builder closes the wrapped SOL account after the swap.
 
 ```typescript
 import {
@@ -2440,9 +2446,9 @@ import {
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import {
-  getAccount,
   getAssociatedTokenAddressSync,
   getMint,
+  unpackAccount,
 } from "@solana/spl-token";
 import BN from "bn.js";
 import {
@@ -2575,15 +2581,10 @@ const outAccount = getAssociatedTokenAddressSync(
   true,
   getTokenProgram(accounts.poolState.tokenYFlag),
 );
-const readOut = async () =>
-  (
-    await getAccount(
-      connection,
-      outAccount,
-      "confirmed",
-      getTokenProgram(accounts.poolState.tokenYFlag),
-    )
-  ).amount;
+const readOut = async () => {
+  const info = await connection.getAccountInfo(outAccount, "confirmed");
+  return info ? unpackAccount(outAccount, info, info.owner).amount : 0n;
+};
 const outBefore = await readOut();
 await sendAndConfirmTransaction(connection, tx, [user]);
 console.log(
@@ -2601,7 +2602,7 @@ console.log(
 What to expect:
 
 - The first loop prints three quotes from one set of reads. An `amountLeft` above zero, which a size larger than the loaded liquidity gives, means the tick arrays ran out: a swap of that size would fail with `NotConsumingFullAmountIn`. Load more arrays with `maxTickArrays` or quote a smaller size.
-- With `amountLeft` at zero the quote equals what the swap pays against the same accounts and clock: the script prints the quoted and the received amounts, and they match.
+- With `amountLeft` at zero the quote equals what the swap pays against the same accounts and clock: the script prints the quoted and the received amounts, and they match when nothing else touched the pool and the fee did not change in between.
 - A quote does not modify the copy it reads, so the copy keeps quoting as of the moment it was read. Read the accounts again after a swap, or after any other transaction that touches the pool, as the script does in step 3.
 
 The clock matters. Dynamic and scheduled fees depend on the time, so the quote uses the slot and timestamp you pass. A copy read some time ago quotes at that time. Read the clock again with `readClock` when you quote later. A Token 2022 mint on either side must be passed as an unpacked `Mint`, as the script does with `getMint` for both. The pure quote throws `InvalidParameters` without it, and `BitmapExtensionAccountIsNotProvided` when the traversal leaves the inline bitmap and the pool's extension was not passed.
@@ -2619,6 +2620,7 @@ import {
   PoolExtension,
   decodePoolExtensionsFromData,
   decodeTicksFromData,
+  deriveTickArrayBitmapExtension,
   isSupportExtension,
   tickArraysForSwap,
   tickUiPrice,
@@ -2639,10 +2641,16 @@ const withReward = isSupportExtension(
   poolState.extensions,
   PoolExtension.LiquidityMining,
 );
+const bitmapExtension =
+  poolState.isBitmapExtensionInitialized === 1
+    ? await client.state.fetchTickArrayBitmapExtension(
+        deriveTickArrayBitmapExtension(pool),
+      )
+    : null;
 const selection = tickArraysForSwap({
   pool,
   poolState,
-  extensionState: null, // fetch the bitmap extension as well if the pool has one
+  extensionState: bitmapExtension,
   swapForY: true,
   maxTickArrays: 5,
 });
@@ -2826,7 +2834,7 @@ Growing the oracle does not erase observations. The program reorders the ring so
 
 ## Claim Partner Fees
 
-The pool creator authority of a dynamic config is the partner of the pools created from it, and it earns a share of the protocol fee on every swap (`partner_fee_bps` of the config, at most 50%). The share accrues on the pool in the token the fee is taken in. Static config and launch pools have no partner. The partner claims what has accrued with `claimPartnerFee`, and the tokens go to the partner's associated token accounts, created when missing. Only the partner can sign. The script reads `RPC_URL`, `PARTNER_SECRET_KEY` and `POOL_ADDRESS`.
+The pool creator authority of a dynamic config is the partner of the pools created from it, and it earns a share of the protocol fee on every swap (`partnerFeeBps` of the config, at most 50%). The share accrues on the pool in the token the fee is taken in. Static config and launch pools have no partner. The partner claims what has accrued with `claimPartnerFee`, and the tokens go to the partner's associated token accounts, created when missing. Only the partner can sign. The script reads `RPC_URL`, `PARTNER_SECRET_KEY` and `POOL_ADDRESS`.
 
 ```typescript
 import {
@@ -2871,7 +2879,7 @@ Errors you are likely to hit:
 - `InvalidAuthority`: the signer is not the pool's partner. The script checks first and throws its own error.
 - `ExceededSlippage`: the amount received after a transfer fee is below `minAmountX` or `minAmountY`.
 
-The operator can change `partner_fee_bps` on a pool later, see [Dynamic Configs](/developer-guides/dlmm-pro/pool-fee-configs#dynamic-configs).
+The operator can change `partnerFeeBps` on a pool later, see [Dynamic Configs](/developer-guides/dlmm-pro/pool-fee-configs#dynamic-configs).
 
 ## Read Events From a Transaction
 
@@ -2945,7 +2953,7 @@ console.log("position NFT", nft.publicKey.toBase58());
 
 The simulation signs with the keypairs and reports `unitsConsumed`. The script sets the limit 20% above it. A tighter limit also lowers the priority fee: the fee is the unit price times the limit you request, not the units used, so a limit of 100,000 at 5,000 micro-lamports costs 500 lamports on top of the base fee and 200,000 costs 1,000. A limit that is too low fails the transaction when the program runs out of units, so keep headroom, and measure again when the position gets more ranges.
 
-Put the budget instructions first. A builder's instruction list is plain `tx.instructions`, so `unshift` puts them ahead of it, and anything the builder prepends, such as token account creation or SOL wrapping, runs after them. Positions with many ranges, and any transaction that creates tick arrays, are the ones to measure. A position that touches many new tick arrays can also hit the limit on instructions in one transaction, so open it with fewer ranges and add the rest with `expandPosition`.
+Put the budget instructions first. A builder's instruction list is plain `tx.instructions`, so `unshift` puts them ahead of it, and anything the builder prepends, such as token account creation or SOL wrapping, runs after them. Positions with many ranges, and any transaction that creates tick arrays, are the ones to measure. A position that adds many new ticks to one tick array can also fail with `ReallocExceedMaxLengthPerInstruction`: one instruction can grow a tick array by at most 10,240 bytes, which is 64 new ticks, or 53 on `LiquidityMining` pools. Open it with fewer ranges and add the rest with `expandPosition`. The simulation runs under the default limit of 200,000 compute units, so it cannot measure a transaction that needs more. For those, simulate with `ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 })` in place, then replace it with the measured limit.
 
 ## Send a Versioned Transaction With a Lookup Table
 
@@ -3051,10 +3059,15 @@ async function sendV0(
   versioned.sign([owner]);
   console.log("versioned transaction:", versioned.serialize().length, "bytes");
   const signature = await connection.sendTransaction(versioned);
-  await connection.confirmTransaction(
+  const { value } = await connection.confirmTransaction(
     { signature, blockhash, lastValidBlockHeight },
     "confirmed",
   );
+  if (value.err) {
+    throw new Error(
+      `Transaction ${signature} failed: ${JSON.stringify(value.err)}`,
+    );
+  }
 }
 
 const [createIx, lookupTableAddress] =
@@ -3134,7 +3147,13 @@ async function dlmmProErrorName(error: unknown): Promise<string | undefined> {
   // Thrown when the node rejects the transaction or it fails on-chain.
   // The program's log line carries the code in hex.
   if (error instanceof SendTransactionError) {
-    const logs = await error.getLogs(connection);
+    let logs: string[];
+    try {
+      logs = await error.getLogs(connection);
+    } catch {
+      // No logs on the error and no signature to look them up with
+      return undefined;
+    }
     const pattern = new RegExp(
       `Program ${DLMM_PRO_PROGRAM_ID.toBase58()} failed: custom program error: 0x([0-9a-f]+)`,
     );
@@ -3192,6 +3211,9 @@ const { quote, tickArrays, tickArrayBitmapExtension } =
     maxTickArrays: 1,
   });
 console.log("amount left unswapped:", quote.amountLeft.toString());
+if (quote.amountLeft.isZero()) {
+  throw new Error("HUGE_INPUT_AMOUNT fits in the loaded tick arrays; raise it");
+}
 const { tx } = await client.pool.swap({
   ...swapAccounts,
   tickArrays,
@@ -3216,7 +3238,7 @@ Mapping a failed transaction:
 - The program logs `Program <id> failed: custom program error: 0x...` for the error it returned. The script matches the DLMM Pro program ID so that an error of another program, such as the token program in a transfer, is not read as one of ours. `parseInt(hex, 16)` gives the number.
 - `error.getLogs(connection)` returns the logs of a `SendTransactionError`, from the error itself when they are already there and by signature otherwise.
 - A landed transaction reports the error as `InstructionError: [index, { Custom: number }]` in the `err` of its status or of `getTransaction(...).meta`, and `PoolErrorCode[number]` gives the name.
-- An error with no code in the 6000 range, such as `custom program error: 0x0` for an account that already exists, comes from another program, and `PoolErrorCode` has no name for it.
+- An error with no code in the 6000 range comes from another program, such as `custom program error: 0x0` from the system program for an account that already exists, or from Anchor's account checks inside the program, such as 3012 (`0xbc4`) for an account that does not exist yet. `PoolErrorCode` has no name for either.
 
 [Program Errors](/developer-guides/dlmm-pro/program/errors) lists every code with its usual cause. A swap that fails with `NotConsumingFullAmountIn` is the usual first one: quote again with `maxTickArrays` raised or a smaller input, and always check `quote.amountLeft`.
 
