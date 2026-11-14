@@ -1,0 +1,1039 @@
+---
+title: "DLMM Pro Rust Integration CPI"
+sidebarTitle: "CPI"
+description: "Call DLMM Pro from your own Solana program with Anchor declare_program! bindings, the account list of each instruction, remaining accounts and the checks a calling program has to make."
+llmsDescription: "Explains DLMM Pro Rust CPI integration for programs that call the dlmm_pro program dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n. Covers the program ID and pool authority, generating bindings with Anchor declare_program! from the published IDL and why not to depend on dlmm-pro-commons on-chain, the CPI instruction scope, event CPI accounts, RemainingAccountsInfo slices, transfer hook accounts and tick array order and writability per instruction, a complete Anchor swap program with a user-signed and a PDA-signed path, full account tables for swap, open_position, add_liquidity, remove_liquidity, claim_fee, claim_reward, refresh_fees_and_rewards, open_limit_order, cancel_limit_order, close_position and close_limit_order, NFT delegates and the owner associated token account rule, optional accounts, exact-in swaps and NotConsumingFullAmountIn, slippage bounds and transfer fees, activation and pool status, reading a swap result from token balances, limits on accounts and CPI depth, off-chain account planning with the TypeScript SDK and the commons crate, common CPI failures, best practices, and testing with LiteSVM and on devnet."
+---
+
+Use CPI when your Solana program has to call DLMM Pro itself, for example to swap as part of a larger instruction, to hold a position or a limit order in a program-controlled account, or to claim fees and rewards on behalf of a vault.
+
+The integration contract is the deployed program ID, the published IDL and the TypeScript SDK. Take account lists from the IDL and compare them with an SDK-built instruction before you ship.
+
+<Warning>
+  DLMM Pro is in beta and is subject to breaking changes. Check the [changelog](/developer-guides/dlmm-pro/changelog) before you upgrade the IDL you generate bindings from.
+</Warning>
+
+## Program ID
+
+| Item | Address |
+| --- | --- |
+| DLMM Pro program | `dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n`, the same on mainnet and devnet |
+| Pool authority | `FSUXyUKbTJ4A5Ccz5M6Uo4J2myc3RsDKTPU9vZwyeXru` |
+| Event authority | `6D8NF9HL6eTrheURXz9fLvrL1L7Uzfy5JAA2bCAUEN13`, the PDA of the seed `__event_authority` under the program |
+| Memo program | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` |
+| Token 2022 program | `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb` |
+
+The pool authority is a PDA of the seed `pool_auth` under the program. It owns every reserve and reward vault and signs the transfers out of them, so it is the transfer authority a transfer hook sees for tokens leaving the pool.
+
+```rust
+use anchor_lang::prelude::*;
+
+pub const DLMM_PRO_PROGRAM_ID: Pubkey = pubkey!("dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n");
+pub const POOL_AUTHORITY: Pubkey = pubkey!("FSUXyUKbTJ4A5Ccz5M6Uo4J2myc3RsDKTPU9vZwyeXru");
+pub const MEMO_PROGRAM_ID: Pubkey = pubkey!("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+
+/// Anchor's event authority of DLMM Pro: seed `__event_authority` under the program.
+pub fn event_authority() -> Pubkey {
+    Pubkey::find_program_address(&[b"__event_authority"], &DLMM_PRO_PROGRAM_ID).0
+}
+```
+
+`declare_program!` also generates `dlmm_pro::ID`, taken from the `address` field of the IDL, so you can use it in place of the first constant.
+
+## Generated Bindings
+
+Generate bindings from the IDL with Anchor's `declare_program!`. Do not type account orders from memory. A misplaced optional account, event account or tick array is the usual cause of a failing CPI.
+
+### Getting the IDL
+
+The IDL ships with the SDK. It is the same file in each of these places:
+
+| Source | Path or import |
+| --- | --- |
+| SDK repository | `src/idl/dlmm-pro/dlmm_pro.json` and `commons/idls/dlmm_pro.json` in [MeteoraAg/dlmm-pro-sdk](https://github.com/MeteoraAg/dlmm-pro-sdk) |
+| npm package | `@meteora-ag/dlmm-pro-sdk/idl/dlmm-pro`, which resolves to `dist/idl/dlmm-pro/dlmm_pro.json` inside the package. The package root also exports it as `DlmmProIDL`. |
+
+The file must be named `dlmm_pro.json`, because `declare_program!(dlmm_pro)` reads `idls/dlmm_pro.json`. The macro looks for an `idls` directory in the crate directory and then in each parent directory, and uses the nearest one. In a workspace, a single `idls` directory at the workspace root works for every crate.
+
+```bash
+mkdir -p idls
+curl -L -o idls/dlmm_pro.json \
+  https://raw.githubusercontent.com/MeteoraAg/dlmm-pro-sdk/main/src/idl/dlmm-pro/dlmm_pro.json
+```
+
+Take the IDL from the SDK release you pin, and update it when you upgrade the SDK. A new program release changes the IDL.
+
+### Cargo and Anchor
+
+The program in this page is built with Anchor 1.x. `declare_program!` generates code that uses `bytemuck`, so the crate needs it as a direct dependency.
+
+```toml
+[package]
+name = "swap-example"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+custom-heap = []
+custom-panic = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+
+[dependencies]
+anchor-lang = "1.0.2"
+anchor-spl = "1.0.2"
+bytemuck = "1"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))', 'cfg(feature, values("idl-build", "anchor-debug"))'] }
+```
+
+The `[features]` entries declare the feature names that Anchor's macros test, and the `[lints]` entry registers the cfg names they use, so the crate builds without unknown-cfg warnings. The examples compile with `anchor-lang` 1.1.2 and 1.2.2.
+
+`CpiContext::new` takes the program ID as a `Pubkey` in Anchor 1.x. In Anchor 0.31 it takes the program `AccountInfo`, so the code on this page does not build against 0.x.
+
+### What the Macro Generates
+
+`declare_program!(dlmm_pro)` creates a module `dlmm_pro` in your crate:
+
+| Item | Contents |
+| --- | --- |
+| `dlmm_pro::ID`, `dlmm_pro::ID_CONST` | The program ID from the IDL, as a static and as a constant. |
+| `dlmm_pro::program::DlmmPro` | A marker type that implements `Id`, so `Program<'info, dlmm_pro::program::DlmmPro>` checks that an account is the DLMM Pro program. |
+| `dlmm_pro::cpi` | One function per instruction, for example `dlmm_pro::cpi::swap(ctx, parameters, remaining_accounts_info)`. Each takes a `CpiContext` and the instruction arguments in IDL order. |
+| `dlmm_pro::cpi::accounts` | One struct per instruction, for example `Swap`, with every account as an `AccountInfo`, in IDL order. An optional account is an `Option<AccountInfo>`. |
+| `dlmm_pro::types` | Instruction arguments and nested types: `SwapParameters`, `RemainingAccountsInfo`, `RemainingAccountsSlice`, `AccountsType`, `TickRange` and the rest. |
+| `dlmm_pro::accounts` | The account headers: `Pool`, `TickArray`, `PositionArray`, `LimitOrder`, `Oracle`, `TickArrayBitmapExtension`, `StaticConfig`, `DynamicConfig` and `Operator`. |
+| `dlmm_pro::events`, `dlmm_pro::error`, `dlmm_pro::constants` | Event types, the `DlmmProError` enum with the IDL codes, and the IDL constants. |
+| `dlmm_pro::client` | `client::accounts` and `client::args`, for building instructions off-chain. |
+| `dlmm_pro::parsers` | Enums for decoding accounts, events and instructions. |
+
+The account types in `dlmm_pro::accounts` describe only the fixed header. `Pool` accounts with extensions and every `TickArray`, `PositionArray`, `LimitOrder` and `Oracle` have a longer, variable tail. Anchor's `Account<'info, dlmm_pro::accounts::Pool>` reads the whole account as the header and panics on a pool with a tail. To read a pool in your program, use `AccountLoader<'info, dlmm_pro::accounts::Pool>`: it checks the owner and the discriminator and maps only the header bytes. That is enough for `has_one` checks on the mints and reserves and for the `tick_current_id`, `pool_status` and `token_x_flag` fields.
+
+### The Generated CPI Returns No Data
+
+No DLMM Pro instruction declares a return value in the IDL, so `dlmm_pro::cpi::swap` and the other functions return `Result<()>`. Read the outcome of a call from token balances or from your own accounts. See [Reading the Result of a Swap](#reading-the-result-of-a-swap).
+
+### Use declare_program! On-Chain, Not dlmm-pro-commons
+
+Generate the bindings in your program with `declare_program!`. Use `dlmm-pro-commons` for off-chain work: planning accounts, quoting and tests. Reasons:
+
+- The crate describes itself as an off-chain commons library. It carries a quote engine, async transfer hook resolution and account parsers that an on-chain program does not need.
+- The example program below builds for SBF into a 160,792-byte binary. Adding `dlmm-pro-commons` and calling `DynamicPool::deserialize` and `derive_tick_array` from a handler also builds, and the binary grows to 176,344 bytes. That build needed `ruint` pinned to 1.15.0, because the `ruint` that Cargo picks by default requires Rust 1.90 and the Rust that ships with Solana platform tools v1.54 is 1.89.
+- The crate declares its own `dlmm_pro` module with `declare_program!`, so you would carry two copies of the generated types next to your own.
+- Every `derive_*` helper calls `find_program_address`, which costs compute on-chain. Pass the addresses in, check them with Anchor constraints, and derive them off-chain.
+
+## CPI Instruction Scope
+
+The IDL lists 39 callable instructions. A program that integrates DLMM Pro usually calls these:
+
+| Instruction | Use | Details |
+| --- | --- | --- |
+| `swap` | Exact-in swap. | [Swap Accounts](#swap-accounts) |
+| `open_position`, `close_position` | Create and close a position array and its NFT. | [Position Accounts](#position-accounts) |
+| `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance` | Deposit into the range slots of a position. | [Add and Remove Liquidity Accounts](#add-and-remove-liquidity-accounts) |
+| `remove_liquidity`, `remove_liquidity_by_bps` | Withdraw from the range slots of a position. | [Add and Remove Liquidity Accounts](#add-and-remove-liquidity-accounts) |
+| `refresh_fees_and_rewards`, `claim_fee`, `claim_reward` | Accrue and pay out fees and rewards. | [Fee and Reward Accounts](#fee-and-reward-accounts) |
+| `open_limit_order`, `cancel_limit_order`, `close_limit_order` | Place, cancel and close limit orders. | [Limit Order Accounts](#limit-order-accounts) |
+| `update_position_delegate_permission`, `update_limit_order_delegate_permission` | Set what an NFT delegate may do. | [Signers and Delegates](#signers-and-delegates) |
+
+The remaining instructions are called the same way, with the account lists in the IDL: `expand_position`, `remove_position`, `lock_permanent_position`, `lock_vesting_position`, `initialize_tick_array`, `initialize_tick_bitmap_extension`, `increase_oracle_length`, the pool creation instructions and the reward authority instructions. See [Program Instructions](/developer-guides/dlmm-pro/program/instructions) for what each one does and who signs it. The operator and admin instructions are not callable by integrators.
+
+## Event CPI Accounts
+
+Every instruction on this page has the Anchor event CPI accounts at the end of its fixed accounts. Most of them emit an event. `refresh_fees_and_rewards` takes the accounts but emits no event, and `claim_reward` emits only when the amount is above 0.
+
+| Account | Address | Position |
+| --- | --- | --- |
+| `event_authority` | `6D8NF9HL6eTrheURXz9fLvrL1L7Uzfy5JAA2bCAUEN13`, the PDA of the seed `__event_authority` under the DLMM Pro program | Second to last |
+| `program` | The DLMM Pro program | Last |
+
+The accounts come after every other fixed account and before the remaining accounts. In the generated struct they are the fields `event_authority` and `program`. The program calls itself to emit the event, so the DLMM Pro program account must be among the accounts you pass to the CPI. In your own `#[derive(Accounts)]` struct you can name the program field anything and type it `Program<'info, dlmm_pro::program::DlmmPro>`, as the examples do. See [Program Events](/developer-guides/dlmm-pro/program/events) for the event layouts.
+
+## Remaining Accounts
+
+An instruction that moves tokens takes a `RemainingAccountsInfo` argument, and `swap` and the liquidity instructions also read tick arrays. The program reads the remaining accounts in two steps:
+
+1. It consumes the transfer hook accounts, slice by slice in the order of `RemainingAccountsInfo.slices`. Each slice takes `length` accounts from the front of the remaining accounts.
+2. It treats what is left as the tick arrays of the instruction.
+
+`RemainingAccountsInfo { slices: vec![] }` means no hook accounts, and the tick arrays start at the first remaining account. A slice has an `accounts_type` and a `length` (`u8`). A slice of length 0 is skipped. Each type can appear once, or the call fails with `DuplicatedRemainingAccountTypes`. A type the instruction does not accept fails with `InvalidRemainingAccountSlice`. Slices that ask for more accounts than were passed fail with `InsufficientRemainingAccounts`.
+
+### Slice Types per Instruction
+
+| Instruction | Accepted slice types |
+| --- | --- |
+| `swap` | `TransferHookX`, `TransferHookY`, `TransferHookReferral` |
+| `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance` | `TransferHookX`, `TransferHookY` |
+| `remove_liquidity`, `remove_liquidity_by_bps` | `TransferHookX`, `TransferHookY` |
+| `claim_fee` | `TransferHookX`, `TransferHookY` |
+| `claim_reward` | `TransferHookReward` |
+| `open_limit_order` | `TransferHookX` when `is_ask_side` is true, `TransferHookY` when it is false |
+| `cancel_limit_order` | `TransferHookX`, `TransferHookY`, `TransferHookReferral` |
+| `open_position`, `close_position`, `close_limit_order`, `refresh_fees_and_rewards` | None. These take no `RemainingAccountsInfo`, and every remaining account is a tick array. |
+
+A mint with a transfer hook needs a slice for each leg that moves a non-zero amount of it, or the call fails with `MissingRemainingAccountForTransferHook`. A slice for a mint without a hook fails with `NoTransferHookProgram`. The hook accounts of a leg are what the hook program declares for that transfer, so they depend on the transfer's source, destination, authority and amount:
+
+| Instruction and leg | Source | Destination | Authority |
+| --- | --- | --- | --- |
+| `swap`, input | `user_token_in` | the input reserve | `user` |
+| `swap`, output | the output reserve | `user_token_out` | pool authority |
+| `swap`, host fee | the reserve of the fee token | `referral` | pool authority |
+| `add_liquidity` family, X and Y | `user_token_x`, `user_token_y` | `reserve_x`, `reserve_y` | `signer` |
+| `remove_liquidity` family, `claim_fee`, X and Y | `reserve_x`, `reserve_y` | `user_token_x`, `user_token_y` | pool authority |
+| `claim_reward` | `reward_vault` | `user_token_account` | pool authority |
+| `open_limit_order` | `user_token` | `reserve` | `owner` |
+| `cancel_limit_order`, X and Y | `reserve_x`, `reserve_y` | `user_token_x`, `user_token_y` | pool authority |
+| `cancel_limit_order`, referral fee | the reserve of the fee token | `referral_token` | pool authority |
+
+An off-chain planner resolves these accounts with the transfer hook interface. `get_extra_account_metas_for_transfer_hook` in the [commons library](/developer-guides/dlmm-pro/rust-integration/library#token-2022) and `getExtraAccountMetasForTransferHook` in the SDK take exactly this source, destination, authority and amount. Your program does not resolve or inspect them. It forwards the remaining accounts and the `RemainingAccountsInfo` it received. A transfer that does not happen, such as a claim of zero, does not use its hook accounts.
+
+### Tick Arrays
+
+| Instruction | Which tick arrays | Order | Writable |
+| --- | --- | --- | --- |
+| `swap` | The arrays of the quote, in swap direction | Descending index for a sale of X, ascending for a sale of Y | Yes |
+| `open_position` | One per distinct array index among the range endpoints. Missing arrays are created. | Ascending index, exactly one account per index | Yes |
+| `add_liquidity` family, `remove_liquidity` family | The arrays that hold both endpoints of every selected slot | Any | Yes |
+| `refresh_fees_and_rewards` | The arrays that hold both endpoints of every selected slot | Any | No, read-only is enough |
+| `open_limit_order` with absolute ticks | One per distinct array index of the order's ticks. Missing arrays are created. | Ascending index, exactly one per index | Yes |
+| `open_limit_order` with `relative_tick` | The arrays the band can resolve the ticks to | Any. Extra arrays are allowed. | Yes |
+| `cancel_limit_order` | The arrays that hold the canceled ticks | Any | Yes |
+| `close_position`, `close_limit_order` | One per distinct array index of every tick the account holds | Ascending index, exactly one per index | Yes |
+| `claim_fee`, `claim_reward` | None | | |
+
+`payer` pays for the tick arrays that `open_position` and `open_limit_order` create. Pass the PDA address of each array even though the account does not exist yet. A tick array that does not belong to the pool, or an address that is not the next one expected, fails with `InvalidTickArray`. When the arrays you pass lack a tick that a position or order uses, the call fails with `CannotFindTickFromId`.
+
+A swap walks the remaining accounts in order and stops after the last array that holds liquidity in the swap direction. Accounts after that point are not read. Pass only tick arrays after the hook accounts.
+
+The extension account `tick_array_bitmap_extension` is needed whenever a tick array index lies outside -512 to 511. Pass it for any pool whose extension exists. Without it a swap fails with `BitmapExtensionAccountIsNotProvided` when its search leaves the inline range. A liquidity or limit order instruction fails with `TickArrayBitmapExtensionAccountIsNotProvided` when a tick array outside that range changes between empty and non-empty.
+
+### Limits
+
+| Limit | Value | Source |
+| --- | --- | --- |
+| Accounts in one CPI instruction | 255 | Solana runtime |
+| Account infos passed to one CPI call | 128, and 255 on the newest runtime releases | Solana runtime releases 2.x and 3.x use 128, release 4.3 uses 255. Stay under 128 unless you know your target cluster runs the newer rule. |
+| Instruction stack depth | 5 | Solana runtime |
+| Fixed accounts of `swap` | 17 | IDL |
+| Range slots in a position | 45 | IDL constant `POSITION_MAX_RANGE_U64` |
+| Ticks in a limit order | 25 | IDL constant `LIMIT_ORDER_MAX_TICK_U64` |
+| Remaining accounts per hook slice | 255 | `length` is a `u8` |
+
+A swap uses 17 fixed accounts plus the hook accounts and tick arrays, and your own instruction adds its accounts on top. Every account of a transaction is paid for in the transaction size, so use a v0 transaction with an address lookup table when the account set grows.
+
+With your program as the top-level instruction, a swap through a Token 2022 mint with a transfer hook reaches depth 4 at the hook program: your program is depth 1, DLMM Pro depth 2, Token 2022 depth 3 and the hook depth 4. The event CPI that DLMM Pro makes to itself is depth 3. If another program calls yours, each added level moves every one of those calls one level deeper, and the hook program itself loses a level for its own CPIs.
+
+This page gives no compute figures: they were not measured, and the program does not document one. Simulate the transaction on devnet with the accounts and the hooks you will use, and set the compute budget from the result. Wide positions, many tick arrays and hook programs raise the cost.
+
+## Account Reference
+
+Tables list the accounts in IDL order. Mut means the account is writable in the CPI, and a writable account must also be writable in the outer transaction. Optional accounts are marked in the notes.
+
+### Swap Accounts
+
+| Account | Mut | Signer | What it is and how to derive it |
+| --- | --- | --- | --- |
+| `pool` | Yes | | The pool. |
+| `pool_authority` | | | The constant pool authority. |
+| `tick_array_bitmap_extension` | Yes | | Optional. `derive_tick_array_bitmap_extension(pool)`. Pass it when the pool has an extension. |
+| `reserve_x` | Yes | | `derive_reserve(token_x_mint, pool)`, also stored in the pool. Must match the pool. |
+| `reserve_y` | Yes | | The same for Y. |
+| `user_token_in` | Yes | | The swapper's account for the input token. Its authority must be `user`. |
+| `user_token_out` | Yes | | The swapper's account for the output token. Its mint decides the direction: a mint equal to the pool's token Y mint means a sale of X. |
+| `referral` | Yes | | Optional. A token account that receives the host fee. It must hold the fee token: the output mint, or token Y on a pool with `CollectFeeMode.OnlyY`. It can be the swapper's own account. |
+| `token_x_mint` | | | Stored in the pool. Must match. |
+| `token_y_mint` | | | Stored in the pool. Must match. |
+| `oracle` | Yes | | `derive_oracle(pool)`. |
+| `user` | | Yes | The swapper. A wallet that signs the transaction, or a PDA that your program signs for. |
+| `token_x_program` | | | The token program of mint X. `token_x_flag` in the pool is 0 for Token and 1 for Token 2022. |
+| `token_y_program` | | | The same for Y. |
+| `memo_program` | | | The memo program. Required even when no memo is written. |
+| `event_authority` | | | The event authority PDA. |
+| `program` | | | The DLMM Pro program. |
+
+Arguments: `parameters: SwapParameters { input_amount, minimum_output_amount }` and `remaining_accounts_info`. The direction is not an argument. Remaining accounts: hook accounts for the slices above, then the tick arrays.
+
+### Position Accounts
+
+`open_position` creates the position NFT as a Token 2022 mint with metadata and mints one token to the owner's associated token account. Its argument is `OpenPositionParameters { tick_ranges }`, with 1 to 45 ranges. Each range needs a lower tick below the upper tick, and both must be usable tick ids on the pool's tick spacing.
+
+| Account | Mut | Signer | What it is and how to derive it |
+| --- | --- | --- | --- |
+| `pool` | | | The pool. |
+| `pool_authority` | | | The constant pool authority. It becomes the mint authority of the NFT. |
+| `nft_mint` | Yes | Yes | A new keypair that you generate. It signs the outer transaction. |
+| `nft_account` | Yes | | The owner's Token 2022 associated token account for `nft_mint`. Derive it with the Token 2022 program ID. |
+| `position` | Yes | | `derive_position(nft_mint)`. Created by the instruction. |
+| `owner` | | | Receives the NFT and owns the position. Not a signer. It can be a PDA. |
+| `payer` | Yes | Yes | Pays the rent of the position, the NFT and the tick arrays it creates. Can be anyone. |
+| `token_program` | | | The Token 2022 program. |
+| `system_program` | | | The system program. |
+| `associated_token_program` | | | The associated token program, `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL`. |
+| `event_authority` | | | The event authority PDA. |
+| `program` | | | The DLMM Pro program. |
+
+<Warning>
+  The IDL's PDA hint for `nft_account` in `open_position` names the legacy Token program. The account the program expects is the associated token account under Token 2022, which is what `findNftAccount` in the SDK derives (with the owner allowed to be off-curve). Derive it with `get_associated_token_address_with_program_id(owner, nft_mint, token_2022_program)`.
+</Warning>
+
+Remaining accounts: the tick arrays, ascending. The call fails with `InvalidActivationAccess` when bit 1 of `pool_status` is set, or when the activation rules do not let `owner` add liquidity yet.
+
+`close_position` closes an empty position: every slot must hold no liquidity, no pending fees and no pending rewards, or the call fails with `PositionIsNotEmpty`. It burns the NFT, closes the NFT token account, the mint and the position array, releases the position's ticks and collects the freed tick array rent, and sends all of it to `rent_receiver`.
+
+| Account | Mut | Signer | What it is and how to derive it |
+| --- | --- | --- | --- |
+| `nft_mint` | Yes | | The position NFT mint, stored in the position. |
+| `nft_account` | Yes | | The token account that holds the NFT. Its authority must be `owner`, and its balance must be 1. |
+| `pool` | | | The pool. |
+| `position` | Yes | | The position. |
+| `pool_authority` | | | The constant pool authority. It closes the mint. |
+| `rent_receiver` | Yes | | Receives the freed rent. The owner chooses it. |
+| `owner` | | Yes | The owner of the NFT account. A delegate cannot close a position. |
+| `token_program` | | | The Token 2022 program. |
+| `event_authority` | | | The event authority PDA. |
+| `program` | | | The DLMM Pro program. |
+
+Remaining accounts: the tick arrays of every tick of the position, ascending, one per distinct index.
+
+### Add and Remove Liquidity Accounts
+
+`add_liquidity`, `add_liquidity_by_weight` and `add_liquidity_imbalance` share one account list. Each deposits into slots of an existing position: `add_liquidity` takes a bitmap and one liquidity amount per selected slot, `add_liquidity_by_weight` takes a multiplier and one weight per slot, and `add_liquidity_imbalance` deposits into one slot with optional per-token caps and a slippage check. Position slots are selected by bit `i` of a `u64` bitmap, and `expected_layout_version` (`Option<u16>`) fails with `InvalidLayoutVersion` when it differs from the position's `layout_version`. Pass `None` to skip the check.
+
+| Account | Mut | Signer | What it is and how to derive it |
+| --- | --- | --- | --- |
+| `pool` | Yes | | The pool. |
+| `position` | Yes | | The position. Must belong to the pool. |
+| `nft_account` | | | The token account that holds the position NFT. Its mint must be the position's NFT mint and its balance must be 1. |
+| `tick_array_bitmap_extension` | Yes | | Optional. Pass it when a tick array lies outside -512 to 511. |
+| `user_token_x` | Yes | | The depositor's account for token X. Its mint must be the pool's mint X. |
+| `user_token_y` | Yes | | The same for Y. |
+| `reserve_x` | Yes | | Must match the pool. |
+| `reserve_y` | Yes | | Must match the pool. |
+| `token_x_mint` | | | Must match the pool. |
+| `token_y_mint` | | | Must match the pool. |
+| `signer` | | Yes | The NFT owner, or a delegate with the AddLiquidity permission. The tokens are taken from the accounts this signer controls. |
+| `token_x_program` | | | The token program of mint X. |
+| `token_y_program` | | | The same for Y. |
+| `event_authority` | | | The event authority PDA. |
+| `program` | | | The DLMM Pro program. |
+
+`remove_liquidity` and `remove_liquidity_by_bps` share another list. `remove_liquidity` takes a bitmap and one liquidity amount per selected slot. `remove_liquidity_by_bps` takes `bps` of the unlocked liquidity of each selected slot, or of every slot when `bitmap` is `None`. Both pay out through the pool authority.
+
+| Account | Mut | Signer | What it is and how to derive it |
+| --- | --- | --- | --- |
+| `pool` | Yes | | The pool. |
+| `pool_authority` | | | The constant pool authority. |
+| `position` | Yes | | The position. |
+| `nft_account` | | | The token account that holds the position NFT. |
+| `tick_array_bitmap_extension` | Yes | | Optional. |
+| `user_token_x` | Yes | | Receives token X. It is not checked as a token account unless X is paid out, so it can be left uninitialized when only Y is withdrawn. |
+| `user_token_y` | Yes | | Receives token Y. |
+| `reserve_x` | Yes | | Must match the pool. |
+| `reserve_y` | Yes | | Must match the pool. |
+| `token_x_mint` | | | Must match the pool. |
+| `token_y_mint` | | | Must match the pool. |
+| `signer` | | Yes | The NFT owner, or a delegate with the RemoveLiquidity permission. |
+| `token_x_program` | | | The token program of mint X. |
+| `token_y_program` | | | The same for Y. |
+| `memo_program` | | | The memo program. |
+| `event_authority` | | | The event authority PDA. |
+| `program` | | | The DLMM Pro program. |
+
+Remaining accounts for both: hook accounts for X and Y, then the tick arrays that hold both endpoints of every selected slot, in any order and all writable. Every remaining account after the hook slices is read as a tick array of the pool, so pass nothing else.
+
+### Fee and Reward Accounts
+
+`refresh_fees_and_rewards` accrues fees and rewards into the selected slots and moves no tokens. Its argument is `bitmap`, which needs at least one bit set and no bit beyond the number of slots, or the call fails with `InvalidParameters`. Any NFT delegate may call it.
+
+| Account | Mut | Signer | What it is and how to derive it |
+| --- | --- | --- | --- |
+| `pool` | Yes | | The pool. Its reward state is updated. |
+| `position` | Yes | | The position. |
+| `nft_account` | | | The token account that holds the position NFT. |
+| `signer` | | Yes | The NFT owner or any approved delegate. |
+| `event_authority` | | | The event authority PDA. |
+| `program` | | | The DLMM Pro program. |
+
+Remaining accounts: the tick arrays of the selected slots, read-only is enough.
+
+`claim_fee` pays out the pending fees of every slot of the position. It does not refresh: fees that have accrued but are not yet credited stay unpaid until you call `refresh_fees_and_rewards`. Its arguments are `min_amount_x` and `min_amount_y`, which compare against the amount after the transfer fee and are skipped when 0, and `remaining_accounts_info`.
+
+| Account | Mut | Signer | What it is and how to derive it |
+| --- | --- | --- | --- |
+| `pool` | | | The pool. |
+| `pool_authority` | | | The constant pool authority. |
+| `position` | Yes | | The position. |
+| `nft_account` | | | The token account that holds the position NFT. |
+| `signer` | | Yes | The NFT owner, or a delegate with the ClaimFee permission. |
+| `reserve_x` | Yes | | Must match the pool. |
+| `reserve_y` | Yes | | Must match the pool. |
+| `user_token_x` | Yes | | Receives token X. |
+| `user_token_y` | Yes | | Receives token Y. |
+| `token_x_mint` | | | Must match the pool. |
+| `token_y_mint` | | | Must match the pool. |
+| `token_x_program` | | | The token program of mint X. |
+| `token_y_program` | | | The same for Y. |
+| `memo_program` | | | The memo program. |
+| `event_authority` | | | The event authority PDA. |
+| `program` | | | The DLMM Pro program. |
+
+`claim_reward` pays out one reward index, summed over every slot, on a pool with the LiquidityMining extension. Its arguments are `reward_index` (0 or 1), `min_amount` and `remaining_accounts_info`. It fails with `InvalidPoolType` on a pool without the extension, `RewardUninitialized` for a slot that was never set up, and `InvalidRewardMint` or `InvalidRewardVault` when the accounts do not match the slot. No event is emitted and no transfer is made when the amount is 0.
+
+| Account | Mut | Signer | What it is and how to derive it |
+| --- | --- | --- | --- |
+| `pool` | | | The pool. |
+| `pool_authority` | | | The constant pool authority. |
+| `position` | Yes | | The position. |
+| `nft_account` | | | The token account that holds the position NFT. |
+| `signer` | | Yes | The NFT owner, or a delegate with the ClaimReward permission. |
+| `reward_vault` | Yes | | The vault of the reward slot, `derive_reward_vault(pool, reward_index)`, stored in the slot. |
+| `reward_mint` | | | The reward mint stored in the slot. |
+| `user_token_account` | Yes | | Receives the reward. |
+| `token_program` | | | The token program of the reward mint. |
+| `memo_program` | | | The memo program. |
+| `event_authority` | | | The event authority PDA. |
+| `program` | | | The DLMM Pro program. |
+
+Remaining accounts: hook accounts in a `TransferHookReward` slice when the reward mint has a hook.
+
+### Limit Order Accounts
+
+`open_limit_order` mints a limit order NFT and deposits one token into up to 25 ticks. An ask sells X above the current tick and a bid buys X below it. Its arguments are `OpenLimitOrderParameters { is_ask_side, max_amount, relative_tick, ticks }` and `remaining_accounts_info`. `max_amount` caps the deposit including the transfer fee. `ticks` must be strictly ascending with non-zero amounts. Ask ticks must lie above the current tick and bid ticks at or below it. The deposit is paid from `user_token` with `owner` as the transfer authority, so the owner must be able to sign for it.
+
+| Account | Mut | Signer | What it is and how to derive it |
+| --- | --- | --- | --- |
+| `pool` | Yes | | The pool. |
+| `pool_authority` | | | The constant pool authority. |
+| `nft_mint` | Yes | Yes | A new keypair that you generate. It signs the outer transaction. |
+| `nft_account` | Yes | | The owner's Token 2022 associated token account for `nft_mint`. |
+| `tick_array_bitmap_extension` | Yes | | Optional. |
+| `reserve` | Yes | | `reserve_x` for an ask, `reserve_y` for a bid, as stored in the pool. |
+| `token_mint` | | | The mint of that side. |
+| `limit_order` | Yes | | `derive_limit_order(nft_mint)`. Created by the instruction. |
+| `user_token` | Yes | | The account the deposit is paid from. Its mint must be `token_mint`. |
+| `referral` | | | Optional. A wallet address that is recorded on the order and shares the limit order fee on cancel. |
+| `payer` | Yes | Yes | Pays the rent of the order, the NFT and the tick arrays it creates. |
+| `owner` | | Yes | Owns the order, receives the NFT, and pays the deposit. |
+| `token_program` | | | The token program of `token_mint`. |
+| `token2022_program` | | | The Token 2022 program. |
+| `system_program` | | | The system program. |
+| `associated_token_program` | | | The associated token program. |
+| `event_authority` | | | The event authority PDA. |
+| `program` | | | The DLMM Pro program. |
+
+Remaining accounts: a hook slice for the deposited token, then the tick arrays.
+
+`cancel_limit_order` cancels the listed ticks and pays out the unfilled amount, the filled proceeds and the owner's share of the fee. Its arguments are `CancelLimitOrderParameters { tick_ids, min_amount_x, min_amount_y }`, with `tick_ids` strictly ascending, and `remaining_accounts_info`. A tick that has nothing left to cancel fails with `CancelNonEmptyLimitOrder`, whose message reads "Cancel on empty limit order".
+
+| Account | Mut | Signer | What it is and how to derive it |
+| --- | --- | --- | --- |
+| `pool` | Yes | | The pool. |
+| `pool_authority` | | | The constant pool authority. |
+| `tick_array_bitmap_extension` | Yes | | Optional. |
+| `reserve_x` | Yes | | Must match the pool. |
+| `reserve_y` | Yes | | Must match the pool. |
+| `token_x_mint` | | | Must match the pool. |
+| `token_y_mint` | | | Must match the pool. |
+| `limit_order` | Yes | | The limit order. |
+| `nft_account` | | | The token account that holds the order NFT. |
+| `user_token_x` | Yes | | Receives token X. |
+| `user_token_y` | Yes | | Receives token Y. |
+| `referral_token` | Yes | | Optional. A token account owned by the referral wallet recorded on the order, holding the fee token. It receives 20 percent of the limit order fee. Without it, or when the referral is the owner or unset, the owner keeps the whole fee. |
+| `signer` | | Yes | The NFT owner, or a delegate with the CancelLimitOrder permission. |
+| `token_x_program` | | | The token program of mint X. |
+| `token_y_program` | | | The same for Y. |
+| `memo_program` | | | The memo program. |
+| `event_authority` | | | The event authority PDA. |
+| `program` | | | The DLMM Pro program. |
+
+Remaining accounts: hook accounts for X, Y and the referral, then the tick arrays of the canceled ticks, in any order and writable.
+
+`close_limit_order` closes an order whose ticks are all canceled, or fails with `LimitOrderIsNotEmpty`. It burns the NFT, closes the NFT account, the mint and the order, collects the tick array rent and sends the rent to `rent_receiver`.
+
+| Account | Mut | Signer | What it is and how to derive it |
+| --- | --- | --- | --- |
+| `pool` | | | The pool. |
+| `pool_authority` | | | The constant pool authority. |
+| `limit_order` | Yes | | The limit order. |
+| `nft_mint` | Yes | | The order NFT mint, stored in the order. |
+| `nft_account` | Yes | | The token account that holds the NFT. Its authority must be `owner`. |
+| `owner` | | Yes | The owner of the NFT account. A delegate cannot close an order. |
+| `rent_receiver` | Yes | | Receives the freed rent. |
+| `token_program` | | | The Token 2022 program. |
+| `event_authority` | | | The event authority PDA. |
+| `program` | | | The DLMM Pro program. |
+
+Remaining accounts: the tick arrays of every tick the order holds, ascending, one per distinct index.
+
+### Signers and Delegates
+
+The owner of a position or order is the owner of the NFT token account. When the owner is a PDA of your program, the PDA signs with `CpiContext::new_with_signer`, and the NFT account is a token account whose authority is that PDA.
+
+| Instruction | Who can sign |
+| --- | --- |
+| `swap` | The `user`. |
+| `open_position` | `payer` and the `nft_mint` keypair sign. `owner` does not sign. |
+| `open_limit_order` | `payer`, `owner` and the `nft_mint` keypair sign. |
+| `close_position`, `close_limit_order` | The owner of the NFT account only. |
+| `add_liquidity` family | The owner, or a delegate with AddLiquidity (permission bit 0). |
+| `remove_liquidity` family | The owner, or a delegate with RemoveLiquidity (bit 1). |
+| `claim_fee` | The owner, or a delegate with ClaimFee (bit 2). |
+| `claim_reward` | The owner, or a delegate with ClaimReward (bit 3). |
+| `refresh_fees_and_rewards` | The owner or any approved delegate. |
+| `cancel_limit_order` | The owner, or a delegate with CancelLimitOrder (bit 0 of the order permissions). |
+
+The delegate route lets a program act on a position that a user keeps in their own wallet:
+
+1. The owner approves the program's PDA as the delegate of the NFT token account with a Token 2022 `approve` of amount 0. A non-zero delegated amount fails with `DelegatedAmountNonZero`, and a signer that is not the account's delegate fails with `InvalidAuthority`.
+2. The owner calls `update_position_delegate_permission` (or `update_limit_order_delegate_permission`) with a permission bitmask. Position permissions are bit 0 AddLiquidity, bit 1 RemoveLiquidity, bit 2 ClaimFee, bit 3 ClaimReward and bit 4 UpdatePositionRange, so the largest mask is 31. A limit order has bit 0 CancelLimitOrder, so the largest mask is 1. A larger value fails with `InvalidPermission`. The permissions are stored on the position or order, not on the delegate.
+3. The PDA signs the instruction as `signer`. A delegate without the right bit fails with `InvalidPermission`.
+
+When a delegate signs an instruction that pays tokens out, the receiving token account must be the owner's associated token account for that mint and token program, and its authority must be the owner. Anything else fails with `IncorrectATA`. This applies to the payouts of `remove_liquidity`, `remove_liquidity_by_bps`, `claim_fee`, `claim_reward` and `cancel_limit_order`. A delegate that adds liquidity pays from token accounts it controls itself.
+
+The second example program below shows both the approve call and a claim signed by a PDA that owns the position.
+
+## A Complete Swap Program
+
+This Anchor program swaps through DLMM Pro with two entry points: `swap_exact_in` for a wallet that signs the transaction, and `swap_from_vault` for a vault PDA of the program that owns the token accounts. Both go through one function that builds `dlmm_pro::cpi::accounts::Swap`, forwards the remaining accounts, passes the signer seeds to `CpiContext::new_with_signer`, and reads the result from the token balances. The program ID `ULkDzAvpWkDRQAJRftnv5mAWcP1UHM85k9TYk6Ro1ze` is a placeholder for your own.
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+
+declare_id!("ULkDzAvpWkDRQAJRftnv5mAWcP1UHM85k9TYk6Ro1ze");
+
+declare_program!(dlmm_pro);
+
+use dlmm_pro::types::{RemainingAccountsInfo, SwapParameters};
+
+const MEMO_PROGRAM_ID: Pubkey = pubkey!("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+const VAULT_SEED: &[u8] = b"vault";
+const POOL_AUTHORITY: Pubkey = pubkey!("FSUXyUKbTJ4A5Ccz5M6Uo4J2myc3RsDKTPU9vZwyeXru");
+
+#[program]
+pub mod swap_example {
+    use super::*;
+
+    /// Swap for a wallet that signs the transaction.
+    pub fn swap_exact_in<'info>(
+        ctx: Context<'info, SwapAccounts<'info>>,
+        input_amount: u64,
+        minimum_output_amount: u64,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        require!(ctx.accounts.user.is_signer, ErrorCode::AccountNotSigner);
+        ctx.accounts.swap(
+            ctx.remaining_accounts,
+            &[],
+            input_amount,
+            minimum_output_amount,
+            remaining_accounts_info,
+        )
+    }
+
+    /// Swap for the vault PDA of this program. The program signs for the vault.
+    pub fn swap_from_vault<'info>(
+        ctx: Context<'info, SwapAccounts<'info>>,
+        input_amount: u64,
+        minimum_output_amount: u64,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        let (vault, bump) = Pubkey::find_program_address(&[VAULT_SEED], &crate::ID);
+        require_keys_eq!(ctx.accounts.user.key(), vault, ErrorCode::ConstraintSeeds);
+        let signer_seeds: &[&[&[u8]]] = &[&[VAULT_SEED, &[bump]]];
+        ctx.accounts.swap(
+            ctx.remaining_accounts,
+            signer_seeds,
+            input_amount,
+            minimum_output_amount,
+            remaining_accounts_info,
+        )
+    }
+}
+
+#[derive(Accounts)]
+pub struct SwapAccounts<'info> {
+    #[account(
+        mut,
+        has_one = reserve_x,
+        has_one = reserve_y,
+        has_one = token_x_mint,
+        has_one = token_y_mint,
+    )]
+    pub pool: AccountLoader<'info, dlmm_pro::accounts::Pool>,
+    /// CHECK: fixed address
+    #[account(address = POOL_AUTHORITY)]
+    pub pool_authority: UncheckedAccount<'info>,
+    /// CHECK: optional; DLMM Pro checks the owner and the pool
+    #[account(mut)]
+    pub tick_array_bitmap_extension: Option<UncheckedAccount<'info>>,
+    #[account(mut)]
+    pub reserve_x: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut)]
+    pub reserve_y: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut, token::authority = user)]
+    pub user_token_in: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut, token::authority = user)]
+    pub user_token_out: InterfaceAccount<'info, TokenAccount>,
+    /// CHECK: optional referral token account; DLMM Pro checks it on use
+    #[account(mut)]
+    pub referral: Option<UncheckedAccount<'info>>,
+    #[account(mint::token_program = token_x_program)]
+    pub token_x_mint: InterfaceAccount<'info, Mint>,
+    #[account(mint::token_program = token_y_program)]
+    pub token_y_mint: InterfaceAccount<'info, Mint>,
+    /// CHECK: oracle PDA; DLMM Pro checks that it belongs to the pool
+    #[account(mut)]
+    pub oracle: UncheckedAccount<'info>,
+    /// CHECK: the swapper, a wallet that signed or a PDA this program signs for
+    pub user: UncheckedAccount<'info>,
+    pub token_x_program: Interface<'info, TokenInterface>,
+    pub token_y_program: Interface<'info, TokenInterface>,
+    /// CHECK: fixed address
+    #[account(address = MEMO_PROGRAM_ID)]
+    pub memo_program: UncheckedAccount<'info>,
+    /// CHECK: Anchor event CPI authority of DLMM Pro
+    #[account(seeds = [b"__event_authority"], bump, seeds::program = dlmm_pro::ID)]
+    pub event_authority: UncheckedAccount<'info>,
+    pub dlmm_pro_program: Program<'info, dlmm_pro::program::DlmmPro>,
+}
+
+impl<'info> SwapAccounts<'info> {
+    fn swap(
+        &mut self,
+        remaining_accounts: &[AccountInfo<'info>],
+        signer_seeds: &[&[&[u8]]],
+        input_amount: u64,
+        minimum_output_amount: u64,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        let in_before = self.user_token_in.amount;
+        let out_before = self.user_token_out.amount;
+
+        let accounts = dlmm_pro::cpi::accounts::Swap {
+            pool: self.pool.to_account_info(),
+            pool_authority: self.pool_authority.to_account_info(),
+            tick_array_bitmap_extension: self
+                .tick_array_bitmap_extension
+                .as_ref()
+                .map(|a| a.to_account_info()),
+            reserve_x: self.reserve_x.to_account_info(),
+            reserve_y: self.reserve_y.to_account_info(),
+            user_token_in: self.user_token_in.to_account_info(),
+            user_token_out: self.user_token_out.to_account_info(),
+            referral: self.referral.as_ref().map(|a| a.to_account_info()),
+            token_x_mint: self.token_x_mint.to_account_info(),
+            token_y_mint: self.token_y_mint.to_account_info(),
+            oracle: self.oracle.to_account_info(),
+            user: self.user.to_account_info(),
+            token_x_program: self.token_x_program.to_account_info(),
+            token_y_program: self.token_y_program.to_account_info(),
+            memo_program: self.memo_program.to_account_info(),
+            event_authority: self.event_authority.to_account_info(),
+            program: self.dlmm_pro_program.to_account_info(),
+        };
+        let cpi_ctx =
+            CpiContext::new_with_signer(self.dlmm_pro_program.key(), accounts, signer_seeds)
+                .with_remaining_accounts(remaining_accounts.to_vec());
+
+        dlmm_pro::cpi::swap(
+            cpi_ctx,
+            SwapParameters {
+                input_amount,
+                minimum_output_amount,
+            },
+            remaining_accounts_info,
+        )?;
+
+        // The swap returns no data. Read the result from the token balances.
+        self.user_token_in.reload()?;
+        self.user_token_out.reload()?;
+        let spent = in_before.saturating_sub(self.user_token_in.amount);
+        let received = self.user_token_out.amount.saturating_sub(out_before);
+        msg!("spent {} received {}", spent, received);
+        Ok(())
+    }
+}
+```
+
+What the example does and why:
+
+- `pool` is an `AccountLoader` with `has_one` constraints on the reserves and mints, so the accounts come from the pool and not from the caller. `token_x_program` and `token_y_program` are tied to the mints with `mint::token_program`, and the mint owner equals the program that the pool's `token_x_flag` and `token_y_flag` name.
+- `user` is an unchecked account, and the two token accounts must have `user` as their authority. `swap_exact_in` requires that `user` signed. `swap_from_vault` requires that `user` is the vault PDA and signs for it with the seeds.
+- `tick_array_bitmap_extension` and `referral` are `Option` fields. The CPI struct takes `Option<AccountInfo>` for them, and `None` is sent as the DLMM Pro program ID, read-only and unsigned, which the program reads as absent.
+- The tick arrays and hook accounts are the remaining accounts. The function forwards `ctx.remaining_accounts` with `with_remaining_accounts`. A forwarded account is writable in the CPI only if it was writable in the outer transaction.
+- `remaining_accounts_info` comes from the caller. It describes the hook slices, so it travels with the remaining accounts it describes.
+- `minimum_output_amount` is also passed through from the caller in this example. A program that swaps on its own account should compute or require a bound itself and not forward zero.
+- After the CPI the two token accounts are reloaded, because Anchor caches the account data it loaded at the start of the instruction. The differences are the amount that left `user_token_in` and the amount that reached `user_token_out`.
+
+This program was built for SBF with `cargo build-sbf` (Agave 4.1.2 tools, platform tools v1.54) and run in LiteSVM against the DLMM Pro program binary from the SDK repository. A swap of 50,000 units of token X for token Y signed by a wallet, and a swap of 30,000 units of token Y for token X signed by the vault PDA, both moved exactly the input amount and delivered the amount the quote predicted.
+
+### Claiming Fees as the Owner and Approving a Delegate
+
+This second program shows the other two patterns of the section above: a PDA that owns a position claims its fees into token accounts that the PDA owns, and the PDA approves a delegate on its NFT account with an amount of 0. Both use the vault PDA of the seed `vault`.
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_spl::token_interface::{self, Approve, Mint, TokenAccount, TokenInterface};
+
+declare_id!("ULkDzAvpWkDRQAJRftnv5mAWcP1UHM85k9TYk6Ro1ze");
+
+declare_program!(dlmm_pro);
+
+use dlmm_pro::types::RemainingAccountsInfo;
+
+const VAULT_SEED: &[u8] = b"vault";
+const POOL_AUTHORITY: Pubkey = pubkey!("FSUXyUKbTJ4A5Ccz5M6Uo4J2myc3RsDKTPU9vZwyeXru");
+const MEMO_PROGRAM_ID: Pubkey = pubkey!("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+
+#[program]
+pub mod fee_example {
+    use super::*;
+
+    /// The vault PDA owns the position NFT and claims the fees to its own token accounts.
+    pub fn claim_fee_as_owner<'info>(
+        ctx: Context<'info, ClaimFeeAsOwner<'info>>,
+        min_amount_x: u64,
+        min_amount_y: u64,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        let accounts = dlmm_pro::cpi::accounts::ClaimFee {
+            pool: ctx.accounts.pool.to_account_info(),
+            pool_authority: ctx.accounts.pool_authority.to_account_info(),
+            position: ctx.accounts.position.to_account_info(),
+            nft_account: ctx.accounts.nft_account.to_account_info(),
+            signer: ctx.accounts.vault.to_account_info(),
+            reserve_x: ctx.accounts.reserve_x.to_account_info(),
+            reserve_y: ctx.accounts.reserve_y.to_account_info(),
+            user_token_x: ctx.accounts.vault_token_x.to_account_info(),
+            user_token_y: ctx.accounts.vault_token_y.to_account_info(),
+            token_x_mint: ctx.accounts.token_x_mint.to_account_info(),
+            token_y_mint: ctx.accounts.token_y_mint.to_account_info(),
+            token_x_program: ctx.accounts.token_x_program.to_account_info(),
+            token_y_program: ctx.accounts.token_y_program.to_account_info(),
+            memo_program: ctx.accounts.memo_program.to_account_info(),
+            event_authority: ctx.accounts.event_authority.to_account_info(),
+            program: ctx.accounts.dlmm_pro_program.to_account_info(),
+        };
+        let signer_seeds: &[&[&[u8]]] = &[&[VAULT_SEED, &[ctx.bumps.vault]]];
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.dlmm_pro_program.key(),
+            accounts,
+            signer_seeds,
+        )
+        .with_remaining_accounts(ctx.remaining_accounts.to_vec());
+        dlmm_pro::cpi::claim_fee(cpi_ctx, min_amount_x, min_amount_y, remaining_accounts_info)
+    }
+
+    /// The vault PDA owns the NFT and approves a delegate with amount 0.
+    pub fn approve_delegate(ctx: Context<ApproveDelegate>) -> Result<()> {
+        let signer_seeds: &[&[&[u8]]] = &[&[VAULT_SEED, &[ctx.bumps.vault]]];
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.key(),
+            Approve {
+                to: ctx.accounts.nft_account.to_account_info(),
+                delegate: ctx.accounts.delegate.to_account_info(),
+                authority: ctx.accounts.vault.to_account_info(),
+            },
+            signer_seeds,
+        );
+        token_interface::approve(cpi_ctx, 0)
+    }
+}
+
+#[derive(Accounts)]
+pub struct ClaimFeeAsOwner<'info> {
+    #[account(
+        has_one = reserve_x,
+        has_one = reserve_y,
+        has_one = token_x_mint,
+        has_one = token_y_mint,
+    )]
+    pub pool: AccountLoader<'info, dlmm_pro::accounts::Pool>,
+    /// CHECK: fixed address
+    #[account(address = POOL_AUTHORITY)]
+    pub pool_authority: UncheckedAccount<'info>,
+    /// CHECK: DLMM Pro checks the owner, the pool and the NFT
+    #[account(mut)]
+    pub position: UncheckedAccount<'info>,
+    #[account(token::authority = vault)]
+    pub nft_account: InterfaceAccount<'info, TokenAccount>,
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub vault: SystemAccount<'info>,
+    #[account(mut)]
+    pub reserve_x: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut)]
+    pub reserve_y: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut, token::mint = token_x_mint, token::authority = vault)]
+    pub vault_token_x: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut, token::mint = token_y_mint, token::authority = vault)]
+    pub vault_token_y: InterfaceAccount<'info, TokenAccount>,
+    #[account(mint::token_program = token_x_program)]
+    pub token_x_mint: InterfaceAccount<'info, Mint>,
+    #[account(mint::token_program = token_y_program)]
+    pub token_y_mint: InterfaceAccount<'info, Mint>,
+    pub token_x_program: Interface<'info, TokenInterface>,
+    pub token_y_program: Interface<'info, TokenInterface>,
+    /// CHECK: fixed address
+    #[account(address = MEMO_PROGRAM_ID)]
+    pub memo_program: UncheckedAccount<'info>,
+    /// CHECK: Anchor event CPI authority of DLMM Pro
+    #[account(seeds = [b"__event_authority"], bump, seeds::program = dlmm_pro::ID)]
+    pub event_authority: UncheckedAccount<'info>,
+    pub dlmm_pro_program: Program<'info, dlmm_pro::program::DlmmPro>,
+}
+
+#[derive(Accounts)]
+pub struct ApproveDelegate<'info> {
+    #[account(mut, token::authority = vault)]
+    pub nft_account: InterfaceAccount<'info, TokenAccount>,
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub vault: SystemAccount<'info>,
+    /// CHECK: any account that may act for the NFT owner
+    pub delegate: UncheckedAccount<'info>,
+    #[account(address = anchor_spl::token_2022::ID)]
+    pub token_program: Interface<'info, TokenInterface>,
+}
+```
+
+Call `refresh_fees_and_rewards` for the slots that hold liquidity before `claim_fee`, in the same transaction, because the claim pays only what is already credited. This program was built with `cargo check` and `cargo build-sbf`. It was not run against the program binary.
+
+## Off-Chain Account Planning
+
+Plan the accounts off-chain and have your client pass them to your program. The TypeScript SDK builds a correct instruction. Print its account metas and mirror them in the accounts your program forwards. The SDK may add token account instructions around the swap, so the snippet picks the instruction that targets the DLMM Pro program. The first 17 accounts of a swap are the fixed accounts in IDL order, and the rest are the remaining accounts: hook accounts, then tick arrays.
+
+```typescript
+import { Connection, PublicKey } from "@solana/web3.js";
+import { BN } from "bn.js";
+import { DLMM_PRO_PROGRAM_ID, DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
+
+const connection = new Connection("https://api.devnet.solana.com");
+const client = new DlmmProClient(connection);
+
+// Replace with a pool and a wallet that holds the input token.
+const pool = new PublicKey("11111111111111111111111111111111");
+const user = new PublicKey("11111111111111111111111111111111");
+
+const inputAmount = new BN(1_000_000);
+const poolState = await client.state.fetchPool(pool);
+const { quote, tickArrays, tickArrayBitmapExtension } =
+  await client.pool.quoteExactIn({ pool, inputAmount, swapForY: true, swapper: user });
+if (!quote.amountLeft.isZero()) {
+  throw new Error("Not enough liquidity in the loaded tick arrays");
+}
+
+const { tx } = await client.pool.swap({
+  pool,
+  tokenXMint: poolState.tokenXMint,
+  tokenYMint: poolState.tokenYMint,
+  user,
+  swapForY: true,
+  tickArrays,
+  tickArrayBitmapExtension,
+  parameters: {
+    inputAmount,
+    minimumOutputAmount: quote.transferFeeExcludedOutAmount.muln(9_950).divn(10_000),
+  },
+});
+
+// The builder may add token account instructions around the swap. Pick the
+// instruction that targets DLMM Pro.
+const swap = tx.instructions.find((ix) => ix.programId.equals(DLMM_PRO_PROGRAM_ID));
+if (!swap) throw new Error("no DLMM Pro instruction");
+
+const FIXED_ACCOUNTS = 17;
+swap.keys.forEach((meta, i) => {
+  const role = i < FIXED_ACCOUNTS ? "fixed" : "remaining";
+  const flags = `${meta.isSigner ? "signer" : "-"} ${meta.isWritable ? "writable" : "readonly"}`;
+  console.log(`${String(i).padStart(2)} ${role.padEnd(9)} ${meta.pubkey.toBase58()} ${flags}`);
+});
+```
+
+The TypeScript client puts the program ID in the slot of an absent optional account and marks it read-only and not a signer. The generated Rust CPI struct does the same.
+
+The commons crate does the same planning in Rust. `build_swap_instruction` in the [commons library page](/developer-guides/dlmm-pro/rust-integration/library#building-a-swap-instruction-from-a-quote) returns an `Instruction` whose first 17 account metas are the fixed accounts of `swap` and whose remaining metas are the hook accounts and tick arrays. Send those remaining metas to your program as its remaining accounts. For the other instructions use `tick_arrays_for_tick_ids` for positions and limit orders, `get_extra_account_metas_for_transfer_hook` for hook accounts and `remaining_accounts_from_hooks` for the `RemainingAccountsInfo` argument.
+
+## What a Calling Program Must Check or Pass Through
+
+| Topic | What to do |
+| --- | --- |
+| Exact-in swaps | `swap` is exact-in. It consumes all of `input_amount` or reverts with `NotConsumingFullAmountIn`. The tick arrays you pass decide whether that is possible: they must cover enough liquidity in the swap direction. Quote off-chain with `quote_exact_in` or `quoteExactIn` and pass the arrays of a quote whose `amount_left` is 0. There is no partial fill. |
+| Slippage on the swap | `minimum_output_amount` is compared with the amount the swapper receives after the output mint's transfer fee. A value of 0 accepts any output. Take the bound from a quote and your own tolerance, or require the caller to supply it, and do not forward 0 for a user. |
+| Slippage on deposits | `max_amount_x`, `max_amount_y` of the add liquidity instructions and `max_amount` of `open_limit_order` cap what leaves the depositor including the transfer fee. A larger amount fails with `ExceededSlippage`. For a Token 2022 mint with a transfer fee, give the headroom for the fee. |
+| Slippage on withdrawals and claims | `min_amount_x`, `min_amount_y` and `min_amount` of the remove, claim and cancel instructions compare with the amount received after the transfer fee. A minimum of 0 skips the check on these instructions. |
+| Relative limit orders | `relative_tick` bounds the spacing-aligned current tick. When the pool moved outside it before the call landed, the call fails with `ExceededSlippage`. |
+| Imbalanced deposits | `add_liquidity_imbalance` also takes a price range and a minimum liquidity in `slippage`. They fail with `ExceededSlippage`. |
+| Pool state from the pool account | Read the mints, reserves and token program flags from the pool, not from the caller, and check them with `has_one`. DLMM Pro checks them too, but your own checks give you a clear error and protect your accounting. |
+| Direction | The program takes the direction from the mint of `user_token_out`. It does not compare `user_token_in` with a mint, and a wrong input account fails when the token program checks the transfer. Check both accounts against the pool's mints yourself. |
+| Activation and status | `swap` fails with `InvalidActivationAccess` when swaps are disabled in `pool_status` (bit 0) or the pool's activation rules block the `user` that signs. A whitelisted swapper is matched against that signer, so for a PDA integrator the PDA must be the whitelisted address. Adding liquidity, `open_position` and `open_limit_order` fail the same way when bit 1 of `pool_status` is set or the owner of the position or order is blocked. Removing liquidity and `cancel_limit_order` ignore `pool_status` and are still subject to the activation rules. Claims, refresh and the close instructions have no activation check. |
+| Token programs | Token X and token Y can use different token programs, and a pool's reward mints have their own. Pass the program that owns each mint. |
+| Transfer hooks | Forward the hook accounts and the slice list together. Do not reorder them. |
+| After the CPI | Reload any Anchor account whose balance you read after the call. |
+
+### Reading the Result of a Swap
+
+`swap` returns no data. Compare the balances of `user_token_in` and `user_token_out` before and after the CPI, as the example program does.
+
+- `user_token_in` drops by `input_amount`. The program transfers the whole amount from the user, and a Token 2022 transfer fee is withheld from what the pool receives.
+- `user_token_out` rises by the amount after the output mint's transfer fee. That equals `transfer_fee_excluded_out_amount` of the quote and `amount_out` of the `EvtSwap` event, and it is the number that `minimum_output_amount` is compared with.
+- If a referral account is passed and a host fee is due, the fee goes to that account and does not change the swapper's amounts.
+
+The event is an inner instruction of your transaction that an off-chain reader can decode, but a program cannot read inner instructions of its own CPI.
+
+## Common CPI Failures
+
+Program errors come from the IDL. Anchor errors come from account checks, in DLMM Pro's accounts or in yours. A custom error that DLMM Pro returns passes through your program unchanged, so the code you see in the transaction is the code in the table.
+
+| Error | Likely cause |
+| --- | --- |
+| `NotConsumingFullAmountIn` (6020) | The swap needs more liquidity than the tick arrays you passed hold. Raise the number of arrays in the quote, lower the input, or pass the arrays of a quote whose `amount_left` is 0 and in the swap direction order. Passing no tick arrays gives this error. |
+| `ExceededSlippage` (6019) | The swap output, a withdrawal or a claim is below its minimum. A deposit plus its transfer fee is above its maximum. A relative limit order's band or an imbalanced deposit's bounds were missed. |
+| `AmountIsZero` (6039) | `input_amount` is 0. |
+| `LiquidityIsZero` (6023) | No tick array in the swap direction holds liquidity, or a liquidity amount is 0. |
+| `InvalidActivationAccess` (6040) | Swaps or deposits are disabled in `pool_status`, or the activation rules do not allow that signer or owner yet. |
+| `InvalidRemainingAccountSlice` (6012) | A slice type is not accepted by the instruction, for example `TransferHookReward` on `swap`. |
+| `DuplicatedRemainingAccountTypes` (6013) | A slice type appears twice. |
+| `InsufficientRemainingAccounts` (6011) | The slice lengths ask for more accounts than were passed, or a relative limit order is missing a tick array its ticks resolve to. |
+| `MissingRemainingAccountForTransferHook` (6017) | A mint has a transfer hook and no slice supplies its accounts. |
+| `NoTransferHookProgram` (6018) | A slice was passed for a mint that has no transfer hook. |
+| `InvalidTickArray` (6015) | A tick array belongs to another pool, or `open_position`, `open_limit_order` or a close instruction received tick arrays in the wrong order or with the wrong index. |
+| `CannotFindTickFromId` (6016) | The tick arrays you passed do not contain a tick that the position or order uses. |
+| `BitmapExtensionAccountIsNotProvided` (6044) | A swap's search left the inline bitmap and the extension account was not passed. |
+| `TickArrayBitmapExtensionAccountIsNotProvided` (6021) | A tick array outside -512 to 511 changed between empty and non-empty and the extension account was not passed. |
+| `InvalidAuthority` (6047) | The signer is not the owner or the delegate of the NFT account. |
+| `DelegatedAmountNonZero` (6048) | The NFT account's delegate was approved with an amount above 0. |
+| `InvalidPermission` (6003) | The delegate lacks the permission bit, or a permission mask is out of range. |
+| `IncorrectATA` (6049) | A delegate asked for a payout to an account other than the owner's associated token account. |
+| `InvalidLayoutVersion` (6050) | `expected_layout_version` differs from the position's `layout_version`. |
+| `InvalidParameters` (6037) | A bitmap has no bit set or a bit beyond the position's slots, the number of liquidity amounts differs from the number of set bits, or ticks are out of order or not usable. |
+| `PositionIsNotEmpty` (6033), `LimitOrderIsNotEmpty` (6034) | Closing a position or order that still holds liquidity, fees, rewards or uncanceled ticks. |
+| `CancelNonEmptyLimitOrder` (6026) | A tick in the cancel list has nothing left to cancel. |
+| `ConstraintMut` (2000) | An account that DLMM Pro or your program writes was passed read-only. |
+| `AccountNotMutable` (3006) | A tick array was passed read-only to an instruction that writes it. |
+| `ConstraintHasOne` (2001) | A reserve, mint, position or bitmap extension account does not match the pool. |
+| `ConstraintSeeds` (2006) | `event_authority` is not the event authority PDA, or a PDA you check was derived wrongly. |
+| `ConstraintAddress` (2012) | `pool_authority` or another fixed-address account is wrong. |
+| `AccountNotSigner` (3010) | The account was not marked as a signer in the outer transaction. |
+| `AccountOwnedByWrongProgram` (3007), `AccountDiscriminatorMismatch` (3002) | An account is not the type the instruction expects, for example a wrong tick array. |
+
+Two runtime errors are not DLMM Pro or Anchor errors. A CPI cannot make an account writable or a signer that the outer instruction did not mark that way, so forward only accounts that the transaction already marked. A PDA signer only counts when you pass its seeds to `new_with_signer`. A missing account in the CPI account infos fails before DLMM Pro runs.
+
+## Best Practices
+
+| Check | Detail |
+| --- | --- |
+| Generate, do not hand-write | Use `declare_program!` and compare your account list with an SDK-built instruction. |
+| Pin the IDL | Keep a copy of the IDL of the release you target in your repository and update it with the SDK. |
+| Quote off-chain | Quote with the SDK or `dlmm-pro-commons`, pass the tick arrays and the bound as arguments, and let the program enforce the bound. |
+| Check accounts against the pool | Use `AccountLoader` and `has_one` for the mints and reserves, and `mint::token_program` for the token programs. |
+| Validate the signer path | A wallet path requires the signature. A PDA path requires the PDA address to match your seeds. |
+| Keep hook accounts and slices together | The slice list describes the front of the remaining accounts. Pass both unchanged. |
+| Pass the event accounts | `event_authority` and `program` are the last two fixed accounts. |
+| Pass the bitmap extension | Include it for every pool that has one. |
+| Read results from balances | Reload the token accounts after the CPI and compute the difference. |
+| Do not forward a zero bound for a user | A minimum of 0 accepts any output. |
+| Use the owner's associated token account for delegates | A delegate's payouts fail with `IncorrectATA` otherwise. |
+| Derive the position NFT account with Token 2022 | Do not follow the legacy token program in the IDL hint of `open_position`. |
+| Simulate before you ship | Simulate on devnet, compare the logs with an SDK-built transaction and set the compute budget from the result. |
+| Re-read state before quoting again | A quote is a snapshot. Fetch the pool, tick arrays and mints again. |
+
+## Testing
+
+### LiteSVM
+
+The SDK repository ships the program binaries its own tests run against. `tests/fixtures/dlmm_pro.so` is the DLMM Pro 0.1.0 binary and `tests/fixtures/access_registry.so` is the access registry binary, both built with the `local` feature according to the repository README. The TypeScript tests and the Rust tests in `commons/tests/onchain` load them into LiteSVM and create pools, positions and swaps against them.
+
+To test your program the same way:
+
+1. Build your program with `cargo build-sbf`.
+2. Load `dlmm_pro.so` at the program ID `dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n`, the access registry at `regUFehW9oycnaV2auYyfqyYjKG1W1uLNT7rtUeemQr`, and your own `.so` at your program ID. LiteSVM provides the Token, Token 2022, associated token and memo programs.
+3. Set the clock to a realistic time, because fees, activation and the oracle read it.
+4. Create a pool the way the SDK tests do, add liquidity, then build your instruction with the generated `accounts` and `instruction` types of your crate and send it.
+5. Compare the result with a quote from `quote_exact_in`.
+
+```rust
+use dlmm_pro_commons::anchor_lang::solana_program::instruction::Instruction;
+use dlmm_pro_commons::anchor_lang::solana_program::pubkey::Pubkey;
+use dlmm_pro_commons::{dlmm_pro, ACCESS_REGISTRY_ID};
+use litesvm::types::{FailedTransactionMetadata, TransactionMetadata};
+use litesvm::LiteSVM;
+use solana_clock::Clock;
+use solana_keypair::Keypair;
+use solana_signer::Signer;
+use solana_transaction::Transaction;
+
+/// Directory of the SDK repository checkout that holds `tests/fixtures`.
+const FIXTURES: &str = "../dlmm-pro-sdk/tests/fixtures";
+
+/// A LiteSVM instance with DLMM Pro, the access registry and the program under
+/// test loaded. `my_program_so` is the output of `cargo build-sbf` for your program.
+pub fn svm_with_programs(my_program_id: Pubkey, my_program_so: &str) -> LiteSVM {
+    let mut svm = LiteSVM::new();
+    svm.add_program_from_file(dlmm_pro::ID, format!("{FIXTURES}/dlmm_pro.so"))
+        .unwrap();
+    svm.add_program_from_file(ACCESS_REGISTRY_ID, format!("{FIXTURES}/access_registry.so"))
+        .unwrap();
+    svm.add_program_from_file(my_program_id, my_program_so)
+        .unwrap();
+    // Start from a realistic clock: activation, fees and the oracle read it.
+    svm.set_sysvar(&Clock {
+        slot: 1_000,
+        unix_timestamp: 1_700_000_000,
+        ..Clock::default()
+    });
+    svm
+}
+
+/// Send one instruction and rotate the blockhash so an identical transaction is
+/// not rejected as a duplicate.
+pub fn send(
+    svm: &mut LiteSVM,
+    instruction: Instruction,
+    payer: &Keypair,
+    other_signers: &[&Keypair],
+) -> Result<TransactionMetadata, Box<FailedTransactionMetadata>> {
+    let mut signers = vec![payer];
+    signers.extend_from_slice(other_signers);
+    let transaction = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&payer.pubkey()),
+        &signers,
+        svm.latest_blockhash(),
+    );
+    let result = svm.send_transaction(transaction);
+    svm.expire_blockhash();
+    result.map_err(Box::new)
+}
+```
+
+The `FIXTURES` path assumes a checkout of the SDK repository next to your project. The helper functions that create pools and seed liquidity in `commons/tests/onchain/common/mod.rs` are a working reference for steps 4 and 5.
+
+### Devnet
+
+The program has the same address on devnet. Create a test pool and seed it with liquidity using the SDK, then call your program with the accounts printed by the TypeScript snippet above. Use `simulateTransaction` first and read the logs for the error name and code. Compare the account list of your CPI with the SDK-built instruction when a call fails.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Rust Commons Library" icon="terminal" iconType="solid" href="/developer-guides/dlmm-pro/rust-integration/library">
+    Account parsers, quotes and the planning helpers used off-chain.
+  </Card>
+  <Card title="Program Instructions" icon="list" iconType="solid" href="/developer-guides/dlmm-pro/program/instructions">
+    Every instruction, its signers and the SDK builder that wraps it.
+  </Card>
+  <Card title="Program Errors" icon="triangle-exclamation" iconType="solid" href="/developer-guides/dlmm-pro/program/errors">
+    Error codes, messages and the usual causes.
+  </Card>
+  <Card title="Program Accounts" icon="table-cells" iconType="solid" href="/developer-guides/dlmm-pro/program/accounts">
+    PDA seeds, account layouts and the dynamic tails.
+  </Card>
+</CardGroup>
