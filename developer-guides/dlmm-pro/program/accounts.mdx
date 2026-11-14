@@ -5,13 +5,13 @@ description: "Account layouts, PDA seeds and constants of the DLMM Pro program: 
 llmsDescription: "Reference for the DLMM Pro program account model (release 0.1.0, program ID dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n). Covers PDA seeds and SDK derive helpers, constants (tick bounds, tick spacing, ticks per array, position range slots, limit order ticks, rewards, fees), the Pool account and its dynamic tail (rewards and activation), StaticConfig and DynamicConfig, TickArray with Tick and TickWithReward, TickArrayBitmapExtension, PositionArray with Position, PositionWithReward and vesting, LimitOrder and LimitOrderData, Oracle observations, Operator, and the access registry TokenBadge. Explains fixed headers versus variable tails and which SDK and commons parsers decode them."
 ---
 
-DLMM Pro keeps its state in nine program accounts. Token badges live in a separate access registry program. Exact layouts ship in the IDL exported by the SDK as `DlmmProIDL`.
+DLMM Pro keeps its state in nine program accounts. Token badges live in a separate access registry program. The IDL exported by the SDK as `DlmmProIDL` has the exact layout of each fixed header. It does not define the entries of the variable tails (`PoolRewardInfo`, `PoolActivation`, `Tick`, `Position`, `LimitOrderData`, `Observation` and the reward variants), so those layouts are given in the tables below.
 
 <Warning>
 `Pool`, `TickArray`, `PositionArray`, `LimitOrder` and `Oracle` accounts have a variable-length tail after the fixed header the IDL describes. Anchor's `AccountDeserialize` on the generated types reads the whole account after the discriminator as the header, so it fails or panics on these accounts. Decode them with the SDK helpers (`client.state.fetchPoolWithExtensions`, `decodePositions`, `decodeTicks`, `decodeLimitOrderData`, `decodeObservations`) or the `Dynamic*` parsers of the commons crate. See [TypeScript SDK](/developer-guides/dlmm-pro/typescript-sdk/reference) and [Rust library](/developer-guides/dlmm-pro/rust-integration/library).
 </Warning>
 
-All accounts start with an 8-byte Anchor discriminator. Sizes below count the fixed header after it.
+All accounts start with an 8-byte Anchor discriminator. Sizes below count the fixed header after it. Integers are little-endian, and the field tables leave out padding bytes.
 
 ## PDA Map
 
@@ -37,6 +37,24 @@ The program ID is `dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n` on mainnet and d
 The pool authority `FSUXyUKbTJ4A5Ccz5M6Uo4J2myc3RsDKTPU9vZwyeXru` signs token transfers out of the reserve and reward vaults. It holds no data.
 
 A tick array index is `floor(floor(tick_id / tick_spacing) / 128)`. The SDK helper `tickIndexFromId` computes it.
+
+## Finding Accounts
+
+Each account type starts with its discriminator, the first 8 bytes of `sha256("account:<Name>")`. Combine it with the offsets below in `getProgramAccounts` `memcmp` filters. Offsets count from the start of the account data, discriminator included.
+
+| Account | Discriminator (hex) | Field offsets |
+| --- | --- | --- |
+| Pool | `f19a6d0411b16dbc` | `token_x_mint` 8, `token_y_mint` 40, `reserve_x` 72, `reserve_y` 104, `creator` 136 |
+| StaticConfig | `e09e6d5df8e8c17e` | `index` 8, `pool_creator_authority` 24 |
+| DynamicConfig | `1b06e155b3bc103e` | `index` 8, `pool_creator_authority` 24 |
+| TickArray | `4561bdbe6e0742bb` | `pool` 8, `tick_index` 40 |
+| TickArrayBitmapExtension | `3c9624db61808b99` | `pool` 8 |
+| PositionArray | `bf7fb653f015fda0` | `pool` 8, `nft_mint` 40 |
+| LimitOrder | `89b7d45b731d8de3` | `pool` 8, `nft_mint` 40, `referral` 72 |
+| Oracle | `8bc283b38cb3e5f4` | `pool` 8 |
+| Operator | `db1fbc91458bcc75` | `whitelisted_address` 8 |
+
+To list the positions or limit orders of a pool, filter `PositionArray` or `LimitOrder` accounts by `pool`. To list those of a wallet, read the wallet's Token 2022 accounts that hold 1 token of a 0-decimal mint, then try `derivePosition(mint)` and `deriveLimitOrder(mint)` for each mint. Position and limit order NFT mints have the pool authority as mint authority and their pool as freeze authority.
 
 ## Constants
 
@@ -133,6 +151,14 @@ Fee numerators use `FEE_DENOMINATOR` as the denominator. Share constants are bas
 | `base_fee_mode` | `u8` | Fee schedule type. |
 | `data` | `[u8; 31]` | Mode-specific parameters, 31 bytes. The SDK `encode*BaseFeeData` helpers build them. |
 
+`data` by mode, with offsets inside `data`. Unused bytes are zero.
+
+| Mode | Layout |
+| --- | --- |
+| Fixed | `cliff_fee_numerator: u64` at 0 |
+| TimeSchedulerLinear, TimeSchedulerExponential | `cliff_fee_numerator: u64` at 0, `period_frequency: u64` at 8, `reduction_factor: u64` at 16, `number_of_period: u16` at 24 |
+| MarketCapSchedulerLinear, MarketCapSchedulerExponential | `cliff_fee_numerator: u64` at 0, `reduction_factor: u64` at 8, `sqrt_price_step_bps: u32` at 16, `scheduler_expiration_duration: u32` at 20, `number_of_period: u16` at 24 |
+
 `DynamicFeeConfig`:
 
 | Field | Type | Meaning |
@@ -190,7 +216,7 @@ Fee numerators use `FEE_DENOMINATOR` as the denominator. Share constants are bas
 
 ### Dynamic Tail
 
-Bytes after the 640-byte header depend on `extensions`. The pool tail order is fixed: the rewards block first when LiquidityMining is set, then the activation block when ActivationAccess is set. A pool with neither extension has no tail.
+Bytes after the 640-byte header depend on `extensions`. The pool tail order is fixed: the rewards block first when LiquidityMining is set, then the activation block when ActivationAccess is set. A pool with neither extension has no tail. A pool account is therefore 648 bytes with no extension, 1,000 with LiquidityMining, 776 with ActivationAccess and 1,128 with both.
 
 | Extension | Block | Size | Contents |
 | --- | --- | --- | --- |
@@ -210,22 +236,30 @@ Bytes after the 640-byte header depend on `extensions`. The pool tail order is f
 | `last_update_time` | `u64` | Last time the reward state was updated. |
 | `cumulative_seconds_with_empty_liquidity_reward` | `u64` | Seconds emitted while the pool had zero liquidity. `withdraw_ineligible_rewards` recovers them. |
 | `reward_growth_global` | `u128` | Cumulative reward per unit of liquidity, Q64.64. |
-| `reward_token_flag` | `u8` | Token program flag of the reward mint: `0` Token, `1` Token 2022. |
+| `reward_token_flag` | `u8` | Token program flag of the reward mint: `0` Token, `1` Token 2022. Followed by 15 bytes of padding. |
 
 `PoolActivation`:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `whitelisted_swap` | `Pubkey` | Address exempt from the activation schedule for swaps, such as an Alpha Vault. |
-| `whitelisted_add_liquidity` | `Pubkey` | Address exempt from the activation schedule for adding liquidity, such as the operator that seeds the pool. Matched against the position NFT owner. |
-| `whitelisted_remove_liquidity` | `Pubkey` | Address exempt from the activation schedule for removing liquidity. Matched against the position NFT owner. |
+| `whitelisted_add_liquidity` | `Pubkey` | Address exempt from the activation schedule for adding liquidity, such as the operator that seeds the pool. Matched against the owner of the position (`open_position`, `expand_position` and the add liquidity instructions) or of the limit order (`open_limit_order`). |
+| `whitelisted_remove_liquidity` | `Pubkey` | Address exempt from the activation schedule for removing liquidity. Matched against the owner of the position (`remove_liquidity`, `remove_liquidity_by_bps`, `remove_position`) or of the limit order (`cancel_limit_order`). |
 | `activations` | `[PoolActivationInfo; 2]` | Two activation slots. Each holds `activation_mode: u8` and `data: [u8; 15]`. |
+
+`data` by `activation_mode`, with offsets inside `data`:
+
+| Mode | Layout |
+| --- | --- |
+| Open | 15 zero bytes |
+| BondingCurve | `is_reach_target: u8` at 0 (`1` once the target is reached), `target_increase_bps: u64` at 7 |
+| TimeBased | `swap_point`, `add_liquidity_point` and `remove_liquidity_point` as 5-byte integers at 0, 5 and 10 |
 
 Use `isSupportExtension(pool.extensions, PoolExtension.LiquidityMining)` to test a bit. Tick arrays and position arrays use their reward variants (`TickWithReward`, `PositionWithReward`) on pools with LiquidityMining. The SDK `withReward` options and the commons `DynamicTickArray` and `DynamicPositionArray` parsers take that choice from the pool.
 
 ## StaticConfig
 
-`StaticConfig` fixes fees, tick spacing, collect fee mode, activation type and extensions for every pool created from it. The size is 120 bytes with no tail.
+`StaticConfig` fixes fees, tick spacing, collect fee mode, activation type and extensions for every pool created from it. The size is 120 bytes with no tail. The configs that exist are listed in [Pool Fee Configs](/developer-guides/dlmm-pro/pool-fee-configs).
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -257,7 +291,9 @@ Use `isSupportExtension(pool.extensions, PoolExtension.LiquidityMining)` to test
 | `pool` | `Pubkey` | Pool the array belongs to. |
 | `tick_index` | `i32` | Tick array index. The array covers tick IDs `tick_index * 128 * tick_spacing` through `(tick_index + 1) * 128 * tick_spacing - 1`. |
 
-The tail holds the initialized ticks sorted by `tick_id`. A new tick array has no ticks, and the account grows or shrinks as positions and limit orders add or drop references to ticks. The tail uses `Tick` (160 bytes) or `TickWithReward` (192 bytes) on LiquidityMining pools.
+The tail holds the initialized ticks sorted by `tick_id`. A new tick array has no ticks, and the account grows or shrinks as positions and limit orders add or drop references to ticks. The tail starts at byte 64 of the account data and uses `Tick` (160 bytes) or `TickWithReward` (192 bytes) on LiquidityMining pools.
+
+One instruction can grow a tick array by at most 10,240 bytes. That is 64 new ticks (53 on LiquidityMining pools), or 63 when the instruction also creates the tick array. An `open_position` or `expand_position` that needs more new ticks in one array fails with `ReallocExceedMaxLengthPerInstruction`, so split the ranges across instructions.
 
 ### Tick
 
@@ -268,8 +304,8 @@ The tail holds the initialized ticks sorted by `tick_id`. A new tick array has n
 | `liquidity_gross` | `u128` | Total liquidity referencing the tick. |
 | `fee_growth_outside_x`, `fee_growth_outside_y` | `u128` | Fee growth on the far side of the tick, Q64.64. |
 | `ref_count` | `u64` | Positions and limit orders that reference the tick. |
-| `tick_id` | `i32` | Tick ID. |
-| `limit_order_ask_side` | `u8` | `1` when the resting limit orders are asks, `0` for bids. |
+| `tick_id` | `i32` | Tick ID, at offset 88 of the entry. Followed by 3 bytes of padding. |
+| `limit_order_ask_side` | `u8` | `1` when the resting limit orders are asks, `0` for bids. At offset 95. |
 | `open_order_amount` | `u64` | Limit order amount not yet reached by the price. |
 | `total_processing_order_amount` | `u64` | Limit order amount currently being filled. |
 | `processed_order_remaining_amount` | `u64` | Unfilled part of the amount being processed. |
@@ -294,7 +330,7 @@ The extension tracks initialized tick arrays beyond the 1024-bit inline bitmap o
 | `positive_bitmap` | `[[u64; 8]; 6]` | Six 512-bit bitmaps for tick array indexes 512 to 3583. |
 | `negative_bitmap` | `[[u64; 8]; 6]` | Six 512-bit bitmaps for tick array indexes -513 to -3584. |
 
-Liquidity or limit orders in a tick array outside indexes -512 to 511 need this account in the instruction, or the program returns `TickArrayBitmapExtensionAccountIsNotProvided`. A swap that searches past the inline bitmap without it fails with `BitmapExtensionAccountIsNotProvided`. Create it with `initialize_tick_bitmap_extension`, or pass it when creating the pool.
+Liquidity or limit orders in a tick array outside indexes -512 to 511 need this account in the instruction, or the program returns `TickArrayBitmapExtensionAccountIsNotProvided`. On a pool whose `is_bitmap_extension_initialized` is `1`, pass it to `swap` as well: a swap whose search leaves the inline bitmap without it fails with `BitmapExtensionAccountIsNotProvided`. A pool with no extension has no liquidity outside the inline bitmap, so the search stops there. Create it with `initialize_tick_bitmap_extension`, or pass it when creating the pool.
 
 ## PositionArray
 
@@ -308,7 +344,7 @@ A [position](/core-products/dlmm-pro/positions) is one NFT plus one `PositionArr
 | `layout_version` | `u16` | Increments whenever `expand_position` or `remove_position` changes the slot layout. |
 | `vesting` | `PositionVesting` | Vesting schedule of the position. One schedule covers every slot. |
 
-The tail holds one slot per range. Instructions select slots with a `u64` bitmap in which bit `i` is slot `i`. The tail uses `Position` (128 bytes) or `PositionWithReward` (192 bytes) on LiquidityMining pools.
+The tail holds one slot per range, starting at byte 144 of the account data (`vesting` is at byte 120). Instructions select slots with a `u64` bitmap in which bit `i` is slot `i`. The tail uses `Position` (128 bytes) or `PositionWithReward` (192 bytes) on LiquidityMining pools.
 
 ### Position
 
@@ -320,7 +356,7 @@ The tail holds one slot per range. Instructions select slots with a `u64` bitmap
 | `released_vesting_liquidity` | `u128` | Vesting liquidity already released into `unlocked_liquidity`. |
 | `fee_growth_checkpoint_x`, `fee_growth_checkpoint_y` | `u128` | Fee growth inside the range at the last refresh, Q64.64. |
 | `fee_pending_x`, `fee_pending_y` | `u64` | Fees accrued and not yet claimed. |
-| `tick_lower_id`, `tick_upper_id` | `i32` | Range of the slot, `[tick_lower_id, tick_upper_id)`. |
+| `tick_lower_id`, `tick_upper_id` | `i32` | Range of the slot, `[tick_lower_id, tick_upper_id)`. Followed by 8 bytes of padding. |
 
 A slot is empty when its total liquidity is zero and it has no pending fees or rewards.
 
@@ -329,11 +365,11 @@ A slot is empty when its total liquidity is zero and it has no pending fees or r
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `inner` | `Position` | The fields above. |
-| `rewards` | `[PositionRewardInfo; 2]` | One entry per reward slot: `growth_inside_checkpoint: u128` (Q64.64) and `pending_amount: u64`. |
+| `rewards` | `[PositionRewardInfo; 2]` | One 32-byte entry per reward slot: `growth_inside_checkpoint: u128` (Q64.64), `pending_amount: u64` and 8 bytes of padding. |
 
 ### PositionVesting
 
-Vesting is part of the `PositionArray` header (24 bytes) and applies to all slots. `lock_vesting_position` moves liquidity from `unlocked_liquidity` into `vesting_liquidity`. At the cliff point the program releases `cliff_unlock_bps` of it, then `bps_per_period` for each elapsed `period_frequency`, up to `number_of_period` periods. The longest schedule is 10 years (`MAX_VESTING_DURATION`).
+Vesting is part of the `PositionArray` header (24 bytes) and applies to all slots. `lock_vesting_position` moves liquidity from `unlocked_liquidity` into `vesting_liquidity`. At the cliff point the program releases `cliff_unlock_bps` of it, then `bps_per_period` for each elapsed `period_frequency`, up to `number_of_period` periods. The time from the lock to the last release is capped at `MAX_VESTING_DURATION` (315,360,000 seconds, 10 years) on Timestamp pools and `MAX_VESTING_DURATION_SLOT` (1,261,440,000 slots) on Slot pools.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -355,7 +391,7 @@ A [limit order](/core-products/dlmm-pro/limit-orders) is one NFT plus one `Limit
 | `referral` | `Pubkey` | Wallet that receives the referral share of the order fee. |
 | `delegate_permission` | `u32` | Bitmask of `LimitOrderDelegatePermission`: bit 0 is CancelLimitOrder. |
 
-The tail holds one `LimitOrderData` (24 bytes) per tick. Canceling a tick zeroes its `amount`, `age` and `is_ask` but keeps `tick_id`, because `close_limit_order` needs the tick arrays of every entry.
+The tail holds one `LimitOrderData` (24 bytes) per tick, starting at byte 144 of the account data. Canceling a tick zeroes its `amount`, `age` and `is_ask` but keeps `tick_id`, because `close_limit_order` needs the tick arrays of every entry.
 
 ### LimitOrderData
 
@@ -364,11 +400,11 @@ The tail holds one `LimitOrderData` (24 bytes) per tick. Canceling a tick zeroes
 | `amount` | `u64` | Deposited amount. Zero once canceled. |
 | `age` | `u64` | Tick `order_age` when the order was placed. Zero once canceled. |
 | `tick_id` | `i32` | Tick ID of the order. |
-| `is_ask` | `u8` | `1` for an ask, `0` for a bid. |
+| `is_ask` | `u8` | `1` for an ask, `0` for a bid. Followed by 3 bytes of padding. |
 
 ## Oracle
 
-The oracle records the cumulative tick for time-weighted average prices. The fixed header is 48 bytes, followed by a ring buffer of `Observation` entries of 16 bytes each. A new oracle holds one observation. `increase_oracle_length` grows it to at most 500.
+The oracle records the cumulative tick for time-weighted average prices. The fixed header is 48 bytes, followed by a ring buffer of `Observation` entries of 16 bytes each, starting at byte 56 of the account data. A new oracle holds one observation. `increase_oracle_length` grows it to at most 500.
 
 | Field | Type | Meaning |
 | --- | --- | --- |

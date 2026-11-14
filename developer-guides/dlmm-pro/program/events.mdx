@@ -2,7 +2,7 @@
 title: "DLMM Pro Program Events"
 sidebarTitle: "Events"
 description: "Events emitted by the DLMM Pro program, with fields and types for pool, swap, position, limit order and reward flows, and how to decode them from a transaction."
-llmsDescription: "Reference for the 31 events in the DLMM Pro IDL (release 0.1.0). Explains Anchor event CPI delivery through inner instructions, the two events emitted as program logs (EvtClaimProtocolFee and EvtInitializeBitmapExtension), the event authority account, per-family field tables for pool and config, EvtSwap, tick array and oracle, position, limit order and reward events, nested parameter types, and a TypeScript example that decodes events with Anchor's BorshCoder events decoder and EventParser using DlmmProIDL and DlmmProTypes from @meteora-ag/dlmm-pro-sdk."
+llmsDescription: "Reference for the 31 events in the DLMM Pro IDL (release 0.1.0). Explains Anchor event CPI delivery through inner instructions, the two events emitted as program logs (EvtClaimProtocolFee and EvtInitializeBitmapExtension), the event authority account, per-family field tables for pool and config, EvtSwap, tick array and oracle, position, limit order and reward events, nested parameter types, the 8-byte event discriminator of every event, a Meaning for every field of every event and nested type, the instruction or instructions that emit each event, an Indexing Notes section (price and liquidity reconstruction, state changes that emit no event, swap attribution, fee fields, limit order fills, log truncation), and a TypeScript example that decodes events with Anchor's BorshCoder events decoder and EventParser using DlmmProIDL and DlmmProTypes from @meteora-ag/dlmm-pro-sdk."
 ---
 
 The program emits 31 events, defined in the IDL (`DlmmProIDL`). Use this page to build indexers, analytics and monitoring from transaction data.
@@ -15,39 +15,43 @@ Two events, `EvtClaimProtocolFee` and `EvtInitializeBitmapExtension`, are writte
 
 Anchor's `EventParser` reads only log lines, so it does not see event CPI events. See [Reading Events](#reading-events).
 
-| Event | Emitted by | Delivery |
-| --- | --- | --- |
-| `EvtAddLiquidity` | `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance` | Inner instruction |
-| `EvtCancelLimitOrder` | `cancel_limit_order` | Inner instruction |
-| `EvtClaimFee` | `claim_fee` | Inner instruction |
-| `EvtClaimPartnerFee` | `claim_partner_fee` | Inner instruction |
-| `EvtClaimProtocolFee` | `claim_protocol_fee2` (only when the amount is non-zero) | Program log |
-| `EvtClaimReward` | `claim_reward` (only when the amount is non-zero) | Inner instruction |
-| `EvtCloseConfig` | `close_config` | Inner instruction |
-| `EvtCloseLimitOrder` | `close_limit_order` | Inner instruction |
-| `EvtClosePosition` | `close_position` | Inner instruction |
-| `EvtCreateDynamicConfig` | `create_dynamic_config` | Inner instruction |
-| `EvtCreateStaticConfig` | `create_static_config` | Inner instruction |
-| `EvtExpandPosition` | `expand_position` | Inner instruction |
-| `EvtIncreaseOracleLength` | `increase_oracle_length` | Inner instruction |
-| `EvtInitializeBitmapExtension` | `initialize_tick_bitmap_extension` (only when it creates the account), and pool creation when a bitmap extension is passed | Program log |
-| `EvtInitializePool` | `initialize_pool_with_static_config`, `initialize_pool_with_dynamic_config`, `initialize_launch_pool` | Inner instruction |
-| `EvtInitializeReward` | `initialize_reward` | Inner instruction |
-| `EvtInitializeTickArray` | `initialize_tick_array` (only when it creates the account) | Inner instruction |
-| `EvtLockPermanent` | `lock_permanent_position` | Inner instruction |
-| `EvtLockVesting` | `lock_vesting_position` | Inner instruction |
-| `EvtOpenLimitOrder` | `open_limit_order` | Inner instruction |
-| `EvtOpenPosition` | `open_position` | Inner instruction |
-| `EvtRemoveLiquidity` | `remove_liquidity`, `remove_liquidity_by_bps` | Inner instruction |
-| `EvtRemovePosition` | `remove_position` | Inner instruction |
-| `EvtSetPoolStatus` | `set_pool_status` | Inner instruction |
-| `EvtSetRewardEmission` | `set_reward_emission` | Inner instruction |
-| `EvtSwap` | `swap` | Inner instruction |
-| `EvtUpdateLimitOrderDelegatePermission` | `update_limit_order_delegate_permission` | Inner instruction |
-| `EvtUpdatePartnerFee` | `update_partner_fee` | Inner instruction |
-| `EvtUpdatePositionDelegatePermission` | `update_position_delegate_permission` | Inner instruction |
-| `EvtUpdateRewardAuthority` | `update_reward_authority` | Inner instruction |
-| `EvtWithdrawIneligibleReward` | `withdraw_ineligible_rewards` (only when the amount is non-zero) | Inner instruction |
+| Event | Emitted by | Delivery | Discriminator (hex) |
+| --- | --- | --- | --- |
+| `EvtAddLiquidity` | `add_liquidity`, `add_liquidity_by_weight`, `add_liquidity_imbalance` | Inner instruction | `aff2089d1ef7b9a9` |
+| `EvtCancelLimitOrder` | `cancel_limit_order` | Inner instruction | `acc7f24e534cfca9` |
+| `EvtClaimFee` | `claim_fee` | Inner instruction | `062458e835c1fd62` |
+| `EvtClaimPartnerFee` | `claim_partner_fee` (only when at least one amount is non-zero) | Inner instruction | `76634d0ae2010157` |
+| `EvtClaimProtocolFee` | `claim_protocol_fee2` (only when the amount is non-zero) | Program log | `baf44bfbbc0d1921` |
+| `EvtClaimReward` | `claim_reward` (only when the amount is non-zero) | Inner instruction | `da5693c8ebbcd7e7` |
+| `EvtCloseConfig` | `close_config` | Inner instruction | `241eef2d3a840e05` |
+| `EvtCloseLimitOrder` | `close_limit_order` | Inner instruction | `60cfbf0f1291ecf3` |
+| `EvtClosePosition` | `close_position` | Inner instruction | `149190448f8ed6b2` |
+| `EvtCreateDynamicConfig` | `create_dynamic_config` | Inner instruction | `e7c50da4f8d58598` |
+| `EvtCreateStaticConfig` | `create_static_config` | Inner instruction | `eae07c98330a2338` |
+| `EvtExpandPosition` | `expand_position` | Inner instruction | `0460b316fb0c998a` |
+| `EvtIncreaseOracleLength` | `increase_oracle_length` | Inner instruction | `c81aca40cc27181d` |
+| `EvtInitializeBitmapExtension` | `initialize_tick_bitmap_extension` (only when it creates the account), and pool creation when a bitmap extension is passed | Program log | `4271b8f776896d03` |
+| `EvtInitializePool` | `initialize_pool_with_static_config`, `initialize_pool_with_dynamic_config`, `initialize_launch_pool` | Inner instruction | `e432f655cb428625` |
+| `EvtInitializeReward` | `initialize_reward` | Inner instruction | `815bbc03f634b9f9` |
+| `EvtInitializeTickArray` | `initialize_tick_array` (only when it creates the account) | Inner instruction | `ac9d60058f59fcf3` |
+| `EvtLockPermanent` | `lock_permanent_position` | Inner instruction | `0dd2f2bd1b6e9a32` |
+| `EvtLockVesting` | `lock_vesting_position` | Inner instruction | `789e36d8cd3202cf` |
+| `EvtOpenLimitOrder` | `open_limit_order` | Inner instruction | `a6fc5a669c6cfcb4` |
+| `EvtOpenPosition` | `open_position` | Inner instruction | `e76de9c61a99419d` |
+| `EvtRemoveLiquidity` | `remove_liquidity`, `remove_liquidity_by_bps` | Inner instruction | `572e5862af60225b` |
+| `EvtRemovePosition` | `remove_position` | Inner instruction | `c65905f60cb0b57b` |
+| `EvtSetPoolStatus` | `set_pool_status` | Inner instruction | `64d54a035f5be492` |
+| `EvtSetRewardEmission` | `set_reward_emission` | Inner instruction | `543554603d7c20cc` |
+| `EvtSwap` | `swap` | Inner instruction | `1b3c15d58aaabb93` |
+| `EvtUpdateLimitOrderDelegatePermission` | `update_limit_order_delegate_permission` | Inner instruction | `fe26bb5caea9618d` |
+| `EvtUpdatePartnerFee` | `update_partner_fee` | Inner instruction | `f8ba75affd0d3ebb` |
+| `EvtUpdatePositionDelegatePermission` | `update_position_delegate_permission` | Inner instruction | `0e46b62fa76764ab` |
+| `EvtUpdateRewardAuthority` | `update_reward_authority` | Inner instruction | `30cfebb9720d6301` |
+| `EvtWithdrawIneligibleReward` | `withdraw_ineligible_rewards` (only when the amount is non-zero) | Inner instruction | `f8d7b84e1fb4b3a8` |
+
+The discriminator column is the 8-byte event discriminator from the IDL, which is the first 8 bytes of the SHA-256 hash of `event:` followed by the event name. For an event CPI instruction, bytes 0 to 8 of the instruction data are the event tag, bytes 8 to 16 are the discriminator and the rest is the Borsh-encoded event. For a program log event, base64-decode the `Program data:` line: the first 8 bytes are the discriminator and the rest is the Borsh-encoded event. Borsh writes integers little-endian, `Option` as a 1-byte flag followed by the value when the flag is 1, and `Vec` as a `u32` length followed by the items, so an indexer in any language can decode events without Anchor.
+
+Tick arrays created inside `open_position`, `expand_position` or `open_limit_order` emit no `EvtInitializeTickArray`, so do not rely on that event to discover tick arrays.
 
 ## Reading Events
 
@@ -102,396 +106,565 @@ Each decoded event has `name` and `data`. Event and field names are camel case i
 
 ### EvtInitializePool
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `creator` | `Pubkey` |
-| `payer` | `Pubkey` |
-| `token_x_mint` | `Pubkey` |
-| `token_y_mint` | `Pubkey` |
-| `token_x_flag` | `u8` |
-| `token_y_flag` | `u8` |
-| `pool_type` | `u8` |
-| `pool_fees` | `PoolFeeParameters` |
-| `tick_spacing` | `u16` |
-| `collect_fee_mode` | `u8` |
-| `initial_sqrt_price` | `u128` |
-| `activation_type` | `u8` |
-| `activation_point` | `u64` |
-| `extensions` | `u8` |
-| `pool_activation` | `Option<PoolActivationParameters>` |
+Emitted by `initialize_pool_with_static_config`, `initialize_pool_with_dynamic_config` and `initialize_launch_pool` once the pool, its two reserve vaults and its oracle exist. Indexers use it to discover pools and to read the settings fixed at creation. `pool_type` tells which instruction produced it: 0 for the static config instruction, 1 for the dynamic config instruction and 2 for the launch pool instruction. For the static config instruction `pool_fees`, `tick_spacing`, `collect_fee_mode`, `activation_type` and `extensions` are copied from the `StaticConfig`, `activation_point` is the current slot or timestamp, and `pool_activation` is always `None`. For the other two instructions the fields echo the instruction arguments, and `pool_activation` is `Some` only when `extensions` has the ActivationAccess bit.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the new pool account. |
+| `creator` | `Pubkey` | The `creator` account passed to the instruction, stored as the pool's `creator`. It does not sign and can differ from `payer`. |
+| `payer` | `Pubkey` | Signer that paid the rent of the new accounts. |
+| `token_x_mint` | `Pubkey` | Mint of token X. |
+| `token_y_mint` | `Pubkey` | Mint of token Y. |
+| `token_x_flag` | `u8` | Token program that owns the X mint: 0 for Token, 1 for Token 2022. |
+| `token_y_flag` | `u8` | Token program that owns the Y mint: 0 for Token, 1 for Token 2022. |
+| `pool_type` | `u8` | 0 Static, 1 Dynamic, 2 LaunchPool. |
+| `pool_fees` | `PoolFeeParameters` | Base fee and dynamic fee settings stored on the pool. See `PoolFeeParameters` in [Nested Types](#nested-types). `dynamic_fee_parameter` is `None` when the pool has no dynamic fee. |
+| `tick_spacing` | `u16` | Distance between usable tick ids. At most 256. |
+| `collect_fee_mode` | `u8` | 0 OutputToken (the swap fee is taken from the output token), 1 OnlyY (the swap fee is always in token Y). |
+| `initial_sqrt_price` | `u128` | Starting square root price, Q64.64, in atoms of token Y per atom of token X. The pool starts at the tick id this price falls on. |
+| `activation_type` | `u8` | Unit of `activation_point` and of the activation schedules: 0 Slot, 1 Timestamp. |
+| `activation_point` | `u64` | Slot or timestamp, as set by `activation_type`, at which the pool opens. The dynamic config and launch pool instructions use the current slot or timestamp when the argument is omitted. |
+| `extensions` | `u8` | Bitmask of pool extensions. Bit 0 is LiquidityMining and bit 1 is ActivationAccess. |
+| `pool_activation` | `Option<PoolActivationParameters>` | Whitelisted addresses and activation schedule when the ActivationAccess extension is set, otherwise `None`. See `PoolActivationParameters` in [Nested Types](#nested-types). |
 
 ### EvtCreateStaticConfig
 
-| Field | Type |
-| --- | --- |
-| `config` | `Pubkey` |
-| `signer` | `Pubkey` |
-| `pool_creator_authority` | `Pubkey` |
-| `index` | `u64` |
-| `pool_fees` | `PoolFeeParameters` |
-| `tick_spacing` | `u16` |
-| `collect_fee_mode` | `u8` |
-| `activation_type` | `u8` |
-| `extensions` | `u8` |
+Emitted by `create_static_config`. Indexers use it to list the configs that pools can be created from. A `pool_creator_authority` equal to the default key (all zeros) marks a public config that anyone can use.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `config` | `Pubkey` | Address of the new `StaticConfig` account. |
+| `signer` | `Pubkey` | Signer of the instruction, an operator with the permission the instruction needs. It needs the CreateConfigKey permission. |
+| `pool_creator_authority` | `Pubkey` | Address that must sign pool creation with this config. The default key means the config is public. |
+| `index` | `u64` | Config index, the seed of the `StaticConfig` address. |
+| `pool_fees` | `PoolFeeParameters` | Base fee and dynamic fee settings that every pool created from the config gets. See `PoolFeeParameters` in [Nested Types](#nested-types). |
+| `tick_spacing` | `u16` | Tick spacing of pools created from the config, from 1 to 256. |
+| `collect_fee_mode` | `u8` | 0 OutputToken, 1 OnlyY. |
+| `activation_type` | `u8` | 0 Slot, 1 Timestamp. Unit of the activation point of pools created from the config. |
+| `extensions` | `u8` | Bitmask of pool extensions. Bit 0 is LiquidityMining. The ActivationAccess bit cannot be set on a static config. |
 
 ### EvtCreateDynamicConfig
 
-| Field | Type |
-| --- | --- |
-| `config` | `Pubkey` |
-| `signer` | `Pubkey` |
-| `pool_creator_authority` | `Pubkey` |
-| `index` | `u64` |
-| `permission` | `u128` |
-| `partner_fee_bps` | `u16` |
+Emitted by `create_dynamic_config`. Indexers use it to list the configs whose pool creator authority picks fees and activation per pool. Pools created from the config record `pool_creator_authority` as their partner and take `partner_fee_bps` as their partner fee share.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `config` | `Pubkey` | Address of the new `DynamicConfig` account. |
+| `signer` | `Pubkey` | Signer of the instruction, an operator with the permission the instruction needs. It needs the CreateConfigKey permission. |
+| `pool_creator_authority` | `Pubkey` | Address that signs pool creation with this config. Never the default key. It becomes the partner of pools created from the config. |
+| `index` | `u64` | Config index, part of the seed of the `DynamicConfig` address. |
+| `permission` | `u128` | Bitmask of config permissions. Bit 0 is CreatePoolWithoutMintValidation, which lets pool creation skip the mint extension checks. |
+| `partner_fee_bps` | `u16` | Share of the protocol fee that goes to the partner on pools created from the config, in basis points. At most 5000. |
 
 ### EvtCloseConfig
 
-| Field | Type |
-| --- | --- |
-| `config` | `Pubkey` |
-| `signer` | `Pubkey` |
+Emitted by `close_config` for a static or a dynamic config. Indexers use it to mark the config as closed. The event does not say which config type it was, so look the address up in the configs seen earlier.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `config` | `Pubkey` | Address of the closed `StaticConfig` or `DynamicConfig` account. |
+| `signer` | `Pubkey` | Signer of the instruction, an operator with the permission the instruction needs. It needs the RemoveConfigKey permission. |
 
 ### EvtSetPoolStatus
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `signer` | `Pubkey` |
-| `status` | `u16` |
+Emitted by `set_pool_status` when an operator changes the pool status. Indexers use it to know when swaps or deposits are switched off. The instruction fails if the new status equals the current one, so every event is a change.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `signer` | `Pubkey` | Signer of the instruction, an operator with the permission the instruction needs. It needs the SetPoolStatus permission. |
+| `status` | `u16` | The new status bitmask, which replaces the old one. A set bit disables an action: bit 0 disables swaps and bit 1 disables adding liquidity. Removing liquidity cannot be disabled. |
 
 ### EvtUpdatePartnerFee
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `signer` | `Pubkey` |
-| `old_partner_fee_bps` | `u16` |
-| `new_partner_fee_bps` | `u16` |
+Emitted by `update_partner_fee` on a pool that has a partner, which means a pool created from a dynamic config. Indexers use it to track the partner share of the protocol fee that later swaps apply.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `signer` | `Pubkey` | Signer of the instruction, an operator with the permission the instruction needs. It needs the UpdatePartnerFee permission. |
+| `old_partner_fee_bps` | `u16` | Partner share of the protocol fee before the change, in basis points. |
+| `new_partner_fee_bps` | `u16` | Partner share of the protocol fee after the change, in basis points. At most 5000. |
 
 ### EvtClaimPartnerFee
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `signer` | `Pubkey` |
-| `amount_x` | `u64` |
-| `amount_y` | `u64` |
+Emitted by `claim_partner_fee` when at least one of the two amounts is non-zero. Indexers use it to track partner fee payouts against the `partner_fee` totals of `EvtSwap`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `signer` | `Pubkey` | The pool partner that signed the claim. |
+| `amount_x` | `u64` | Token X paid out of the X reserve, in atoms, before any Token 2022 transfer fee. It is the accrued partner fee capped by `max_amount_x`. |
+| `amount_y` | `u64` | Token Y paid out of the Y reserve, in atoms, before any Token 2022 transfer fee. It is the accrued partner fee capped by `max_amount_y`. |
 
 ### EvtClaimProtocolFee
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `receiver_token_account` | `Pubkey` |
-| `token_mint` | `Pubkey` |
-| `amount` | `u64` |
+Emitted by `claim_protocol_fee2` when the claimed amount is non-zero. It is a program log event, so it can be missing from the transaction that produced it. The instruction pays one token per call and is signed by the protocol fee authority, so integrators do not send it. Indexers use the event to track protocol fee payouts against the `protocol_fee` totals of `EvtSwap`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `receiver_token_account` | `Pubkey` | Token account that received the fee. Its mint decides whether token X or token Y was claimed. |
+| `token_mint` | `Pubkey` | Mint of the claimed token, equal to the mint of `receiver_token_account`. |
+| `amount` | `u64` | Claimed amount in atoms, as taken from the reserve and before any Token 2022 transfer fee. It is capped by the `max_amount` argument. |
 
 ## Swap Events
 
 ### EvtSwap
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `pre_tick_id` | `i32` |
-| `post_tick_id` | `i32` |
-| `pre_sqrt_price` | `u128` |
-| `post_sqrt_price` | `u128` |
-| `swap_for_y` | `bool` |
-| `amount_in` | `u64` |
-| `amount_left` | `u64` |
-| `amount_out` | `u64` |
-| `transfer_fee_in` | `u64` |
-| `transfer_fee_out` | `u64` |
-| `mm_fee` | `u64` |
-| `protocol_fee` | `u64` |
-| `limit_order_fee` | `u64` |
-| `host_fee` | `u64` |
-| `partner_fee` | `u64` |
-| `fees_on_input` | `bool` |
-| `fees_on_token_x` | `bool` |
+Emitted by every successful `swap`, after the token transfers. Indexers use it for trades, volume, price, fees and the current tick. The fee fields are all in the fee token, the token named by `fees_on_input` and `fees_on_token_x`. Together `mm_fee`, `limit_order_fee`, `protocol_fee`, `host_fee` and `partner_fee` add up to the whole trading fee the swap charged.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `pre_tick_id` | `i32` | Current tick id of the pool before the swap. |
+| `post_tick_id` | `i32` | Current tick id of the pool after the swap. Use it as the pool's tick id, not the tick id computed from `post_sqrt_price`, because the two can differ right after a tick is crossed. |
+| `pre_sqrt_price` | `u128` | Square root price before the swap, Q64.64, in atoms of token Y per atom of token X. |
+| `post_sqrt_price` | `u128` | Square root price after the swap, Q64.64. |
+| `swap_for_y` | `bool` | `true` when the user sells token X and receives token Y, which is when `user_token_out` holds the Y mint. `false` for the other direction. |
+| `amount_in` | `u64` | The whole `input_amount` the user pays, in atoms of the input token. It includes the input mint's Token 2022 transfer fee and, when the fee is on input, the trading fee. |
+| `amount_left` | `u64` | Input not consumed. Always 0, because a swap consumes its whole input or fails. |
+| `amount_out` | `u64` | Atoms of the output token the user receives, after the trading fee (when the fee is on output) and after the output mint's Token 2022 transfer fee. |
+| `transfer_fee_in` | `u64` | Token 2022 transfer fee withheld from `amount_in`. The input reserve receives `amount_in` minus this value. 0 for a mint without a transfer fee. |
+| `transfer_fee_out` | `u64` | Token 2022 transfer fee withheld on the output transfer. The output reserve sends `amount_out` plus this value. 0 for a mint without a transfer fee. |
+| `mm_fee` | `u64` | Fee kept by liquidity providers (market making liquidity) after the protocol share, in atoms of the fee token. It is added to the pool's fee growth per unit of liquidity while market making liquidity is active. |
+| `protocol_fee` | `u64` | Protocol share of the fee after the host fee and the partner fee are taken out, in atoms of the fee token. It accrues in the pool until `claim_protocol_fee2` pays it. |
+| `limit_order_fee` | `u64` | Fee earned by the limit orders this swap filled, after the protocol share, in atoms of the fee token. Makers receive it when they cancel the order. It is 0 when no limit order was filled, and it can also round down to 0 for a small fill. |
+| `host_fee` | `u64` | Host (referral) share of the protocol fee, in atoms of the fee token. It is sent to the `referral` token account during the swap. 0 when the swap has no `referral` account. |
+| `partner_fee` | `u64` | Partner share of the protocol fee, in atoms of the fee token. It accrues in the pool until the partner claims it. 0 on pools without a partner or with a partner share of 0. |
+| `fees_on_input` | `bool` | `true` when the fee token is the input token, `false` when it is the output token. |
+| `fees_on_token_x` | `bool` | `true` when the fee token is token X, `false` when it is token Y. |
+
+`amount_in` is the whole `input_amount`, including the input mint's transfer fee and the trading fee. `amount_out` is what the user receives, after the output mint's transfer fee. `amount_left` is always 0, because a swap consumes its whole input or fails. The event does not name the trader; read the `user` account of the `swap` instruction.
 
 ## Tick Array and Oracle Events
 
 ### EvtInitializeTickArray
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `index` | `i32` |
+Emitted by `initialize_tick_array` only when the call creates the tick array account. Calling it for an array that exists emits nothing. Tick arrays created inside `open_position`, `expand_position` or `open_limit_order` emit no event, so this event does not list every tick array.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `index` | `i32` | Tick array index, the seed of the tick array address. The index of the array that holds a tick id is that id divided by the tick spacing and then by 128, each division rounded down. |
 
 ### EvtInitializeBitmapExtension
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
+Emitted by `initialize_tick_bitmap_extension` only when the call creates the extension, and by the three pool creation instructions when a bitmap extension account is passed. It is a program log event, so it can be missing from the transaction. Indexers use it to know that the pool can hold tick arrays outside indexes -512 to 511. The `is_bitmap_extension_initialized` field of the `Pool` account gives the same answer without relying on logs.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool that now has a bitmap extension account. |
 
 ### EvtIncreaseOracleLength
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `old_length` | `u64` |
-| `new_length` | `u64` |
+Emitted by `increase_oracle_length` after the oracle account grows. Indexers use it to know how many observations the oracle ring buffer can hold.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `old_length` | `u64` | Number of observations the oracle held before the call. |
+| `new_length` | `u64` | Number of observations after the call. The sum is at most 500. |
 
 ## Position Events
 
 ### EvtOpenPosition
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `position` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
-| `tick_ranges` | `Vec<TickRange>` |
+Emitted by `open_position` after the position account and its NFT exist. Indexers use it to create the position and to learn its range slots, because the account itself is only decoded on demand. Slot `i` of the position is element `i` of `tick_ranges`. Tick arrays created by the call emit no event.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | The `owner` account that received the position NFT. It can differ from the payer. |
+| `position` | `Pubkey` | Address of the `PositionArray` account. |
+| `nft_mint` | `Pubkey` | Mint of the position NFT. Its address is the seed of the `position` account. |
+| `nft_account` | `Pubkey` | The owner's associated Token 2022 account that was created for the NFT. |
+| `tick_ranges` | `Vec<TickRange>` | The ranges requested, in slot order. Each range runs from `tick_lower_id` up to but not including `tick_upper_id`. See `TickRange` in [Nested Types](#nested-types). |
 
 ### EvtExpandPosition
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `position` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
-| `tick_ranges` | `Vec<TickRange>` |
+Emitted by `expand_position` after new range slots are added. The signer is the owner or a delegate with the UpdatePositionRange permission. The new ranges are appended after the existing slots, so the first new slot has the index equal to the slot count before the call. The event does not carry that count, so keep it from earlier events or read the position account. The call also raises the position `layout_version`. Tick arrays created by the call emit no event.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | Owner of the NFT token account. When a delegate signs, this is the owner, not the delegate. |
+| `position` | `Pubkey` | Address of the `PositionArray` account. |
+| `nft_mint` | `Pubkey` | Mint of the position NFT. Its address is the seed of the `position` account. |
+| `nft_account` | `Pubkey` | Token account that holds the NFT at the time of the event. |
+| `tick_ranges` | `Vec<TickRange>` | The ranges that were appended, in the order of their new slots. See `TickRange` in [Nested Types](#nested-types). |
 
 ### EvtRemovePosition
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `position` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
-| `bitmap` | `u64` |
-| `tick_ranges` | `Vec<TickRange>` |
+Emitted by `remove_position` after empty range slots are removed. The signer is the owner or a delegate with the UpdatePositionRange permission. The remaining slots keep their order and move down to fill the gaps, so slot indexes after the removed ones change. The call also raises the position `layout_version`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | Owner of the NFT token account. When a delegate signs, this is the owner, not the delegate. |
+| `position` | `Pubkey` | Address of the `PositionArray` account. |
+| `nft_mint` | `Pubkey` | Mint of the position NFT. Its address is the seed of the `position` account. |
+| `nft_account` | `Pubkey` | Token account that holds the NFT at the time of the event. |
+| `bitmap` | `u64` | Slots that were removed, as they were numbered before the call. Bit `i` set means slot `i` was removed. |
+| `tick_ranges` | `Vec<TickRange>` | Ranges of the removed slots, in ascending order of their old slot index. See `TickRange` in [Nested Types](#nested-types). |
 
 ### EvtClosePosition
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `position` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
+Emitted by `close_position` after the position account is closed and its NFT is burned. The position must be empty in every slot. Indexers use it to mark the position as closed.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | NFT owner that signed the close. |
+| `position` | `Pubkey` | Address of the closed `PositionArray` account. |
+| `nft_mint` | `Pubkey` | Mint of the burned position NFT. |
+| `nft_account` | `Pubkey` | Token account that held the NFT. It is closed by the call. |
 
 ### EvtAddLiquidity
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `position` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
-| `amount_x` | `u64` |
-| `amount_y` | `u64` |
-| `current_sqrt_price` | `u128` |
-| `bitmap` | `u64` |
-| `liquidities` | `Vec<u128>` |
+Emitted by `add_liquidity`, `add_liquidity_by_weight` and `add_liquidity_imbalance` after the deposit. The event does not say which of the three ran, so read the discriminator of the parent instruction. In every case `bitmap` selects range slots and `liquidities` lists one amount per set bit in ascending slot order. For `add_liquidity` they are the arguments. For `add_liquidity_by_weight` each entry is the `multiplier` times the `u8` weight of its slot. For `add_liquidity_imbalance` the bitmap has exactly one bit, the `index` argument, and the single entry is the liquidity the program derived from the two maximum amounts, the smaller of the two results. Indexers use it to track the liquidity of each slot.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | Owner of the NFT token account. When a delegate with the AddLiquidity permission signs, this is the owner, not the signer. |
+| `position` | `Pubkey` | Address of the `PositionArray` account. |
+| `nft_mint` | `Pubkey` | Mint of the position NFT. Its address is the seed of the `position` account. |
+| `nft_account` | `Pubkey` | Token account that holds the NFT at the time of the event. |
+| `amount_x` | `u64` | Atoms of token X taken from the signer's token account, including the Token 2022 transfer fee. The X reserve receives this value minus the transfer fee. It never exceeds `max_amount_x`. |
+| `amount_y` | `u64` | Atoms of token Y taken from the signer's token account, including the Token 2022 transfer fee. The Y reserve receives this value minus the transfer fee. It never exceeds `max_amount_y`. |
+| `current_sqrt_price` | `u128` | Square root price of the pool when the instruction ran, Q64.64. Adding liquidity does not move it. |
+| `bitmap` | `u64` | Range slots that received liquidity. Bit `i` set means slot `i` of the position. |
+| `liquidities` | `Vec<u128>` | Liquidity added, unscaled integers, one entry for each set bit of `bitmap` in ascending slot order. |
+
+`amount_x` and `amount_y` are what the signer pays, transfer fee included.
 
 ### EvtRemoveLiquidity
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `position` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
-| `amount_x` | `u64` |
-| `amount_y` | `u64` |
-| `current_sqrt_price` | `u128` |
-| `bitmap` | `u64` |
-| `liquidities` | `Vec<u128>` |
+Emitted by `remove_liquidity` and `remove_liquidity_by_bps` after the withdrawal. The event does not say which of the two ran, so read the discriminator of the parent instruction. For `remove_liquidity` `bitmap` and `liquidities` are the arguments. For `remove_liquidity_by_bps` the program computes them after releasing vested liquidity: each selected slot contributes its unlocked liquidity times `bps` divided by 10000, rounded down, and slots that round to zero are left out. The `bps` value is not in the event.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | Owner of the NFT token account. When a delegate with the RemoveLiquidity permission signs, this is the owner, not the signer. |
+| `position` | `Pubkey` | Address of the `PositionArray` account. |
+| `nft_mint` | `Pubkey` | Mint of the position NFT. Its address is the seed of the `position` account. |
+| `nft_account` | `Pubkey` | Token account that holds the NFT at the time of the event. |
+| `amount_x` | `u64` | Atoms of token X that left the X reserve, before any Token 2022 transfer fee. The receiver gets this value minus the transfer fee. |
+| `amount_y` | `u64` | Atoms of token Y that left the Y reserve, before any Token 2022 transfer fee. The receiver gets this value minus the transfer fee. |
+| `current_sqrt_price` | `u128` | Square root price of the pool when the instruction ran, Q64.64. Removing liquidity does not move it. |
+| `bitmap` | `u64` | Range slots liquidity was removed from. Bit `i` set means slot `i` of the position. |
+| `liquidities` | `Vec<u128>` | Liquidity removed, unscaled integers, one entry for each set bit of `bitmap` in ascending slot order. |
+
+In `EvtRemoveLiquidity` and `EvtClaimFee`, `amount_x` and `amount_y` are what leaves the reserves, before any transfer fee.
 
 ### EvtClaimFee
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `position` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
-| `amount_x` | `u64` |
-| `amount_y` | `u64` |
-| `current_sqrt_price` | `u128` |
+Emitted by `claim_fee` on every call, including a call with nothing to pay. The amounts are the pending swap fees summed over every range slot of the position, which the instruction pays out and resets. Indexers use it to track fees paid to liquidity providers.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | Owner of the NFT token account. When a delegate with the ClaimFee permission signs, this is the owner, not the signer. |
+| `position` | `Pubkey` | Address of the `PositionArray` account. |
+| `nft_mint` | `Pubkey` | Mint of the position NFT. Its address is the seed of the `position` account. |
+| `nft_account` | `Pubkey` | Token account that holds the NFT at the time of the event. |
+| `amount_x` | `u64` | Pending fee in atoms of token X that left the X reserve, before any Token 2022 transfer fee. |
+| `amount_y` | `u64` | Pending fee in atoms of token Y that left the Y reserve, before any Token 2022 transfer fee. |
+| `current_sqrt_price` | `u128` | Square root price of the pool when the instruction ran, Q64.64. |
 
 ### EvtLockPermanent
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `position` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
-| `bps` | `u16` |
-| `liquidities` | `Vec<u128>` |
+Emitted by `lock_permanent_position`. The owner must sign. After releasing vested liquidity, the instruction moves `bps` of the unlocked liquidity of every range slot into permanent lock, where it stays in range and keeps earning fees but can never be removed. Indexers use it to separate locked from removable liquidity.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | NFT owner that signed the lock. |
+| `position` | `Pubkey` | Address of the `PositionArray` account. |
+| `nft_mint` | `Pubkey` | Mint of the position NFT. Its address is the seed of the `position` account. |
+| `nft_account` | `Pubkey` | Token account that holds the NFT at the time of the event. |
+| `bps` | `u16` | Share of each slot's unlocked liquidity that was locked, in basis points, from 1 to 10000. |
+| `liquidities` | `Vec<u128>` | Liquidity moved into permanent lock, one entry for every slot of the position in slot order (not only selected slots). A slot with no unlocked liquidity has 0. The pool's total liquidity does not change. |
 
 ### EvtLockVesting
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `position` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
-| `parameters` | `LockVestingPositionParameters` |
-| `liquidities` | `Vec<u128>` |
+Emitted by `lock_vesting_position`. The owner must sign, and a position can have one vesting schedule in its lifetime. The instruction moves `parameters.bps` of the unlocked liquidity of every range slot into the schedule, which then releases it after a cliff and in periods. Indexers use it to follow the release schedule.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | NFT owner that signed the lock. |
+| `position` | `Pubkey` | Address of the `PositionArray` account. |
+| `nft_mint` | `Pubkey` | Mint of the position NFT. Its address is the seed of the `position` account. |
+| `nft_account` | `Pubkey` | Token account that holds the NFT at the time of the event. |
+| `parameters` | `LockVestingPositionParameters` | The schedule as passed in. `cliff_point` is `None` when the schedule starts at the slot or timestamp the instruction ran at. See `LockVestingPositionParameters` in [Nested Types](#nested-types). |
+| `liquidities` | `Vec<u128>` | Liquidity moved into the vesting schedule, one entry for every slot of the position in slot order. A slot with no unlocked liquidity has 0. The pool's total liquidity does not change. |
 
 ### EvtUpdatePositionDelegatePermission
 
-| Field | Type |
-| --- | --- |
-| `position` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `permission` | `u32` |
-| `delegate` | `Option<Pubkey>` |
+Emitted by `update_position_delegate_permission`, signed by the NFT owner. It records the permission bitmask a delegate has on the position. It does not record the approval itself, which is a Token 2022 `approve` on the NFT token account. `delegate` shows who is approved at the time of the call.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `position` | `Pubkey` | Address of the `PositionArray` account. |
+| `owner` | `Pubkey` | NFT owner that signed the call. |
+| `permission` | `u32` | Permission bitmask for the delegate: bit 0 AddLiquidity, bit 1 RemoveLiquidity, bit 2 ClaimFee, bit 3 ClaimReward, bit 4 UpdatePositionRange. |
+| `delegate` | `Option<Pubkey>` | Delegate currently approved on the NFT token account, or `None` when there is none. |
 
 ## Limit Order Events
 
 ### EvtOpenLimitOrder
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `limit_order` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `is_ask_side` | `bool` |
-| `order_ages` | `Vec<u64>` |
-| `referral` | `Option<Pubkey>` |
-| `actual_tick_limit_order_amount` | `Vec<TickLimitOrderAmount>` |
+Emitted by `open_limit_order` after the limit order account and its NFT exist and the deposit is made. Indexers use it to create the order and to learn its ticks. Tick arrays created by the call emit no event. There is no event when a swap fills the order. See [Limit Order Fills](#limit-order-fills).
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | The `owner` signer that holds the limit order NFT. The NFT token account is the owner's associated Token 2022 account for `nft_mint`. |
+| `limit_order` | `Pubkey` | Address of the `LimitOrder` account. |
+| `nft_mint` | `Pubkey` | Mint of the limit order NFT. Its address is the seed of the `limit_order` account. |
+| `is_ask_side` | `bool` | `true` for an ask order, which deposits token X and sells it for token Y. `false` for a bid order, which deposits token Y and buys token X. |
+| `order_ages` | `Vec<u64>` | Age of each tick when the order was placed on it, one entry per element of `actual_tick_limit_order_amount` in the same order. At cancel time the program compares it with the age of the tick to tell whether the order is unfilled, partly filled or filled. |
+| `referral` | `Option<Pubkey>` | Wallet that receives a share of the limit order fee when the order is canceled, or `None` when no referral account was passed. |
+| `actual_tick_limit_order_amount` | `Vec<TickLimitOrderAmount>` | Ticks and amounts deposited, with tick ids resolved to absolute ids when `relative_tick` was used, in ascending tick order. The amounts exclude any Token 2022 transfer fee, so the owner paid their sum plus the transfer fee. See `TickLimitOrderAmount` in [Nested Types](#nested-types). |
 
 ### EvtCancelLimitOrder
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `referral` | `Pubkey` |
-| `limit_order` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
-| `owner_amount_x` | `u64` |
-| `owner_amount_y` | `u64` |
-| `owner_fee_x` | `u64` |
-| `owner_fee_y` | `u64` |
-| `referral_fee` | `u64` |
-| `referral_fees_on_token_x` | `bool` |
-| `tick_ids` | `Vec<i32>` |
+Emitted by `cancel_limit_order`, which cancels the ticks listed in `tick_ids` and pays the owner. This is the only event that shows how much of an order was filled, and only as totals over the canceled ticks, so cancel one tick per call to get a per-tick result. The signer is the owner or a delegate with the CancelLimitOrder permission.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | Owner of the NFT token account. When a delegate signs, this is the owner, not the delegate. |
+| `referral` | `Pubkey` | Referral wallet stored on the order when it was opened, or the default key (all zeros) when there was none. |
+| `limit_order` | `Pubkey` | Address of the `LimitOrder` account. |
+| `nft_mint` | `Pubkey` | Mint of the limit order NFT. |
+| `nft_account` | `Pubkey` | Token account that holds the NFT at the time of the event. |
+| `owner_amount_x` | `u64` | Total atoms of token X that left the X reserve for the owner, before any Token 2022 transfer fee. It includes `owner_fee_x`. For an ask order it is the unfilled amount, for a bid order it is the proceeds of the filled part. |
+| `owner_amount_y` | `u64` | Total atoms of token Y that left the Y reserve for the owner, before any Token 2022 transfer fee. It includes `owner_fee_y`. For a bid order it is the unfilled amount, for an ask order it is the proceeds of the filled part. |
+| `owner_fee_x` | `u64` | Owner's share of the limit order fee in token X, in atoms. Already inside `owner_amount_x`. |
+| `owner_fee_y` | `u64` | Owner's share of the limit order fee in token Y, in atoms. Already inside `owner_amount_y`. |
+| `referral_fee` | `u64` | Referral share of the limit order fee, in atoms of the token named by `referral_fees_on_token_x`. It is 20 percent of the fee and is sent to the referral token account from the reserve. It is 0 when the order has no referral, the referral is the owner, or no matching referral token account was passed. |
+| `referral_fees_on_token_x` | `bool` | `true` when `referral_fee` was paid in token X, `false` when in token Y. Only meaningful when `referral_fee` is above 0. |
+| `tick_ids` | `Vec<i32>` | Tick ids that were canceled, in ascending order. |
+
+`owner_amount_x` and `owner_amount_y` are the totals paid to the owner and already include `owner_fee_x` and `owner_fee_y`. `referral_fees_on_token_x` says which token `referral_fee` was paid in and only matters when `referral_fee` is above 0.
 
 ### EvtCloseLimitOrder
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `limit_order` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
+Emitted by `close_limit_order` after the limit order account is closed and its NFT is burned. Every tick of the order must be canceled first. Indexers use it to mark the order as closed.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | NFT owner that signed the close. |
+| `limit_order` | `Pubkey` | Address of the closed `LimitOrder` account. |
+| `nft_mint` | `Pubkey` | Mint of the burned limit order NFT. |
+| `nft_account` | `Pubkey` | Token account that held the NFT. It is closed by the call. |
 
 ### EvtUpdateLimitOrderDelegatePermission
 
-| Field | Type |
-| --- | --- |
-| `limit_order` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `permission` | `u32` |
-| `delegate` | `Option<Pubkey>` |
+Emitted by `update_limit_order_delegate_permission`, signed by the NFT owner. It records the permission bitmask a delegate has on the limit order. The approval itself is a Token 2022 `approve` on the NFT token account and emits nothing.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `limit_order` | `Pubkey` | Address of the `LimitOrder` account. |
+| `owner` | `Pubkey` | NFT owner that signed the call. |
+| `permission` | `u32` | Permission bitmask for the delegate. Bit 0 is CancelLimitOrder. |
+| `delegate` | `Option<Pubkey>` | Delegate currently approved on the NFT token account, or `None` when there is none. |
 
 ## Reward Events
 
 ### EvtInitializeReward
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `reward_mint` | `Pubkey` |
-| `reward_authority` | `Pubkey` |
-| `reward_index` | `u8` |
+Emitted by `initialize_reward` when a reward slot of a pool with the LiquidityMining extension is set up. Indexers use it to learn the reward mints and who may fund them. It starts no emission.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `reward_mint` | `Pubkey` | Mint of the reward token. |
+| `reward_authority` | `Pubkey` | The `reward_authority` account passed to the instruction. It can set the emission of the slot. |
+| `reward_index` | `u8` | Reward slot, 0 or 1. |
 
 ### EvtSetRewardEmission
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `reward_index` | `u8` |
-| `open_time` | `u64` |
-| `end_time` | `u64` |
-| `emission_per_second` | `u128` |
+Emitted by `set_reward_emission` after the funder pays the reward for the whole window into the reward vault. Indexers use it to know when a reward runs and at what rate.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `reward_index` | `u8` | Reward slot, 0 or 1. |
+| `open_time` | `u64` | Unix timestamp in seconds at which the emission starts. When the argument was omitted it is the time of the call. |
+| `end_time` | `u64` | Unix timestamp in seconds at which the emission ends. The window is between 1 day and 1 year long. |
+| `emission_per_second` | `u128` | Reward atoms emitted per second, Q64.64. |
 
 ### EvtUpdateRewardAuthority
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `new_authority` | `Pubkey` |
-| `reward_index` | `u8` |
+Emitted by `update_reward_authority`. Indexers use it to track who can fund each reward slot. The old authority is not in the event.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `new_authority` | `Pubkey` | Address that is now the authority of the reward slot. It differs from the previous authority. |
+| `reward_index` | `u8` | Reward slot, 0 or 1. |
 
 ### EvtClaimReward
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `owner` | `Pubkey` |
-| `position` | `Pubkey` |
-| `nft_mint` | `Pubkey` |
-| `nft_account` | `Pubkey` |
-| `reward_mint` | `Pubkey` |
-| `reward_index` | `u8` |
-| `amount` | `u64` |
+Emitted by `claim_reward` when the paid amount is non-zero. The amount is the pending reward of one reward slot summed over every range slot of the position. Indexers use it to track reward payouts.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `owner` | `Pubkey` | Owner of the NFT token account. When a delegate with the ClaimReward permission signs, this is the owner, not the signer. |
+| `position` | `Pubkey` | Address of the `PositionArray` account. |
+| `nft_mint` | `Pubkey` | Mint of the position NFT. Its address is the seed of the `position` account. |
+| `nft_account` | `Pubkey` | Token account that holds the NFT at the time of the event. |
+| `reward_mint` | `Pubkey` | Mint of the reward that was paid. |
+| `reward_index` | `u8` | Reward slot that was claimed, 0 or 1. |
+| `amount` | `u64` | Atoms of the reward token that left the reward vault, before any Token 2022 transfer fee. |
 
 ### EvtWithdrawIneligibleReward
 
-| Field | Type |
-| --- | --- |
-| `pool` | `Pubkey` |
-| `reward_index` | `u8` |
-| `reward_amount` | `u64` |
+Emitted by `withdraw_ineligible_rewards` when the amount is non-zero. The reward authority recovers the reward that was emitted while the pool had no liquidity, once the emission has ended.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `pool` | `Pubkey` | Address of the pool account the event is about. |
+| `reward_index` | `u8` | Reward slot, 0 or 1. |
+| `reward_amount` | `u64` | Atoms of the reward token that left the reward vault, before any Token 2022 transfer fee. It equals the empty-liquidity seconds times the emission rate, rounded down. |
 
 ## Nested Types
 
 Types used inside the events above.
 
-| Type | Field | Type of field |
-| --- | --- | --- |
-| `PoolFeeParameters` | `base_fee_parameter` | `BaseFeeConfigParameters` |
-| `PoolFeeParameters` | `dynamic_fee_parameter` | `Option<DynamicFeeParameters>` |
-| `BaseFeeConfigParameters` | `base_fee_mode` | `u8` |
-| `BaseFeeConfigParameters` | `data` | `[u8; 31]` |
-| `DynamicFeeParameters` | `max_volatility_accumulator` | `u32` |
-| `DynamicFeeParameters` | `variable_fee_control` | `u32` |
-| `DynamicFeeParameters` | `filter_period` | `u16` |
-| `DynamicFeeParameters` | `decay_period` | `u16` |
-| `DynamicFeeParameters` | `reduction_factor` | `u16` |
-| `DynamicFeeParameters` | `min_delta_tick_for_significant_swap` | `u16` |
-| `PoolActivationParameters` | `whitelisted_swap` | `Pubkey` |
-| `PoolActivationParameters` | `whitelisted_add_liquidity` | `Pubkey` |
-| `PoolActivationParameters` | `whitelisted_remove_liquidity` | `Pubkey` |
-| `PoolActivationParameters` | `activations` | `[PoolActivationInfoParameters; 2]` |
-| `PoolActivationInfoParameters` | `activation_mode` | `u8` |
-| `PoolActivationInfoParameters` | `data` | `[u8; 15]` |
-| `LockVestingPositionParameters` | `cliff_point` | `Option<u64>` |
-| `LockVestingPositionParameters` | `cliff_unlock_bps` | `u16` |
-| `LockVestingPositionParameters` | `bps_per_period` | `u16` |
-| `LockVestingPositionParameters` | `period_frequency` | `u64` |
-| `LockVestingPositionParameters` | `number_of_period` | `u16` |
-| `LockVestingPositionParameters` | `bps` | `u16` |
-| `LockVestingPositionParameters` | `expected_layout_version` | `Option<u16>` |
-| `TickRange` | `tick_lower_id` | `i32` |
-| `TickRange` | `tick_upper_id` | `i32` |
-| `TickLimitOrderAmount` | `id` | `i32` |
-| `TickLimitOrderAmount` | `amount` | `u64` |
+### PoolFeeParameters
 
-`create_operator_account`, `close_operator_account` and `refresh_fees_and_rewards` emit no event. Read the operator and position accounts to track them.
+Fee settings of a pool. Carried by `EvtInitializePool` and `EvtCreateStaticConfig`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `base_fee_parameter` | `BaseFeeConfigParameters` | Base fee mode and its encoded parameters. |
+| `dynamic_fee_parameter` | `Option<DynamicFeeParameters>` | Dynamic fee settings, or `None` when the pool or config has no dynamic fee. |
+
+### BaseFeeConfigParameters
+
+Base fee schedule inside `PoolFeeParameters`. The layout of `data` for each mode is on the [Accounts](/developer-guides/dlmm-pro/program/accounts) page.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `base_fee_mode` | `u8` | Fee schedule type: 0 Fixed, 1 TimeSchedulerLinear, 2 TimeSchedulerExponential, 3 MarketCapSchedulerLinear, 4 MarketCapSchedulerExponential. |
+| `data` | `[u8; 31]` | Mode-specific parameters packed into 31 bytes, little-endian, with unused bytes zero. Fee numerators in it use a denominator of 1,000,000,000. |
+
+### DynamicFeeParameters
+
+Dynamic fee settings inside `PoolFeeParameters`. The dynamic fee grows with recent price movement.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `max_volatility_accumulator` | `u32` | Cap on the volatility accumulator. At most 16777215. |
+| `variable_fee_control` | `u32` | Scale factor of the variable fee. At most 16777215. |
+| `filter_period` | `u16` | Seconds after the last reference update or significant swap during which the volatility reference holds. Above 0 and below `decay_period`. |
+| `decay_period` | `u16` | Seconds after which the volatility reference resets to 0. At most 3600. |
+| `reduction_factor` | `u16` | Share of the volatility accumulator kept as the reference between the filter and decay periods, in basis points, from 1 to 10000. |
+| `min_delta_tick_for_significant_swap` | `u16` | Smallest tick movement of a swap that counts as significant. Above 0. |
+
+### PoolActivationParameters
+
+Activation access settings of a pool with the ActivationAccess extension. Carried by `EvtInitializePool`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `whitelisted_swap` | `Pubkey` | Address that can swap regardless of the activation schedule, such as an Alpha Vault. |
+| `whitelisted_add_liquidity` | `Pubkey` | Address that can add liquidity regardless of the schedule, such as the operator that seeds the pool. It is matched against the owner of the position or limit order. |
+| `whitelisted_remove_liquidity` | `Pubkey` | Address that can remove liquidity regardless of the schedule. It is matched against the owner of the position or limit order. |
+| `activations` | `[PoolActivationInfoParameters; 2]` | Two activation slots, each with a mode and mode-specific data. Every slot must allow an action for a non-whitelisted address to perform it. |
+
+### PoolActivationInfoParameters
+
+One activation slot inside `PoolActivationParameters`. The layout of `data` for each mode is on the [Accounts](/developer-guides/dlmm-pro/program/accounts) page.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `activation_mode` | `u8` | 0 Open (everything allowed), 1 BondingCurve (adding and removing liquidity wait for the price to reach a target), 2 TimeBased (swap, add and remove liquidity each start at a slot or timestamp). |
+| `data` | `[u8; 15]` | Mode-specific parameters packed into 15 bytes, with unused bytes zero. |
+
+### LockVestingPositionParameters
+
+Vesting schedule of `lock_vesting_position`. Carried by `EvtLockVesting`. Times and periods are in slots or seconds, following the `activation_type` of the pool.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `cliff_point` | `Option<u64>` | Slot or timestamp at which the cliff releases, or `None` to start at the slot or timestamp the instruction ran at. |
+| `cliff_unlock_bps` | `u16` | Share of the vesting liquidity released at the cliff, in basis points. |
+| `bps_per_period` | `u16` | Share of the vesting liquidity released in each period after the cliff, in basis points. |
+| `period_frequency` | `u64` | Length of one period, in slots or seconds. |
+| `number_of_period` | `u16` | Number of periods after the cliff. `cliff_unlock_bps` plus `bps_per_period` times this value equals 10000. |
+| `bps` | `u16` | Share of each range slot's unlocked liquidity that moves into the schedule, in basis points, from 1 to 10000. |
+| `expected_layout_version` | `Option<u16>` | Position layout version the caller expected, or `None` when the check was skipped. |
+
+### TickRange
+
+Price range of one position slot. Carried by `EvtOpenPosition`, `EvtExpandPosition` and `EvtRemovePosition`. The range holds liquidity while the pool's current tick id is at or above the lower id and below the upper id.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `tick_lower_id` | `i32` | Lower tick id of the range, inclusive. A multiple of the tick spacing. |
+| `tick_upper_id` | `i32` | Upper tick id of the range, exclusive. A multiple of the tick spacing and above `tick_lower_id`. |
+
+### TickLimitOrderAmount
+
+Deposit of a limit order into one tick. Carried by `EvtOpenLimitOrder`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | `i32` | Tick id of the deposit. A multiple of the tick spacing. Already resolved to an absolute id when the order used `relative_tick`. |
+| `amount` | `u64` | Atoms deposited into the tick, excluding any Token 2022 transfer fee. |
+
+## Indexing Notes
+
+The tables above give the fields. These notes cover what an indexer needs beyond them.
+
+### Reconstructing Pool Price and Liquidity
+
+- Start from `EvtInitializePool`. The pool begins at `initial_sqrt_price` (Q64.64, atoms of token Y per atom of token X). Its current tick id is the highest tick id whose price is at or below that price, which the SDK helper `tickIdFromSqrtPrice` computes.
+- After that, take the price and tick from the latest `EvtSwap`: `post_sqrt_price` and `post_tick_id`. Use `post_tick_id` as the tick id instead of recomputing it from the price, because right after a swap crosses a tick the pool records the tick below it. The UI price is the square of `post_sqrt_price` divided by 2 to the power 128, times 10 to the power of the difference between the X and Y decimals.
+- `EvtAddLiquidity`, `EvtRemoveLiquidity` and `EvtClaimFee` carry `current_sqrt_price`, the price when the instruction ran, so they give extra price samples between swaps. No other event moves the price.
+- Pool liquidity is the sum of the liquidity of every position slot whose range holds the current tick id, meaning `tick_lower_id` is at or below it and `tick_upper_id` is above it. Limit orders do not count toward it.
+- Keep the liquidity of every slot per position. Slots come from `EvtOpenPosition` (slot `i` is element `i` of `tick_ranges`), grow with `EvtExpandPosition` (new ranges are appended) and shrink with `EvtRemovePosition` (the bits of `bitmap` name the removed slots, and the others shift down in order). Add each `liquidities` entry of `EvtAddLiquidity` to the slot named by the matching bit of `bitmap`, and subtract each entry of `EvtRemoveLiquidity` the same way.
+- `EvtLockPermanent` and `EvtLockVesting` move liquidity between the unlocked, locked and vesting buckets of a slot. They do not change the slot's total, so they do not change pool liquidity. Releases from a vesting schedule emit nothing and also do not change the total.
+- A swap changes pool liquidity only by crossing ticks, and the events do not list the ticks crossed. Recompute liquidity from the slot sums above at the new `post_tick_id`, or read the `liquidity` field of the `Pool` account.
+
+### State Changes That Emit No Event
+
+- Tick arrays created inside `open_position`, `expand_position` or `open_limit_order`. `EvtInitializeTickArray` comes only from `initialize_tick_array` when it creates the account. To find the tick arrays of a pool, read the accounts or derive them from the slot ranges and limit order ticks: the array index of a tick id is the id divided by the tick spacing and then by 128, each rounded down.
+- Ticks and tick array space released by `close_position`, `remove_position` and `close_limit_order`. They shrink tick arrays and return rent, and emit only their own events.
+- The oracle update inside every `swap`. The first swap starts the oracle, and later swaps add the previous tick weighted by the seconds elapsed, opening a new observation once 15 seconds have passed since the latest one was created. Read the `Oracle` account for observations. `EvtIncreaseOracleLength` covers only the length.
+- Fee and reward accrual. A swap adds the liquidity provider fee to the pool's fee growth and updates reward growth. A position's pending fees and rewards are brought up to date, with no event, by the add and remove liquidity instructions and by `refresh_fees_and_rewards`. `claim_fee` and `claim_reward` pay what is already pending. Only the claim events show amounts that left the pool.
+- Activation state. A BondingCurve activation slot flips to reached after the swap that reaches its target price, and TimeBased slots open as time passes. Neither emits an event.
+- Delegate approvals and NFT transfers. They are Token 2022 operations. `EvtUpdatePositionDelegatePermission` and `EvtUpdateLimitOrderDelegatePermission` record permission bits only. The `owner` in each event is the owner of the NFT token account when the event was emitted, so read the token account to follow ownership.
+- The bitmap bits that mark tick arrays with liquidity. They flip inside swaps, liquidity changes and limit order calls.
+- `create_operator_account`, `close_operator_account` and `refresh_fees_and_rewards` emit no event. Read the operator and position accounts to track them.
+
+### Attributing a Swap to a Trader
+
+`EvtSwap` has no user field. The event is an inner instruction of the `swap` that emitted it, and it is emitted last, after the token transfers. Find that `swap` instruction (at the top level, or an inner instruction when a router calls it) and read its `user` account, the signer and the 12th account in IDL order (index 11). `user` authorizes the transfer of the input tokens. The output goes to `user_token_out`, which can be any token account of the output mint, so the receiver can differ from `user`. A transaction with several swaps on one pool has one event per swap, in the order the swaps ran.
+
+### Fees in Swap Events
+
+- All fee fields of `EvtSwap` are in the fee token. `fees_on_input` and `fees_on_token_x` name it. In OutputToken mode the fee is on the output token, so `fees_on_input` is `false` and `fees_on_token_x` is `true` when the user buys token X. In OnlyY mode the fee token is always token Y, so it is the input when the user sells token Y and the output when the user sells token X.
+- `protocol_fee` is what is left for the protocol after the host and partner cuts. The host cut is at most 20 percent of the protocol fee, paid to the `referral` token account during the swap, so `host_fee` is 0 without one. The partner cut applies on pools that have a partner, which are pools created from a dynamic config, at the pool's `partner_fee_bps`. It is taken from what is left after the host cut.
+- The protocol and partner amounts accrue in the pool. They leave it later in `EvtClaimProtocolFee` and `EvtClaimPartnerFee`. Liquidity provider fees (`mm_fee`) leave in `EvtClaimFee`, and limit order fees (`limit_order_fee`) leave in `EvtCancelLimitOrder` as `owner_fee_x`, `owner_fee_y` and `referral_fee`.
+- The event does not carry the fee rate, which can change between swaps because of scheduled and dynamic fees. Work it out from the fee total and the amount the fee was charged on.
+
+### Limit Order Fills
+
+A swap fills limit orders at the tick price when it reaches a tick whose orders hold the token the swap buys. No event is emitted per order or per tick for these fills.
+
+- In `EvtSwap`, `limit_order_fee` above 0 shows that limit orders were filled. A value of 0 does not prove the opposite, because the fee shares round down. The filled amounts are not in the event. They are part of `amount_in` and `amount_out`, mixed with the market making fills.
+- The filled and unfilled parts of an order are settled when the owner cancels it. `EvtCancelLimitOrder` gives the totals over the canceled ticks: the unfilled amount comes back in the order's own token, the filled part comes back as the other token at the tick price, and the owner's fee share is inside `owner_amount_x` and `owner_amount_y`. Cancel one tick per call if you need a per-tick split.
+- The proceeds of a filled order stay in the pool until the owner cancels the order. `EvtOpenLimitOrder` shows the deposit, `EvtCancelLimitOrder` shows the payout, and `EvtCloseLimitOrder` ends the order.
+
+### Log Events Can Be Truncated
+
+`EvtClaimProtocolFee` and `EvtInitializeBitmapExtension` are written to the transaction log. When a transaction's logs exceed the runtime log size limit, the runtime truncates them and these events can be missing, while event CPI events stay in the inner instructions. Do not treat a missing log event as proof that the action did not happen. Reconcile instead: the pool's `protocol_fee_x` and `protocol_fee_y` fall by the claimed amount, and `is_bitmap_extension_initialized` on the pool (or the existence of the bitmap extension account) says whether the extension exists.
