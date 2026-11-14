@@ -167,7 +167,7 @@ The `data` field of `BaseFeeConfigParameters` depends on `base_fee_mode`. Offset
 | --- | --- | --- |
 | 0 Fixed | `cliff_fee_numerator: u64` at 0 | The numerator is at least 100000 and at most 990000000. The fee is constant. |
 | 1 TimeSchedulerLinear | `cliff_fee_numerator: u64` at 0, `period_frequency: u64` at 8, `reduction_factor: u64` at 16, `number_of_period: u16` at 24 | `period_frequency`, `reduction_factor` and `number_of_period` are above 0. `p` is the smaller of `number_of_period` and the whole periods from the activation point, `(current point - activation point) / period_frequency`, and it is `number_of_period` before the activation point. The fee numerator is `cliff_fee_numerator - reduction_factor * p`. It must not go below 0, and at `number_of_period` it must be at least 100000, while `cliff_fee_numerator` is at most 990000000. |
-| 2 TimeSchedulerExponential | Same as mode 1 | Same rules as mode 1, with the fee numerator `cliff_fee_numerator * (1 - reduction_factor / 10000)^p`, rounded down. `reduction_factor` is in basis points and above 10000 fails with MathOverflow. |
+| 2 TimeSchedulerExponential | Same as mode 1 | Same rules as mode 1, with the fee numerator `cliff_fee_numerator * (1 - reduction_factor / 10000)^p`, rounded down. `reduction_factor` is in basis points. 10000 or more fails with MathOverflow, and so does a schedule whose decayed factor rounds down to zero. |
 | 3 MarketCapSchedulerLinear | `cliff_fee_numerator: u64` at 0, `reduction_factor: u64` at 8, `sqrt_price_step_bps: u32` at 16, `scheduler_expiration_duration: u32` at 20, `number_of_period: u16` at 24 | `reduction_factor`, `sqrt_price_step_bps`, `scheduler_expiration_duration` and `number_of_period` are above 0. `p` is 0 when the current square root price is at or below the pool initial one. Otherwise it is the smaller of `number_of_period` and `(sqrt_price - init_sqrt_price) * 10000 / init_sqrt_price / sqrt_price_step_bps`, whole numbers. `p` is `number_of_period` before the activation point and after `activation point + scheduler_expiration_duration`, in slots or seconds. The fee and its limits are as in mode 1. |
 | 4 MarketCapSchedulerExponential | Same as mode 3 | Same rules as mode 3, with the fee as in mode 2. |
 
@@ -178,7 +178,7 @@ The `data` field of `PoolActivationInfoParameters` depends on `activation_mode`.
 | `activation_mode` | Layout of `data` | Rules |
 | --- | --- | --- |
 | 0 Open | 15 zero bytes | Allows swaps and liquidity changes at all times. |
-| 1 BondingCurve | `is_reach_target: u8` at 0, 6 zero bytes, `target_increase_bps: u64` at 7 | `is_reach_target` is 0 and `target_increase_bps` is above 10000. Swaps are always allowed. Adding and removing liquidity is allowed only after a swap leaves the pool price at or above `init_sqrt_price * target_increase_bps / 10000`, which sets `is_reach_target` to 1 for good. The target price must not exceed the price of the largest tick id that is a multiple of the tick spacing, and `whitelisted_add_liquidity` must be set. |
+| 1 BondingCurve | `is_reach_target: u8` at 0, 6 zero bytes, `target_increase_bps: u64` at 7 | `is_reach_target` is 0 and `target_increase_bps` is above 10000. Swaps are always allowed. Adding and removing liquidity is allowed only after a swap leaves the pool square root price at or above `init_sqrt_price * target_increase_bps / 10000` (the basis points apply to the square root price, so 20000 means four times the initial price), which sets `is_reach_target` to 1 for good. The target price must not exceed the price of the largest tick id that is a multiple of the tick spacing, and `whitelisted_add_liquidity` must be set. |
 | 2 TimeBased | `swap_point`, `add_liquidity_point` and `remove_liquidity_point` as 5-byte integers at 0, 5 and 10 | Each action is allowed from its point, in slots or seconds. No point is before the current point, and none is more than 30 days after it. `swap_point` must equal the pool activation point. |
 
 ### initialize_pool_with_static_config
@@ -261,7 +261,7 @@ Creates a pool from a `DynamicConfig` with fees, tick spacing, price, activation
 | `parameters.pool_fees.dynamic_fee_parameter.max_volatility_accumulator` | `u32` | Cap on the volatility accumulator. At most 16777215. One unit is 1 over 10000 of a tick of price movement from the reference price. |
 | `parameters.pool_fees.dynamic_fee_parameter.variable_fee_control` | `u32` | Scale of the variable fee. At most 16777215. The variable fee numerator is the ceiling of `variable_fee_control * volatility_accumulator^2 / 100000000000`, in units of 1 over 1000000000. At the cap it must not exceed 990000000. |
 | `parameters.pool_fees.dynamic_fee_parameter.filter_period` | `u16` | Seconds. Must be above 0 and below `decay_period`. Swaps closer than this to the last reference update or significant swap keep the volatility reference unchanged. |
-| `parameters.pool_fees.dynamic_fee_parameter.decay_period` | `u16` | Seconds. Must be above `filter_period` and at most 3600. After this long the volatility reference resets to 0. |
+| `parameters.pool_fees.dynamic_fee_parameter.decay_period` | `u16` | Seconds. Must be above `filter_period` and at most 3600. After this long the volatility reference resets to 0. The reference also resets once it is more than 3600 seconds old, even when significant swaps keep arriving. |
 | `parameters.pool_fees.dynamic_fee_parameter.reduction_factor` | `u16` | Basis points, 1 to 10000. Between the filter and decay periods the volatility reference becomes the accumulator times this value over 10000. |
 | `parameters.pool_fees.dynamic_fee_parameter.min_delta_tick_for_significant_swap` | `u16` | Must be above 0. A swap counts as significant when its price movement, measured in ticks, is at least this value. |
 | `parameters.tick_spacing` | `u16` | Distance between usable tick ids. 1 to 256 inclusive. |
@@ -324,6 +324,7 @@ Creates a pool from a `DynamicConfig` with fees, tick spacing, price, activation
 | --- | --- |
 | `InvalidPoolCreatorAuthority` | The config `pool_creator_authority` differs from the account passed. |
 | `InvalidParameters` | A parameter is out of range, for example the tick spacing, the initial price, a fee parameter, `extensions` above 3, `activation_point` or `pool_activation` set without the ActivationAccess bit, or a missing `pool_activation` with it. |
+| `MathOverflow` | A linear fee schedule whose `cliff_fee_numerator` is below `reduction_factor * number_of_period`, or an exponential schedule with a `reduction_factor` of 10000 or more. |
 | `InvalidBaseFeeMode` | `base_fee_mode` is not 0 to 4. |
 | `TypeCastFailed` | `collect_fee_mode` is not 0 or 1. |
 | `InvalidActivationType` | `activation_type` is not 0 or 1. |
@@ -354,7 +355,7 @@ Creates a launch pool, keyed by its mint pair alone with no config. Anyone can c
 | `parameters.pool_fees.dynamic_fee_parameter.max_volatility_accumulator` | `u32` | Cap on the volatility accumulator. At most 16777215. One unit is 1 over 10000 of a tick of price movement from the reference price. |
 | `parameters.pool_fees.dynamic_fee_parameter.variable_fee_control` | `u32` | Scale of the variable fee. At most 16777215. The variable fee numerator is the ceiling of `variable_fee_control * volatility_accumulator^2 / 100000000000`, in units of 1 over 1000000000. At the cap it must not exceed 990000000. |
 | `parameters.pool_fees.dynamic_fee_parameter.filter_period` | `u16` | Seconds. Must be above 0 and below `decay_period`. Swaps closer than this to the last reference update or significant swap keep the volatility reference unchanged. |
-| `parameters.pool_fees.dynamic_fee_parameter.decay_period` | `u16` | Seconds. Must be above `filter_period` and at most 3600. After this long the volatility reference resets to 0. |
+| `parameters.pool_fees.dynamic_fee_parameter.decay_period` | `u16` | Seconds. Must be above `filter_period` and at most 3600. After this long the volatility reference resets to 0. The reference also resets once it is more than 3600 seconds old, even when significant swaps keep arriving. |
 | `parameters.pool_fees.dynamic_fee_parameter.reduction_factor` | `u16` | Basis points, 1 to 10000. Between the filter and decay periods the volatility reference becomes the accumulator times this value over 10000. |
 | `parameters.pool_fees.dynamic_fee_parameter.min_delta_tick_for_significant_swap` | `u16` | Must be above 0. A swap counts as significant when its price movement, measured in ticks, is at least this value. |
 | `parameters.tick_spacing` | `u16` | Distance between usable tick ids. 1 to 256 inclusive. |
@@ -418,6 +419,7 @@ Creates a launch pool, keyed by its mint pair alone with no config. Anyone can c
 | --- | --- |
 | `InvalidTokenOwnerProof` | `user_token_x` or `user_token_y` has a balance of 0. |
 | `InvalidParameters` | A parameter is out of range, for example the tick spacing, the initial price, a fee parameter, `extensions` above 3, `activation_point` or `pool_activation` set without the ActivationAccess bit, or a missing `pool_activation` with it. |
+| `MathOverflow` | A linear fee schedule whose `cliff_fee_numerator` is below `reduction_factor * number_of_period`, or an exponential schedule with a `reduction_factor` of 10000 or more. |
 | `InvalidBaseFeeMode` | `base_fee_mode` is not 0 to 4. |
 | `TypeCastFailed` | `collect_fee_mode` is not 0 or 1. |
 | `InvalidActivationType` | `activation_type` is not 0 or 1. |
@@ -479,10 +481,10 @@ Then the tick arrays, all writable, in swap direction: descending tick array ind
 
 - `input_amount` must be above 0.
 - The pool must have swaps enabled in `pool_status`, and when the pool has ActivationAccess every activation slot must allow swaps at the current slot or timestamp, unless the signer is `whitelisted_swap`. Open allows always, BondingCurve allows always, TimeBased allows from its swap point.
-- The input transfer fee is taken off `input_amount` first. If the fee is on the input (collect fee mode `OnlyY` and token Y in, see below), the trading fee is then taken from that amount, rounded up. The walk then consumes the result tick by tick. At each tick it fills the market maker liquidity of the range first and then, with the input left, the limit orders of that tick at the tick price, processed orders before open orders. Amounts out are rounded down, and amounts in are rounded up.
+- The input transfer fee is taken off `input_amount` first. If the fee is on the input (collect fee mode `OnlyY` and token Y in, see below), the trading fee is charged step by step and rounded up in each step: a step that ends at a tick with input left grosses the fee up from the amount it consumed, and the last step takes the fee from the input that remains. The walk consumes the input tick by tick. At each tick it fills the market maker liquidity of the range first and then, with the input left, the limit orders of that tick at the tick price, processed orders before open orders. Amounts out are rounded down, and amounts in are rounded up.
 - The fee token follows the collect fee mode. With `OutputToken`, the fee is taken from the output side, so token Y when swapping X for Y and token X otherwise. With `OnlyY`, token Y is the fee token: it is taken from the output when swapping X for Y and from the input when swapping Y for X. When the fee is on the output it is rounded up and taken from the output of each step before the output transfer fee.
 - The trading fee numerator is the base fee at the current slot or timestamp and price, plus the variable fee of the dynamic fee state, capped at 990000000, over 1000000000. The dynamic fee volatility state is updated before the walk and again after it.
-- The fee is split between the market maker side and the limit order side by the share of the fill each one provided. The protocol takes 10% of the market maker part (20% on a launch pool) and 50% of the limit order part. If a referral account is passed, the host fee is 20% of the protocol fee, where the limit order part of the protocol fee counts at no more than the market maker protocol rate. The host fee is paid from the reserve to `referral`. If the pool has a partner and `partner_fee_bps` is above 0, the partner takes that share of the protocol fee left after the host fee. The protocol fee left accrues in `protocol_fee_x` or `protocol_fee_y` and the partner fee in the pending partner fee of the fee token. The market maker part left after the protocol fee accrues to liquidity providers through the fee growth of the fee token, and the limit order part left accrues to the filled limit orders of the tick.
+- The fee is split between the market maker side and the limit order side by the share of the fill each one provided. The protocol takes 10% of the market maker part (20% on a launch pool) and 50% of the limit order part. Two edge cases: when the limit order fill of a step rounds down to zero output, the protocol takes the whole limit order part of that step, and when a step fills nothing at all, the protocol takes the whole fee of that step. If a referral account is passed, the host fee is 20% of the protocol fee, where the limit order part of the protocol fee counts at no more than the market maker protocol rate. The host fee is paid from the reserve to `referral`. If the pool has a partner and `partner_fee_bps` is above 0, the partner takes that share of the protocol fee left after the host fee. The protocol fee left accrues in `protocol_fee_x` or `protocol_fee_y` and the partner fee in the pending partner fee of the fee token. The market maker part left after the protocol fee accrues to liquidity providers through the fee growth of the fee token, and the limit order part left accrues to the filled limit orders of the tick.
 - The walk must consume the whole input after the transfer fee and the trading fee. If the tick arrays run out first, the call fails with NotConsumingFullAmountIn. If the pool has no tick array with liquidity in the swap direction, it fails with LiquidityIsZero.
 - The output transfer fee is taken off the output. `minimum_output_amount` is checked against the amount after that fee. The pool sends the full output to the user, the user receives it minus the transfer fee, and the host fee is paid from the reserve to `referral` before it.
 - The price, current tick id and liquidity of the pool are updated, ticks crossed update their outside fee growth and reward growth, tick arrays that become empty or non-empty flip their bits in the pool bitmap (or extension), rewards are accrued up to now on LiquidityMining pools, and BondingCurve activation slots mark their target as reached once the price has risen to the target.
@@ -539,7 +541,7 @@ Creates the tick array account of one tick array index with no ticks. Anyone can
 #### Checks and Effects
 
 - At least one usable tick id of the array lies within the tick bounds.
-- If the account does not exist, creates it with the fixed header only (pool and index) and charges the minimum rent to `funder`. The size uses the reward variant when the pool has LiquidityMining. If it exists, nothing changes and no event is emitted.
+- If the account does not exist, creates it with the fixed header only (pool and index, 64 bytes including the discriminator) and charges the minimum rent to `funder`. The size of a tick, which is larger on a LiquidityMining pool, only matters when ticks are added later. If it exists, nothing changes and no event is emitted.
 - Ticks are added later by `open_position`, `expand_position` and `open_limit_order`, which also create the tick array when it is missing, so this instruction is optional.
 
 #### Events
@@ -551,6 +553,7 @@ Creates the tick array account of one tick array index with no ticks. Anyone can
 | Error | Cause |
 | --- | --- |
 | `InvalidParameters` | The array has no usable tick id within the tick bounds. |
+| `MathOverflow` | `index` is so large that its tick ids do not fit in an `i32`. |
 
 #### SDK
 
@@ -669,7 +672,7 @@ Tick arrays, all writable, one per distinct tick array index that holds a lower 
 - The pool must have adding liquidity enabled in `pool_status`, and with ActivationAccess every activation slot must allow adding liquidity at the current point, unless `owner` is `whitelisted_add_liquidity`. BondingCurve allows only after its target is reached, TimeBased from its add liquidity point.
 - Each range needs lower below upper, both multiples of the pool tick spacing and within -443636 to 443636. There are 1 to 45 ranges. Overlapping and repeated ranges are allowed.
 - Creates the position array with slots in the order given, each with zero liquidity, `layout_version` 0 and `delegate_permission` 0. Mints exactly 1 of the NFT to `owner`.
-- `payer` pays the rent of one tick entry per reference, which is every lower and upper tick id of every range, even when ranges share a tick. Missing tick arrays are created and tick arrays grow to hold new ticks. Each tick keeps a reference count that goes up by one per use. The same rent returns to the `rent_receiver` of `remove_position` or `close_position`.
+- `payer` pays the rent of one tick entry per reference, which is every lower and upper tick id of every range, even when ranges share a tick. Missing tick arrays are created and tick arrays grow to hold new ticks. Each tick keeps a reference count that goes up by one per use. The same rent returns to the `rent_receiver` of `remove_position` or `close_position`. `payer` also pays the rent-exempt minimum of each tick array this call creates. Tick arrays are never closed, so that part is not refunded.
 - No tokens move, the pool state does not change, and no `EvtInitializeTickArray` is emitted for tick arrays created here.
 
 #### Events
@@ -725,7 +728,7 @@ Tick arrays, all writable, one per distinct tick array index that holds a lower 
 - The pool must have adding liquidity enabled in `pool_status`, and with ActivationAccess every activation slot must allow adding liquidity at the current point, unless the NFT owner is `whitelisted_add_liquidity`. BondingCurve allows only after its target is reached, TimeBased from its add liquidity point.
 - The new ranges follow the same rules as in `open_position`, and the slot count after the call must not exceed 45.
 - New slots are added after the existing ones, so existing slot indexes do not change. `layout_version` goes up by 1.
-- The position array grows and `payer` tops it up to the rent-exempt minimum of the new size. `payer` pays the rent of one tick entry per reference, which is every lower and upper tick id of every range, even when ranges share a tick. Missing tick arrays are created and tick arrays grow to hold new ticks. Each tick keeps a reference count that goes up by one per use. The same rent returns to the `rent_receiver` of `remove_position` or `close_position`.
+- The position array grows and `payer` tops it up to the rent-exempt minimum of the new size. `payer` pays the rent of one tick entry per reference, which is every lower and upper tick id of every range, even when ranges share a tick. Missing tick arrays are created and tick arrays grow to hold new ticks. Each tick keeps a reference count that goes up by one per use. The same rent returns to the `rent_receiver` of `remove_position` or `close_position`. `payer` also pays the rent-exempt minimum of each tick array this call creates. Tick arrays are never closed, so that part is not refunded.
 
 #### Events
 
@@ -738,7 +741,7 @@ Tick arrays, all writable, one per distinct tick array index that holds a lower 
 | `InvalidAuthority` | The signer is not the owner of the NFT token account, and is not its delegate. |
 | `DelegatedAmountNonZero` | The signer is the delegate of the NFT token account, but the delegated amount is not 0. |
 | `InvalidPermission` | The signer is a delegate and the position or limit order permission bits do not include the permission this instruction needs. |
-| `InvalidParameters` | No range or more than 45, a lower tick id not below the upper, a tick id that is not a multiple of the tick spacing or is outside -443636 to 443636. |
+| `InvalidParameters` | No range or more than 45, more than 45 slots in the position after the call, a lower tick id not below the upper, a tick id that is not a multiple of the tick spacing or is outside -443636 to 443636. |
 | `InvalidActivationAccess` | Adding liquidity is disabled in `pool_status`, or the activation rules do not allow it yet for the owner. |
 | `InvalidTickArray` | A tick array is missing from the remaining accounts, is not at its derived address, or belongs to another pool or index. |
 | `ReallocExceedMaxLengthPerInstruction` | New ticks would grow one tick array by more than 10240 bytes in one instruction. |
@@ -794,13 +797,12 @@ Tick arrays, all writable, one per distinct tick array index that holds a lower 
 | --- | --- |
 | `InvalidAuthority` | The signer is not the owner of the NFT token account, and is not its delegate. |
 | `DelegatedAmountNonZero` | The signer is the delegate of the NFT token account, but the delegated amount is not 0. |
-| `InvalidPermission` | The signer is a delegate and the position or limit order permission bits do not include the permission this instruction needs. |
+| `InvalidPermission` | The signer is a delegate and the position permission bits do not include UpdatePositionRange, or the signer is a delegate and `rent_receiver` is not the owner of the NFT token account. |
 | `InvalidLayoutVersion` | `expected_layout_version` differs from the position `layout_version`. |
 | `InvalidParameters` | The bitmap is empty, selects a slot beyond the slot count, or selects every slot. |
 | `PositionIsNotEmpty` | A selected slot still has liquidity, pending fees or pending rewards. |
 | `InvalidActivationAccess` | The activation rules do not allow removing liquidity yet for the owner. |
 | `InvalidTickArray` | A tick array is missing, has the wrong index or belongs to another pool. |
-| `CannotFindTickFromId` | A tick of a removed range is not in the tick array passed. |
 
 #### SDK
 
@@ -822,7 +824,7 @@ This instruction takes no arguments.
 | `nft_account` | Yes | No | Token account of the owner that holds the NFT. It is burned from and closed. |
 | `pool` | No | No | The pool. Only read. |
 | `position` | Yes | No | Position array to close. It is closed and its lamports go to `rent_receiver`. |
-| `pool_authority` | No | No | Pool authority. It signs token transfers out of reserves and vaults, and holds no data. Fixed address `FSUXyUKbTJ4A5Ccz5M6Uo4J2myc3RsDKTPU9vZwyeXru`. |
+| `pool_authority` | No | No | Pool authority, the close authority of the NFT mint. It signs the closing of the mint and holds no data. Fixed address `FSUXyUKbTJ4A5Ccz5M6Uo4J2myc3RsDKTPU9vZwyeXru`. |
 | `rent_receiver` | Yes | No | Receives the rent of the position array, the NFT token account, the NFT mint and the tick references. |
 | `owner` | No | Yes | Signs. Must be the authority of `nft_account`. |
 | `token_program` | No | No | Token 2022 program. Fixed address `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`. |
@@ -850,7 +852,6 @@ Tick arrays, all writable, one per distinct tick array index that holds a lower 
 | --- | --- |
 | `PositionIsNotEmpty` | A slot still has liquidity, pending fees or pending rewards. |
 | `InvalidTickArray` | A tick array is missing, has the wrong index or belongs to another pool. |
-| `CannotFindTickFromId` | A tick of the position is not in the tick array passed. |
 
 #### SDK
 
@@ -944,7 +945,7 @@ Transfer hook slices from the `remaining_account_info` argument, then tick array
 - The position must exist for the NFT: `nft_account` holds 1 of the position NFT. The signer must be the NFT owner, or a delegate of the token account with a zero delegated amount and the AddLiquidity permission.
 - The pool must have adding liquidity enabled in `pool_status`, and with ActivationAccess every activation slot must allow adding liquidity at the current point, unless the NFT owner is `whitelisted_add_liquidity`. BondingCurve allows only after its target is reached, TimeBased from its add liquidity point.
 - `expected_layout_version`, when set, must match the position layout version.
-- For each selected slot the position and its ticks are brought up to date first: released vesting liquidity becomes unlocked, and fees and rewards are accrued to the position. Then the liquidity is added to the slot unlocked liquidity and to the gross and net liquidity of its two ticks. A tick cannot hold more gross liquidity than the largest `u128` divided by the number of ticks of the pool.
+- For each selected slot the position and its ticks are brought up to date first: released vesting liquidity becomes unlocked, and fees and rewards are accrued to the position. Then the liquidity is added to the slot unlocked liquidity and to the gross liquidity of its two ticks. The net liquidity of the lower tick goes up by the same amount and the net liquidity of the upper tick goes down by it. A tick cannot hold more gross liquidity than the largest `u128` divided by the number of ticks of the pool.
 - Pool liquidity increases only by the liquidity of slots whose range contains the current tick, meaning lower tick id at or below it and upper tick id above it.
 - Token amounts follow the current price: only token X when the price is below the range, only token Y when above, both when inside. Each amount is rounded up and summed over the slots. The program then adds the Token 2022 transfer fee of each mint, so that the reserve receives exactly the required amount. The fee-included total must not exceed the matching `max_amount`. Nothing is paid for a token whose total is 0.
 - Tick arrays that change between holding no liquidity and holding some flip their bit in the pool bitmap, or in the extension for indexes outside -512 to 511.
@@ -974,6 +975,7 @@ Transfer hook slices from the `remaining_account_info` argument, then tick array
 | `InvalidRemainingAccountSlice` | A slice has an `accounts_type` that this instruction does not accept. |
 | `DuplicatedRemainingAccountTypes` | Two slices with accounts share the same `accounts_type`. |
 | `InsufficientRemainingAccounts` | A slice `length` is larger than the number of remaining accounts left. |
+| `TypeCastFailed` | The token X or Y amount for a selected liquidity does not fit in a `u64`. |
 
 #### SDK
 
@@ -1029,7 +1031,7 @@ Transfer hook slices from the `remaining_account_info` argument, then tick array
 - The position must exist for the NFT: `nft_account` holds 1 of the position NFT. The signer must be the NFT owner, or a delegate of the token account with a zero delegated amount and the AddLiquidity permission.
 - The pool must have adding liquidity enabled in `pool_status`, and with ActivationAccess every activation slot must allow adding liquidity at the current point, unless the NFT owner is `whitelisted_add_liquidity`. BondingCurve allows only after its target is reached, TimeBased from its add liquidity point.
 - `expected_layout_version`, when set, must match the position layout version.
-- For each selected slot the position and its ticks are brought up to date first: released vesting liquidity becomes unlocked, and fees and rewards are accrued to the position. Then the liquidity is added to the slot unlocked liquidity and to the gross and net liquidity of its two ticks. A tick cannot hold more gross liquidity than the largest `u128` divided by the number of ticks of the pool.
+- For each selected slot the position and its ticks are brought up to date first: released vesting liquidity becomes unlocked, and fees and rewards are accrued to the position. Then the liquidity is added to the slot unlocked liquidity and to the gross liquidity of its two ticks. The net liquidity of the lower tick goes up by the same amount and the net liquidity of the upper tick goes down by it. A tick cannot hold more gross liquidity than the largest `u128` divided by the number of ticks of the pool.
 - Pool liquidity increases only by the liquidity of slots whose range contains the current tick, meaning lower tick id at or below it and upper tick id above it.
 - Token amounts follow the current price: only token X when the price is below the range, only token Y when above, both when inside. Each amount is rounded up and summed over the slots. The program then adds the Token 2022 transfer fee of each mint, so that the reserve receives exactly the required amount. The fee-included total must not exceed the matching `max_amount`. Nothing is paid for a token whose total is 0.
 - Tick arrays that change between holding no liquidity and holding some flip their bit in the pool bitmap, or in the extension for indexes outside -512 to 511.
@@ -1060,6 +1062,7 @@ Transfer hook slices from the `remaining_account_info` argument, then tick array
 | `DuplicatedRemainingAccountTypes` | Two slices with accounts share the same `accounts_type`. |
 | `InsufficientRemainingAccounts` | A slice `length` is larger than the number of remaining accounts left. |
 | `MathOverflow` | `multiplier * weight` overflows `u128`. |
+| `TypeCastFailed` | The token X or Y amount for a selected liquidity does not fit in a `u64`. |
 
 #### SDK
 
@@ -1117,10 +1120,11 @@ Transfer hook slices from the `remaining_account_info` argument, then tick array
 - Parameters are validated: at least one maximum is set and above 0, `index` is a valid slot, the layout version matches, and when `sqrt_price_slippage` is set its bounds are inside the price limits, ordered, and contain the current price.
 - For each side with a maximum, the amount used is the smaller of the maximum and the token account balance. The Token 2022 transfer fee is removed from it, and the liquidity that this amount buys in the slot range is computed. A side that the range cannot take at the current price gives no liquidity and is ignored. When both sides give a value, the smaller liquidity is minted, so one side may be only partly used.
 - The maximum passed on to the deposit is the given maximum for a side, and 0 for a side that is `None`. The call then runs as `add_liquidity` for that single slot with that liquidity, so the amounts actually paid are rounded up from the liquidity and checked against the maximums.
+- A side that is `None` has a maximum of 0. If the range needs that token at the current price, which is the case whenever the current tick is inside the range, the call fails with `ExceededSlippage`. Use a one-sided deposit only for a range that is entirely above the current tick (token X only) or that ends at or below it (token Y only).
 - The position must exist for the NFT: `nft_account` holds 1 of the position NFT. The signer must be the NFT owner, or a delegate of the token account with a zero delegated amount and the AddLiquidity permission.
 - The pool must have adding liquidity enabled in `pool_status`, and with ActivationAccess every activation slot must allow adding liquidity at the current point, unless the NFT owner is `whitelisted_add_liquidity`. BondingCurve allows only after its target is reached, TimeBased from its add liquidity point.
 - `expected_layout_version`, when set, must match the position layout version.
-- For each selected slot the position and its ticks are brought up to date first: released vesting liquidity becomes unlocked, and fees and rewards are accrued to the position. Then the liquidity is added to the slot unlocked liquidity and to the gross and net liquidity of its two ticks. A tick cannot hold more gross liquidity than the largest `u128` divided by the number of ticks of the pool.
+- For each selected slot the position and its ticks are brought up to date first: released vesting liquidity becomes unlocked, and fees and rewards are accrued to the position. Then the liquidity is added to the slot unlocked liquidity and to the gross liquidity of its two ticks. The net liquidity of the lower tick goes up by the same amount and the net liquidity of the upper tick goes down by it. A tick cannot hold more gross liquidity than the largest `u128` divided by the number of ticks of the pool.
 - Pool liquidity increases only by the liquidity of slots whose range contains the current tick, meaning lower tick id at or below it and upper tick id above it.
 - Token amounts follow the current price: only token X when the price is below the range, only token Y when above, both when inside. Each amount is rounded up and summed over the slots. The program then adds the Token 2022 transfer fee of each mint, so that the reserve receives exactly the required amount. The fee-included total must not exceed the matching `max_amount`. Nothing is paid for a token whose total is 0.
 - Tick arrays that change between holding no liquidity and holding some flip their bit in the pool bitmap, or in the extension for indexes outside -512 to 511.
@@ -1150,7 +1154,7 @@ Transfer hook slices from the `remaining_account_info` argument, then tick array
 | `InvalidParameters` | Both maximums are `None`, `index` is not below the slot count, or the price bounds are outside the price limits or reversed. |
 | `AmountIsZero` | A maximum is 0, or no side can take liquidity at the current price. |
 | `LiquidityIsZero` | The liquidity computed is 0. |
-| `ExceededSlippage` | The pool price is outside the `sqrt_price_slippage` bounds, the liquidity is below `min_liquidity`, or the transfer-fee-included amount is above a maximum. |
+| `ExceededSlippage` | The pool price is outside the `sqrt_price_slippage` bounds, the liquidity is below `min_liquidity`, the transfer-fee-included amount is above a maximum, or the range needs a token whose maximum is `None`. |
 
 #### SDK
 
@@ -1206,7 +1210,7 @@ Transfer hook slices from the `remaining_account_info` argument, then tick array
 - The signer must be the NFT owner, or a delegate of the token account with a zero delegated amount and the RemoveLiquidity permission.
 - Removing liquidity cannot be disabled in `pool_status`. With ActivationAccess every activation slot must allow removing at the current point unless the NFT owner is `whitelisted_remove_liquidity`. BondingCurve allows only after its target is reached, TimeBased from its remove liquidity point.
 - `expected_layout_version`, when set, must match the position layout version.
-- For each selected slot the position is brought up to date first: released vesting liquidity becomes unlocked, and fees and rewards are accrued to the position. Liquidity is then taken from the slot unlocked liquidity only, so permanently locked and still vesting liquidity cannot leave. The gross and net liquidity of the two ticks drop by the same amount. Tick references are only dropped when the slot is removed or the position is closed.
+- For each selected slot the position is brought up to date first: released vesting liquidity becomes unlocked, and fees and rewards are accrued to the position. Liquidity is then taken from the slot unlocked liquidity only, so permanently locked and still vesting liquidity cannot leave. The gross liquidity of the two ticks drops by the same amount. The net liquidity of the lower tick drops by it and the net liquidity of the upper tick rises by it. Tick references are only dropped when the slot is removed or the position is closed.
 - Pool liquidity decreases only by the liquidity of slots whose range contains the current tick.
 - Token amounts follow the current price and are rounded down, summed over the slots. The amounts are taken out of the reserves in full, and the receiver gets them minus the Token 2022 transfer fee of each mint. `min_amount_x` and `min_amount_y` are checked against the amounts after that fee, and a minimum of 0 skips the check.
 - Fees and rewards that the slots earned are not paid out here. They stay pending on the position until `claim_fee` and `claim_reward`.
@@ -1226,6 +1230,8 @@ Transfer hook slices from the `remaining_account_info` argument, then tick array
 | `InvalidPermission` | The signer is a delegate and the position or limit order permission bits do not include the permission this instruction needs. |
 | `InvalidLayoutVersion` | `expected_layout_version` differs from the position `layout_version`. |
 | `MathOverflow` | A liquidity to remove is larger than the unlocked liquidity of the slot or the liquidity of a tick. |
+| `LiquidityIsTooHigh` | A liquidity is above the largest signed 128-bit value. |
+| `TypeCastFailed` | The token X or Y amount for a selected liquidity does not fit in a `u64`. |
 | `ExceededSlippage` | The amount of token X or Y after the transfer fee is below `min_amount_x` or `min_amount_y`. |
 | `IncorrectATA` | A delegate signed and the receiving account is not the associated token account of the NFT owner for that mint. |
 | `InvalidActivationAccess` | The activation rules do not allow removing liquidity yet for the NFT owner. |
@@ -1297,7 +1303,7 @@ Transfer hook slices from the `remaining_account_info` argument, then tick array
 - The signer must be the NFT owner, or a delegate of the token account with a zero delegated amount and the RemoveLiquidity permission.
 - Removing liquidity cannot be disabled in `pool_status`. With ActivationAccess every activation slot must allow removing at the current point unless the NFT owner is `whitelisted_remove_liquidity`. BondingCurve allows only after its target is reached, TimeBased from its remove liquidity point.
 - `expected_layout_version`, when set, must match the position layout version.
-- For each selected slot the position is brought up to date first: released vesting liquidity becomes unlocked, and fees and rewards are accrued to the position. Liquidity is then taken from the slot unlocked liquidity only, so permanently locked and still vesting liquidity cannot leave. The gross and net liquidity of the two ticks drop by the same amount. Tick references are only dropped when the slot is removed or the position is closed.
+- For each selected slot the position is brought up to date first: released vesting liquidity becomes unlocked, and fees and rewards are accrued to the position. Liquidity is then taken from the slot unlocked liquidity only, so permanently locked and still vesting liquidity cannot leave. The gross liquidity of the two ticks drops by the same amount. The net liquidity of the lower tick drops by it and the net liquidity of the upper tick rises by it. Tick references are only dropped when the slot is removed or the position is closed.
 - Pool liquidity decreases only by the liquidity of slots whose range contains the current tick.
 - Token amounts follow the current price and are rounded down, summed over the slots. The amounts are taken out of the reserves in full, and the receiver gets them minus the Token 2022 transfer fee of each mint. `min_amount_x` and `min_amount_y` are checked against the amounts after that fee, and a minimum of 0 skips the check.
 - Fees and rewards that the slots earned are not paid out here. They stay pending on the position until `claim_fee` and `claim_reward`.
@@ -1316,7 +1322,6 @@ Transfer hook slices from the `remaining_account_info` argument, then tick array
 | `DelegatedAmountNonZero` | The signer is the delegate of the NFT token account, but the delegated amount is not 0. |
 | `InvalidPermission` | The signer is a delegate and the position or limit order permission bits do not include the permission this instruction needs. |
 | `InvalidLayoutVersion` | `expected_layout_version` differs from the position `layout_version`. |
-| `MathOverflow` | A liquidity to remove is larger than the unlocked liquidity of the slot or the liquidity of a tick. |
 | `ExceededSlippage` | The amount of token X or Y after the transfer fee is below `min_amount_x` or `min_amount_y`. |
 | `IncorrectATA` | A delegate signed and the receiving account is not the associated token account of the NFT owner for that mint. |
 | `InvalidActivationAccess` | The activation rules do not allow removing liquidity yet for the NFT owner. |
@@ -1357,7 +1362,7 @@ Accrues fees and rewards into the selected range slots of a position without mov
 
 #### Remaining Accounts
 
-Tick arrays that hold the lower and upper tick id of every selected slot, in any order. The program only reads them, so they can be read-only.
+Tick arrays that hold the lower and upper tick id of every selected slot that has liquidity, in any order. The program only reads them, so they can be read-only.
 
 #### Checks and Effects
 
@@ -1379,7 +1384,7 @@ No event is emitted.
 | `InvalidAuthority` | The signer is not the NFT owner and not the delegate of the NFT token account. |
 | `DelegatedAmountNonZero` | The signer is the delegate but the delegated amount is not 0. |
 | `InvalidTickArray` | A remaining account belongs to another pool. |
-| `CannotFindTickFromId` | A tick of a selected slot is not in any tick array passed. |
+| `CannotFindTickFromId` | A tick of a selected slot that has liquidity is not in any tick array passed. |
 
 #### SDK
 
@@ -1593,7 +1598,7 @@ Mints a limit order NFT to `owner` and deposits one token into up to 25 ticks as
 | `limit_order` | Yes | No | New limit order account paid by `payer`, with one entry per tick. PDA with seeds `"limit_order"`, `nft_mint`. |
 | `user_token` | Yes | No | Token account that pays the deposit, for `token_mint`. `owner` must be its authority. |
 | `referral` (optional) | No | No | Wallet address recorded as the referral of the order, not a token account. It can receive 20% of the order fee when the order is cancelled. When omitted, pass the program ID as placeholder and the order has no referral. |
-| `payer` | Yes | Yes | Pays the rent of the NFT mint, the NFT token account, the limit order, and tick arrays and ticks that are missing. |
+| `payer` | Yes | Yes | Pays the rent of the NFT mint, the NFT token account, the limit order, missing tick arrays, and one tick entry per order tick. |
 | `owner` | No | Yes | Signs, owns the order and pays the deposit. Receives the NFT. |
 | `token_program` | No | No | Token program of `token_mint`, Token or Token 2022. |
 | `token2022_program` | No | No | Token 2022 program, used for the NFT. Fixed address `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`. |
@@ -1629,7 +1634,6 @@ Transfer hook slice for the deposited token (`TransferHookX` for an ask order, `
 | `InvalidActivationAccess` | Adding liquidity is disabled in `pool_status`, or the activation rules do not allow it yet for the owner. |
 | `InvalidTickArray` | A tick array is missing, is not at its derived address, or belongs to another pool or index. |
 | `InsufficientRemainingAccounts` | With `relative_tick`, a tick array needed for a tick is not among the remaining accounts. |
-| `ReallocExceedMaxLengthPerInstruction` | New ticks would grow one tick array by more than 10240 bytes in one instruction. |
 | `TickArrayBitmapExtensionAccountIsNotProvided` | A tick array outside indexes -512 to 511 becomes non-empty and `tick_array_bitmap_extension` was not passed. |
 | `MissingRemainingAccountForTransferHook` | A mint in a transfer has a transfer hook program and no transfer hook slice with accounts of the matching type was passed. |
 | `NoTransferHookProgram` | A transfer hook slice with accounts was passed for a mint that has no transfer hook program. |
@@ -1692,7 +1696,7 @@ Transfer hook slices from the `remaining_account_info` argument (`TransferHookX`
 - For each tick id, the order entry must exist and not be canceled. What it gets depends on how far the tick was filled. Unfilled: the whole amount comes back in the deposited token. Partly filled: the amount is split in proportion between the unfilled part (rounded up, so earlier cancellers get slightly more of the unfilled side) and the filled part. Fully filled: the whole amount has been exchanged.
 - The filled part is paid in the other token at the tick price (token Y per token X, the square of the tick square root price), rounded down, so the pool never pays out more than it took in. An ask order receives token Y and a bid order receives token X.
 - The order also gets its share of the limit order fee collected at the tick, in proportion to its filled amount, rounded down. The fee token is token X for an ask order and token Y for a bid order with `OutputToken`, and always token Y with `OnlyY`.
-- If the order has a referral wallet that is not the owner, `referral_token` is passed and owned by that wallet, the referral gets 20% of the fee, rounded down, paid from the reserve of the fee token, and the owner gets the rest. Otherwise the owner gets all of it. A referral account that is missing or wrong is not an error, the owner just keeps the whole fee.
+- If the order has a referral wallet that is not the owner, `referral_token` is passed and owned by that wallet, the referral gets 20% of the fee, rounded down, paid from the reserve of the fee token, and the owner gets the rest. Otherwise the owner gets all of it. A referral account that is missing or not owned by the referral wallet is not an error, the owner just keeps the whole fee. An account owned by the referral wallet must be for the fee token, or the transfer fails.
 - The owner payout is the unfilled amount plus the filled proceeds plus the owner fee, per token. It leaves the reserves in full and the receiver gets it minus the Token 2022 transfer fee. `min_amount_x` and `min_amount_y` are checked against the amounts after that fee.
 - A delegate can only pay into the associated token account of the NFT owner for that mint and token program. If a receiver is a Token 2022 account that requires incoming transfer memos, a memo is written first.
 - Each canceled entry is zeroed and the tick drops the amounts. Ticks and their rent stay referenced by the order until it is closed. Tick arrays that change between holding no liquidity and holding some flip their bit in the pool bitmap, or in the extension for indexes outside -512 to 511.
@@ -1759,7 +1763,7 @@ Tick arrays, all writable, one per distinct tick array index of the ticks of the
 - Every tick entry of the order must be canceled. Cancel first and claim the payout.
 - Pause and activation rules do not apply: an owner can always close.
 - Burns the 1 NFT, closes the NFT token account and the NFT mint (the pool authority signs for the mint), and closes the limit order. The rent of all three goes to `rent_receiver`.
-- Drops the reference of every tick of the order. Ticks without references leave their tick arrays, the arrays shrink, and the rent paid for those ticks goes to `rent_receiver`.
+- Drops the reference of every tick of the order and returns the rent of one tick entry per order tick to `rent_receiver`. Ticks left without references are removed and their tick arrays shrink.
 
 #### Events
 
@@ -1825,7 +1829,7 @@ Creates the reward vault of a reward slot and sets its mint and authority. Needs
 
 | Name | Type | Meaning |
 | --- | --- | --- |
-| `index` | `u8` | Reward slot, 0 or 1. The slot must not be initialized yet. |
+| `index` | `u8` | Reward slot, 0 or 1. The slot must not be initialized yet: its reward vault would already exist, so a second call fails when the vault account is created, with a system program error and not a program error. |
 
 #### Accounts
 
@@ -1862,7 +1866,6 @@ Creates the reward vault of a reward slot and sets its mint and authority. Needs
 | --- | --- |
 | `InvalidPoolType` | The pool does not have the LiquidityMining extension. |
 | `InvalidRewardIndex` | `index` is not 0 or 1. |
-| `InvalidRewardState` | The slot is already initialized. |
 | `InvalidPermission` | The signer is not the whitelisted wallet of `operator` or lacks InitializeReward, or no operator was passed and the signer is not the pool creator, or `index` is not 0. |
 | `UnsupportNativeMintToken2022` | The reward mint is the Token 2022 native mint. |
 | `UnsupportedMint` | The reward mint is not supported without a badge and none was passed, including a freeze authority when the pool creator initializes. |
@@ -1870,7 +1873,7 @@ Creates the reward vault of a reward slot and sets its mint and authority. Needs
 
 #### SDK
 
-`client.reward.initializeReward`.
+`client.reward.initializeReward`. The builder covers the pool creator path only: slot 0 with no operator account. For an operator or slot 1, build it with `client.program.methods.initializeReward`.
 
 ### update_reward_authority
 
@@ -1917,7 +1920,7 @@ Changes the authority of a reward slot. The pool creator can do it for slot 0, a
 
 #### SDK
 
-`client.reward.updateRewardAuthority`.
+`client.reward.updateRewardAuthority`. The builder covers the pool creator path only: slot 0 with no operator account. For an operator or slot 1, build it with `client.program.methods.updateRewardAuthority`.
 
 ### set_reward_emission
 
@@ -1963,7 +1966,7 @@ Transfer hook slice from the `remaining_accounts_info` argument. Only `TransferH
 - Pool reward state is brought up to now first. The previous window must have ended, and no ineligible reward from it may be waiting (see `withdraw_ineligible_rewards`). A slot with no emission yet counts as ended.
 - The open time must not be before now and at most 30 days after it. The window must be 1 to 365 days.
 - The whole reward for the window is paid up front into the vault: the amount is computed with rounding up, the Token 2022 transfer fee is added so the vault receives exactly that, and the total must not exceed `max_amount`.
-- Sets the open time, end time and rate of the slot and the last update time to the open time. Rewards then accrue to positions in proportion to liquidity while the pool has liquidity.
+- Sets the open time, end time and rate of the slot and the last update time to the open time. Rewards then accrue to in-range positions in proportion to their liquidity while the pool `liquidity` is above 0.
 
 #### Events
 
@@ -1980,7 +1983,7 @@ Transfer hook slice from the `remaining_accounts_info` argument. Only `TransferH
 | `InvalidRewardVault` | `reward_vault` is not the vault of the slot. |
 | `InvalidPermission` | `authority` is not the authority of the slot. |
 | `InvalidRewardState` | The previous emission has not ended, or it left ineligible rewards that were not withdrawn. |
-| `InvalidParameters` | `emission_per_second` is 0, `open_time` is in the past or more than 30 days ahead, the window is outside 1 to 365 days, or the amount to fund is 0. |
+| `InvalidParameters` | `emission_per_second` is 0, `open_time` is in the past or more than 30 days ahead, or the window is outside 1 to 365 days. |
 | `ExceededSlippage` | The amount to fund plus the transfer fee is above `max_amount`. |
 | `MathOverflow` | `end_time` is before `open_time`, or an amount overflows. |
 | `MissingRemainingAccountForTransferHook` | A mint in a transfer has a transfer hook program and no transfer hook slice with accounts of the matching type was passed. |
@@ -2066,7 +2069,7 @@ Transfer hook slice from the `remaining_account_info` argument. Only `TransferHo
 
 ### withdraw_ineligible_rewards
 
-Withdraws the rewards that were emitted while the pool had no liquidity, after the emission has ended. The reward authority of the slot signs and picks the receiving account.
+Withdraws the rewards that were emitted while the pool `liquidity` was 0, meaning no liquidity was in range at the current price, after the emission has ended. The reward authority of the slot signs and picks the receiving account.
 
 #### Arguments
 
@@ -2359,7 +2362,7 @@ Creates a `StaticConfig` that fixes the fees, tick spacing, collect fee mode, ac
 | `config_parameters.pool_fees.dynamic_fee_parameter.max_volatility_accumulator` | `u32` | Cap on the volatility accumulator. At most 16777215. One unit is 1 over 10000 of a tick of price movement from the reference price. |
 | `config_parameters.pool_fees.dynamic_fee_parameter.variable_fee_control` | `u32` | Scale of the variable fee. At most 16777215. The variable fee numerator is the ceiling of `variable_fee_control * volatility_accumulator^2 / 100000000000`, in units of 1 over 1000000000. At the cap it must not exceed 990000000. |
 | `config_parameters.pool_fees.dynamic_fee_parameter.filter_period` | `u16` | Seconds. Must be above 0 and below `decay_period`. Swaps closer than this to the last reference update or significant swap keep the volatility reference unchanged. |
-| `config_parameters.pool_fees.dynamic_fee_parameter.decay_period` | `u16` | Seconds. Must be above `filter_period` and at most 3600. After this long the volatility reference resets to 0. |
+| `config_parameters.pool_fees.dynamic_fee_parameter.decay_period` | `u16` | Seconds. Must be above `filter_period` and at most 3600. After this long the volatility reference resets to 0. The reference also resets once it is more than 3600 seconds old, even when significant swaps keep arriving. |
 | `config_parameters.pool_fees.dynamic_fee_parameter.reduction_factor` | `u16` | Basis points, 1 to 10000. Between the filter and decay periods the volatility reference becomes the accumulator times this value over 10000. |
 | `config_parameters.pool_fees.dynamic_fee_parameter.min_delta_tick_for_significant_swap` | `u16` | Must be above 0. A swap counts as significant when its price movement, measured in ticks, is at least this value. |
 | `config_parameters.tick_spacing` | `u16` | Distance between usable tick ids. 1 to 256 inclusive. |
@@ -2397,6 +2400,7 @@ Creates a `StaticConfig` that fixes the fees, tick spacing, collect fee mode, ac
 | --- | --- |
 | `InvalidPermission` | The operator is not the signer or lacks CreateConfigKey. |
 | `InvalidParameters` | A fee value, the tick spacing or `extensions` is out of range, including the ActivationAccess bit. |
+| `MathOverflow` | A linear fee schedule whose `cliff_fee_numerator` is below `reduction_factor * number_of_period`, or an exponential schedule with a `reduction_factor` of 10000 or more. |
 | `InvalidBaseFeeMode` | `base_fee_mode` is not 0 to 4. |
 | `TypeCastFailed` | `collect_fee_mode` or `activation_type` is not 0 or 1. |
 
@@ -2414,7 +2418,7 @@ Creates a `DynamicConfig` that authorizes one pool creator authority to create p
 | --- | --- | --- |
 | `index` | `u64` | Config index, part of the config address. A used index for the same authority fails because the account exists. |
 | `config_parameters` | `DynamicConfigParameters` | Config settings. The fields follow. |
-| `config_parameters.permission` | `u128` | Bitmask of config permissions, 0 or 1. Bit 0 CreatePoolWithoutMintValidation skips the token badge and Token 2022 extension checks for pools of this config. |
+| `config_parameters.permission` | `u128` | Bitmask of config permissions, 0 or 1. Bit 0 CreatePoolWithoutMintValidation skips the per-mint token badge and Token 2022 extension checks for pools of this config. The Token 2022 native mint is still rejected, and an `OnlyY` pool whose token Y is not wrapped SOL or USDC still needs `token_badge_y`. |
 | `config_parameters.partner_fee_bps` | `u16` | Partner share of the protocol fee for pools of this config, in basis points, 0 to 5000. |
 
 #### Accounts
