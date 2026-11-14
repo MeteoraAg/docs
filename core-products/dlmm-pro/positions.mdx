@@ -34,13 +34,13 @@ Instructions that act on some slots take a bitmap of slot indexes and the ranges
 - The position array account, which is 144 bytes plus 128 bytes per slot, or 192 bytes per slot on pools with the `LiquidityMining` extension.
 - One tick's rent for each range edge, and any tick array that does not exist yet. See [Tick Array Rent](/core-products/dlmm-pro/ticks-and-liquidity#tick-array-rent).
 
-| Slots | Position array size | Rent in lamports | With `LiquidityMining` |
+| Slots | Position array size | Rent in lamports at the current rent rate | With `LiquidityMining` |
 | --- | --- | --- | --- |
 | 1 | 272 bytes | 2,784,000 | 336 bytes, 3,229,440 |
 | 9 | 1,296 bytes | 9,911,040 | 1,872 bytes, 13,920,000 |
 | 45 | 5,904 bytes | 41,982,720 | 8,784 bytes, 62,027,520 |
 
-`expand_position` appends new ranges after the existing slots, so they take the next free indexes. The total cannot pass 45, or it fails with `InvalidParameters`. The payer covers the extra slots, 890,880 lamports per slot (1,336,320 with `LiquidityMining`), plus the edges. Both instructions need deposits to be open.
+`expand_position` appends new ranges after the existing slots, so they take the next free indexes. The total cannot pass 45, or it fails with `InvalidParameters`. The payer covers the extra slots, 890,880 lamports per slot (1,336,320 with `LiquidityMining`) at the current rent rate, plus the edges. See [Tick Array Rent](/core-products/dlmm-pro/ticks-and-liquidity#tick-array-rent) for the rate. Both instructions need deposits to be open.
 
 A bitmap selects slots, one bit per slot index with bit 0 for slot 0. A bitmap of `0b10110` selects slots 1, 2 and 4, and the matching `liquidities` list holds three entries in ascending slot order. The bitmap must select at least one slot and none past the end of the position.
 
@@ -77,12 +77,12 @@ Every deposit sets a cap on each token, transfer fee included, and fails rather 
 | Instruction | Arguments | Rules |
 | --- | --- | --- |
 | `add_liquidity` | `max_amount_x`, `max_amount_y`, `expected_layout_version`, `bitmap`, `liquidities` | One liquidity per selected slot. Zero fails with `LiquidityIsZero`. A count that does not match the bitmap fails with `InvalidParameters`. |
-| `add_liquidity_by_weight` | The same, with `multiplier` and `liquidities` as weights | Each selected slot gets `multiplier × weight`. Weights are 1 to 255, so zero fails with `LiquidityIsZero`. A product above `2^127 - 1` fails with `LiquidityIsTooHigh`. |
+| `add_liquidity_by_weight` | The same, with `multiplier` and `liquidities` as weights | Each selected slot gets `multiplier × weight`. Weights are 1 to 255, so zero fails with `LiquidityIsZero`. A product above `2^127 - 1` fails with `LiquidityIsTooHigh`, and one that does not fit in 128 bits fails with `MathOverflow`. |
 | `add_liquidity_imbalance` | `max_amount_x`, `max_amount_y` (either can be unset), `slippage`, `expected_layout_version`, `index` | One slot. At least one cap is required, and a cap of zero fails with `AmountIsZero`. |
 
 The program works out the amounts from the liquidity at the price when the transaction runs, rounds them up, adds any Token 2022 transfer fee and compares the result with the cap. If either token needs more than its cap, the deposit fails with `ExceededSlippage`. A cap that is unset or zero for a token the range needs fails the same way, except that `add_liquidity_imbalance` rejects a zero cap with `AmountIsZero`. Tokens are pulled from the signer's token accounts, so a delegate pays from accounts it can spend from. The pool must accept deposits from the position's owner, otherwise the deposit fails with `InvalidActivationAccess`.
 
-An imbalanced deposit finds the liquidity each token can fund at the current price, from the smaller of its cap and the wallet balance after any transfer fee, and deposits the smaller of the two. Its optional `slippage` has two parts. `sqrt_price_slippage` gives a minimum and maximum square-root price, and the deposit fails with `ExceededSlippage` if the price is outside it. `min_liquidity` fails with `ExceededSlippage` if less liquidity would be minted. Both are optional.
+An imbalanced deposit finds the liquidity each token can fund at the current price, from the smaller of its cap and the wallet balance after any transfer fee, and deposits the smaller of the two. Its `slippage` argument has two parts, and each can be left unset. `sqrt_price_slippage` gives a minimum and maximum square-root price, and the deposit fails with `ExceededSlippage` if the price is outside it. `min_liquidity` fails with `ExceededSlippage` if less liquidity would be minted.
 
 With tick spacing 10, the price on tick 5 and the range `[0, 10)`:
 
@@ -218,7 +218,7 @@ A withdrawal needs the pool's withdrawals to be open for the owner, or it fails 
 4. Optionally call `remove_position` on empty slots to shrink the position, keeping at least one slot.
 5. Call `close_position` as the owner. It fails with `PositionIsNotEmpty` unless every slot is empty.
 
-Closing burns the NFT, closes the NFT token account and mint, closes the position array and refunds every edge's tick rent. The rent goes to the account you name as the rent receiver. `remove_position` refunds the slot's 128 bytes and its edges, and a delegate must name the owner as the receiver, or it fails with `InvalidPermission`.
+Closing burns the NFT, closes the NFT token account and mint, closes the position array and refunds every edge's tick rent. The rent goes to the account you name as the rent receiver. `remove_position` refunds the slot's rent (128 bytes, or 192 on `LiquidityMining` pools) and its edges, and a delegate must name the owner as the receiver, or it fails with `InvalidPermission`.
 
 
 ## Locks
@@ -243,7 +243,7 @@ The schedule has a cliff point, `cliff_unlock_bps` released at the cliff, `bps_p
 - `cliff_unlock_bps + bps_per_period × number_of_period` must equal 10,000.
 - Either `cliff_unlock_bps` is above zero, or all three period values are above zero. If any period value is set, all three must be.
 - The cliff point is now or later. Leave it unset to start now. The time until the cliff plus `period_frequency × number_of_period` can be at most 10 years, which is 315,360,000 seconds or 1,261,440,000 slots.
-- Any failed check fails with `InvalidParameters`. A second schedule fails with `PositionAlreadyHadVesting`. A lock that moves nothing fails with `LiquidityIsZero`.
+- A failed check fails with `InvalidParameters`, except that a `bps_per_period × number_of_period` too large for 16 bits fails with `MathOverflow`. A second schedule fails with `PositionAlreadyHadVesting`. A lock that moves nothing fails with `LiquidityIsZero`.
 
 Released liquidity at a time `t` is `⌊(cliff_unlock_bps + completed_periods × bps_per_period) × total / 10,000⌋`, where `total` is the slot's vesting plus released liquidity and `completed_periods` is capped at `number_of_period`. Nothing is released before the cliff. It moves from vesting to unlocked when the slot is refreshed, deposited into, withdrawn from, or locked permanently, and during a withdrawal by bps. It is not released on its own.
 

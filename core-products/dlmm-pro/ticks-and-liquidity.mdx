@@ -150,7 +150,7 @@ The inline bitmap in the pool account has 1,024 bits for indexes `-512` to `511`
 | 0 | 512 |
 | 511 | 1023 |
 
-In tick ids the inline window is `-65536 × spacing` to `65535 × spacing`. At spacing 1 that is `-65536` to `65535`. At spacing 7 and above it is `-458752` to `458745` or wider, which covers every possible tick, so those pools never need the extension.
+In tick ids the inline window is `-65536 × spacing` to `65535 × spacing`. At spacing 1 that is `-65536` to `65535`. At spacing 7 and above it is `-458752` to `458745` or wider, which covers every possible tick, so those pools never need the extension to hold liquidity. If someone has created it anyway, swaps that search past the inline bitmap still have to pass it.
 
 The extension account adds six chunks of 512 bits on each side, covering indexes `512` to `3583` and `-513` to `-3584`. Every pool can hold any tick with it, because spacing 1 needs indexes `-3466` to `3465`. The chunk and bit for an index outside the inline window:
 
@@ -167,11 +167,11 @@ The extension account adds six chunks of 512 bits on each side, covering indexes
 | -1025 | Negative | 1 | 0 |
 | -3584 | Negative | 5 | 511 |
 
-To find the next array to swap through, the program scans the bitmap from the current array index in the swap direction for the nearest set bit, first in the inline bitmap and then in the extension if it is initialized. A swap that has to look outside the inline window, on a pool whose extension is initialized, fails with `BitmapExtensionAccountIsNotProvided` when the account is not passed. A deposit, order or cancel that has to flip a bit outside the window without it fails with `TickArrayBitmapExtensionAccountIsNotProvided`. Anyone can create the extension with `initialize_tick_bitmap_extension`, and creating it again does nothing.
+To find the next array to swap through, the program scans the bitmap from the current array index in the swap direction for the nearest set bit, starting in the bitmap that holds the current array index and continuing into the other one, with the extension used only if it is initialized. A swap that has to look outside the inline window, on a pool whose extension is initialized, fails with `BitmapExtensionAccountIsNotProvided` when the account is not passed. A deposit, order or cancel that has to flip a bit outside the window without it fails with `TickArrayBitmapExtensionAccountIsNotProvided`. Anyone can create the extension with `initialize_tick_bitmap_extension`, and creating it again does nothing.
 
 ### Tick Array Rent
 
-Rent figures use the Solana rent-exempt minimum of 6,960 lamports per byte plus 128 bytes of account overhead.
+Rent figures use the current Solana rent-exempt rate of 6,960 lamports per byte, charged on the account size plus 128 bytes of account overhead. The rate is a cluster setting, so the lamport amounts change if it does. The byte sizes do not.
 
 | Account or item | Size | Rent in lamports | Who pays |
 | --- | --- | --- | --- |
@@ -180,10 +180,10 @@ Rent figures use the Solana rent-exempt minimum of 6,960 lamports per byte plus 
 | One tick on a `LiquidityMining` pool | 192 bytes | 1,336,320 | Same |
 | One range (two edges) | 320 bytes | 2,227,200 | Same |
 | One range on a `LiquidityMining` pool | 384 bytes | 2,672,640 | Same |
-| Full array of 128 ticks | 20,544 bytes | 143,877,120 | Same |
+| Full array of 128 ticks | 20,544 bytes | 143,877,120 | 1,336,320 from whoever created the array, never refunded, plus 142,540,800 of refundable tick rent |
 | Tick array bitmap extension | 808 bytes | 6,514,560 | Whoever creates it |
 
-Each edge pays the rent of one tick even when the tick already exists, and gets it back when that edge is removed. A single instruction can grow an account by at most 10,240 bytes, so it can add at most 64 new ticks (53 on `LiquidityMining` pools) to one tick array. More fails with `ReallocExceedMaxLengthPerInstruction`.
+Each edge pays the rent of one tick even when the tick already exists, and gets it back when that edge is removed. A single instruction can grow a tick array by at most 10,240 bytes. That is 64 new ticks, or 53 on `LiquidityMining` pools. When the same instruction also creates the array on a pool without `LiquidityMining`, the limit is 63, because the new account's 64 bytes count too. More fails with `ReallocExceedMaxLengthPerInstruction`.
 
 ## How a Swap Moves
 
@@ -219,7 +219,7 @@ The swap fails in these cases:
 | `NotConsumingFullAmountIn` | The tick arrays passed run out before the input is used up. |
 | `ExceededSlippage` | The output after any Token 2022 transfer fee is below `minimum_output_amount`. |
 
-Pass the tick arrays in the order the swap visits them: descending index when selling X for Y, ascending when buying X. The program skips accounts that are not the next array it expects.
+Pass the tick arrays in the order the swap visits them: descending index when selling X for Y, ascending when buying X. Every account passed must be a tick array. The program skips arrays that are not the next one it expects.
 
 ### Worked Swap
 
@@ -263,7 +263,7 @@ The next new observation wraps around and overwrites slot 0.
 
 To read an average between slot 0 and slot 1 after the swap at time 1031, divide the change in cumulative by the change in time: `(3930 - 700) / (1031 - 1007) = 134.58`. The geometric mean price over that window is `1.0001^134.58 = 1.01355`. To average up to time 1036 with the current tick at 145, extend slot 1 yourself: `3930 + 5 × 145 = 4655`, then `(4655 - 700) / (1036 - 1007) = 136.38`, a mean price of `1.0001^136.38 = 1.01373`.
 
-Extending the oracle costs 16 bytes per observation, 111,360 lamports each, and the new account size is topped up to the rent-exempt minimum from the payer. The oracle starts at 72 bytes (1,392,000 lamports). At the 500 observation maximum it is 8,056 bytes and 56,960,640 lamports, so growing it from 1 to 500 costs 55,568,640. Adding zero observations, or growing past 500, fails with `InvalidParameters`. If the ring has already wrapped around when it is extended, the program first rotates it so the newest observation is last and the new empty slots follow it, which keeps existing observations.
+Extending the oracle costs 16 bytes per observation, 111,360 lamports each at the current rent rate, and the new account size is topped up to the rent-exempt minimum from the payer. The oracle starts at 72 bytes (1,392,000 lamports). At the 500 observation maximum it is 8,056 bytes and 56,960,640 lamports, so growing it from 1 to 500 costs 55,568,640. Adding zero observations, or growing past 500, fails with `InvalidParameters`. If the ring has already wrapped around when it is extended, the program first rotates it so the newest observation is last and the new empty slots follow it, which keeps existing observations.
 
 
 ## Related

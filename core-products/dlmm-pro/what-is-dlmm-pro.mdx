@@ -64,9 +64,9 @@ The pool account stores the two token mints and their reserve accounts, the crea
 | Account | Holds | Created by |
 | --- | --- | --- |
 | Config | Settings a static or dynamic config pool copies at creation | An operator |
-| Pool | The state above | The pool creator, at pool creation |
-| Reserve X and Reserve Y | The pool's tokens, one account per mint | The pool creator, at pool creation |
-| Oracle | The tick-cumulative observations | The pool creator, at pool creation |
+| Pool | The state above | The payer of the pool creation transaction |
+| Reserve X and Reserve Y | The pool's tokens, one account per mint | The payer of the pool creation transaction |
+| Oracle | The tick-cumulative observations | The payer of the pool creation transaction |
 | Tick array | Up to 128 usable ticks, grown and shrunk as ticks come and go | Whoever first needs it |
 | Tick array bitmap extension | Bitmap bits beyond the inline window | At pool creation if needed, or by anyone later |
 | Position array and NFT | Up to 45 ranges and their liquidity, fees and rewards | The position owner or payer |
@@ -78,7 +78,7 @@ A typical life of a pool:
 2. LPs open positions and deposit. Each range edge creates or updates a tick, and the pool's active liquidity changes if the range contains the current tick.
 3. Makers open limit orders. Each order tick stores the deposited amount on the tick.
 4. A swap works out one fee rate from the pool's fee settings, then walks ticks in the direction of the trade. At each tick it fills LP liquidity, then orders, takes the fee on the step and splits it, then crosses the tick and moves on until the input is used up.
-5. LPs and makers collect: LPs claim fees and rewards from a position, makers cancel an order to get their proceeds, and referrals, partners and Meteora collect their shares.
+5. LPs and makers collect: LPs claim fees and rewards from a position, makers cancel an order to get their proceeds, referrals are paid inside the swap or cancel, and partners and Meteora claim their balances from the pool.
 6. Positions and orders are closed, which burns the NFT and returns the rent.
 
 A swap also needs the tick arrays it will pass through in its transaction. If they run out before the input is used up, it fails with `NotConsumingFullAmountIn`. The caller sets a minimum output, and the swap fails with `ExceededSlippage` if the output after any transfer fee is lower.
