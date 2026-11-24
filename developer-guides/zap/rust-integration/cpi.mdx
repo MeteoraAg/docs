@@ -40,23 +40,25 @@ The `-f` flag makes `curl` fail instead of saving an error page as the IDL. Take
 
 ```rust
 use anchor_lang::prelude::*;
+
+declare_program!(zap);
+
 use zap::cpi;
-use zap::cpi::accounts::ZapOutCtx;
-use zap::ZapOutParameters;
+use zap::cpi::accounts::ZapOut;
+use zap::types::ZapOutParameters;
 
 pub fn zap_out_via_cpi<'info>(
-    ctx: Context<'_, '_, '_, 'info, YourZapOutCtx<'info>>,
+    ctx: Context<'info, YourZapOutCtx<'info>>,
     params: ZapOutParameters,
     remaining_accounts: Vec<AccountInfo<'info>>,
 ) -> Result<()> {
-    let cpi_program = ctx.accounts.zap_program.to_account_info();
-    let cpi_accounts = ZapOutCtx {
+    let cpi_accounts = ZapOut {
         user_token_in_account: ctx.accounts.user_token_in_account.to_account_info(),
         amm_program: ctx.accounts.amm_program.to_account_info(),
     };
 
     cpi::zap_out(
-        CpiContext::new(cpi_program, cpi_accounts)
+        CpiContext::new(zap::ID, cpi_accounts)
             .with_remaining_accounts(remaining_accounts),
         params,
     )
@@ -67,20 +69,19 @@ The remaining accounts are forwarded by Zap to the whitelisted downstream swap i
 
 ## Common CPI Calls
 
-| CPI call | Account context | Parameters | Notes |
+| CPI call | Accounts struct | Parameters | Notes |
 | --- | --- | --- | --- |
-| `cpi::initialize_ledger_account` | `InitializeLedgerAccountCtx` | None | Creates `UserLedger` at `["user_ledger", owner]`. |
-| `cpi::close_ledger_account` | `CloseLedgerAccountCtx` | None | Closes the ledger and sends rent to `rent_receiver`. |
-| `cpi::set_ledger_balance` | `SetLedgerBalanceCtx` | `amount`, `is_token_a` | Writes a direct token A/X or token B/Y amount. |
-| `cpi::update_ledger_balance_after_swap` | `UpdateLedgerBalanceAfterSwapCtx` | `pre_source_token_balance`, `max_transfer_amount`, `is_token_a` | Stores a capped token-account balance delta. |
-| `cpi::zap_out` | `ZapOutCtx` | `ZapOutParameters` | Invokes a whitelisted downstream swap payload. |
-| `cpi::zap_in_damm_v2` | `ZapInDammv2Ctx` | `pre_sqrt_price`, `max_sqrt_price_change_bps` | Adds liquidity to an existing DAMM v2 position and may CPI to DAMM v2 `swap2`. |
-| `cpi::zap_in_dlmm_for_initialized_position` | `ZapInDlmmForInitializedPositionCtx` | DLMM bin, strategy, and remaining-account info args | Rebalances an existing DLMM position. |
-| `cpi::zap_in_dlmm_for_uninitialized_position` | `ZapInDlmmForUnintializedPositionCtx` | DLMM bin, strategy, and remaining-account info args | Initializes a new DLMM position, then rebalances liquidity. |
+| `cpi::initialize_ledger_account` | `InitializeLedgerAccount` | None | Creates `UserLedger` at `["user_ledger", owner]`. |
+| `cpi::close_ledger_account` | `CloseLedgerAccount` | None | Closes the ledger and sends rent to `rent_receiver`. |
+| `cpi::set_ledger_balance` | `SetLedgerBalance` | `amount`, `is_token_a` | Writes a direct token A/X or token B/Y amount. |
+| `cpi::update_ledger_balance_after_swap` | `UpdateLedgerBalanceAfterSwap` | `pre_source_token_balance`, `max_transfer_amount`, `is_token_a` | Stores a capped token-account balance delta. |
+| `cpi::zap_out` | `ZapOut` | `ZapOutParameters` | Invokes a whitelisted downstream swap payload. |
+| `cpi::zap_in_damm_v2` | `ZapInDammV2` | `pre_sqrt_price`, `max_sqrt_price_change_bps` | Adds liquidity to an existing DAMM v2 position and may CPI to DAMM v2 `swap2`. |
+| `cpi::zap_in_dlmm_for_initialized_position` | `ZapInDlmmForInitializedPosition` | DLMM bin, strategy, and remaining-account info args | Rebalances an existing DLMM position. |
+| `cpi::zap_in_dlmm_for_uninitialized_position` | `ZapInDlmmForUninitializedPosition` | DLMM bin, strategy, and remaining-account info args | Initializes a new DLMM position, then rebalances liquidity. |
+| `cpi::zap_in_dlmm_pro` | `ZapInDlmmPro` | `DlmmProZapInParameters`, `remaining_accounts_info` | Opens a new DLMM Pro position and deposits the ledger balances. |
 
-<Note>
-  The uninitialized DLMM account context name is spelled `ZapInDlmmForUnintializedPositionCtx` in the current Rust source. Use the generated binding name exactly.
-</Note>
+`declare_program!` names each accounts struct from the instruction name. The `Ctx` suffix on the program's Rust accounts structs is not part of these types. `CpiContext::new` takes `zap::ID`.
 
 ## Zap-Out CPI Requirements
 
@@ -99,6 +100,7 @@ The remaining accounts are forwarded by Zap to the whitelisted downstream swap i
 | DAMM v2 zap in | Ledger initialized and populated, existing DAMM v2 position, position NFT account, pool vaults, token mints, token programs, DAMM v2 program, and DAMM v2 event authority. |
 | DLMM initialized zap in | Ledger initialized and populated, existing DLMM position, LbPair, reserves, token accounts, token mints, token programs, memo program, system program, DLMM event authority, bin arrays, and transfer-hook accounts when required. |
 | DLMM uninitialized zap in | Same as initialized, but `position` is a fresh signer and Zap calls DLMM `initialize_position2`. |
+| DLMM Pro zap in | Ledger initialized and populated, a new position NFT mint that signs, the DLMM Pro pool and reserves, user token accounts, tick arrays, and the DLMM Pro event authority. |
 
 Zap does not emit its own custom events, but DAMM v2 and DLMM downstream CPI calls require their event authority accounts.
 
