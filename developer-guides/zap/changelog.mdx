@@ -2,13 +2,109 @@
 title: "Zap Changelog"
 sidebarTitle: "Changelog"
 description: "Track Zap program and TypeScript SDK release notes, integration changes, and known source-material gaps."
-llmsDescription: "Explains the Zap integration changelog for builders maintaining Meteora Zap integrations. Covers local program version 0.2.2, SDK version 1.3.1, DAMM v2 compounding and single-sided pool support, DAMM v2 base fee mode and rate-limiter account changes, zap-in endpoint additions, Jupiter API configuration changes, DLMM 0.12.0 support, DLMM rebalance fixes, zap-in SDK method additions, estimator functions, and source-material gaps for Rust client publishing."
+llmsDescription: "Explains the Zap integration changelog for builders maintaining Meteora Zap integrations. Covers program 0.3.0 and TypeScript SDK 2.1.0: zap_in_dlmm_pro, leftover ranges, max_tick_slippage and min_multiplier, zap-out through DLMM Pro, Anchor 1.2.1, and the SDK estimators and transaction builders. Earlier entries cover program 0.2.3 Jupiter route_v2 zap-out changes, and program 0.2.2 with SDK 1.3.0 for DAMM v2 compounding and single-sided pools."
 rss: true
 ---
 
 <Tip>
   Track Zap releases here.
 </Tip>
+
+<Update
+  label="zap 0.3.0"
+  description="DLMM Pro Zap-In and Zap-Out"
+  rss="Zap 0.3.0 adds zap_in_dlmm_pro and zap-out swaps through DLMM Pro, and ships TypeScript SDK 2.1.0."
+>
+  ## Release summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.3.0` | — |
+  | TypeScript SDK | `2.1.0` | [zap-sdk #41](https://github.com/MeteoraAg/zap-sdk/pull/41) |
+
+  ## What We Shipped 
+  - Zap in to a new DLMM Pro position with `zap_in_dlmm_pro`
+  - Zap out through a DLMM Pro swap
+  - TypeScript SDK `2.1.0`
+
+  ## What To Do
+
+  <div style={{overflowX: 'auto', marginBottom: '1.5rem'}}>
+    <table>
+      <thead>
+        <tr>
+          <th>Integrators</th>
+          <th>What Changed</th>
+          <th>What To Do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Partners</strong></td>
+          <td>
+            <ul>
+              <li>New endpoint <code>zap_in_dlmm_pro</code> opens a DLMM Pro position and deposits weighted tick ranges in one instruction</li>
+              <li>Optional <code>leftover</code> ranges, <code>max_tick_slippage</code>, and <code>min_multiplier</code></li>
+              <li><code>zap_out</code> accepts a DLMM Pro <code>swap</code></li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Use <code>@meteora-ag/zap-sdk@2.1.0</code> or later. It depends on <code>@meteora-ag/dlmm-pro-sdk</code>.</li>
+              <li>Estimate with <code>estimateDlmmProDirectSwap</code> or <code>estimateDlmmProIndirectSwap</code>. Pass the returned pool tick as the tick the ranges were built against, and derive <code>minMultiplier</code> from the returned multiplier.</li>
+              <li>Build with <code>getZapInDlmmProDirectParams</code> or <code>getZapInDlmmProIndirectParams</code>, then <code>buildZapInDlmmProTransaction</code>. Pass <code>ranges</code> with weights, for example from <code>buildLiquidityShape</code>. The position NFT mint must sign.</li>
+              <li>Set <code>maxTickSlippage</code>. Set <code>minMultiplier</code> when a range bound sits close to the price. A move inside a single tick can change the multiplier many times over, and the zap in fails with <code>ExceededSlippage</code> when the multiplier is below <code>minMultiplier</code>.</li>
+              <li>Call <code>zapOutThroughDlmmPro</code> to zap out through a DLMM Pro pool (<code>dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n</code>).</li>
+              <li>Upgrading from SDK <code>1.x</code> includes the <code>2.0.0</code> breaking changes: builders return <code>ZapInstructionsResponse</code> (<code>instructions</code> and <code>addressLookupTableAccounts</code>), and Jupiter API v2 is the default. Read the <a href="https://github.com/MeteoraAg/zap-sdk/blob/main/CHANGELOG.md">SDK 2.0.0 notes</a> before upgrading.</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  ## Program: `zap` `0.3.0`
+
+  Program ID (mainnet and devnet): `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz`
+
+  ### Added
+
+  - Added endpoint `zap_in_dlmm_pro`. It opens a DLMM Pro position for the given tick ranges and adds `multiplier * weight` liquidity to every range in one deposit, sized by the largest multiplier both ledger balances can fund. The binding side is used up.
+  - The other side's leftover goes into its single-sided range on the optional `leftover` (`range_x` above the price, `range_y` below it), and only that range is opened, after the shape ranges. With no `leftover`, that balance stays in the ledger.
+  - A leftover range is given by its bound next to the price (`inner_tick_id`) and away from it (`outer_tick_id`). With `leftover.is_inner_tick_relative`, `inner_tick_id` is a distance in tick spacing away from the price, from the closest tick a single-sided range can start at for the pool tick at execution, so the leftover ranges start next to the price. With `leftover`, the tick arrays can be passed in any order, and extra accounts are allowed.
+  - `max_tick_slippage` is the maximum distance between the pool tick at execution and `current_tick_id`. The optional `min_multiplier` fails the instruction with `ExceededSlippage` when the multiplier at execution is below it. A move inside a single tick can change the multiplier many times over when a range bound sits close to the price.
+  - Range bounds and the leftover `outer_tick_id` must be within DLMM Pro's min and max tick (`[-443636, 443636]`).
+  - `zap_out` supports swapping through DLMM Pro (`dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n`) `swap`.
+
+  ### Changed
+
+  - Updated Anchor to `1.2.1` (`solana-v4` crates), Solana to `4.1.2`, and Rust to `1.95.0`. The program is built with platform-tools `v1.57` for SBPF `v3`.
+  - Bumped the `damm-v2` (cp-amm) dependency to the Anchor `1.2.1` revision.
+
+  ## TypeScript SDK: `@meteora-ag/zap-sdk` `2.1.0`
+
+  [SDK PR #41](https://github.com/MeteoraAg/zap-sdk/pull/41)
+
+  <Tip>
+    Production: [`@meteora-ag/zap-sdk@2.1.0`](https://www.npmjs.com/package/@meteora-ag/zap-sdk/v/2.1.0).
+  </Tip>
+
+  ### Added
+
+  - Support for Zap program `0.3.0`: endpoint `zap_in_dlmm_pro`, and `zap_out` swaps through DLMM Pro.
+  - `zapOutThroughDlmmPro` zaps out by swapping through a DLMM Pro pool.
+  - `getZapInDlmmProDirectParams`, `getZapInDlmmProIndirectParams`, and `buildZapInDlmmProTransaction` zap in to a new DLMM Pro position. The position is given as tick ranges with weights, for example the `ranges` from `buildLiquidityShape` of `@meteora-ag/dlmm-pro-sdk`. `maxTickSlippage` and the optional `minMultiplier` bound the price slippage, and the optional `leftover` ranges take what the ranges leave of the token that is not used up. The position NFT mint passed to `buildZapInDlmmProTransaction` must sign the zap-in transaction.
+  - `estimateDlmmProDirectSwap` and `estimateDlmmProIndirectSwap` size the swaps of a DLMM Pro zap in. They also return the pool tick and the multiplier expected when the zap in executes, to pass as the tick the ranges were built against and to derive `minMultiplier` from.
+  - `getDlmmProZapInMultiplier`, which mirrors how the program sizes the deposit, and `getDlmmProZapInTickArrays`, which returns the tick arrays the zap in needs, including the ones the `leftover` ranges can resolve to.
+  - Helpers `getDlmmProSwapInstruction`, `getDlmmProTickArraysForSwap`, `getDlmmProDepositTransferHookAccounts`, and `deriveDlmmProEventAuthority`.
+  - Constants `DLMM_PRO_PROGRAM_ID` and `AMOUNT_IN_DLMM_PRO_OFFSET`.
+  - Examples `zapInDlmmProDirect`, `zapInDlmmProIndirect`, and `zapOutThroughDlmmPro`.
+
+  ### Changed
+
+  - Added the dependency `@meteora-ag/dlmm-pro-sdk`.
+  - The IDL of release `0.3.0` names the types it shares between the pool programs after their program. In `ZapTypes`, `remainingAccountsInfo`, `remainingAccountsSlice`, and `accountsType` are now `dlmmDlmmTypesRemainingAccountsInfo`, `dlmmDlmmTypesRemainingAccountsSlice`, and `dlmmDlmmTypesAccountsType`, and `pool` is now `cpAmmStatePoolPool`. The methods of the SDK take the same arguments as before.
+</Update>
 
 <Update
  label="zap 0.2.3"
@@ -19,7 +115,7 @@ rss: true
 
   | Component | Version | PR |
   | --- | --- | --- |
-  | Program | `0.2.3` | [zap-program #53](https://github.com/MeteoraAg/zap-program/pull/53) |
+  | Program | `0.2.3` | — |
 
   ## What We Shipped
   - Whitelisted Jupiter `route_v2` and `shared_account_route_v2` for `zap_out`
@@ -31,8 +127,6 @@ rss: true
   ## Program: `zap` `0.2.3`
 
   Program ID (mainnet and devnet): `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz`
-
-  [Program PR #53](https://github.com/MeteoraAg/zap-program/pull/53)
 
   ### Changed
 
@@ -58,7 +152,7 @@ rss: true
 
   | Component | Version | PR |
   | --- | --- | --- |
-  | Program | `0.2.2` | [zap-program #46](https://github.com/MeteoraAg/zap-program/pull/46) |
+  | Program | `0.2.2` | — |
   | TypeScript SDK | `1.3.0` | [zap-sdk #30](https://github.com/MeteoraAg/zap-sdk/pull/30) |
 
   ## What We Shipped 
@@ -97,8 +191,6 @@ rss: true
   ## Program: `zap` `0.2.2`
 
   Program ID (mainnet and devnet): `zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz`
-
-  [Program PR #46](https://github.com/MeteoraAg/zap-program/pull/46)
 
   ### Added
 
