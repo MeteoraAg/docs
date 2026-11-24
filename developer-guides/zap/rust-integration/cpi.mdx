@@ -2,7 +2,7 @@
 title: "Zap CPI Integration"
 sidebarTitle: "CPI"
 description: "Learn how to call Zap instructions through Rust CPI, pass ledger and downstream accounts, and handle zap-out payload constraints."
-llmsDescription: "Explains Rust CPI integration for the Meteora Zap Anchor program. Covers enabling the cpi feature, using zap::cpi calls, constructing account contexts for zap_out, ledger management, DAMM v2 zap in, DLMM initialized and uninitialized zap in, payload whitelisting, remaining account ordering, signer requirements, downstream event authority accounts, Token 2022 considerations, and testing guidance."
+llmsDescription: "Explains Rust CPI integration for the Meteora Zap Anchor program. Covers generating bindings with Anchor declare_program! from the published IDL, the IDL type names that contain :: and do not compile as Rust identifiers, zap::cpi calls, constructing account contexts for zap_out, ledger management, DAMM v2 zap in, DLMM initialized and uninitialized zap in, payload whitelisting, remaining account ordering, signer requirements, downstream event authority accounts, Token 2022 considerations, and testing guidance."
 ---
 
 Use CPI when your Solana program needs to call Zap directly. Most client apps should use the TypeScript SDK instead because Zap flows require careful transaction ordering, token account setup, and downstream remaining accounts.
@@ -16,11 +16,27 @@ Use CPI when your Solana program needs to call Zap directly. Most client apps sh
 
 ## Generated Bindings
 
-Prefer generated CPI bindings from the Zap IDL published with `@meteora-ag/zap-sdk`. The crate name in Rust code is `zap`.
+Generate bindings from the IDL with Anchor's `declare_program!`. Do not type account orders from memory. A misplaced optional account or remaining account is the usual cause of a failing CPI.
+
+The IDL ships in the [Zap SDK repository](https://github.com/MeteoraAg/zap-sdk/blob/main/src/idl/zap/idl.json) at `src/idl/zap/idl.json`. `declare_program!(zap)` reads `idls/zap.json`. The macro looks for an `idls` directory in the crate directory and then in each parent directory, and uses the nearest one. Copy the file from the SDK release you pin and save it as `idls/zap.json`.
+
+```bash
+mkdir -p idls
+curl -fL -o idls/zap.json \
+  https://raw.githubusercontent.com/MeteoraAg/zap-sdk/main/src/idl/zap/idl.json
+```
+
+The `-f` flag makes `curl` fail instead of saving an error page as the IDL. Take the IDL from the SDK release you pin, and update it when you upgrade the SDK.
+
+<Warning>
+  The published Zap IDL does not compile with `declare_program!` as it is. Some types in the IDL share a name, such as two types called `Pool`, so Anchor's IDL builder names them by their full module path, for example `cp_amm::state::pool::Pool`. `declare_program!` cannot turn a name that contains `::` into a Rust identifier, and the build fails because `"cp_amm::state::pool::Pool"` is not a valid identifier. Give these types valid, unique names in your copy of the IDL, or generate the bindings another way.
+</Warning>
+
+`declare_program!(zap)` creates a `zap` module in your crate. The examples on this page use `zap::cpi` and `zap::cpi::accounts` from that module.
 
 ## CPI Pattern
 
-Anchor generates CPI helpers from the program crate. For low-level zap out:
+`declare_program!(zap)` generates the CPI helpers. For low-level zap out:
 
 ```rust
 use anchor_lang::prelude::*;
@@ -110,7 +126,7 @@ Zap does not emit its own custom events, but DAMM v2 and DLMM downstream CPI cal
 
 | Practice | Why it matters |
 | --- | --- |
-| Prefer generated bindings | Anchor CPI helpers keep account structs and argument order aligned with the IDL. |
+| Prefer `declare_program!` | The generated helpers keep account structs and argument order aligned with the IDL. |
 | Use SDK-built payloads as references | The TypeScript SDK source shows the exact DAMM v2, DLMM, and Jupiter payload formats. |
 | Simulate full flows | Zap calls downstream programs and depends on token balance deltas. |
 | Keep caps conservative | `max_transfer_amount` and `max_swap_amount` are safety limits, not quote outputs. |
