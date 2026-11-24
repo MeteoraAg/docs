@@ -63,16 +63,16 @@ The BUILD path contains focused references for the five main liquidity protocols
 
 | Product | Package and pinned version | Use it for |
 |:--------|:---------------------------|:-----------|
-| DBC | `@meteora-ag/dynamic-bonding-curve-sdk@1.5.11` | Token launches, curve configuration, trading, fee claims, graduation, and migration |
-| DAMM v2 | `@meteora-ag/cp-amm-sdk@1.4.5` | Constant-product pools, position NFTs, swaps, liquidity, locks, vesting, fees, and rewards |
+| DBC | `@meteora-ag/dynamic-bonding-curve-sdk@2.0.0` | Token launches, curve configuration, trading, fee claims, graduation, and migration |
+| DAMM v2 | `@meteora-ag/cp-amm-sdk@1.5.1` | Constant-product pools, position NFTs, swaps, liquidity, locks, vesting, fees, and rewards |
 | DLMM | `@meteora-ag/dlmm@1.9.14` | Bin-based liquidity, strategies, swaps, positions, fee claims, limit orders, and rebalancing |
 | DLMM Pro | `@meteora-ag/dlmm-pro-sdk@0.1.3` | Tick-based liquidity, shaped multi-range positions, swaps, limit orders, pool creation, locks, and fee and reward claims |
-| DAMM v1 | `@meteora-ag/dynamic-amm-sdk@1.4.1` | Existing v1 pools, LP tokens, lock escrows, Dynamic Vault integration, and Stake2Earn |
+| DAMM v1 | `@meteora-ag/dynamic-amm-sdk@2.0.0` | Existing v1 pools, LP tokens, lock escrows, Dynamic Vault integration, and Stake2Earn |
 
 The root `SKILL.md` pins the SDK versions verified by the reference packs. It also records compatibility rules that are easy to miss when combining the SDKs:
 
 - The covered SDKs use `@solana/web3.js` v1 transaction types.
-- DBC, DAMM v2, and DLMM use Anchor 0.31 and DLMM Pro uses Anchor 0.32, while DAMM v1 uses Anchor 0.29 and is best isolated when dependency types conflict.
+- DBC, DAMM v2, DLMM, and DAMM v1 use Anchor 0.31, while DLMM Pro uses Anchor 0.32. `Program` objects should not be passed from one SDK to another.
 - SDK amounts use `BN` values in base units. Studio configs normally use human token units, except where a config field explicitly says otherwise.
 - Builders return unsigned transactions. Some operations return multiple transactions or additional keypairs that must also sign.
 - Pool state should be refreshed before quoting or building a transaction.
@@ -86,9 +86,9 @@ Compact SDK notes are also included for the helper programs that sit on top of t
 | Met Lock | `@meteora-ag/met-lock-sdk@1.0.1` |
 | Stake2Earn | `@meteora-ag/m3m3@1.0.10` |
 | Pool Farms | `@meteora-ag/farming-sdk@1.0.18` |
-| Dynamic Vault | `@meteora-ag/vault-sdk@2.3.1` |
+| Dynamic Vault | `@meteora-ag/vault-sdk@2.4.0` |
 | Dynamic Fee Sharing | `@meteora-ag/dynamic-fee-sharing-sdk@1.1.0` |
-| Zap | `@meteora-ag/zap-sdk@1.3.2` |
+| Zap | `@meteora-ag/zap-sdk@2.0.0` |
 
 Each of these products also has studio commands, so the ACT path covers the ordinary lifecycle. The notes exist for the surfaces the studio does not expose — account discovery, read helpers, and the individual gotchas worth knowing before you call these SDKs directly, such as which parameter names do not match the units they take. The versions above reflect the current skill; check `SKILL.md` before installing dependencies in case the packages have moved forward.
 

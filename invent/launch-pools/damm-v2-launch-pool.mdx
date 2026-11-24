@@ -2,7 +2,7 @@
 title: "DAMM v2 Launch Pool"
 sidebarTitle: "DAMM v2 Launch Pool"
 description: "Learn how to create a Meteora DAMM v2 launch pool with balanced or one-sided liquidity, configurable fees, activation controls, optional Alpha Vault, and position management settings."
-llmsDescription: "Guide to creating a DAMM v2 launch pool with Meteora Invent Studio, covering setup, local validator, environment variables, keypair generation, damm_v2_config.jsonc, quote mint, createBaseToken, creator, base and quote amounts, initial price, min and max price, base fee modes, rate limiter, market cap scheduler, dynamic fees, collect fee mode, compounding fees, activation controls, add liquidity, split position, optional Alpha Vault, and balanced or one-sided pool commands."
+llmsDescription: "Guide to creating a DAMM v2 launch pool with Meteora Invent Studio, covering setup, local validator, environment variables, keypair generation, damm_v2_config.jsonc, quote mint, createBaseToken, creator, base and quote amounts, initial price, min and max price, base fee modes, market cap scheduler, dynamic fees, collect fee mode, compounding fees, activation controls, add liquidity, split position, optional Alpha Vault, and balanced or one-sided pool commands."
 ---
 
 This guide walks you through the steps to create a DAMM v2 launch pool on Meteora. Whether you’re a seasoned developer or just starting out, this guide has got you covered to deploy liquidity and launch your project on Meteora.
@@ -175,20 +175,13 @@ npm install -g pnpm
         "maxPrice": null, // max price (in terms of quote/base price) - NOTE: null would use the MAX_SQRT_PRICE for the DAMM v2 balanced pool
         "poolFees": {
           "baseFee": {
-            "baseFeeMode": 0, // 0 - Fee Scheduler: Linear | 1 - Fee Scheduler: Exponential | 2 - Rate Limiter (rejected for new configs and new pools) | 3 - Fee Market Cap Scheduler: Linear | 4 - Fee Market Cap Scheduler: Exponential
+            "baseFeeMode": 0, // 0 - Fee Scheduler: Linear | 1 - Fee Scheduler: Exponential | 3 - Fee Market Cap Scheduler: Linear | 4 - Fee Market Cap Scheduler: Exponential
             "feeTimeSchedulerParam": {
               "startingFeeBps": 120, // starting base fee (in basis points) (if you want a flat fee, set startingFeeBps and endingFeeBps to the same value)
               "endingFeeBps": 120, // ending base fee (in basis points) (if you want a flat fee, set startingFeeBps and endingFeeBps to the same value)
               "numberOfPeriod": 0, // number of periods
               "totalDuration": 0 // total duration (If activationType is 0 (slots), totalDuration = duration / 0.4 | If activationType is 1 (timestamp), totalDuration = duration)
             }
-            // "rateLimiterParam": {
-            //   "baseFeeBps": 120, // existing rate-limiter pools only
-            //   "feeIncrementBps": 100,
-            //   "referenceAmount": 1, // reference amount (not in lamports)
-            //   "maxLimiterDuration": 3600, // if activationType is 0 (slots), maxLimiterDuration = duration / 0.4, if activationType is 1 (timestamp), maxLimiterDuration = duration)
-            //   "maxFeeBps": 5000
-            // }
             // "feeMarketCapSchedulerParam": {
             //   "startingFeeBps": 500, // starting base fee (in basis points)
             //   "endingFeeBps": 50, // ending base fee (in basis points)
