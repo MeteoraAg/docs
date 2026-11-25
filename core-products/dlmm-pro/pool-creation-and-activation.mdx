@@ -52,11 +52,11 @@ An operator with the right permission creates a static config with an index, and
 
 ### Dynamic Configs
 
-A dynamic config belongs to one pool creator authority, typically a launchpad or partner. That authority signs every pool created from it and chooses the pool's settings at creation, including activation rules. In return it becomes the pool's partner and earns the config's partner share of the protocol fee, up to 50%. See [Fees](/core-products/dlmm-pro/fees#where-the-fee-goes).
+A dynamic config belongs to one pool creator authority, typically a launchpad or partner. That authority signs every pool created from it and chooses the pool's settings at creation, including activation rules. In return it becomes the pool's partner and earns the config's partner share of the protocol fee. See [Fees](/core-products/dlmm-pro/fees#where-the-fee-goes).
 
 A dynamic config can also carry the `CreatePoolWithoutMintValidation` permission, which skips the token badge and Token 2022 extension checks for its pools. Token Y on an `OnlyY` pool still needs to be SOL, USDC or a badged token.
 
-A dynamic config is created by an operator for one `pool_creator_authority`, which cannot be the default key. It holds a permission number, where `CreatePoolWithoutMintValidation` is 1 and nothing else exists, and a `partner_fee_bps` from 0 to 5,000. The native mint of Token 2022 is rejected even with the permission.
+A dynamic config is created by an operator for one `pool_creator_authority`, which cannot be the default key. It holds a permission number, where `CreatePoolWithoutMintValidation` is 1 and nothing else exists, and a `partner_fee_bps`. The native mint of Token 2022 is rejected even with the permission.
 
 Steps to create a pool from a dynamic config: the authority signs, passes the full set of settings from [Creation Parameters and Validation](#creation-parameters-and-validation), and sends `initialize_pool_with_dynamic_config`. The pool copies `partner_fee_bps` from the config, and records the authority as its partner, even when the bps is 0, because an operator can raise it later. A pool for the same mints and the same config can be created only once.
 
@@ -202,7 +202,7 @@ The status is a number from 0 to 3. Bit 0 set disables swaps and bit 1 set disab
 | Setting | Who changes it |
 | --- | --- |
 | Pool status | An operator with `SetPoolStatus` |
-| Partner fee bps, from 0 to 5,000 | An operator with `UpdatePartnerFee`, on a pool with a partner |
+| Partner fee bps | An operator with `UpdatePartnerFee`, on a pool with a partner |
 | Reward slot 0: set the mint once, change the authority | The pool creator, or an operator with `InitializeReward` to set the mint and `UpdateRewardAuthority` to change the authority |
 | Reward slot 1: set the mint once, change the authority | An operator with `InitializeReward` to set the mint and `UpdateRewardAuthority` to change the authority |
 | Reward emissions | The slot's reward authority |

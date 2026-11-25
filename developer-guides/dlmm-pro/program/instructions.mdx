@@ -2419,7 +2419,7 @@ Creates a `DynamicConfig` that authorizes one pool creator authority to create p
 | `index` | `u64` | Config index, part of the config address. A used index for the same authority fails because the account exists. |
 | `config_parameters` | `DynamicConfigParameters` | Config settings. The fields follow. |
 | `config_parameters.permission` | `u128` | Bitmask of config permissions, 0 or 1. Bit 0 CreatePoolWithoutMintValidation skips the per-mint token badge and Token 2022 extension checks for pools of this config. The Token 2022 native mint is still rejected, and an `OnlyY` pool whose token Y is not wrapped SOL or USDC still needs `token_badge_y`. |
-| `config_parameters.partner_fee_bps` | `u16` | Partner share of the protocol fee for pools of this config, in basis points, 0 to 5000. |
+| `config_parameters.partner_fee_bps` | `u16` | Partner share of the protocol fee for pools of this config, in basis points. |
 
 #### Accounts
 
@@ -2437,7 +2437,7 @@ Creates a `DynamicConfig` that authorizes one pool creator authority to create p
 #### Checks and Effects
 
 - The operator must be the signer with CreateConfigKey.
-- `permission` is at most 1 and `partner_fee_bps` is at most 5000.
+- `permission` is at most 1 and `partner_fee_bps` is at most `MAX_PARTNER_FEE_BPS`.
 - `pool_creator_authority` is not the default key.
 - Stores the settings. Pools created later copy `partner_fee_bps`, and an operator can change a pool partner fee with `update_partner_fee`.
 
@@ -2450,7 +2450,7 @@ Creates a `DynamicConfig` that authorizes one pool creator authority to create p
 | Error | Cause |
 | --- | --- |
 | `InvalidPermission` | The operator is not the signer or lacks CreateConfigKey. |
-| `InvalidParameters` | `permission` is above 1, `partner_fee_bps` is above 5000, or `pool_creator_authority` is the default key. |
+| `InvalidParameters` | `permission` is above 1, `partner_fee_bps` is above `MAX_PARTNER_FEE_BPS`, or `pool_creator_authority` is the default key. |
 
 #### SDK
 
@@ -2546,7 +2546,7 @@ Sets the partner fee share of a pool that has a partner. Needs an operator with 
 
 | Name | Type | Meaning |
 | --- | --- | --- |
-| `partner_fee_bps` | `u16` | Partner share of the protocol fee, in basis points, 0 to 5000 inclusive. |
+| `partner_fee_bps` | `u16` | Partner share of the protocol fee, in basis points. |
 
 #### Accounts
 
@@ -2561,7 +2561,7 @@ Sets the partner fee share of a pool that has a partner. Needs an operator with 
 #### Checks and Effects
 
 - The operator must be the signer with UpdatePartnerFee.
-- `partner_fee_bps` is at most 5000, and the pool must have a partner, which only pools from a dynamic config have.
+- `partner_fee_bps` is at most `MAX_PARTNER_FEE_BPS`, and the pool must have a partner, which only pools from a dynamic config have.
 - Stores the new share. It applies to swaps after the change, and fees already accrued stay as they are.
 
 #### Events
@@ -2573,7 +2573,7 @@ Sets the partner fee share of a pool that has a partner. Needs an operator with 
 | Error | Cause |
 | --- | --- |
 | `InvalidPermission` | The operator is not the signer or lacks UpdatePartnerFee. |
-| `InvalidParameters` | `partner_fee_bps` is above 5000, or the pool has no partner. |
+| `InvalidParameters` | `partner_fee_bps` is above `MAX_PARTNER_FEE_BPS`, or the pool has no partner. |
 
 #### SDK
 
