@@ -2,7 +2,7 @@
 title: "DLMM Pro TS SDK Getting Started"
 sidebarTitle: "Getting Started"
 description: "Install @meteora-ag/dlmm-pro-sdk, create a client, read a pool's price, and quote and send your first swap."
-llmsDescription: "First steps with the DLMM Pro TypeScript SDK @meteora-ag/dlmm-pro-sdk: installing with npm, pnpm or yarn, creating a DlmmProClient from a Solana Connection, the pool, position, limitOrder, reward and state services, devnet and custom program IDs, reading a pool with fetchPool and tickUiPrice, quoting an exact-in swap with quoteExactIn, setting minimumOutputAmount for slippage, sending the unsigned transaction with sendAndConfirmTransaction, builder conventions for signers, token accounts, wrapped SOL and transfer hooks, and handling PoolError. Also covers prerequisites with package versions, a tsconfig for the examples, CommonJS and ESM usage and the TS1479 error under Node16 resolution, funding a devnet wallet and finding a pool with getProgramAccounts, a walk-through of the quote and swap script, every field of QuoteExactInResult, choosing minimumOutputAmount slippage, and a troubleshooting table of first-run errors."
+llmsDescription: "First steps with the DLMM Pro TypeScript SDK @meteora-ag/dlmm-pro-sdk: installing with npm, pnpm or yarn, creating a DlmmProClient from a Solana Connection, the pool, position, limitOrder, reward and state services, devnet and custom program IDs, reading a pool with fetchPool and tickUiPrice, quoting an exact-in swap with quoteExactIn, setting minimumOutputAmount for slippage, sending the unsigned transaction with sendAndConfirmTransaction, builder conventions for signers, token accounts, wrapped SOL and transfer hooks, and handling PoolError. Also covers prerequisites with package versions, a tsconfig for the examples, CommonJS and ESM usage and the module resolution settings the types resolve under, funding a devnet wallet and finding a pool with getProgramAccounts, a walk-through of the quote and swap script, every field of QuoteExactInResult, choosing minimumOutputAmount slippage, and a troubleshooting table of first-run errors."
 ---
 
 `@meteora-ag/dlmm-pro-sdk` builds DLMM Pro transactions and reads DLMM Pro accounts. It also quotes swaps with the same math as the program.
@@ -85,7 +85,7 @@ This `tsconfig.json` type-checks every script on these pages with TypeScript 7.0
 
 ## CommonJS and ESM
 
-The package ships both builds. Its `exports` map sends `import` to `dist/index.js` and `require` to `dist/index.cjs`, and both expose the same API.
+The package ships both builds. Its `exports` map sends `import` to `dist/index.mjs` and `require` to `dist/index.js`, and both expose the same API.
 
 ```javascript
 // ES module: a .mjs file, or any file in a package with "type": "module"
@@ -97,22 +97,11 @@ import { DlmmProClient } from "@meteora-ag/dlmm-pro-sdk";
 const { DlmmProClient } = require("@meteora-ag/dlmm-pro-sdk");
 ```
 
-TypeScript types depend on how you resolve modules:
+Each build has its own type declarations, so TypeScript resolves the package from ES modules and from CommonJS files with `moduleResolution` set to `Bundler`, `Node16` or `NodeNext`.
 
-- With `module` set to `CommonJS` and `moduleResolution` set to `Bundler`, a `.cts` file can import the package normally.
-- With `module` and `moduleResolution` set to `Node16`, a CommonJS TypeScript file that imports the package fails with `TS1479`. The package declares `"type": "module"` and has one set of type declarations, which TypeScript reads as an ES module, so it refuses the `require` call it would emit. Import the package from an `.mts` file instead, switch to `NodeNext` or `Bundler`, or use a dynamic `import()`, which type-checks under `Node16` (with the same `types` setting as above, because it reads `process.env`) and runs.
-
-```typescript
-// A .cts file compiled with module and moduleResolution set to Node16
-import { Connection } from "@solana/web3.js";
-
-async function main() {
-  const { DlmmProClient } = await import("@meteora-ag/dlmm-pro-sdk");
-  const client = new DlmmProClient(new Connection(process.env.RPC_URL!, "confirmed"));
-  console.log(typeof client.pool.swap);
-}
-main();
-```
+<Note>
+This needs `0.1.4` or later. In `0.1.3` and earlier, `Node16` and `NodeNext` lost the package's enums and types, such as `BaseFeeMode` and `Pool`, and a CommonJS TypeScript file compiled with `Node16` failed with `TS1479`.
+</Note>
 
 ## Create a Client
 
@@ -387,7 +376,7 @@ These are the failures people hit first, as they appear and what to check. See [
 | `SyntaxError: "undefined" is not valid JSON`, or `Unexpected token` | `WALLET_SECRET_KEY` is unset or is not a JSON array. | Export it as the JSON array of bytes, as the wallet script prints it. |
 | `Error: bad secret key size` | The array in `WALLET_SECRET_KEY` is not 64 bytes. | Use the full secret key, not the public key or a seed. |
 | `Top-level await is currently not supported with the "cjs" output format` | The script is a `.ts` file in a CommonJS package. | Rename it to `.mts`, or set `"type": "module"`. |
-| `TS1479` on the import of the package | A CommonJS TypeScript file compiled with `Node16`. | See [CommonJS and ESM](#commonjs-and-esm). |
+| `TS1479` on the import of the package, or `has no exported member` for its enums and types | `@meteora-ag/dlmm-pro-sdk` `0.1.3` or earlier with `moduleResolution` set to `Node16` or `NodeNext`. | Upgrade to `0.1.4` or later. See [CommonJS and ESM](#commonjs-and-esm). |
 | `failed to get info about account ...: TypeError: fetch failed` | The RPC endpoint cannot be reached. | Check `RPC_URL` and your network. |
 | `Account not found: <address>` | The address does not exist on the cluster `RPC_URL` points at. A devnet pool address on a mainnet endpoint gives this. | Use the matching cluster. |
 | `Account <address> is not owned by dPro1D5wiqnGMH8vMDG23jh35btTHoWdyqXjqkqxe8n` | The address exists but is not a DLMM Pro account, for example a token mint. | Use a pool address. |
