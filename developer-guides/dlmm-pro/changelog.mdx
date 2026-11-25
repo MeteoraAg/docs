@@ -11,6 +11,52 @@ rss: true
 </Tip>
 
 <Update
+  label="dlmm-pro-sdk 0.1.4"
+  description="NodeNext Types and Tick Price Precision"
+  rss="DLMM Pro SDK 0.1.4: the type declarations now resolve under Node16 and NodeNext from ES modules and CommonJS, and tickPrice and tickUiPrice keep their precision at the lowest ticks. The dlmm_pro program and dlmm-pro-commons are unchanged."
+>
+  ## Release Summary
+
+  | Component | Version | PR |
+  | --- | --- | --- |
+  | Program | `0.1.0` (unchanged) | - |
+  | TypeScript SDK | `0.1.4` | [dlmm-pro-sdk #29](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/29) |
+  | Commons | `0.1.1` (unchanged) | - |
+
+  ## What We Shipped
+
+  - Type declarations that resolve under `Node16` and `NodeNext`, from ES modules and from CommonJS files
+  - Tick prices that keep their precision at the lowest ticks
+
+  ## What To Do
+
+  | Integrators | What To Do |
+  | --- | --- |
+  | TypeScript projects on `Node16` or `NodeNext` | Upgrade to `0.1.4`. In `0.1.3` and earlier the package's enums and types, such as `BaseFeeMode` and `Pool`, were missing under these settings, and a CommonJS file compiled with `Node16` failed with `TS1479`. Workarounds such as a dynamic `import()` or a switch to `Bundler` are no longer needed. |
+  | Anyone showing tick prices | Upgrade to `0.1.4` if you call `tickPrice` or `tickUiPrice`, or read `priceLower` and `priceUpper` from `buildLiquidityShape`. Earlier versions kept about two significant digits near `MIN_TICK_ID`, so neighbouring ticks could show the same price. |
+  | Everyone else | Upgrade when convenient. |
+
+  No function signatures changed. `import` now loads `dist/index.mjs` and `require` loads `dist/index.js`, so code that imports `@meteora-ag/dlmm-pro-sdk` or its `idl` subpaths needs no change.
+
+  ## TypeScript SDK: `@meteora-ag/dlmm-pro-sdk` `0.1.4`
+
+  [SDK PR #29](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/29)
+
+  <Tip>
+    Production: [`@meteora-ag/dlmm-pro-sdk@0.1.4`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.4).
+  </Tip>
+
+  ### Changed
+
+  - The package is no longer `"type": "module"`, and `import` and `require` each have their own type declarations. `import` loads `dist/index.mjs` with `dist/index.d.mts`, and `require` loads `dist/index.js` with `dist/index.d.ts`, in place of `dist/index.js` and `dist/index.cjs` sharing one declaration file. Imports of `@meteora-ag/dlmm-pro-sdk` and its `idl` subpaths are unaffected.
+
+  ### Fixed
+
+  - `tickPrice` and `tickUiPrice` now keep the precision of the tick's sqrt price. They truncated the price to a multiple of 2^-64, which left about two significant digits near `MIN_TICK_ID`. The `priceLower` and `priceUpper` of the `buildLiquidityShape` columns use the same price.
+  - The type declarations now resolve under `moduleResolution` `Node16` and `NodeNext`, and a CommonJS file compiled with `Node16` no longer fails with `TS1479`. Enums and types such as `BaseFeeMode` and `Pool` were missing for those consumers.
+</Update>
+
+<Update
   label="dlmm-pro-sdk 0.1.2"
   description="Tick Id Bounds Check"
   rss="DLMM Pro SDK 0.1.2: getSqrtPriceFromTickId now rejects a tick id outside the tick bounds instead of returning the price of a different tick. The dlmm_pro program and dlmm-pro-commons are unchanged."
@@ -41,7 +87,7 @@ rss: true
   [SDK PR #27](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/27)
 
   <Tip>
-    Production: [`@meteora-ag/dlmm-pro-sdk@0.1.2`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.2).
+    Superseded by [`@meteora-ag/dlmm-pro-sdk@0.1.4`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.4). Use the latest release.
   </Tip>
 
   ### Fixed
@@ -82,7 +128,7 @@ rss: true
   [SDK PR #26](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/26)
 
   <Tip>
-    Superseded by [`@meteora-ag/dlmm-pro-sdk@0.1.2`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.2). Use the latest release.
+    Superseded by [`@meteora-ag/dlmm-pro-sdk@0.1.4`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.4). Use the latest release.
   </Tip>
 
   ### Fixed
@@ -149,7 +195,7 @@ rss: true
   [SDK PR #16](https://github.com/MeteoraAg/dlmm-pro-sdk/pull/16)
 
   <Tip>
-    Superseded by [`@meteora-ag/dlmm-pro-sdk@0.1.2`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.2). Use the latest release.
+    Superseded by [`@meteora-ag/dlmm-pro-sdk@0.1.4`](https://www.npmjs.com/package/@meteora-ag/dlmm-pro-sdk/v/0.1.4). Use the latest release.
   </Tip>
 
   ### Added

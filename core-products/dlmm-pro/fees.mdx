@@ -2,7 +2,7 @@
 title: "Fees"
 sidebarTitle: "Fees"
 description: "How a DLMM Pro pool sets its trading fee from a base fee mode and an optional dynamic fee, which token it collects the fee in, and who receives each part."
-llmsDescription: "Explains DLMM Pro trading fees: total fee as base fee plus dynamic fee capped at 99% (MAX_FEE_NUMERATOR), FEE_DENOMINATOR of 1e9, base fee modes Fixed, TimeSchedulerLinear, TimeSchedulerExponential, MarketCapSchedulerLinear and MarketCapSchedulerExponential with cliff fee, reduction factor, periods, sqrt price step and scheduler expiration, the dynamic fee driven by price movement from a reference with filter period, decay period, reduction factor and variable fee control, getDynamicFeeParams defaults, collect fee modes OutputToken and OnlyY, the fee split between LP liquidity and limit orders, protocol shares of 10% (20% on launch pools) and 50% on limit-order fees, the 20% referral host fee, partner fees up to 50% of the protocol fee on dynamic-config pools, and fee claiming."
+llmsDescription: "Explains DLMM Pro trading fees: total fee as base fee plus dynamic fee capped at 99% (MAX_FEE_NUMERATOR), FEE_DENOMINATOR of 1e9, base fee modes Fixed, TimeSchedulerLinear, TimeSchedulerExponential, MarketCapSchedulerLinear and MarketCapSchedulerExponential with cliff fee, reduction factor, periods, sqrt price step and scheduler expiration, the dynamic fee driven by price movement from a reference with filter period, decay period, reduction factor and variable fee control, getDynamicFeeParams defaults, collect fee modes OutputToken and OnlyY, the fee split between LP liquidity and limit orders, protocol shares of 10% (20% on launch pools) and 50% on limit-order fees, the 20% referral host fee, partner fees on dynamic-config pools, and fee claiming."
 ---
 
 Every DLMM Pro swap pays one trading fee. The fee rate is the pool's base fee plus its dynamic fee, if enabled, and never exceeds 99%.
@@ -180,7 +180,7 @@ In each step of a swap, the fee is first split between LP liquidity and limit or
 | LPs | 90% of the LP part (80% on launch pools) | Accrues to ranges that were in range during the swap; claimed per position |
 | Limit order makers | 50% of the limit-order part | Paid when the order is canceled |
 | Referral host | 20% of the protocol fee | Sent in the swap to the referral token account the swapper passes |
-| Pool partner | The pool's partner fee bps of what remains, up to 50% | Accrues on the pool; the partner claims it |
+| Pool partner | The pool's partner fee bps of what remains | Accrues on the pool; the partner claims it |
 | Protocol | The rest | Claimed by Meteora |
 
 Notes on the split:
@@ -201,7 +201,7 @@ Every share of the fee is rounded so the pool never pays out more than it collec
 
 Two edge cases: when a step fills nothing on the side the fee is taken from, the protocol takes the whole step fee, and when a limit-order fill rounds down to zero output, the protocol takes that step's limit-order fee.
 
-The swap from [Worked Swap](/core-products/dlmm-pro/ticks-and-liquidity#worked-swap), a 0.30% fee, 5,200,000,000 Y in, an ask for 5,000,000 X filled in step 1, split for a normal pool and a launch pool. The swapper receives 5,157,598,797 X and the fees total 15,519,356 X in every row. A partner fee bps of 2,000 is 20% and 5,000 is 50%:
+The swap from [Worked Swap](/core-products/dlmm-pro/ticks-and-liquidity#worked-swap), a 0.30% fee, 5,200,000,000 Y in, an ask for 5,000,000 X filled in step 1, split for a normal pool and a launch pool. The swapper receives 5,157,598,797 X and the fees total 15,519,356 X in every row. A partner fee bps of 2,000 is 20%:
 
 | Pool | Referral | Partner fee bps | LPs | Makers | Host | Partner | Protocol |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -211,13 +211,12 @@ The swap from [Worked Swap](/core-products/dlmm-pro/ticks-and-liquidity#worked-s
 | Normal | Yes | 2,000 | 13,953,922 | 7,500 | 310,386 | 249,509 | 998,039 |
 | Launch | No | None | 12,403,486 | 7,500 | 0 | 0 | 3,108,370 |
 | Launch | Yes | None | 12,403,486 | 7,500 | 620,774 | 0 | 2,487,596 |
-| Normal | Yes | 5,000 | 13,953,922 | 7,500 | 310,386 | 623,774 | 623,774 |
 
 Rows with a partner fee apply to dynamic-config pools, the only pools that have a partner. A launch pool never has one.
 
 The protocol's gross share in the first normal row is `1,496,181 + 54,253` from the two LP parts and `7,500` from the order. With a referral, the host's 20% applies to `1,496,181 + 54,253 + 1,500`, where 1,500 is 10% of the 15,000 limit-order fee, not the 7,500 the protocol actually took. That gives `⌊1,551,934 × 0.2⌋ = 310,386`. The partner's share then applies to what is left after the host: `⌊1,247,548 × 0.2⌋ = 249,509`.
 
-Who collects each part: LPs with `claim_fee` on their position, makers when the order is canceled, the host in the swap itself, the pool partner with `claim_partner_fee` and Meteora with its protocol fee claim. `claim_partner_fee` takes `max_amount_x` and `max_amount_y`, caps on the accrued fee before any transfer fee, and `min_amount_x` and `min_amount_y`, minimums after it that fail with `ExceededSlippage`. It sends nothing and returns when both amounts are zero. An operator can set the partner fee bps to any value from 0 to 5,000 on a pool that has a partner.
+Who collects each part: LPs with `claim_fee` on their position, makers when the order is canceled, the host in the swap itself, the pool partner with `claim_partner_fee` and Meteora with its protocol fee claim. `claim_partner_fee` takes `max_amount_x` and `max_amount_y`, caps on the accrued fee before any transfer fee, and `min_amount_x` and `min_amount_y`, minimums after it that fail with `ExceededSlippage`. It sends nothing and returns when both amounts are zero. An operator can change the partner fee bps on a pool that has a partner.
 
 
 ## Related
